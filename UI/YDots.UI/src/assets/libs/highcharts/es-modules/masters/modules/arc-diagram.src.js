@@ -1,0 +1,2 @@
+/*! For license information please see arc-diagram.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/ArcDiagram/ArcDiagramSeries.js";export default Highcharts;

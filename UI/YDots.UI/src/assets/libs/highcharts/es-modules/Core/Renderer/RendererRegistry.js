@@ -1,0 +1,1 @@
+"use strict";import H from"../Globals.js";var RendererRegistry;!function(e){let r;e.rendererTypes={},e.getRendererType=function(n=r){return e.rendererTypes[n]||e.rendererTypes[r]},e.registerRendererType=function(n,t,s){e.rendererTypes[n]=t,r&&!s||(r=n,H.Renderer=t)}}(RendererRegistry||(RendererRegistry={}));export default RendererRegistry;

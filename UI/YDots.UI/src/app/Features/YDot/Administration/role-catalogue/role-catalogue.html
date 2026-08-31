@@ -1,0 +1,750 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+    <!-- ======================= Header ======================= -->
+    <div class="rc-header mb-4">
+      <div class="rc-header__left">
+        <div class="rc-header__icon" aria-hidden="true">
+          <i class="ri-shield-star-line"></i>
+        </div>
+        <div>
+          <h1 class="rc-header__title">Role & Permission Catalogue</h1>
+          <p class="rc-header__subtitle">Maintain controlled business roles and permission bundles</p>
+        </div>
+      </div>
+      <div class="rc-header__right">
+        <button class="btn btn-primary btn-sm" type="button" (click)="createDraftRole()">
+          <i class="ri-add-line" aria-hidden="true"></i>
+          <span>Create Draft Role</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ======================= Loading ======================= -->
+    @if (loading()) {
+      <div class="state-block" role="status" aria-live="polite">
+        <div class="state-block__icon" aria-hidden="true"><i class="ri-loader-4-line ri-spin"></i></div>
+        <p class="state-block__title">Loading role catalogue…</p>
+        <p class="state-block__hint">Fetching roles and permissions</p>
+      </div>
+    }
+
+    <!-- ======================= Error ======================= -->
+    @if (loadFailed() && !loading()) {
+      <div class="state-block" role="alert">
+        <div class="state-block__icon state-block__icon--danger" aria-hidden="true"><i class="ri-error-warning-line"></i></div>
+        <p class="state-block__title">Failed to load catalogue</p>
+        <p class="state-block__hint">The role catalogue couldn't be retrieved. Please try again.</p>
+        <button class="btn btn-outline-primary btn-sm" type="button" (click)="retry()">
+          <i class="ri-refresh-line me-1" aria-hidden="true"></i> Retry
+        </button>
+      </div>
+    }
+
+    <!-- ======================= Main Content ======================= -->
+    @if (!loading() && !loadFailed()) {
+
+      <!-- -------- Stats Strip -------- -->
+      <div class="stats-grid mb-4" role="list" aria-label="Role counts by status">
+        <div class="stat-card stat-card--total" role="listitem">
+          <div class="stat-card__icon" aria-hidden="true"><i class="ri-shield-star-line"></i></div>
+          <div class="stat-card__body">
+            <div class="stat-card__label">Total Roles</div>
+            <div class="stat-card__value">{{ roleCounts().total }}</div>
+          </div>
+        </div>
+
+        @for (item of statusBreakdown(); track item.status) {
+          <div class="stat-card" [ngClass]="statCardClass(item.status)" role="listitem">
+            <div class="stat-card__icon" aria-hidden="true"><i [ngClass]="statusIcon(item.status)"></i></div>
+            <div class="stat-card__body">
+              <div class="stat-card__label">{{ item.status }} Roles</div>
+              <div class="stat-card__value">{{ item.count }}</div>
+            </div>
+          </div>
+        }
+
+        <div class="stat-card stat-card--system" role="listitem">
+          <div class="stat-card__icon" aria-hidden="true"><i class="ri-lock-2-line"></i></div>
+          <div class="stat-card__body">
+            <div class="stat-card__label">System Roles</div>
+            <div class="stat-card__value">{{ systemRoleCount() }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- -------- Filter Toolbar -------- -->
+      <div class="rc-toolbar mb-3">
+        <input type="checkbox" id="filterPanelToggle" class="filter-panel-toggle-input" hidden>
+
+        <div class="rc-search">
+          <i class="ri-search-line" aria-hidden="true"></i>
+          <label for="roleSearchInput" class="visually-hidden">Search roles</label>
+          <input id="roleSearchInput" type="text" placeholder="Search by name, code or purpose…"
+                 [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+        </div>
+
+        <div class="rc-tabs" role="tablist" aria-label="Filter by approval state">
+          <button type="button" class="rc-tab" role="tab" [attr.aria-selected]="filterStatus() === ''"
+                  [class.rc-tab--active]="filterStatus() === ''" (click)="filterStatus.set('')">
+            <i class="ri-apps-2-line" aria-hidden="true"></i>
+            All
+            <span class="rc-tab__count">{{ roleCounts().total }}</span>
+          </button>
+          @for (item of statusBreakdown(); track item.status) {
+            <button type="button" class="rc-tab" role="tab" [attr.aria-selected]="filterStatus() === item.status"
+                    [ngClass]="statusTabClass(item.status)"
+                    [class.rc-tab--active]="filterStatus() === item.status" (click)="filterStatus.set(item.status)">
+              <i [ngClass]="statusIcon(item.status)" aria-hidden="true"></i>
+              {{ item.status }}
+              <span class="rc-tab__count">{{ item.count }}</span>
+            </button>
+          }
+        </div>
+
+        <label for="filterPanelToggle" class="rc-filter-btn">
+          <i class="ri-equalizer-line" aria-hidden="true"></i>
+          <span>Filter</span>
+          @if (filterType() || filterFunction()) {
+            <span class="rc-filter-dot" aria-label="Filters active"></span>
+          }
+        </label>
+
+        <div class="rc-filter-panel" role="dialog" aria-label="Smart filters">
+          <div class="rc-filter-panel__head">
+            <div>
+              <div class="rc-filter-panel__title">Smart Filters</div>
+              <div class="rc-filter-panel__caption">Refine the catalogue view</div>
+            </div>
+            <label for="filterPanelToggle" class="rc-filter-panel__close" aria-label="Close filters"><i class="ri-close-line" aria-hidden="true"></i></label>
+          </div>
+
+          <div class="rc-filter-panel__body">
+            <fieldset class="rc-filter-group">
+              <legend class="rc-filter-group__label">Role Type</legend>
+              <div class="rc-chip-row">
+                <label class="rc-chip" [class.rc-chip--active]="filterType() === ''">
+                  <input type="radio" name="typeRadio" [checked]="filterType() === ''" (change)="filterType.set('')">
+                  <span class="rc-chip__box" aria-hidden="true"><i class="ri-check-line"></i></span>
+                  <span class="rc-chip__text">All types</span>
+                </label>
+                @for (type of data()?.roleTypeOptions ?? []; track type.id) {
+                  <label class="rc-chip" [class.rc-chip--active]="filterType() === type.id">
+                    <input type="radio" name="typeRadio" [checked]="filterType() === type.id" (change)="filterType.set(type.id ?? '')">
+                    <span class="rc-chip__box" aria-hidden="true"><i class="ri-check-line"></i></span>
+                    <span class="rc-chip__text">{{ type.name }}</span>
+                  </label>
+                }
+              </div>
+            </fieldset>
+
+            <div class="rc-filter-group">
+              <label class="rc-filter-group__label" for="functionFilterSelect">Owning Function</label>
+              <div class="rc-select">
+                <i class="ri-building-2-line" aria-hidden="true"></i>
+                <select id="functionFilterSelect" [ngModel]="filterFunction()" (ngModelChange)="filterFunction.set($event)">
+                  <option value="">All functions</option>
+                  <option value="Donation Operations">Donation Operations</option>
+                  <option value="Fundraising">Fundraising</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Compliance">Compliance</option>
+                </select>
+                <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="rc-filter-panel__foot">
+            <button type="button" class="rc-link-btn" (click)="clearFilters()">
+              <i class="ri-refresh-line" aria-hidden="true"></i> Reset all
+            </button>
+            <label for="filterPanelToggle" class="btn btn-primary btn-sm px-4 mb-0">Apply Filters</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================= Empty State ======================= -->
+      @if (filteredRoles().length === 0) {
+        <div class="state-block state-block--card">
+          <div class="state-block__icon" aria-hidden="true"><i class="ri-shield-line"></i></div>
+          <p class="state-block__title">No roles found</p>
+          <p class="state-block__hint">No roles match the current filters.</p>
+          <button class="btn btn-outline-primary btn-sm" type="button" (click)="clearFilters()">
+            <i class="ri-filter-off-line me-1" aria-hidden="true"></i> Clear filters
+          </button>
+        </div>
+      }
+
+      <!-- ======================= Flex Layout: Grid + Details ======================= -->
+      @if (filteredRoles().length > 0) {
+        <div class="rc-layout">
+          <!-- -------- Left: Grid Cards -------- -->
+          <div class="rc-layout__grid">
+            <div class="rc-grid-card">
+              <div class="rc-grid-card__head">
+                <div class="rc-grid-card__title">
+                  <i class="ri-grid-fill" aria-hidden="true"></i>
+                  <span>Role Catalogue</span>
+                </div>
+                <span class="rc-grid-card__meta" aria-live="polite">{{ filteredRoles().length }} role(s)</span>
+              </div>
+              <div class="rc-grid" role="list" aria-label="Role cards">
+                @for (role of filteredRoles(); track role.id) {
+                  <div class="rc-grid-item" role="listitem" tabindex="0"
+                       [ngClass]="'is-' + role.approvalState.toLowerCase()"
+                       [class.rc-grid-item--selected]="detailRole()?.id === role.id"
+                       (click)="openDetail(role)" (keydown.enter)="openDetail(role)">
+                    <div class="rc-grid-item__top">
+                      <span class="rc-avatar" [ngStyle]="avatarStyle(role.roleName)" aria-hidden="true">
+                        {{ role.roleName | slice:0:1 }}
+                      </span>
+                      <div class="rc-grid-item__title">
+                        <a href="javascript:void(0)" class="rc-grid-item__name" (click)="openDetail(role); $event.stopPropagation()">{{ role.roleName }}</a>
+                        <code class="rc-code">{{ role.roleCode }}</code>
+                      </div>
+                      <span class="rc-status" [ngClass]="statusBadgeClass(role.approvalState)">
+                        <span class="rc-status__dot" aria-hidden="true"></span>
+                        {{ role.approvalState }}
+                      </span>
+                    </div>
+
+                    <p class="rc-grid-item__purpose">{{ role.purpose || '—' }}</p>
+
+                    <div class="rc-grid-item__meta">
+                      <span class="rc-type"><i class="ri-price-tag-3-line" aria-hidden="true"></i>{{ role.roleType }}</span>
+                      <span class="rc-function"><i class="ri-building-2-line" aria-hidden="true"></i>{{ role.owningFunction || '—' }}</span>
+                    </div>
+
+                    <div class="rc-grid-item__footer">
+                      <span class="rc-privilege" [class.rc-privilege--elevated]="role.privilegeClassification === 'Elevated'">
+                        <i class="ri-shield-keyhole-line" aria-hidden="true"></i>{{ role.privilegeClassification }}
+                      </span>
+                      <span class="rc-users"><i class="ri-user-line" aria-hidden="true"></i>{{ role.assignedUserCount }}</span>
+                      <span class="rc-date"><i class="ri-calendar-line" aria-hidden="true"></i>{{ role.effectiveDate }}</span>
+                    </div>
+
+                    <div class="rc-grid-item__actions">
+                      <button type="button" class="rc-action rc-action--primary" title="Compare" aria-label="Compare {{ role.roleName }} with another role"
+                              (click)="openCompareModal(role); $event.stopPropagation()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/>
+                        </svg>
+                      </button>
+                      @if (role.approvalState === 'Draft' || role.approvalState === 'Pending') {
+                        <button type="button" class="rc-action rc-action--success" title="Submit" aria-label="Submit {{ role.roleName }} for approval"
+                                (click)="submitRole(role); $event.stopPropagation()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/>
+                          </svg>
+                        </button>
+                      }
+                      @if (role.approvalState === 'Draft' || role.approvalState === 'Pending') {
+                        <button type="button" class="rc-action rc-action--danger" title="Delete draft" aria-label="Delete draft {{ role.roleName }}"
+                                (click)="openDeleteRoleModal(role); $event.stopPropagation()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+                          </svg>
+                        </button>
+                      }
+                      @if ((role.approvalState === 'Active' || role.approvalState === 'Approved') && !role.isSystemRole) {
+                        <button type="button" class="rc-action rc-action--neutral" title="Retire" aria-label="Retire {{ role.roleName }}"
+                                (click)="retireRole(role); $event.stopPropagation()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>
+                          </svg>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- -------- Right: Details Panel (inline flex) -------- -->
+          @if (showDetailModal() && detailView(); as role) {
+            <div class="rc-layout__details">
+              <div class="rc-details-panel" role="dialog" aria-modal="true" aria-labelledby="roleDetailTitle">
+
+                <div class="rc-details-panel__header">
+                  <div class="rc-details-panel__title">
+                    <i class="ri-shield-star-line" aria-hidden="true"></i>
+                    <span>Role Details</span>
+                  </div>
+                  <button type="button" class="rc-details-panel__close" (click)="closeDetail()" aria-label="Close">
+                    <i class="ri-close-line" aria-hidden="true"></i>
+                  </button>
+                </div>
+
+                <div class="rc-details-panel__body">
+
+                  <!-- ---- Profile header ---- -->
+                  <div class="rc-profile-header">
+                    <div class="rc-profile-status">
+                      <span class="rc-status" [ngClass]="statusBadgeClass(role.approvalState)">
+                        <span class="rc-status__dot" aria-hidden="true"></span>{{ role.approvalState }}
+                      </span>
+                    </div>
+                    <span class="rc-profile-avatar" [ngStyle]="avatarStyle(role.name)" aria-hidden="true">
+                      {{ role.name | slice:0:1 }}
+                    </span>
+                    <h5 class="rc-profile-name" id="roleDetailTitle">{{ role.name }}</h5>
+                    <p class="rc-profile-id">{{ role.code }}</p>
+                    <span class="rc-profile-location">
+                      <i class="ri-building-2-line" aria-hidden="true"></i>{{ role.owningFunction || '—' }}
+                    </span>
+
+                    <div class="rc-profile-actions">
+                      @if (role.canActivate) {
+                        <button class="rc-btn rc-btn--success" type="button" (click)="submitRole(role)">
+                          <i class="ri-play-circle-line" aria-hidden="true"></i> Put Into Use
+                        </button>
+                      }
+                      @if (role.canRetire) {
+                        <button class="rc-btn rc-btn--outline" type="button" (click)="retireRole(role)">
+                          <i class="ri-archive-line" aria-hidden="true"></i> Retire Role
+                        </button>
+                      }
+                      @if (role.isSystemRole) {
+                        <p class="rc-profile-bio mb-0">
+                          <i class="ri-lock-2-line me-1" aria-hidden="true"></i>Built in. This role is
+                          part of the platform and cannot be changed here.
+                        </p>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- ---- Purpose ---- -->
+                  <div class="rc-profile-section">
+                    <div class="rc-profile-section__label">Purpose</div>
+                    <p class="rc-profile-bio">{{ role.purpose || 'No purpose has been documented for this role.' }}</p>
+                  </div>
+
+                  <!-- ---- Role Attributes ---- -->
+                  <div class="rc-profile-section">
+                    <div class="rc-profile-section__label">Role Attributes</div>
+                    <div class="rc-tag-row">
+                      <span class="rc-tag-pill">{{ role.roleType }}</span>
+                      <span class="rc-tag-pill" [ngClass]="role.isPrivileged ? 'rc-tag-pill--purple' : 'rc-tag-pill--blue'">
+                        <i class="ri-shield-keyhole-line" aria-hidden="true"></i>{{ role.privilegeLevel }}
+                      </span>
+                      @if (role.isDefaultRole) {
+                        <span class="rc-tag-pill rc-tag-pill--amber">
+                          <i class="ri-group-line" aria-hidden="true"></i>Given to everybody
+                        </span>
+                      }
+                      @if (role.grantsAllPermissions) {
+                        <span class="rc-tag-pill rc-tag-pill--purple">
+                          <i class="ri-key-2-line" aria-hidden="true"></i>Every permission
+                        </span>
+                      }
+                      <span class="rc-tag-pill">
+                        <i class="ri-user-line" aria-hidden="true"></i>{{ role.assignedUserCount }}
+                        {{ role.assignedUserCount === 1 ? 'holder' : 'holders' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- ---- Permissions ---- -->
+                  <div class="rc-profile-section">
+                    <div class="rc-profile-section__label">Permissions Included</div>
+                    @if (role.permissionBundle.length > 0) {
+                      <div class="rc-check-grid">
+                        @for (perm of role.permissionBundle; track perm.code) {
+                          <div class="rc-check-item">
+                            <i class="ri-checkbox-circle-fill" aria-hidden="true"></i>
+                            <span>
+                              {{ perm.name }}
+                              @if (perm.isSensitive) {
+                                <i class="ri-alert-line text-warning ms-1"
+                                   title="Sensitive permission" aria-label="Sensitive permission"></i>
+                              }
+                              <small class="text-muted d-block">{{ perm.code }}</small>
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <p class="rc-profile-bio">No permissions have been added to this role yet.</p>
+                    }
+
+                    @if (role.excludedPermissions.length > 0) {
+                      <div class="rc-profile-section__label mt-3">Explicitly Denied</div>
+                      <div class="rc-check-grid mt-2">
+                        @for (perm of role.excludedPermissions; track perm.code) {
+                          <div class="rc-check-item rc-check-item--excluded">
+                            <i class="ri-close-circle-line" aria-hidden="true"></i>
+                            <span>
+                              {{ perm.name }}
+                              <small class="text-muted d-block">{{ perm.code }}</small>
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+
+                  <!-- ---- Details ---- -->
+                  <div class="rc-profile-section">
+                    <div class="rc-profile-section__label">Details</div>
+                    <div class="rc-meta-row">
+                      <span class="rc-meta-row__label">Version</span>
+                      <span class="rc-meta-row__value">v{{ role.roleVersion }}</span>
+                    </div>
+                    <div class="rc-meta-row">
+                      <span class="rc-meta-row__label">Created</span>
+                      <span class="rc-meta-row__value">{{ role.createdAt }}</span>
+                    </div>
+                    <div class="rc-meta-row">
+                      <span class="rc-meta-row__label">Last Changed</span>
+                      <span class="rc-meta-row__value">{{ role.updatedAt }}</span>
+                    </div>
+                    <div class="rc-meta-row">
+                      <span class="rc-meta-row__label">Priority</span>
+                      <span class="rc-meta-row__value">{{ role.priority }}</span>
+                    </div>
+                    <div class="rc-meta-row">
+                      <span class="rc-meta-row__label">Menus Made Visible</span>
+                      <span class="rc-meta-row__value">{{ role.visibleMenuCount }}</span>
+                    </div>
+                  </div>
+
+                  <!-- ---- Cannot be held alongside ---- -->
+                  <div class="rc-profile-section">
+                    <div class="rc-profile-section__label">Cannot Be Held Alongside</div>
+                    @if (role.incompatibleRoles.length > 0) {
+                      @for (conflict of role.incompatibleRoles; track conflict.name) {
+                        <div class="rc-meta-row">
+                          <span class="rc-meta-row__label">
+                            {{ conflict.name }}
+                            @if (conflict.isBlocking) {
+                              <span class="rc-tag-pill rc-tag-pill--red ms-1">Refused</span>
+                            } @else {
+                              <span class="rc-tag-pill rc-tag-pill--amber ms-1">Flagged</span>
+                            }
+                          </span>
+                          <span class="rc-meta-row__value">{{ conflict.reason || '—' }}</span>
+                        </div>
+                      }
+                    } @else {
+                      <p class="rc-profile-bio">
+                        No segregation-of-duties rules apply to this role.
+                      </p>
+                    }
+                  </div>
+
+                </div>
+
+                <div class="rc-details-panel__footer">
+                  <button class="btn btn-light" type="button" (click)="closeDetail()">Close</button>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
+</main>
+
+<!-- ======================= CREATE ROLE MODAL ======================= -->
+@if (showCreateModal()) {
+  <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="createRoleModalTitle">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content rc-modal">
+        <div class="rc-modal__header">
+          <div class="rc-modal__title">
+            <span class="rc-modal__badge rc-modal__badge--primary" aria-hidden="true"><i class="ri-add-circle-line"></i></span>
+            <div>
+              <h5 class="mb-0" id="createRoleModalTitle">Create Draft Role</h5>
+              <small>Define a new business role and its permission bundle</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeCreateModal()"></button>
+        </div>
+        <div class="modal-body rc-modal__body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="roleNameInput">Role Name <span class="text-danger">*</span></label>
+              <input id="roleNameInput" type="text" class="form-control rc-input" placeholder="e.g. Donation Manager"
+                     [ngModel]="createRoleForm().name" (ngModelChange)="createRoleForm.set({...createRoleForm(), name: $event})">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="roleCodeInput">Role Code <span class="text-danger">*</span></label>
+              <input id="roleCodeInput" type="text" class="form-control rc-input" placeholder="e.g. DON-MGR-001"
+                     [ngModel]="createRoleForm().code" (ngModelChange)="createRoleForm.set({...createRoleForm(), code: $event})">
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold" for="rolePurposeInput">Purpose</label>
+              <textarea id="rolePurposeInput" class="form-control rc-input" rows="2" placeholder="Describe what this role is for…"
+                        [ngModel]="createRoleForm().description" (ngModelChange)="createRoleForm.set({...createRoleForm(), description: $event})"></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="privilegeLevelSelect">Privilege Level</label>
+              <select id="privilegeLevelSelect" class="form-select rc-input"
+                      [ngModel]="createRoleForm().isPrivileged"
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isPrivileged: $event === 'true' || $event === true})">
+                <option [ngValue]="false">Standard</option>
+                <option [ngValue]="true">Privileged — assignment is reviewed</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="rolePriorityInput">Priority</label>
+              <input id="rolePriorityInput" type="number" min="0" max="9999" class="form-control rc-input"
+                     [ngModel]="createRoleForm().priority"
+                     (ngModelChange)="createRoleForm.set({...createRoleForm(), priority: +$event})">
+              <small class="text-muted">Decides the order roles are listed and applied in. Lower comes first.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="owningFunctionSelect">Owning Function</label>
+              <select id="owningFunctionSelect" class="form-select rc-input" [ngModel]="createRoleForm().displayTag" (ngModelChange)="createRoleForm.set({...createRoleForm(), displayTag: $event})">
+                <option value="">Select function</option>
+                <option value="Donation Operations">Donation Operations</option>
+                <option value="Fundraising">Fundraising</option>
+                <option value="Finance">Finance</option>
+                <option value="Compliance">Compliance</option>
+                <option value="Inventory">Inventory</option>
+                <option value="Communications">Communications</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="form-label small fw-semibold" id="permissionBundleLabel">Permission Bundle</div>
+              <div class="multi-select-wrap">
+                <button type="button" class="multi-select-trigger rc-input w-100" aria-haspopup="listbox" [attr.aria-expanded]="permissionDropdownOpen()"
+                        aria-labelledby="permissionBundleLabel" (click)="togglePermissionDropdown()">
+                  <span class="multi-select-placeholder" [class.text-muted]="selectedPermissionCodes().length === 0">
+                    {{ selectedPermissionCodes().length === 0 ? 'Select permissions…' : selectedPermissionLabels() }}
+                  </span>
+                  <i class="ri-arrow-down-s-line chevron" aria-hidden="true"></i>
+                </button>
+                @if (permissionDropdownOpen()) {
+                  <div class="multi-select-dropdown" role="listbox" aria-labelledby="permissionBundleLabel">
+                    <div class="multi-select-search">
+                      <i class="ri-search-line" aria-hidden="true"></i>
+                      <label class="visually-hidden" for="permissionSearchInput">Search permissions</label>
+                      <input id="permissionSearchInput" type="text" placeholder="Search permissions…" #permissionSearch>
+                    </div>
+                    <div class="multi-select-options">
+                      @for (perm of permissionChoices(); track perm.code) {
+                        <label class="multi-select-option">
+                          <input type="checkbox"
+                                 [checked]="isPermissionSelected(perm.code)"
+                                 (change)="togglePermission(perm.code)">
+                          <span class="multi-select-check" aria-hidden="true"><i class="ri-check-line"></i></span>
+                          <span class="multi-select-option-label">
+                            <span class="fw-semibold">
+                              {{ perm.name }}
+                              @if (perm.isSensitive) {
+                                <i class="ri-alert-line text-warning ms-1"
+                                   title="Sensitive permission" aria-label="Sensitive permission"></i>
+                              }
+                            </span>
+                            <small class="text-muted d-block">{{ perm.code }} — {{ perm.description }}</small>
+                          </span>
+                        </label>
+                      } @empty {
+                        <p class="text-muted small px-3 py-2 mb-0">
+                          The permission list is still loading.
+                        </p>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="defaultRoleSelect">Given To Everybody</label>
+              <select id="defaultRoleSelect" class="form-select rc-input"
+                      [ngModel]="createRoleForm().isDefaultRole"
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isDefaultRole: $event === 'true' || $event === true})">
+                <option [ngValue]="false">No — assigned individually</option>
+                <option [ngValue]="true">Yes — every new person gets it</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="form-label small fw-semibold" id="incompatibleRolesLabel">Incompatible Roles</div>
+              <div class="multi-select-wrap">
+                <button type="button" class="multi-select-trigger rc-input w-100" aria-haspopup="listbox" [attr.aria-expanded]="incompatibleDropdownOpen()"
+                        aria-labelledby="incompatibleRolesLabel" (click)="toggleIncompatibleDropdown()">
+                  <span class="multi-select-placeholder" [class.text-muted]="selectedIncompatibleRoleIds().length === 0">
+                    {{ selectedIncompatibleRoleIds().length === 0 ? 'Select incompatible roles…' : selectedIncompatibleRoleLabels() }}
+                  </span>
+                  <i class="ri-arrow-down-s-line chevron" aria-hidden="true"></i>
+                </button>
+                @if (incompatibleDropdownOpen()) {
+                  <div class="multi-select-dropdown" role="listbox" aria-labelledby="incompatibleRolesLabel">
+                    <div class="multi-select-search">
+                      <i class="ri-search-line" aria-hidden="true"></i>
+                      <label class="visually-hidden" for="incompatibleSearchInput">Search roles</label>
+                      <input id="incompatibleSearchInput" type="text" placeholder="Search roles…" #incompatibleSearch>
+                    </div>
+                    <div class="multi-select-options">
+                      @for (role of data()?.roles ?? []; track role.id) {
+                        <label class="multi-select-option">
+                          <input type="checkbox"
+                                 [checked]="isIncompatibleRoleSelected(role.id ?? '')"
+                                 (change)="toggleIncompatibleRole(role.id ?? '')">
+                          <span class="multi-select-check" aria-hidden="true"><i class="ri-check-line"></i></span>
+                          <span class="multi-select-option-label">
+                            <span class="fw-semibold">{{ role.name }}</span>
+                            <small class="text-muted d-block">{{ role.code }}</small>
+                          </span>
+                        </label>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-label small fw-semibold" id="deniedPermissionsLabel">Explicitly Denied</div>
+              <small class="text-muted d-block mb-2">
+                Deny beats allow. Use this to give a broad role and carve one thing out of it.
+              </small>
+              <div class="rc-check-grid">
+                @for (perm of permissionChoices(); track perm.code) {
+                  @if (isPermissionDenied(perm.code)) {
+                    <label class="multi-select-option">
+                      <input type="checkbox" checked (change)="toggleDeniedPermission(perm.code)">
+                      <span class="multi-select-check" aria-hidden="true"><i class="ri-check-line"></i></span>
+                      <span class="multi-select-option-label">
+                        <span class="fw-semibold">{{ perm.name }}</span>
+                        <small class="text-muted d-block">{{ perm.code }}</small>
+                      </span>
+                    </label>
+                  }
+                } @empty {
+                  <p class="text-muted small mb-0">Nothing is denied.</p>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer rc-modal__footer">
+          <button class="btn btn-light" type="button" (click)="closeCreateModal()">Cancel</button>
+          <button class="btn btn-primary" type="button" (click)="confirmCreateRole()" [disabled]="submitting()">
+            @if (submitting()) { <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> }
+            <i class="ri-save-line me-1" aria-hidden="true"></i> Create Draft
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ======================= COMPARE ROLE MODAL ======================= -->
+@if (showCompareModal() && actionRole(); as role) {
+  <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="compareModalTitle">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content rc-modal">
+        <div class="rc-modal__header">
+          <div class="rc-modal__title">
+            <span class="rc-modal__badge rc-modal__badge--info" aria-hidden="true"><i class="ri-file-compare-line"></i></span>
+            <div>
+              <h5 class="mb-0" id="compareModalTitle">Compare Roles</h5>
+              <small>Compare permissions and attributes side by side</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeCompareModal()"></button>
+        </div>
+        <div class="modal-body rc-modal__body">
+          <div class="alert alert-info small rc-alert">
+            <i class="ri-information-line" aria-hidden="true"></i>
+            <span>Select another role to compare permissions and attributes.</span>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="baseRoleInput">Base Role</label>
+            <input id="baseRoleInput" type="text" class="form-control rc-input" [value]="role.roleName" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="compareRoleSelect">Compare With</label>
+            <select id="compareRoleSelect" class="form-select rc-input" [ngModel]="compareRoleId()" (ngModelChange)="compareRoleId.set($event)">
+              <option value="">Select role to compare</option>
+              @for (r of data()?.roles ?? []; track r.id) {
+                @if (r.id !== role.id) {
+                  <option [value]="r.id">{{ r.name }} ({{ r.code }})</option>
+                }
+              }
+            </select>
+          </div>
+          @if (compareResult(); as result) {
+            <div class="mt-4">
+              <h6 class="fw-semibold mb-2">Comparison Summary</h6>
+              <div class="rc-compare-grid">
+                <div class="rc-compare-card rc-compare-card--left">
+                  <i class="ri-arrow-left-line" aria-hidden="true"></i>
+                  <small>Only in base</small>
+                  <strong>{{ result.onlyInLeft.length }}</strong>
+                </div>
+                <div class="rc-compare-card rc-compare-card--both">
+                  <i class="ri-exchange-line" aria-hidden="true"></i>
+                  <small>In both</small>
+                  <strong>{{ result.inBoth.length }}</strong>
+                </div>
+                <div class="rc-compare-card rc-compare-card--right">
+                  <i class="ri-arrow-right-line" aria-hidden="true"></i>
+                  <small>Only in other</small>
+                  <strong>{{ result.onlyInRight.length }}</strong>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="modal-footer rc-modal__footer">
+          <button class="btn btn-light" type="button" (click)="closeCompareModal()">Close</button>
+          <button class="btn btn-primary" type="button" (click)="runCompare()" [disabled]="!compareRoleId() || comparing()">
+            @if (comparing()) { <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> }
+            <i class="ri-file-compare-line me-1" aria-hidden="true"></i> Compare
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ======================= DELETE DRAFT MODAL ======================= -->
+@if (showDeleteRoleModal() && actionRole(); as role) {
+  <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content rc-modal">
+        <div class="rc-modal__header">
+          <div class="rc-modal__title">
+            <span class="rc-modal__badge rc-modal__badge--danger" aria-hidden="true"><i class="ri-delete-bin-line"></i></span>
+            <div>
+              <h5 class="mb-0" id="deleteModalTitle">Delete Unused Draft</h5>
+              <small>This action cannot be undone</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeDeleteRoleModal()"></button>
+        </div>
+        <div class="modal-body rc-modal__body">
+          <div class="alert alert-danger small rc-alert rc-alert--danger">
+            <i class="ri-alert-line" aria-hidden="true"></i>
+            <span>This permanently deletes the draft role <strong>{{ role.roleName }}</strong> ({{ role.roleCode }}).</span>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="deleteReasonInput">Deletion Reason <span class="text-danger">*</span></label>
+            <textarea id="deleteReasonInput" class="form-control rc-input" rows="3" placeholder="Enter reason (10–1000 characters)"
+                      [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($event)"
+                      [attr.aria-invalid]="!!deleteError()" [attr.aria-describedby]="deleteError() ? 'deleteReasonError' : null"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters.</div>
+            @if (deleteError()) {
+              <div class="text-danger small mt-1" id="deleteReasonError" role="alert"><i class="ri-error-warning-line me-1" aria-hidden="true"></i>{{ deleteError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer rc-modal__footer">
+          <button class="btn btn-light" type="button" (click)="closeDeleteRoleModal()">Cancel</button>
+          <button class="btn btn-danger" type="button" (click)="confirmDeleteRole()">
+            <i class="ri-delete-bin-line me-1" aria-hidden="true"></i> Permanently Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}

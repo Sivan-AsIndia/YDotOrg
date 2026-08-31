@@ -1,0 +1,1 @@
+const fs=require("fs"),axios=require("axios"),downloadImage=async(a,e,o)=>{let t=(await axios.get(a)).data.replace(/\r+|\n+|\t+/gm,"");o&&(t=await o(t)),fs.writeFileSync(e,t,"utf-8")};module.exports=downloadImage;

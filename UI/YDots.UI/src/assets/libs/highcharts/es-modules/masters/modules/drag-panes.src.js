@@ -1,0 +1,2 @@
+/*! For license information please see drag-panes.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import AxisResizer from"../../Extensions/DragPanes/AxisResizer.js";import DragPanes from"../../Extensions/DragPanes/DragPanes.js";const G=Highcharts;G.AxisResizer=AxisResizer,DragPanes.compose(G.Axis,G.Pointer);export default Highcharts;

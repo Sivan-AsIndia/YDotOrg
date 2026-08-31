@@ -1,0 +1,1818 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <div [attr.data-ui-state]="uiState()">
+        <!-- ============ TASK HEADER ============ -->
+        <header class="task-header" aria-labelledby="wizard-title">
+          <div class="task-header-main">
+            <div class="identity-text">
+              <div class="title-row">
+                <h1 class="page-title" id="wizard-title">New Campaign</h1>
+                <!-- Lifecycle state — badge with text; colour never carries meaning alone.
+                     Shown only once a draft exists; "No record" is not surfaced as a badge. -->
+                @if (lifecycleState() !== 'No record') {
+                  <span class="state-pill" role="status">
+                    <span class="dot" aria-hidden="true"></span>{{ lifecycleState() }}
+                  </span>
+                }
+              </div>
+              <p class="page-subtitle">
+                Create a campaign in simple steps.
+              </p>
+              <p class="header-meta">
+                <span class="scope-chip" title="Active scope"
+                  ><span aria-hidden="true">⊚</span> {{ activeScope }}</span
+                >
+                <span class="sep" aria-hidden="true">•</span>
+                <span>{{ operatingTimeZone }}</span>
+                @if (stableReference()) {
+                  <span class="sep" aria-hidden="true">•</span>
+                  <span class="ver" title="Stable reference">{{ stableReference() }}</span>
+                }
+              </p>
+            </div>
+
+          </div>
+        </header>
+
+        <!-- ============ STEP PROGRESS — progressive disclosure ============ -->
+        <nav class="stepper" aria-label="Campaign wizard steps">
+          <ol>
+            @for (step of steps; track step.title; let i = $index) {
+              <li
+                class="step"
+                [class.active]="stepIndex() === i"
+                [class.done]="stepCompletion()[i]"
+              >
+                <button
+                  type="button"
+                  class="step-btn"
+                  (click)="goToStep(i)"
+                  [attr.aria-current]="stepIndex() === i ? 'step' : null"
+                >
+                  <span class="step-index" aria-hidden="true">
+                    @if (stepCompletion()[i] && stepIndex() !== i) {
+                      ✓
+                    } @else {
+                      {{ i + 1 }}
+                    }
+                  </span>
+                  <span class="step-text">
+                    <span class="step-title">{{ step.title }}</span>
+                    <span class="step-caption">{{ step.caption }}</span>
+                  </span>
+                </button>
+                @if (i < steps.length - 1) {
+                  <span class="step-line" aria-hidden="true"></span>
+                }
+              </li>
+            }
+          </ol>
+        </nav>
+
+        <!-- ============ WORK AREA — two-region layout ============ -->
+        <div class="wizard-body" [class.wizard-body-full]="isLastStep()">
+          <!-- ---- Main work column ---- -->
+          <div class="work-main">
+            <!-- LOADING — retain task title, scope and safe skeleton; announce loading -->
+            @if (uiState() === 'loading') {
+              <section class="state-block" role="status" aria-live="polite">
+                <p class="state-title">Loading Campaign wizard…</p>
+                <div class="skeleton-grid" aria-hidden="true">
+                  @for (n of [1, 2, 3, 4, 5, 6]; track n) {
+                    <div class="skeleton-row"></div>
+                  }
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                  Cancel
+                </button>
+              </section>
+            }
+
+            <!-- EMPTY — explain the reason; never imply a global zero -->
+            @else if (uiState() === 'empty') {
+              <section class="state-block">
+                <p class="state-title">No saved drafts in your scope yet.</p>
+                <p class="state-body">
+                  This is empty because there are no draft configurations inside your current scope
+                  and filters — not a global zero. Start a new campaign configuration below to
+                  continue.
+                </p>
+                <button type="button" class="btn btn-primary btn-sm" (click)="dismissState()">
+                  Start a configuration
+                </button>
+              </section>
+            }
+
+            <!-- NO ACCESS — hide restricted record, fields, counts and actions -->
+            @else if (uiState() === 'no-access') {
+              <section class="state-block">
+                <p class="state-title">You do not have access to the Campaign wizard.</p>
+                <p class="state-body">
+                  Restricted menu, record, fields, counts, actions and search suggestions are
+                  hidden. This value cannot be displayed with your current access.
+                </p>
+                <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                  Return to permitted landing page
+                </button>
+              </section>
+            }
+
+            <!-- CONFLICT — record changed after load; retain proposed values -->
+            @else if (uiState() === 'conflict') {
+              <section class="state-block state-block-warn">
+                <p class="state-title">This record changed after you opened it.</p>
+                <p class="state-body">
+                  Review the latest version before continuing. Your proposed values are retained ({{
+                    concurrencyVersion()
+                  }}).
+                </p>
+                <div class="state-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Compare
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Reapply eligible changes
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Cancel
+                  </button>
+                </div>
+              </section>
+            }
+
+            <!-- DUPLICATE — safe candidate category without exposing protected details -->
+            @else if (uiState() === 'duplicate') {
+              <section class="state-block state-block-warn">
+                <p class="state-title">A similar campaign configuration may already exist.</p>
+                <p class="state-body">
+                  A safe candidate was found in your scope. Protected details of another person's
+                  record are not shown. Choose how to proceed — nothing is overwritten silently.
+                </p>
+                <div class="state-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Link
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Merge
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Change the value
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Request review
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Cancel
+                  </button>
+                </div>
+              </section>
+            }
+
+            <!-- DEPENDENCY FAILURE — separate committed local result from failed dependency -->
+            @else if (uiState() === 'dependency-failure') {
+              <section class="state-block state-block-warn">
+                <p class="state-title">We could not complete the dependent service step.</p>
+                <p class="state-body">
+                  Your confirmed local result is unchanged. The message/provider/report/job or audit
+                  dependency failed. Retry only the failed dependency using the correlation
+                  reference below.
+                </p>
+                <p class="corr-ref mono">Correlation: CORR-CAMPWIZ-7f3a9</p>
+                <div class="state-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Retry dependency
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="dismissState()">
+                    Support route
+                  </button>
+                </div>
+              </section>
+            }
+
+            <!-- READY / VALIDATION / SUCCESS all show the step form; validation & success add banners -->
+            @else {
+              <!-- REFERENCE DATA — every controlled picker on steps 2 and 3 is filled from an
+                   API, so a failed load leaves those dropdowns empty. Saying so beats an empty
+                   list with no explanation. -->
+              @if (referenceError()) {
+                <div class="alert alert-error" role="alert" aria-live="assertive">
+                  <p class="alert-title">Some lists could not be loaded.</p>
+                  <p class="alert-body">{{ referenceError() }}</p>
+                </div>
+              }
+
+              <!-- VALIDATION — error summary linking to the exact fields -->
+              @if (uiState() === 'validation' && !requiredComplete()) {
+                <div class="alert alert-error" role="alert" aria-live="assertive">
+                  <p class="alert-title">Some required information is missing.</p>
+                  <ul class="alert-list">
+                    @for (label of remainingRequired(); track label) {
+                      <li>Enter {{ label }}.</li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <!-- SUCCESS — stable reference, resulting state, effective time, remaining dependency, next action -->
+              @if (uiState() === 'success') {
+                <div class="alert alert-success" role="status" aria-live="polite">
+                  <p class="alert-title">Saved successfully.</p>
+                  <p class="alert-body">
+                    Reference <strong class="mono">{{ successRef() }}</strong
+                    >; state <strong>{{ lifecycleState() }}</strong
+                    >; effective <strong>{{ lastSaved() ?? 'now' }}</strong
+                    >.
+                  </p>
+                  <p class="alert-body">
+                    @if (!requiredComplete()) {
+                      Pending dependency: {{ remainingRequired().length }} required field(s)
+                      remaining. Next permitted route — complete the remaining information.
+                    } @else {
+                      No pending dependency. Next permitted route — submit for activation.
+                    }
+                  </p>
+                  <button type="button" class="link-btn" (click)="dismissState()">
+                    Continue editing
+                  </button>
+                </div>
+              }
+
+              <!-- ---------- STEP CARD ---------- -->
+              <section class="work-card" aria-labelledby="step-heading">
+                <header class="work-card-head">
+                  <h2 class="work-card-title" id="step-heading">
+                    {{ stepIndex() + 1 }}. {{ currentStep().title }}
+                  </h2>
+                  <p class="work-card-sub">{{ currentStep().caption }}</p>
+                </header>
+
+                <!-- ===== STEP 1 — Basic Information ===== -->
+                @if (stepIndex() === 0) {
+                  <div class="field-grid">
+                    <!-- Campaign name — free-text input -->
+                    <div class="field">
+                      <label class="field-label" for="f-name"
+                        >Campaign name <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-name"
+                        type="text"
+                        class="control"
+                        autocomplete="off"
+                        [attr.maxlength]="campaignNameMax"
+                        placeholder="Enter the campaign name…"
+                        [ngModel]="campaignName()"
+                        (ngModelChange)="campaignName.set($event)"
+                        [attr.aria-invalid]="
+                          wasAttempted(0) && !campaignNameValid() ? 'true' : null
+                        "
+                      />
+                      @if (wasAttempted(0) && !campaignNameValid()) {
+                        <p class="field-error">Enter Campaign name.</p>
+                      } @else {
+                        <p class="field-hint">Enter a clear and concise campaign name.</p>
+                      }
+                    </div>
+
+                    <!-- Campaign code — fully editable, user-typed code, auto-uppercased,
+                         20 characters maximum (no fixed prefix) -->
+                    <div class="field">
+                      <label class="field-label" for="f-code"
+                        >Campaign code <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-code"
+                        type="text"
+                        class="control mono"
+                        autocomplete="off"
+                        [attr.maxlength]="campaignCodeMax"
+                        [ngModel]="campaignCode()"
+                        (ngModelChange)="setCampaignCode($event)"
+                        [attr.aria-invalid]="wasAttempted(0) && !campaignCode().trim() ? 'true' : null"
+                        placeholder="e.g. EDU2025"
+                      />
+                      @if (wasAttempted(0) && !campaignCode().trim()) {
+                        <p class="field-error">Enter Campaign code.</p>
+                      } @else {
+                        <p class="field-hint">
+                          Enter a unique campaign code — up to {{ campaignCodeMax }} characters.
+                        </p>
+                      }
+                    </div>
+
+                    <!-- Purpose — rich-text editor with character counter, 10–1,000 -->
+                    <div class="field field-wide">
+                      <label class="field-label" for="f-purpose"
+                        >Purpose <span class="req" aria-hidden="true">*</span></label
+                      >
+
+                      <div class="rte-editor">
+                        <div
+                          class="rte-toolbar"
+                          role="toolbar"
+                          aria-label="Purpose formatting"
+                          (mousedown)="$event.preventDefault()"
+                        >
+                          <button type="button" class="rte-btn" title="Bold" aria-label="Bold" (click)="applyFormat(purposeBody, 'bold')">
+                            <strong>B</strong>
+                          </button>
+                          <button type="button" class="rte-btn" title="Italic" aria-label="Italic" (click)="applyFormat(purposeBody, 'italic')">
+                            <em>I</em>
+                          </button>
+                          <button type="button" class="rte-btn" title="Underline" aria-label="Underline" (click)="applyFormat(purposeBody, 'underline')">
+                            <span style="text-decoration: underline">U</span>
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button type="button" class="rte-btn" title="Bulleted list" aria-label="Bulleted list" (click)="applyFormat(purposeBody, 'insertUnorderedList')">
+                            • List
+                          </button>
+                          <button type="button" class="rte-btn" title="Numbered list" aria-label="Numbered list" (click)="applyFormat(purposeBody, 'insertOrderedList')">
+                            1. List
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button type="button" class="rte-btn" title="Align left" aria-label="Align left" (click)="applyFormat(purposeBody, 'justifyLeft')">
+                            ⯇
+                          </button>
+                          <button type="button" class="rte-btn" title="Align centre" aria-label="Align centre" (click)="applyFormat(purposeBody, 'justifyCenter')">
+                            ☰
+                          </button>
+                          <button type="button" class="rte-btn" title="Align right" aria-label="Align right" (click)="applyFormat(purposeBody, 'justifyRight')">
+                            ⯈
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Font size</span>
+                            <select class="rte-select" aria-label="Font size" (change)="applyFormat(purposeBody, 'fontSize', $any($event.target).value)">
+                              <option value="" disabled selected>Size</option>
+                              @for (s of fontSizes; track s.value) {
+                                <option [value]="s.value">{{ s.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button type="button" class="rte-btn" title="Clear formatting" aria-label="Clear formatting" (click)="applyFormat(purposeBody, 'removeFormat')">
+                            Clear
+                          </button>
+                        </div>
+
+                        <div
+                          #purposeBody
+                          id="f-purpose"
+                          class="control rte-body"
+                          contenteditable="true"
+                          role="textbox"
+                          aria-multiline="true"
+                          aria-labelledby="f-purpose"
+                          [attr.aria-invalid]="
+                            !purposeValid() && (purposeLen() > 0 || wasAttempted(0)) ? 'true' : null
+                          "
+                          [innerHTML]="purposeSeed()"
+                          (input)="syncEditor(purposeBody)"
+                          data-placeholder="Describe the controlled purpose of this campaign…"
+                        ></div>
+                      </div>
+                      <div class="counter-row">
+                        @if (!purposeValid() && (purposeLen() > 0 || wasAttempted(0))) {
+                          <span class="field-error"
+                            >Review Purpose. Enter {{ purposeMin }}–{{
+                              purposeMax
+                            }}
+                            characters.</span
+                          >
+                        } @else if (purposeValid()) {
+                          <span class="looks-good">✓ Looks good!</span>
+                        } @else {
+                          <span class="field-hint"
+                            >Meaningful text required for this controlled decision.</span
+                          >
+                        }
+                        <span class="char-count" [class.over]="purposeLen() > purposeMax"
+                          >{{ purposeLen() }} / {{ purposeMax }} characters</span
+                        >
+                      </div>
+                    </div>
+
+                    <!-- Fund or programme — text input -->
+                    <div class="field">
+                      <label class="field-label" for="f-fund"
+                        >Fund or programme <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-fund"
+                        type="text"
+                        class="control"
+                        [attr.maxlength]="fundProgrammeMax"
+                        [ngModel]="fundProgramme()"
+                        (ngModelChange)="fundProgramme.set($event)"
+                        [attr.aria-invalid]="
+                          wasAttempted(0) && !fundProgrammeValid() ? 'true' : null
+                        "
+                        placeholder="e.g. Education Fund 2025"
+                      />
+                      @if (wasAttempted(0) && !fundProgrammeValid()) {
+                        <p class="field-error">Enter Fund or programme.</p>
+                      } @else {
+                        <p class="field-hint">The fund or programme this campaign belongs to.</p>
+                      }
+                    </div>
+
+                    <!-- Owner — a single box that holds every accountable owner as a chip. Picking an owner adds a chip and removes that person from the
+                         dropdown; a new campaign starts with the full list again. -->
+                    <div class="field">
+                      <label class="field-label" for="f-owner"
+                        >Owner <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <div class="combo owner-chip-combo" appClickOutside (appClickOutside)="ownerOpen.set(false)">
+                        <!-- Search box only — selected owners appear as chips BELOW the box, not inside it. -->
+                        <div class="chip-box chip-box-search" [class.is-invalid]="wasAttempted(0) && !selectedOwners().length" (click)="ownerOpen.set(true)">
+                          <input
+                            id="f-owner"
+                            type="text"
+                            class="chip-input"
+                            autocomplete="off"
+                            [placeholder]="selectedOwners().length ? 'Add another owner…' : 'Search eligible owners in scope…'"
+                            [ngModel]="ownerQuery()"
+                            (ngModelChange)="ownerQuery.set($event); ownerOpen.set(true)"
+                            (focus)="ownerOpen.set(true)"
+                            (click)="ownerOpen.set(true); $event.stopPropagation()"
+                            [attr.aria-invalid]="wasAttempted(0) && !selectedOwners().length ? 'true' : null"
+                            role="combobox"
+                            [attr.aria-expanded]="ownerOpen()"
+                            aria-controls="owner-list"
+                          />
+                        </div>
+                        @if (ownerOpen()) {
+                          <ul class="combo-list" id="owner-list" role="listbox">
+                            @for (r of ownerResults(); track r.ref) {
+                              <li role="option">
+                                <button type="button" class="combo-option" (click)="chooseOwner(r)">
+                                  <span class="opt-avatar" aria-hidden="true">{{ r.label.charAt(0) }}</span>
+                                  <span class="opt-body">
+                                    <span class="opt-label">{{ r.label }}</span>
+                                    <!-- THE HUMAN REFERENCE ONLY. `r.ref` is the person's API id, and rendering it put a raw
+                                         GUID in front of an operator beside the USR- code they would actually
+                                         quote. The id is still what the option carries and what is sent. -->
+                                    <span class="opt-context">{{ r.context }}</span>
+                                  </span>
+                                </button>
+                              </li>
+                            }
+                            @if (ownerResults().length === 0) {
+                              <li class="combo-empty">
+                                {{ selectedOwners().length ? 'No more eligible people in scope.' : 'No eligible person in scope.' }}
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                      <!-- Selected owners shown as chips BELOW the search box. -->
+                      @if (selectedOwners().length) {
+                        <div class="owner-chips-below">
+                          @for (o of selectedOwners(); track o.ref) {
+                            <span class="owner-chip">
+                              <span class="opt-avatar sm" aria-hidden="true">{{ o.label.charAt(0) }}</span>
+                              <span class="owner-chip-label">{{ o.label }}</span>
+                              <button
+                                type="button"
+                                class="owner-chip-x"
+                                (click)="removeOwnerChip(o.ref); $event.stopPropagation()"
+                                [attr.aria-label]="'Remove ' + o.label"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          }
+                        </div>
+                      }
+                      @if (wasAttempted(0) && !selectedOwners().length) {
+                        <p class="field-error">Enter Owner.</p>
+                      } @else {
+                        <p class="field-hint">One or more people responsible for this campaign.</p>
+                      }
+                    </div>
+
+                    <!-- Start date — date picker with time-zone label -->
+                    <div class="field">
+                      <label class="field-label" for="f-start"
+                        >Start date <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-start"
+                        type="date"
+                        class="control"
+                        [ngModel]="startDate()"
+                        (ngModelChange)="startDate.set($event)"
+                        [attr.aria-invalid]="wasAttempted(0) && !startDateValid() ? 'true' : null"
+                      />
+                      @if (wasAttempted(0) && !startDateValid()) {
+                        <p class="field-error">Enter Start date.</p>
+                      } @else {
+                        <p class="field-hint">
+                          When will this campaign go live? Interpreted as
+                          <strong>{{ interpretDate(startDate()) }}</strong> ·
+                          {{ operatingTimeZone }}
+                        </p>
+                      }
+                    </div>
+
+                    <!-- End date — date picker with time-zone label -->
+                    <div class="field">
+                      <label class="field-label" for="f-end"
+                        >End date <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-end"
+                        type="date"
+                        class="control"
+                        [ngModel]="endDate()"
+                        (ngModelChange)="endDate.set($event)"
+                        [attr.aria-invalid]="
+                          !endDateValid() && (!!endDate() || wasAttempted(0)) ? 'true' : null
+                        "
+                      />
+                      @if (!endDateValid() && (!!endDate() || wasAttempted(0))) {
+                        <p class="field-error">
+                          {{
+                            !endDate()
+                              ? 'Enter End date.'
+                              : 'Review End date. The end cannot fall before the start.'
+                          }}
+                        </p>
+                      } @else {
+                        <p class="field-hint">
+                          When will this campaign end? Interpreted as
+                          <strong>{{ interpretDate(endDate()) }}</strong> · {{ operatingTimeZone }}
+                        </p>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- ===== STEP 2 — Channels & Sources ===== -->
+                @else if (stepIndex() === 1) {
+                  <div class="field-grid">
+                    <!-- Channels — searchable controlled choice -->
+                    <div class="field field-wide">
+                      <label class="field-label" for="f-channels"
+                        >Channels <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        id="f-channels"
+                        type="text"
+                        class="control"
+                        [ngModel]="channelQuery()"
+                        (ngModelChange)="channelQuery.set($event)"
+                        [attr.aria-invalid]="wasAttempted(1) && !channelsValid() ? 'true' : null"
+                        placeholder="Search approved channels…"
+                      />
+                      <div class="choice-chips" role="group" aria-label="Channels">
+                        @for (c of channelResults(); track c.ref) {
+                          <button
+                            type="button"
+                            class="chip-toggle"
+                            [class.on]="selectedChannels().includes(c.ref)"
+                            [attr.aria-pressed]="selectedChannels().includes(c.ref)"
+                            (click)="toggleChannel(c.ref)"
+                          >
+                            {{ c.label }}
+                          </button>
+                        }
+                      </div>
+                      @if (wasAttempted(1) && !channelsValid()) {
+                        <p class="field-error">Select at least one channel.</p>
+                      } @else {
+                        <p class="field-hint">
+                          From the effective approved catalogue. Selected:
+                          @if (selectedChannels().length) {
+                            <strong>{{ selectedChannels().length }}</strong>
+                            (<span class="mono">{{ selectedChannelLabels().join(', ') }}</span>)
+                          } @else {
+                            none
+                          }
+                        </p>
+                      }
+                    </div>
+                    <!-- Country — searchable single-select from the full country list -->
+                    <div class="field">
+                      <label class="field-label" for="f-country"
+                        >Country <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <div class="combo" appClickOutside (appClickOutside)="countryOpen.set(false)">
+                        <input
+                          id="f-country"
+                          type="text"
+                          class="control"
+                          autocomplete="off"
+                          placeholder="Search and select a country…"
+                          [ngModel]="countryQuery()"
+                          (ngModelChange)="countryQuery.set($event); countryOpen.set(true)"
+                          (focus)="countryOpen.set(true)"
+                          (click)="countryOpen.set(true)"
+                          [attr.aria-invalid]="wasAttempted(1) && !countryValid() ? 'true' : null"
+                          role="combobox"
+                          [attr.aria-expanded]="countryOpen()"
+                          aria-controls="country-list"
+                        />
+                        @if (selectedCountry()) {
+                          <button
+                            type="button"
+                            class="combo-clear"
+                            (click)="clearCountry()"
+                            aria-label="Clear country"
+                          >
+                            ✕
+                          </button>
+                        }
+                        @if (countryOpen()) {
+                          <ul class="combo-list" id="country-list" role="listbox">
+                            @for (c of countryResults(); track c.ref) {
+                              <li role="option" [attr.aria-selected]="selectedCountry() === c.ref">
+                                <button
+                                  type="button"
+                                  class="combo-option"
+                                  (click)="chooseCountry(c)"
+                                >
+                                  <span class="opt-body"
+                                    ><span class="opt-label">{{ c.label }}</span></span
+                                  >
+                                </button>
+                              </li>
+                            }
+                            @if (countryResults().length === 0) {
+                              <li class="combo-empty">No matching country.</li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                      @if (wasAttempted(1) && !countryValid()) {
+                        <p class="field-error">Enter Country.</p>
+                      } @else {
+                        <p class="field-hint">
+                          This campaign can be sent to any country. Type to filter the list.
+                        </p>
+                      }
+                    </div>
+
+                    <!-- State — the country's own divisions from the masters API. There is no
+                         free-text fallback: `stateId` is a Guid, so a typed name could never be
+                         sent. A country with no states in the master data leaves this empty and
+                         `regionValid` treats that as satisfied. -->
+                    <div class="field">
+                      <label class="field-label" for="f-region"
+                        >State
+                        @if (regionOptions().length) {
+                          <span class="req" aria-hidden="true">*</span>
+                        }
+                      </label>
+                      <div class="combo" appClickOutside (appClickOutside)="regionOpen.set(false)">
+                        <input
+                          id="f-region"
+                          type="text"
+                          class="control"
+                          autocomplete="off"
+                          [disabled]="!regionOptions().length"
+                          [placeholder]="
+                            !selectedCountry()
+                              ? 'Select a country first'
+                              : regionOptions().length
+                                ? 'Search states…'
+                                : 'No states recorded for this country'
+                          "
+                          [ngModel]="regionQuery()"
+                          (ngModelChange)="regionQuery.set($event); regionOpen.set(true)"
+                          (focus)="regionOpen.set(true)"
+                          (click)="regionOpen.set(true)"
+                          [attr.aria-invalid]="wasAttempted(1) && !regionValid() ? 'true' : null"
+                          role="combobox"
+                          [attr.aria-expanded]="regionOpen()"
+                          aria-controls="region-list"
+                        />
+                        @if (region()) {
+                          <button
+                            type="button"
+                            class="combo-clear"
+                            (click)="clearRegion()"
+                            aria-label="Clear state"
+                          >
+                            ✕
+                          </button>
+                        }
+                        @if (regionOpen() && regionOptions().length) {
+                          <ul class="combo-list" id="region-list" role="listbox">
+                            @for (r of regionResults(); track r.ref) {
+                              <li role="option" [attr.aria-selected]="region() === r.ref">
+                                <button type="button" class="combo-option" (click)="chooseRegion(r)">
+                                  <span class="opt-body"><span class="opt-label">{{ r.label }}</span></span>
+                                </button>
+                              </li>
+                            }
+                            @if (regionResults().length === 0) {
+                              <li class="combo-empty">No matching state.</li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                      @if (wasAttempted(1) && !regionValid()) {
+                        <p class="field-error">Enter State.</p>
+                      } @else {
+                        <p class="field-hint">State for the selected country.</p>
+                      }
+                    </div>
+
+                    <!-- City — the state's own cities from the masters API. Free text is gone
+                         for the same reason as State: `cityId` is a Guid. -->
+                    <div class="field">
+                      <label class="field-label" for="f-city"
+                        >City
+                        @if (cityOptions().length) {
+                          <span class="req" aria-hidden="true">*</span>
+                        }
+                      </label>
+                      <div class="combo" appClickOutside (appClickOutside)="cityOpen.set(false)">
+                        <input
+                          id="f-city"
+                          type="text"
+                          class="control"
+                          autocomplete="off"
+                          [disabled]="!cityOptions().length"
+                          [placeholder]="
+                            !region()
+                              ? 'Select a state first'
+                              : cityOptions().length
+                                ? 'Search cities…'
+                                : 'No cities recorded for this state'
+                          "
+                          [ngModel]="cityQuery()"
+                          (ngModelChange)="cityQuery.set($event); cityOpen.set(true)"
+                          (focus)="cityOpen.set(true)"
+                          (click)="cityOpen.set(true)"
+                          [attr.aria-invalid]="wasAttempted(1) && !cityValid() ? 'true' : null"
+                          role="combobox"
+                          [attr.aria-expanded]="cityOpen()"
+                          aria-controls="city-list"
+                        />
+                        @if (city()) {
+                          <button
+                            type="button"
+                            class="combo-clear"
+                            (click)="clearCity()"
+                            aria-label="Clear city"
+                          >
+                            ✕
+                          </button>
+                        }
+                        @if (cityOpen() && cityOptions().length) {
+                          <ul class="combo-list" id="city-list" role="listbox">
+                            @for (c of cityResults(); track c.ref) {
+                              <li role="option" [attr.aria-selected]="city() === c.ref">
+                                <button type="button" class="combo-option" (click)="chooseCity(c)">
+                                  <span class="opt-body"><span class="opt-label">{{ c.label }}</span></span>
+                                </button>
+                              </li>
+                            }
+                            @if (cityResults().length === 0) {
+                              <li class="combo-empty">No matching city.</li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                      @if (wasAttempted(1) && !cityValid()) {
+                        <p class="field-error">Enter City.</p>
+                      } @else {
+                        <p class="field-hint">City or town for this campaign's activity.</p>
+                      }
+                    </div>
+
+                    <!-- Zip code — free-text -->
+                    <div class="field">
+                      <label class="field-label" for="f-pincode"
+                        >Zip code <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <input
+                        #pincodeInput
+                        id="f-pincode"
+                        type="text"
+                        class="control"
+                        maxlength="10"
+                        inputmode="numeric"
+                        [value]="pincode()"
+                        (input)="onPincodeInput(pincodeInput)"
+                        [attr.aria-invalid]="
+                          !pincodeValid() && (pincode() !== '' || wasAttempted(1)) ? 'true' : null
+                        "
+                        placeholder="e.g. 600001"
+                      />
+                      @if (!pincodeValid() && (pincode() !== '' || wasAttempted(1))) {
+                        <p class="field-error">
+                          {{ pincode() === '' ? 'Enter Zip code.' : 'Review Zip code. Enter a valid postal code.' }}
+                        </p>
+                      } @else {
+                        <p class="field-hint">Zip code for the selected state.</p>
+                      }
+                    </div>
+
+                    <!-- Lifecycle activation — how the campaign becomes Active from Scheduled -->
+                    <div class="field field-wide">
+                      <label class="field-label">Lifecycle activation</label>
+                      <div
+                        class="activation-modes"
+                        role="radiogroup"
+                        aria-label="Lifecycle activation"
+                      >
+                        <label class="activation-option" [class.on]="activationMode() === 'auto'">
+                          <input
+                            type="radio"
+                            name="activation-mode"
+                            value="auto"
+                            [checked]="activationMode() === 'auto'"
+                            (change)="activationMode.set('auto')"
+                          />
+                          <span class="activation-text">
+                            <strong>Auto-activate</strong>
+                            <span
+                              >Automatically becomes Active on the start date once Scheduled.</span
+                            >
+                          </span>
+                        </label>
+                        <label class="activation-option" [class.on]="activationMode() === 'manual'">
+                          <input
+                            type="radio"
+                            name="activation-mode"
+                            value="manual"
+                            [checked]="activationMode() === 'manual'"
+                            (change)="activationMode.set('manual')"
+                          />
+                          <span class="activation-text">
+                            <strong>Manual activate</strong>
+                            <span>Stays Scheduled until someone explicitly activates it.</span>
+                          </span>
+                        </label>
+                      </div>
+
+                      <!-- Reminder before start date — mandatory for either activation mode -->
+                      <div class="reminder-days">
+                        <div class="field">
+                          <label class="field-label" for="f-reminder-days"
+                            >Days before start date <span class="req" aria-hidden="true">*</span></label
+                          >
+                          <input
+                            id="f-reminder-days"
+                            type="number"
+                            min="1"
+                            max="30"
+                            class="control control-inline"
+                            [ngModel]="reminderDaysBefore()"
+                            (ngModelChange)="reminderDaysBefore.set($event)"
+                            [attr.aria-invalid]="wasAttempted(1) && !reminderDaysBeforeValid() ? 'true' : null"
+                          />
+                          @if (wasAttempted(1) && !reminderDaysBeforeValid()) {
+                            <p class="field-error">Enter Days before start date (1–30).</p>
+                          }
+                        </div>
+                        <div class="field">
+                          <label class="field-label" for="f-reminder-time"
+                            >Reminder time <span class="req" aria-hidden="true">*</span></label
+                          >
+                          <input
+                            id="f-reminder-time"
+                            type="time"
+                            class="control control-inline"
+                            [ngModel]="reminderTime()"
+                            (ngModelChange)="reminderTime.set($event)"
+                            [attr.aria-invalid]="wasAttempted(1) && !reminderTimeValid() ? 'true' : null"
+                          />
+                          @if (wasAttempted(1) && !reminderTimeValid()) {
+                            <p class="field-error">Enter Reminder time.</p>
+                          }
+                        </div>
+                      </div>
+                      <p class="field-hint">
+                        A reminder is sent this many days before the start date, at the time
+                        above, so an owner can activate on time.
+                      </p>
+                    </div>
+                  </div>
+                }
+
+                <!-- ===== STEP 3 — Publication & Notice ===== -->
+                @else if (stepIndex() === 2) {
+                  <div class="field-grid">
+                    <!-- Public description — rich-text editor with counter, 10–2,000 -->
+                    <div class="field field-wide">
+                      <div class="field-label-row">
+                        <label class="field-label" for="f-public"
+                          >Public description <span class="req" aria-hidden="true">*</span></label
+                        >
+                        <button type="button" class="field-preview-btn" (click)="openFieldPreview('description')"
+                          [disabled]="!hasFieldContent('description')"
+                          [title]="hasFieldContent('description') ? 'Preview' : 'Enter a description to preview'">
+                          <span aria-hidden="true">👁</span> Preview
+                        </button>
+                      </div>
+
+                      <!-- Formatting toolbar: bold / italic / underline / lists / font size / font style /
+                     justify / line spacing. mousedown preventDefault keeps the caret/selection inside
+                     the editor alive when a toolbar control is clicked — without it, focus moves to the
+                     button first and a command like "bulleted list" ends up applying to the whole
+                     paragraph instead of just the caret/selection the user intended. -->
+                      <div class="rte-editor">
+                        <div
+                          class="rte-toolbar"
+                          role="toolbar"
+                          aria-label="Text formatting"
+                          (mousedown)="$event.preventDefault()"
+                        >
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Bold"
+                            aria-label="Bold"
+                            (click)="applyFormat(descBody, 'bold')"
+                          >
+                            <strong>B</strong>
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Italic"
+                            aria-label="Italic"
+                            (click)="applyFormat(descBody, 'italic')"
+                          >
+                            <em>I</em>
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Underline"
+                            aria-label="Underline"
+                            (click)="applyFormat(descBody, 'underline')"
+                          >
+                            <span style="text-decoration: underline">U</span>
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Bulleted list"
+                            aria-label="Bulleted list"
+                            (click)="applyFormat(descBody, 'insertUnorderedList')"
+                          >
+                            • List
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Numbered list"
+                            aria-label="Numbered list"
+                            (click)="applyFormat(descBody, 'insertOrderedList')"
+                          >
+                            1. List
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align left"
+                            aria-label="Align left"
+                            (click)="applyFormat(descBody, 'justifyLeft')"
+                          >
+                            ⯇
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align centre"
+                            aria-label="Align centre"
+                            (click)="applyFormat(descBody, 'justifyCenter')"
+                          >
+                            ☰
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align right"
+                            aria-label="Align right"
+                            (click)="applyFormat(descBody, 'justifyRight')"
+                          >
+                            ⯈
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Font size</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Font size"
+                              (change)="applyFormat(descBody, 'fontSize', $any($event.target).value)"
+                            >
+                              <option value="" disabled selected>Size</option>
+                              @for (s of fontSizes; track s.value) {
+                                <option [value]="s.value">{{ s.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Font style</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Font style"
+                              (change)="applyFormat(descBody, 'fontName', $any($event.target).value)"
+                            >
+                              <option value="" disabled selected>Font</option>
+                              @for (f of fontFamilies; track f.value) {
+                                <option [value]="f.value">{{ f.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Line spacing</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Line spacing"
+                              [ngModel]="descLineHeight()"
+                              (ngModelChange)="applyLineHeight('desc', $event)"
+                            >
+                              @for (l of lineHeights; track l.value) {
+                                <option [value]="l.value">{{ l.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Clear formatting"
+                            aria-label="Clear formatting"
+                            (click)="applyFormat(descBody, 'removeFormat')"
+                          >
+                            Clear
+                          </button>
+                        </div>
+
+                        <!-- Big editable area -->
+                        <div
+                          #descBody
+                          id="f-public"
+                          class="control rte-body"
+                          contenteditable="true"
+                          role="textbox"
+                          aria-multiline="true"
+                          aria-labelledby="f-public"
+                          [attr.aria-invalid]="!publicDescriptionValid()"
+                          [style.lineHeight]="descLineHeight()"
+                          [innerHTML]="descSeed()"
+                          (input)="syncDescription(descBody)"
+                          data-placeholder="Public-facing description (published only through a separately approved publication field)…"
+                        ></div>
+                      </div>
+                      <div class="counter-row">
+                        @if (!publicDescriptionValid()) {
+                          <span class="field-error"
+                            >Review Public description. Enter {{ purposeMin }}–{{
+                              publicDescriptionMax
+                            }}
+                            characters.</span
+                          >
+                        } @else {
+                          <span class="field-hint"
+                            >Internal unless a separately approved publication field is used. Use
+                            the toolbar to format the text.</span
+                          >
+                        }
+                        <span class="char-count"
+                          >{{ publicDescriptionLen() }} / {{ publicDescriptionMax }} characters</span
+                        >
+                      </div>
+                    </div>
+
+                    <!-- Terms and notice — big rich-text editor with counter, up to 20,000 chars -->
+                    <div class="field field-wide">
+                      <div class="field-label-row">
+                        <label class="field-label" for="f-terms"
+                          >Terms and notice <span class="req" aria-hidden="true">*</span></label
+                        >
+                        <button type="button" class="field-preview-btn" (click)="openFieldPreview('terms')"
+                          [disabled]="!hasFieldContent('terms')"
+                          [title]="hasFieldContent('terms') ? 'Preview' : 'Enter terms and notice to preview'">
+                          <span aria-hidden="true">👁</span> Preview
+                        </button>
+                      </div>
+
+                      <div class="rte-editor">
+                        <div
+                          class="rte-toolbar"
+                          role="toolbar"
+                          aria-label="Terms and notice formatting"
+                          (mousedown)="$event.preventDefault()"
+                        >
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Bold"
+                            aria-label="Bold"
+                            (click)="applyFormat(termsBody, 'bold')"
+                          >
+                            <strong>B</strong>
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Italic"
+                            aria-label="Italic"
+                            (click)="applyFormat(termsBody, 'italic')"
+                          >
+                            <em>I</em>
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Underline"
+                            aria-label="Underline"
+                            (click)="applyFormat(termsBody, 'underline')"
+                          >
+                            <span style="text-decoration: underline">U</span>
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Bulleted list"
+                            aria-label="Bulleted list"
+                            (click)="applyFormat(termsBody, 'insertUnorderedList')"
+                          >
+                            • List
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Numbered list"
+                            aria-label="Numbered list"
+                            (click)="applyFormat(termsBody, 'insertOrderedList')"
+                          >
+                            1. List
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align left"
+                            aria-label="Align left"
+                            (click)="applyFormat(termsBody, 'justifyLeft')"
+                          >
+                            ⯇
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align centre"
+                            aria-label="Align centre"
+                            (click)="applyFormat(termsBody, 'justifyCenter')"
+                          >
+                            ☰
+                          </button>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Align right"
+                            aria-label="Align right"
+                            (click)="applyFormat(termsBody, 'justifyRight')"
+                          >
+                            ⯈
+                          </button>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Font size</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Font size"
+                              (change)="applyFormat(termsBody, 'fontSize', $any($event.target).value)"
+                            >
+                              <option value="" disabled selected>Size</option>
+                              @for (s of fontSizes; track s.value) {
+                                <option [value]="s.value">{{ s.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Font style</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Font style"
+                              (change)="applyFormat(termsBody, 'fontName', $any($event.target).value)"
+                            >
+                              <option value="" disabled selected>Font</option>
+                              @for (f of fontFamilies; track f.value) {
+                                <option [value]="f.value">{{ f.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <label class="rte-select-wrap">
+                            <span class="rte-sr">Line spacing</span>
+                            <select
+                              class="rte-select"
+                              aria-label="Line spacing"
+                              [ngModel]="termsLineHeight()"
+                              (ngModelChange)="applyLineHeight('terms', $event)"
+                            >
+                              @for (l of lineHeights; track l.value) {
+                                <option [value]="l.value">{{ l.label }}</option>
+                              }
+                            </select>
+                          </label>
+                          <span class="rte-sep" aria-hidden="true"></span>
+                          <button
+                            type="button"
+                            class="rte-btn"
+                            title="Clear formatting"
+                            aria-label="Clear formatting"
+                            (click)="applyFormat(termsBody, 'removeFormat')"
+                          >
+                            Clear
+                          </button>
+                        </div>
+
+                        <!-- Big editable area — larger than Public description, since Terms & notice can run long -->
+                        <div
+                          #termsBody
+                          id="f-terms"
+                          class="control rte-body rte-body-lg"
+                          contenteditable="true"
+                          role="textbox"
+                          aria-multiline="true"
+                          aria-labelledby="f-terms"
+                          [attr.aria-invalid]="!termsNoticeValid()"
+                          [style.lineHeight]="termsLineHeight()"
+                          [innerHTML]="termsSeed()"
+                          (input)="syncEditor(termsBody)"
+                          data-placeholder="Terms and notice — donor-facing terms, disclaimers and legal notices…"
+                        ></div>
+                      </div>
+                      <div class="counter-row">
+                        @if (!termsNoticeValid()) {
+                          <span class="field-error"
+                            >Review Terms and notice. Enter {{ purposeMin }}–{{
+                              termsNoticeMax | number
+                            }} characters.</span
+                          >
+                        } @else {
+                          <span class="field-hint"
+                            >Entered value is preserved on recoverable failure. Use the toolbar to
+                            format the text.</span
+                          >
+                        }
+                        <span class="char-count" [class.over]="termsNoticeLen() > termsNoticeMax"
+                          >{{ termsNoticeLen() | number }} /
+                          {{ termsNoticeMax | number }} characters</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- ===== STEP 4 — Review & Launch: a real recap of everything entered ===== -->
+                @else if (stepIndex() === 3) {
+                  <div class="review-region">
+                    <div class="review-groups-grid">
+                    <!-- Basic Information recap -->
+                    <div class="review-group">
+                      <h3 class="review-group-title">1. Basic Information</h3>
+                      <dl class="review-list compact">
+                        <div>
+                          <dt>Campaign name</dt>
+                          <dd>{{ campaignName().trim() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Campaign code</dt>
+                          <dd class="mono">{{ campaignCode() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Purpose</dt>
+                          <dd>{{ purpose().trim() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Fund or programme</dt>
+                          <dd>{{ fundProgramme().trim() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Owner</dt>
+                          <dd>{{ ownersLabel() }}</dd>
+                        </div>
+                        <div>
+                          <dt>Start date</dt>
+                          <dd>{{ interpretDate(startDate()) }}</dd>
+                        </div>
+                        <div>
+                          <dt>End date</dt>
+                          <dd>{{ interpretDate(endDate()) }}</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <!-- Publication & Notice recap — click to open a read/edit popup.
+                         Labels stack above their boxes and the boxes are enlarged so the
+                         section fills its column with no blank space. -->
+                    <div class="review-group">
+                      <h3 class="review-group-title">3. Publication &amp; Notice</h3>
+                      <dl class="review-list compact">
+                        <div>
+                          <dt>Public description</dt>
+                          <dd>{{ publicDescription().trim() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Terms and notice</dt>
+                          <dd>{{ termsNotice().trim() || '—' }}</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <!-- Channels & Sources recap -->
+                    <div class="review-group">
+                      <h3 class="review-group-title">2. Channels &amp; Sources</h3>
+                      <dl class="review-list compact">
+                        <div>
+                          <dt>Channels</dt>
+                          <dd>
+                            {{ selectedChannelLabels().length ? selectedChannelLabels().join(', ') : '—' }}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Country</dt>
+                          <dd>{{ selectedCountry() ? selectedCountryLabel() : '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>State</dt>
+                          <dd>{{ region() ? selectedRegionLabel() : '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>City</dt>
+                          <dd>{{ city() ? selectedCityLabel() : '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Zip code</dt>
+                          <dd>{{ pincode() || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Lifecycle activation</dt>
+                          <dd>
+                            @if (activationMode() === 'auto') {
+                              Auto-activate on the start date
+                            } @else {
+                              Manual activate
+                            }
+                            · Reminder {{ reminderDaysBefore() }} day(s) before at
+                            {{ reminderTime() || '—' }}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    </div>
+
+                    <!-- Ready confirmation only — the "missing information" list has been removed
+                         from Review & Launch per request. -->
+                    @if (requiredComplete()) {
+                      <div class="alert alert-success" role="status">
+                        <p class="alert-title">
+                          All required information captured. Ready to submit for activation.
+                        </p>
+                      </div>
+                    }
+
+                    <p class="review-note">
+                      Check every detail above before you submit — Submit reviews and confirms this
+                      configuration.
+                    </p>
+                  </div>
+                }
+              </section>
+            }
+
+            <!-- ============ BOTTOM STEP NAVIGATION — Save Draft / Discard sit next to Submit ============ -->
+            @if (uiState() === 'ready' || uiState() === 'validation' || uiState() === 'success') {
+              <nav class="step-nav" aria-label="Step navigation">
+                @if (!isFirstStep()) {
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="previousStep()">
+                    <span aria-hidden="true">←</span> Previous
+                  </button>
+                } @else {
+                  <span></span>
+                }
+                <div class="step-nav-right">
+                  @if (isLastStep()) {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      (click)="saveDraft()"
+                      [disabled]="!saveDraftAllowed()"
+                    >
+                      <span aria-hidden="true">🔖</span> Save Draft
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-danger-ghost btn-sm"
+                    (click)="discard()"
+                  >
+                    <span aria-hidden="true">✕</span> Discard
+                  </button>
+                  @if (isLastStep()) {
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm"
+                      (click)="requestSubmit()"
+                      [disabled]="!submitAllowed()"
+                    >
+                      Submit <span aria-hidden="true">→</span>
+                    </button>
+                  } @else {
+                    <button type="button" class="btn btn-primary btn-sm" (click)="nextStep()">
+                      Next Step <span aria-hidden="true">→</span>
+                    </button>
+                  }
+                </div>
+              </nav>
+            }
+          </div>
+
+          <!-- ---- Secondary panel — Campaign Summary / Persistent outcome.
+               Hidden on Review & Launch: that step already shows a full recap of every
+               section, so the summary panel would only duplicate it and waste width. ---- -->
+          @if (!isLastStep()) {
+          <aside class="work-side" aria-label="Campaign summary">
+            <section class="card summary-card">
+              <h2 class="panel-title"><span aria-hidden="true">▤</span> Campaign Summary</h2>
+              <dl class="kv-list">
+                <div>
+                  <dt>Campaign Name</dt>
+                  <dd>{{ campaignName().trim() || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Campaign Code</dt>
+                  <dd class="mono">{{ campaignCode() || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Owner</dt>
+                  <dd>{{ ownersLabel() }}</dd>
+                </div>
+                <div>
+                  <dt>Start Date</dt>
+                  <dd>{{ interpretDate(startDate()) }}</dd>
+                </div>
+                <div>
+                  <dt>End Date</dt>
+                  <dd>{{ interpretDate(endDate()) }}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <span class="badge badge-warn">{{
+                      lifecycleState() === 'Draft' ? 'Draft' : 'Not saved'
+                    }}</span>
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <!-- Progress — reflects completed steps -->
+            <section class="card progress-card">
+              <div class="progress-head">
+                <span class="panel-title">Progress</span>
+                <span class="progress-count"
+                  >{{ requiredDone() }} of {{ requiredTotal() }} required</span
+                >
+              </div>
+              <div
+                class="progress-track"
+                role="progressbar"
+                [attr.aria-valuenow]="progressPct()"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div class="progress-fill" [style.width.%]="progressPct()"></div>
+              </div>
+              <span class="progress-pct">{{ progressPct() }}%</span>
+            </section>
+
+            <!-- Tip — supports the Save draft affordance -->
+            <section class="card tip-card">
+              <p class="tip-title"><span aria-hidden="true">💡</span> Tip</p>
+              <p class="tip-body">
+                You can save this campaign as draft and complete the remaining steps later.
+              </p>
+            </section>
+          </aside>
+          }
+        </div>
+
+        <!-- ============ Fields marked with * note — shown only while validating ============ -->
+        @if (uiState() === 'validation') {
+          <p class="required-note">
+            <span aria-hidden="true">ⓘ</span> Fields marked with <span class="req">*</span> are
+            required.
+          </p>
+        }
+
+        <!-- ============ SUBMIT confirmation dialog ============ -->
+        @if (submitDialogOpen()) {
+          <div class="cw-modal-backdrop" (click)="cancelSubmit()">
+            <div
+              class="cw-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="submit-title"
+              (click)="$event.stopPropagation()"
+            >
+              <h3 class="cw-modal-title" id="submit-title">Submit campaign configuration</h3>
+              <p class="cw-modal-lead">
+                Review the configuration before submit. This executes idempotently and will show the
+                stable reference, committed result, any pending dependency and the safe next action.
+              </p>
+              <dl class="review-list compact">
+                <div>
+                  <dt>Reference</dt>
+                  <dd class="mono">{{ stableReference() ?? 'CAMPWIZ-2025-0007' }}</dd>
+                </div>
+                <div>
+                  <dt>Resulting state</dt>
+                  <dd>{{ decisionReview().resultingState }}</dd>
+                </div>
+                <div>
+                  <dt>Effective permission</dt>
+                  <dd class="mono">cam.campaign-wizard.submit</dd>
+                </div>
+              </dl>
+              <div class="cw-modal-actions">
+                <button type="button" class="btn btn-ghost" (click)="cancelSubmit()">Cancel</button>
+                <button type="button" class="btn btn-primary" (click)="confirmSubmit()">
+                  Confirm submit
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- ============ DELETE UNUSED DRAFT dialog — high-risk ============ -->
+        @if (deleteDialogOpen()) {
+          <div class="cw-modal-backdrop" (click)="cancelDeleteDraft()">
+            <div
+              class="cw-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-title"
+              (click)="$event.stopPropagation()"
+            >
+              <h3 class="cw-modal-title" id="delete-title">Confirm Delete unused draft</h3>
+              <p class="cw-modal-lead">
+                Review the affected record, consequence, reason and effective time. Linked history
+                is preserved; only this unused draft with no downstream reference is removed. This
+                requires explicit confirmation.
+              </p>
+              <dl class="review-list compact">
+                <div>
+                  <dt>Affected record</dt>
+                  <dd class="mono">{{ stableReference() ?? 'CAMPWIZ-2025-0007' }}</dd>
+                </div>
+                <div>
+                  <dt>Consequence</dt>
+                  <dd>The draft configuration is removed; linked history is retained.</dd>
+                </div>
+                <div>
+                  <dt>Effective time</dt>
+                  <dd>On confirmation · {{ operatingTimeZone }}</dd>
+                </div>
+              </dl>
+              <div class="field">
+                <label class="field-label" for="del-reason"
+                  >Reason <span class="req" aria-hidden="true">*</span></label
+                >
+                <textarea
+                  id="del-reason"
+                  class="control textarea"
+                  [ngModel]="deleteReason()"
+                  (ngModelChange)="deleteReason.set($event)"
+                  placeholder="State a named reason for deleting this unused draft…"
+                ></textarea>
+                @if (!deleteReasonValid()) {
+                  <p class="field-hint">
+                    Enter a named reason ({{ deleteReasonMin }}–{{ deleteReasonMax }} characters).
+                  </p>
+                }
+              </div>
+              <div class="cw-modal-actions">
+                <button type="button" class="btn btn-ghost" (click)="cancelDeleteDraft()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  (click)="confirmDeleteDraft()"
+                  [disabled]="!deleteReasonValid()"
+                >
+                  Delete unused draft
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- ============ PUBLIC DESCRIPTION / TERMS & NOTICE — view / edit popup (Review & Launch) ============ -->
+        @if (previewField(); as field) {
+          <div class="cw-modal-backdrop" (click)="closeFieldPreview()">
+            <div
+              class="cw-modal cw-modal-lg"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="preview-title"
+              (click)="$event.stopPropagation()"
+            >
+              <h3 class="cw-modal-title" id="preview-title">{{ previewFieldLabel() }}</h3>
+
+              @if (!previewEditing()) {
+                <!-- READ VIEW -->
+                <div class="preview-readonly" [innerHTML]="previewFieldHtml()"></div>
+                <div class="cw-modal-actions">
+                  <button type="button" class="btn btn-ghost" (click)="closeFieldPreview()">
+                    Close
+                  </button>
+                  <button type="button" class="btn btn-primary" (click)="startEditPreview()">
+                    Edit
+                  </button>
+                </div>
+              } @else {
+                <!-- EDIT VIEW — full formatting toolbar (bold / italic / underline / bullet / numbered /
+               justify / font size / font style / line spacing), same mousedown-preventDefault fix -->
+                <div class="rte-editor">
+                  <div
+                    class="rte-toolbar"
+                    role="toolbar"
+                    aria-label="Text formatting"
+                    (mousedown)="$event.preventDefault()"
+                  >
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Bold"
+                      aria-label="Bold"
+                      (click)="applyFormat(previewBody, 'bold')"
+                    >
+                      <strong>B</strong>
+                    </button>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Italic"
+                      aria-label="Italic"
+                      (click)="applyFormat(previewBody, 'italic')"
+                    >
+                      <em>I</em>
+                    </button>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Underline"
+                      aria-label="Underline"
+                      (click)="applyFormat(previewBody, 'underline')"
+                    >
+                      <span style="text-decoration: underline">U</span>
+                    </button>
+                    <span class="rte-sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Bulleted list"
+                      aria-label="Bulleted list"
+                      (click)="applyFormat(previewBody, 'insertUnorderedList')"
+                    >
+                      • List
+                    </button>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Numbered list"
+                      aria-label="Numbered list"
+                      (click)="applyFormat(previewBody, 'insertOrderedList')"
+                    >
+                      1. List
+                    </button>
+                    <span class="rte-sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Align left"
+                      aria-label="Align left"
+                      (click)="applyFormat(previewBody, 'justifyLeft')"
+                    >
+                      ⯇
+                    </button>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Align centre"
+                      aria-label="Align centre"
+                      (click)="applyFormat(previewBody, 'justifyCenter')"
+                    >
+                      ☰
+                    </button>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Align right"
+                      aria-label="Align right"
+                      (click)="applyFormat(previewBody, 'justifyRight')"
+                    >
+                      ⯈
+                    </button>
+                    <span class="rte-sep" aria-hidden="true"></span>
+                    <label class="rte-select-wrap">
+                      <span class="rte-sr">Font size</span>
+                      <select
+                        class="rte-select"
+                        aria-label="Font size"
+                        (change)="applyFormat(previewBody, 'fontSize', $any($event.target).value)"
+                      >
+                        <option value="" disabled selected>Size</option>
+                        @for (s of fontSizes; track s.value) {
+                          <option [value]="s.value">{{ s.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label class="rte-select-wrap">
+                      <span class="rte-sr">Font style</span>
+                      <select
+                        class="rte-select"
+                        aria-label="Font style"
+                        (change)="applyFormat(previewBody, 'fontName', $any($event.target).value)"
+                      >
+                        <option value="" disabled selected>Font</option>
+                        @for (f of fontFamilies; track f.value) {
+                          <option [value]="f.value">{{ f.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label class="rte-select-wrap">
+                      <span class="rte-sr">Line spacing</span>
+                      <select
+                        class="rte-select"
+                        aria-label="Line spacing"
+                        [ngModel]="popupLineHeight()"
+                        (ngModelChange)="applyLineHeight('popup', $event)"
+                      >
+                        @for (l of lineHeights; track l.value) {
+                          <option [value]="l.value">{{ l.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <span class="rte-sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      class="rte-btn"
+                      title="Clear formatting"
+                      aria-label="Clear formatting"
+                      (click)="applyFormat(previewBody, 'removeFormat')"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div
+                    #previewBody
+                    id="f-preview-edit"
+                    class="control rte-body rte-body-lg"
+                    contenteditable="true"
+                    role="textbox"
+                    aria-multiline="true"
+                    aria-labelledby="preview-title"
+                    [style.lineHeight]="popupLineHeight()"
+                    [innerHTML]="popupSeed()"
+                    (input)="syncEditor(previewBody)"
+                  ></div>
+                </div>
+                @if (field === 'terms') {
+                  <div class="counter-row">
+                    <span class="field-hint"
+                      >Maximum {{ termsNoticeMax | number }} characters.</span
+                    >
+                    <span
+                      class="char-count"
+                      [class.over]="popupDraftText().trim().length > termsNoticeMax"
+                      >{{ popupDraftText().trim().length | number }} /
+                      {{ termsNoticeMax | number }} characters</span
+                    >
+                  </div>
+                }
+                <div class="cw-modal-actions">
+                  <button type="button" class="btn btn-ghost" (click)="cancelEditPreview()">
+                    Cancel
+                  </button>
+                  <button type="button" class="btn btn-primary" (click)="savePreviewEdit()">
+                    Save
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</main>

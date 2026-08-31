@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";function SUM(r,e){const o=FormulaProcessor.getArgumentsValues(r,e);let s=0;for(let r,t=0,c=o.length;t<c;++t)switch(r=o[t],typeof r){case"number":isNaN(r)||(s+=r);break;case"object":s+=SUM(r,e)}return s}FormulaProcessor.registerProcessorFunction("SUM",SUM);export default SUM;

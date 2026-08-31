@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../../Core/Series/SeriesRegistry.js";const{sma:{prototype:{pointClass:SMAPoint}}}=SeriesRegistry.seriesTypes;class VBPPoint extends SMAPoint{destroy(){this.negativeGraphic&&(this.negativeGraphic=this.negativeGraphic.destroy()),super.destroy.apply(this,arguments)}}export default VBPPoint;

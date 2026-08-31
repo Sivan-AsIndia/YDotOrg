@@ -1,0 +1,384 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3 cpc">
+
+      <!-- ============ STATUS BANNER ============ -->
+      @if (uiState() === 'success') {
+        <div class="cpc-banner cpc-banner-success" role="status" aria-live="polite">
+          <svg class="cpc-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ activeActionId() || 'Action' }} completed successfully. The record and audit trail have been updated.</span>
+          <button type="button" class="cpc-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss notification">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      }
+
+      <!-- ============ HEADER ============ -->
+      <header class="cpc-header">
+        <div class="cpc-header-main">
+          <div class="cpc-title-row">
+            <h1 class="cpc-title">{{ screen.title }}</h1>
+            <!-- <span class="cpc-badge" [ngClass]="consentClass(consentState())">{{ consentState() }}</span> -->
+          </div>
+          <p class="cpc-subtitle">
+            <span>{{ screen.primaryUsers.join(' · ') }}</span>
+            <span class="cpc-dot" aria-hidden="true">·</span>
+            <span>Updated <strong>{{ lastRefresh() || '—' }}</strong></span>
+            <span class="cpc-dot" aria-hidden="true">·</span>
+            <span>{{ activeScope() || '—' }}</span>
+          </p>
+        </div>
+
+        <div class="cpc-header-actions">
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm "
+            [disabled]="!permissions()['reviewEvidence']"
+            (click)="openAction('reviewEvidence')">
+            <svg class="cpc-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              <circle cx="10" cy="10" r="2.25" stroke="currentColor" stroke-width="1.4"/>
+            </svg>
+            Review evidence
+          </button>
+
+          <details class="cpc-more-actions">
+            <summary class="btn btn-outline-primary btn-sm " aria-label="More actions">
+              More actions
+              <svg class="cpc-icon cpc-icon-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M5.5 8l4.5 4.5L14.5 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </summary>
+            <div class="cpc-menu" role="menu">
+              <button type="button" role="menuitem" [disabled]="!permissions()['withdraw']" (click)="openAction('withdraw')">Withdraw consent</button>
+              <button type="button" role="menuitem" [disabled]="!permissions()['correct']" (click)="openAction('correct')">Correct record</button>
+            </div>
+          </details>
+
+          <button
+            type="button"
+            class="btn btn-primary btn-sm cpc-btn-primary"
+            [disabled]="!permissions()['grant']"
+            (click)="openAction('grant')">
+            <svg class="cpc-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            {{ screen.primaryAction }}
+          </button>
+        </div>
+      </header>
+
+      <!-- ============ CONTENT GRID ============ -->
+      <div class="cpc-grid">
+
+        <!-- ===== MAIN COLUMN ===== -->
+        <div class="cpc-col cpc-col-main">
+
+          <!-- Card: Consent details -->
+          <section class="cpc-card" aria-labelledby="cpc-h-consent">
+            <div class="cpc-card-header">
+              <span class="cpc-accent-bar" aria-hidden="true"></span>
+              <h2 id="cpc-h-consent" class="cpc-card-title">Consent details</h2>
+            </div>
+
+            <div class="cpc-form-grid">
+              <div class="cpc-field">
+                <span class="cpc-field-label">Donor reference</span>
+                <div class="cpc-display cpc-display-muted">{{ donorReference() }}</div>
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Consent reference</span>
+                <div class="cpc-display cpc-display-muted">{{ activeConsent()?.id ?? 'No consent recorded' }}</div>
+              </div>
+
+              <div class="cpc-field cpc-field-wide">
+                <span class="cpc-field-label">Purpose<span class="cpc-required" aria-hidden="true">*</span><span class="cpc-sr-only">required</span></span>
+                <div class="cpc-display cpc-display-textarea" [class.cpc-field-error]="!activeConsent()?.purpose">{{ activeConsent()?.purpose ?? '-' }}</div>
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Channel<span class="cpc-required" aria-hidden="true">*</span><span class="cpc-sr-only">required</span></span>
+                <div class="cpc-display cpc-display-select">{{ activeConsent()?.channel || selectedChannel() || '-' }}</div>
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Consent state<span class="cpc-required" aria-hidden="true">*</span><span class="cpc-sr-only">required</span></span>
+                <div class="cpc-display cpc-display-select">
+                  {{ consentState() }}
+                  <!-- <span class="cpc-badge cpc-badge-inline" [ngClass]="consentClass(consentState())">{{ consentState() }}</span> -->
+                </div>
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Notice version</span>
+                <div class="cpc-display cpc-display-muted">{{ activeConsent()?.noticeVersion ?? noticeVersion() }}</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card: Evidence and restrictions -->
+          <section class="cpc-card" aria-labelledby="cpc-h-evidence">
+            <div class="cpc-card-header">
+              <span class="cpc-accent-bar" aria-hidden="true"></span>
+              <h2 id="cpc-h-evidence" class="cpc-card-title">Evidence and restrictions</h2>
+            </div>
+
+            <div class="cpc-form-grid">
+              <div class="cpc-field cpc-field-wide">
+                <span class="cpc-field-label">
+                  Evidence source<span class="cpc-required" aria-hidden="true">*</span><span class="cpc-sr-only">required</span>
+          
+                </span>
+
+                @if (activeConsent()?.evidenceSource) {
+                  <div class="cpc-file-row">
+                    <span class="cpc-file-icon" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" fill="none"><path d="M5 2.5h6.5L15.5 6.5V17a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11.5 2.5V6.5H15.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                    </span>
+                    <span class="cpc-file-name">{{ activeConsent()?.evidenceSource }}</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="!permissions()['reviewEvidence']" (click)="openAction('reviewEvidence')">Preview</button>
+                  </div>
+                } @else {
+                  <div class="cpc-empty-state cpc-empty-state-inline">No evidence uploaded for this consent record.</div>
+                }
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Effective time<span class="cpc-required" aria-hidden="true">*</span><span class="cpc-sr-only">required</span></span>
+                <div class="cpc-display cpc-display-muted">{{ activeConsent()?.effectiveAtUtc ?? '-' }}</div>
+              </div>
+
+              <div class="cpc-field">
+                <span class="cpc-field-label">Expiry time</span>
+                <div class="cpc-display cpc-display-muted">
+                  {{ activeConsent()?.expiryAtUtc ?? 'No expiry' }}
+                  @if (consentState() === 'Expired' || consentState() === 'Pending') {
+                    <span class="cpc-tag cpc-tag-amber cpc-tag-warning">
+                      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.5v3.25M8 11.75h.01" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                      Needs attention
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <div class="cpc-field cpc-field-wide">
+                <span class="cpc-field-label">
+                  Public-recognition preference
+                  <span class="cpc-tag cpc-tag-gray">Internal · public only</span>
+                </span>
+                <div class="cpc-display cpc-display-muted">{{ activeConsent()?.publicRecognitionPreference ? 'Yes' : 'No' }}</div>
+              </div>
+
+              <div class="cpc-field cpc-field-wide">
+                <span class="cpc-field-label">
+                  Contact restrictions
+                </span>
+                <div class="cpc-display cpc-display-muted">{{ activeConsent()?.contactRestrictions ?? 'None' }}</div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ===== SIDE COLUMN ===== -->
+        <div class="cpc-col cpc-col-side">
+
+          <!-- Card: Review -->
+          <section class="cpc-card" aria-labelledby="cpc-h-review">
+            <div class="cpc-card-header">
+              <span class="cpc-accent-bar" aria-hidden="true"></span>
+              <h2 id="cpc-h-review" class="cpc-card-title">Review</h2>
+            </div>
+            <p class="cpc-card-desc">{{ screen.purpose }}</p>
+
+            <dl class="cpc-kv-list">
+              <div class="cpc-kv-row">
+                <dt>Consent state</dt>
+                <dd><span class="cpc-badge" [ngClass]="consentClass(consentState())">{{ consentState() }}</span></dd>
+              </div>
+              <div class="cpc-kv-row">
+                <dt>Purpose</dt>
+                <dd>{{ activeConsent()?.purpose ?? '-' }}</dd>
+              </div>
+              <div class="cpc-kv-row">
+                <dt>Effective permission</dt>
+                <dd><code class="cpc-code">{{ effectivePermissionSummary() }}</code></dd>
+              </div>
+              <div class="cpc-kv-row">
+                <dt>Evidence</dt>
+                <dd>{{ activeConsent()?.evidenceSource || 'Not attached' }} · {{ activeConsent()?.noticeVersion ?? noticeVersion() }}</dd>
+              </div>
+              <div class="cpc-kv-row">
+                <dt>Effective → expiry</dt>
+                <dd>{{ activeConsent()?.effectiveAtUtc ?? '-' }} → {{ activeConsent()?.expiryAtUtc ?? 'No expiry' }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Card: Related and history -->
+          <section class="cpc-card" aria-labelledby="cpc-h-related">
+            <div class="cpc-card-header">
+              <span class="cpc-accent-bar" aria-hidden="true"></span>
+              <h2 id="cpc-h-related" class="cpc-card-title">Related and history</h2>
+            </div>
+
+            <div class="cpc-tabs" role="tablist" aria-label="Related and history views">
+              <button
+                type="button"
+                role="tab"
+                id="cpc-tab-overview"
+                class="cpc-tab"
+                [attr.aria-selected]="activeTab() === 'overview'"
+                [class.cpc-tab-active]="activeTab() === 'overview'"
+                (click)="setTab('overview')">
+                Overview
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="cpc-tab-history"
+                class="cpc-tab"
+                [attr.aria-selected]="activeTab() === 'history'"
+                [class.cpc-tab-active]="activeTab() === 'history'"
+                (click)="setTab('history')">
+                History
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="cpc-tab-actions"
+                class="cpc-tab"
+                [attr.aria-selected]="activeTab() === 'actions'"
+                [class.cpc-tab-active]="activeTab() === 'actions'"
+                (click)="setTab('actions')">
+                Actions
+              </button>
+            </div>
+
+            <!-- Overview panel -->
+            @if (activeTab() === 'overview') {
+              <div role="tabpanel" aria-labelledby="cpc-tab-overview" class="cpc-tabpanel">
+                <div class="cpc-overview-table" role="table" aria-label="Field contracts">
+                  <div class="cpc-overview-row cpc-overview-head" role="row">
+                    <span role="columnheader">Field</span>
+                    <span role="columnheader">Control</span>
+                    <span role="columnheader">Visibility</span>
+                  </div>
+                  @for (fc of fieldContracts; track fc.label) {
+                    <div class="cpc-overview-row" role="row">
+                      <span role="cell" class="cpc-overview-label">
+                        {{ fc.label }}
+                        @if (fc.required) {
+                          <span class="cpc-required" aria-hidden="true">*</span>
+                        }
+                      </span>
+                      <span role="cell" class="cpc-overview-control">{{ fc.control }}</span>
+                      <span role="cell">
+                        <span class="cpc-tag cpc-tag-sm"
+                          [ngClass]="{
+                            'cpc-tag-purple': fc.visibility === 'Confidential',
+                            'cpc-tag-red': fc.visibility === 'Restricted',
+                            'cpc-tag-gray': fc.visibility.indexOf('Internal') === 0
+                          }">{{ fc.visibility }}</span>
+                      </span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- History panel -->
+            @if (activeTab() === 'history') {
+              <div role="tabpanel" aria-labelledby="cpc-tab-history" class="cpc-tabpanel">
+                <div class="cpc-filter-row">
+                  <label class="cpc-filter-label" for="cpc-saved-filter">Saved view</label>
+                  <select
+                    id="cpc-saved-filter"
+                    class="cpc-select cpc-select-sm"
+                    [ngModel]="savedFilter()"
+                    (ngModelChange)="savedFilter.set($event)">
+                    @for (f of savedFilters; track f) {
+                      <option [value]="f">{{ f }}</option>
+                    }
+                  </select>
+                </div>
+
+                @if (activeFilterSummary().length > 0) {
+                  <div class="cpc-chip-row">
+                    @for (chip of activeFilterSummary(); track chip.key) {
+                      <span class="cpc-chip">
+                        {{ chip.label }}
+                        <button type="button" aria-label="Remove filter" (click)="removeFilterChip(chip.key)">
+                          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                        </button>
+                      </span>
+                    }
+                  </div>
+                }
+
+                @if (filteredHistory().length > 0) {
+                  <ul class="cpc-history-list">
+                    @for (item of filteredHistory(); track $index) {
+                      <li class="cpc-history-item">
+                        <p class="cpc-history-primary">{{ item.primary }}</p>
+                        <p class="cpc-history-secondary">{{ item.secondary }}</p>
+                        <p class="cpc-history-meta">{{ item.meta }}</p>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <div class="cpc-empty-state">
+                    <p>No consent history for “{{ savedFilter() }}”.</p>
+                    <button type="button" class="btn btn-outline-primary btn-sm cpc-btn-outline" (click)="removeFilterChip('saved')">Clear filter</button>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Actions panel -->
+            @if (activeTab() === 'actions') {
+              <div role="tabpanel" aria-labelledby="cpc-tab-actions" class="cpc-tabpanel">
+                <ul class="cpc-actions-list">
+                  @for (action of actions; track action.id) {
+                    <li class="cpc-action-row">
+                      <div class="cpc-action-info">
+                        <p class="cpc-action-label">
+                          {{ action.label }}
+                          @if (action.requiresReason) {
+                            <span class="cpc-tag cpc-tag-sm cpc-tag-gray">Reason required</span>
+                          }
+                        </p>
+                        <p class="cpc-action-meta">{{ action.allowedState }}</p>
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-outline-primary btn-sm cpc-btn-outline"
+                        [disabled]="!permissions()[action.id]"
+                        (click)="openAction(action.id)">
+                        Run
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </section>
+        </div>
+      </div>
+
+      <!-- ============ CONFIRM MODAL ============ -->
+      <!-- Assumes ConfirmModalComponent's public API: input `config`, outputs `confirm` (reason: string) and `cancel`.
+           Adjust these bindings if the shared component's actual selector/inputs/outputs differ. -->
+      @if (confirmConfig(); as cfg) {
+        <app-confirm-modal
+          [config]="cfg"
+          (confirm)="onConfirm($event)"
+          (cancel)="onCancel()">
+        </app-confirm-modal>
+      }
+
+    </div>
+  </div>
+</main>

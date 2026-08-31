@@ -1,0 +1,2 @@
+/*! For license information please see price-channel.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/PC/PCIndicator.js";export default Highcharts;

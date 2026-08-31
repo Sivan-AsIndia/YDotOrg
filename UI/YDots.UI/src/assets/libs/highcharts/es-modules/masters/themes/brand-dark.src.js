@@ -1,0 +1,2 @@
+/*! For license information please see brand-dark.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import BrandDark from"../../Extensions/Themes/BrandDark.js";H.theme=BrandDark.options,BrandDark.apply();export default H;

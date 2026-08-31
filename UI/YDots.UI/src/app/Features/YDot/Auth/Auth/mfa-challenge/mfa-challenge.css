@@ -1,0 +1,85 @@
+/* IAM-AUTH-05 — MFA challenge.
+   A narrow, single-purpose card. Nothing here competes with the six input boxes. */
+
+.mfa-card {
+  /* Wide enough for six comfortable boxes, narrow enough to stay obviously one task. */
+  max-width: 470px;
+}
+
+/* ---- Method badge --------------------------------------------------------------------- */
+
+.mfa-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 28px;
+  background-color: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+}
+
+.mfa-icon-app {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+
+/* ---- One-time code boxes --------------------------------------------------------------- */
+
+.otp-box {
+  /* Fixed square boxes read as "one character each" without any label saying so. */
+  width: 52px;
+  height: 60px;
+  font-size: 24px;
+  font-weight: 600;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid #d5d8de;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  /* Stops mobile browsers turning digits into a phone-number link. */
+  -moz-appearance: textfield;
+}
+
+.otp-box::-webkit-outer-spin-button,
+.otp-box::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.otp-box:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  outline: none;
+}
+
+.otp-box:disabled {
+  background-color: #f3f4f6;
+  opacity: 0.7;
+}
+
+/* Six 52px boxes plus gaps overflow a small phone, so they shrink rather than wrap —
+   a wrapped code entry looks broken. */
+@media (max-width: 420px) {
+  .otp-box {
+    width: 44px;
+    height: 52px;
+    font-size: 20px;
+  }
+}
+
+/* ---- Recovery code ---------------------------------------------------------------------- */
+
+.recovery-input {
+  /* Monospace so the grouped code lines up with the printed copy the person is reading from,
+     and letter-spacing so O and 0 are easier to tell apart. */
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.recovery-input::placeholder {
+  letter-spacing: 2px;
+  text-transform: none;
+}

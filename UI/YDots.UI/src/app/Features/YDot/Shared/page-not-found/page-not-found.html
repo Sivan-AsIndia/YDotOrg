@@ -1,0 +1,42 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container py-8">
+    <div class="row justify-content-center">
+      <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body text-center p-8">
+
+            <div class="mb-5">
+              <i class="ri-compass-3-line display-4 text-muted"></i>
+            </div>
+
+            <h4 class="mb-3">That page does not exist</h4>
+
+            <p class="text-muted mb-4">
+              The address below matches no page in this application. If you followed a menu entry
+              or a link from inside YDot, that link is wrong and worth reporting - the address is
+              what somebody will need in order to fix it.
+            </p>
+
+            <!--
+              Shown verbatim. A "page not found" with no address is a dead end for the person
+              reading it and for whoever they report it to.
+            -->
+            <div class="alert alert-light border text-start d-inline-block mb-6">
+              <div class="small text-muted mb-1">Address</div>
+              <code class="d-block">{{ attemptedUrl() }}</code>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+              <button type="button" class="btn btn-primary" (click)="goBack()">
+                <i class="ri-arrow-left-line me-1"></i> Back to the dashboard
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</main>

@@ -1,0 +1,1 @@
+"use strict";import ColumnSeries from"../Column/ColumnSeries.js";class BulletPoint extends ColumnSeries.prototype.pointClass{destroy(){const t=this;t.targetGraphic&&(t.targetGraphic=t.targetGraphic.destroy()),super.destroy.apply(t,arguments)}}export default BulletPoint;

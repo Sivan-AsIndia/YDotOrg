@@ -1,0 +1,170 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  <div class="org-header">
+    <div>
+      <h1 class="org-title"><span class="org-title-icon"><i class="ri-building-4-line"></i></span>Organisation Directory</h1>
+      <p class="org-subtitle">Search, review and manage every organisation registered in YDot.</p>
+    </div>
+    <div class="org-header-actions">
+      <a routerLink="/app/administration/organisation/organisations/create" class="org-btn org-btn-primary org-btn-sm">
+        <i class="ri-add-line"></i> Create Organisation
+      </a>
+    </div>
+  </div>
+
+  <div class="org-stat-grid">
+    <div class="org-stat-card">
+      <div class="org-stat-icon"><i class="ri-building-4-line"></i></div>
+      <p class="org-stat-label">Total Organisations</p>
+      <p class="org-stat-value">{{ orgState.totalOrganisations() }}</p>
+    </div>
+    <div class="org-stat-card is-accent">
+      <div class="org-stat-icon"><i class="ri-checkbox-circle-line"></i></div>
+      <p class="org-stat-label">Active</p>
+      <p class="org-stat-value">{{ orgState.activeOrganisations() }}</p>
+    </div>
+    <div class="org-stat-card is-warn">
+      <div class="org-stat-icon"><i class="ri-time-line"></i></div>
+      <p class="org-stat-label">Pending Verification</p>
+      <p class="org-stat-value">{{ orgState.pendingVerificationCount() }}</p>
+    </div>
+    <div class="org-stat-card is-error">
+      <div class="org-stat-icon"><i class="ri-error-warning-line"></i></div>
+      <p class="org-stat-label">Changes Requested</p>
+      <p class="org-stat-value">{{ orgState.changesRequestedCount() }}</p>
+    </div>
+  </div>
+
+  <section class="org-doc-section">
+    <h3 class="org-doc-heading org-doc-heading--blue">Filters</h3>
+    <div class="org-grid org-grid-4">
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label">Search</label>
+        <input type="text" class="org-input" placeholder="Name, ID, Owner, Email or Reg. No."
+               [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+      </div>
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label">Type</label>
+        <select class="org-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+          <option value="">All types</option>
+          <option value="Non-Profit / NGO">Non-Profit / NGO</option>
+          <option value="Charitable Organisation">Charitable Organisation</option>
+          <option value="Foundation">Foundation</option>
+          <option value="Community Organisation">Community Organisation</option>
+          <option value="Educational Organisation">Educational Organisation</option>
+          <option value="Healthcare Organisation">Healthcare Organisation</option>
+          <option value="Religious / Faith-Based Organisation">Religious / Faith-Based Organisation</option>
+          <option value="Social Welfare Organisation">Social Welfare Organisation</option>
+          <option value="International / Foreign Organisation">International / Foreign Organisation</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label">Legal Structure</label>
+        <select class="org-select" [ngModel]="legalStructureFilter()" (ngModelChange)="legalStructureFilter.set($event)">
+          <option value="">All structures</option>
+          <option value="Trust">Trust</option>
+          <option value="Society">Society</option>
+          <option value="Section 8 Company">Section 8 Company</option>
+          <option value="Non-Profit Company">Non-Profit Company</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label">Status</label>
+        <select class="org-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+          <option value="">All statuses</option>
+          <option value="Draft">Draft</option>
+          <option value="Submitted">Submitted</option>
+          <option value="Pending Verification">Pending Verification</option>
+          <option value="Changes Requested">Changes Requested</option>
+          <option value="Verified">Verified</option>
+          <option value="Active">Active</option>
+          <option value="Suspended">Suspended</option>
+          <option value="Deactivated">Deactivated</option>
+        </select>
+      </div>
+    </div>
+    @if (hasActiveFilters()) {
+      <button type="button" class="org-btn org-btn-ghost org-btn-sm" style="margin-top:16px;" (click)="clearFilters()">
+        <i class="ri-close-line"></i> Clear filters
+      </button>
+    }
+  </section>
+
+  @if (filtered().length === 0) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-building-4-line"></i></div>
+      <h3 class="org-empty-title">No organisations found</h3>
+      <p class="org-empty-body">Try adjusting your search or filters.</p>
+      @if (hasActiveFilters()) {
+        <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="clearFilters()">Clear filters</button>
+      } @else {
+        <a routerLink="/app/administration/organisation/organisations/create" class="org-btn org-btn-primary org-btn-sm">Create Organisation</a>
+      }
+    </div>
+  } @else {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--good">Organisations</h3>
+      <div class="org-table-scroll">
+        <table class="org-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Type</th>
+              <th>Owner</th>
+              <th>Owner Email / Login ID</th>
+              <th>Legal Structure</th>
+              <th>Status</th>
+              <th>Verification</th>
+              <th>Created</th>
+              <th>Updated</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (org of filtered(); track org.id) {
+              <tr>
+                <td>
+                  <button type="button" class="org-name-link" (click)="viewOrganisation(org.id)">{{ org.name }}</button>
+                  <span class="org-code">{{ org.id }}</span>
+                </td>
+                <td>{{ org.organisationType }}</td>
+                <td>{{ org.ownerName }}</td>
+                <td>{{ org.ownerEmail }}</td>
+                <td>{{ org.legalStructure }}</td>
+                <td><span class="org-badge" [ngClass]="org.statusClass">{{ org.status }}</span></td>
+                <td>{{ verificationLabel(org) }}</td>
+                <td>{{ org.createdDate }}</td>
+                <td>{{ org.updatedDate }}</td>
+                <td class="text-end">
+                  <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="org-menu-btn org-icon-btn" (click)="viewOrganisation(org.id)" title="View" aria-label="View"><i class="ri-eye-line"></i></button>
+                    @if (canSuspend(org) || canDeactivate(org)) {
+                      <div class="org-menu-wrap dropdown">
+                        <button class="org-menu-btn org-icon-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="More actions" aria-label="More actions">
+                          <i class="ri-more-2-line"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                          @if (canSuspend(org)) {
+                            <li><a class="dropdown-item text-warning" href="javascript:void(0)" (click)="suspend(org)"><i class="ri-pause-circle-line"></i>Suspend</a></li>
+                          }
+                          @if (canDeactivate(org)) {
+                            <li><a class="dropdown-item text-danger" href="javascript:void(0)" (click)="deactivate(org)"><i class="ri-forbid-2-line"></i>Deactivate</a></li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>
+</div>
+</main>

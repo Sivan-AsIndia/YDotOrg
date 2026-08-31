@@ -1,0 +1,289 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid py-6">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-6">
+      <div>
+        <h4 class="mb-1">
+          <i [class]="isDepartments() ? 'ri-organization-chart me-2' : 'ri-map-pin-line me-2'"></i>
+          {{ title() }}
+        </h4>
+        <p class="text-muted mb-0">{{ subtitle() }}</p>
+      </div>
+
+      @if (canManage() && editing() === null) {
+        <button type="button" class="btn btn-primary" (click)="startAdding()">
+          <i class="ri-add-line me-1"></i>
+          Add {{ isDepartments() ? 'a department' : 'an office' }}
+        </button>
+      }
+    </div>
+
+    @if (errorMessage()) {
+      <div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
+        <i class="ri-error-warning-line mt-1"></i>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <!-- ---------------------------------------------------------------- The editor -->
+    @if (editing() !== null) {
+      <div class="card border-0 shadow-sm mb-6">
+        <div class="card-header">
+          <h6 class="mb-0">
+            {{ editing() === 'new'
+                ? (isDepartments() ? 'New department' : 'New office or region')
+                : 'Edit' }}
+          </h6>
+        </div>
+
+        <div class="card-body">
+          <div class="row g-4">
+            <div class="col-lg-6">
+              <label class="form-label small" for="s-name">Name <span class="text-danger">*</span></label>
+              <input id="s-name" type="text" class="form-control" maxlength="200"
+                     [ngModel]="form().name" (ngModelChange)="update('name', $event)">
+              @if (fieldErrors()['name']) {
+                <div class="invalid-feedback d-block">{{ fieldErrors()['name'] }}</div>
+              }
+            </div>
+
+            <div class="col-lg-3">
+              <label class="form-label small" for="s-code">Code <span class="text-danger">*</span></label>
+              <input id="s-code" type="text" class="form-control" maxlength="20"
+                     [ngModel]="form().code" (ngModelChange)="update('code', $event)"
+                     autocapitalize="characters" spellcheck="false">
+              <!--
+                Every master in this system carries a code. A name changes when somebody
+                reorganises, and anything that referenced it by name breaks quietly.
+              -->
+              <div class="form-text">
+                Short and permanent. Unique inside this organisation.
+              </div>
+              @if (fieldErrors()['code']) {
+                <div class="invalid-feedback d-block">{{ fieldErrors()['code'] }}</div>
+              }
+            </div>
+
+            <div class="col-lg-3">
+              <label class="form-label small" for="s-parent">Sits under</label>
+              <select id="s-parent" class="form-select"
+                      [ngModel]="form().parentId" (ngModelChange)="update('parentId', $event)">
+                <option value="">Nothing — this is top level</option>
+                @for (option of parentOptions(); track option.id) {
+                  <option [value]="option.id">{{ option.name }}</option>
+                }
+              </select>
+              @if (fieldErrors()['parentDepartmentId'] || fieldErrors()['parentUnitId']) {
+                <div class="invalid-feedback d-block">
+                  {{ fieldErrors()['parentDepartmentId'] || fieldErrors()['parentUnitId'] }}
+                </div>
+              }
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small" for="s-description">Description</label>
+              <textarea id="s-description" class="form-control" rows="2" maxlength="500"
+                        [ngModel]="form().description"
+                        (ngModelChange)="update('description', $event)"></textarea>
+            </div>
+
+            @if (!isDepartments()) {
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-type">Kind</label>
+                <input id="s-type" type="text" class="form-control" maxlength="50"
+                       [ngModel]="form().unitType" (ngModelChange)="update('unitType', $event)"
+                       placeholder="Head office, branch, region…">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-city">City</label>
+                <input id="s-city" type="text" class="form-control" maxlength="100"
+                       [ngModel]="form().city" (ngModelChange)="update('city', $event)">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-country">Country</label>
+                <input id="s-country" type="text" class="form-control" maxlength="100"
+                       [ngModel]="form().country" (ngModelChange)="update('country', $event)">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-email">Contact e-mail</label>
+                <input id="s-email" type="email" class="form-control" maxlength="256"
+                       [ngModel]="form().contactEmail"
+                       (ngModelChange)="update('contactEmail', $event)">
+              </div>
+            }
+
+            <div class="col-lg-3">
+              <label class="form-label small" for="s-order">Order</label>
+              <input id="s-order" type="number" class="form-control" min="0"
+                     [ngModel]="form().displayOrder"
+                     (ngModelChange)="update('displayOrder', +$event)">
+            </div>
+
+            @if (editing() !== 'new') {
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-status">Status</label>
+                <select id="s-status" class="form-select"
+                        [ngModel]="form().status" (ngModelChange)="update('status', $event)">
+                  <option value="active">Active</option>
+                  <!--
+                    Inactive is what to use instead of removing something that still has history
+                    attached: it disappears from the pickers and keeps everything that pointed at
+                    it intact.
+                  -->
+                  <option value="inactive">Inactive</option>
+                </select>
+                <div class="form-text">Inactive removes it from the pickers, keeping its history.</div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-end gap-2">
+          <button type="button" class="btn btn-outline-secondary" (click)="cancelEditing()">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" [disabled]="!canSave()" (click)="save()">
+            @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
+            @else { <i class="ri-save-line me-1"></i> Save }
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ---------------------------------------------------------------- The list -->
+    @if (loading()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-loader-4-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3 mb-0">Loading…</p>
+        </div>
+      </div>
+    } @else if (loadFailed()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-cloud-off-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      </div>
+    } @else if (rows().length === 0) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-inbox-line fs-2 text-muted"></i>
+          <h6 class="mt-3">Nothing here yet</h6>
+          <p class="text-muted">
+            @if (isDepartments()) {
+              Add the functions this organisation is organised into — Fundraising, Finance, and
+              so on.
+            } @else {
+              Add the offices, branches or regions this organisation operates from.
+            }
+          </p>
+          @if (canManage()) {
+            <button type="button" class="btn btn-primary" (click)="startAdding()">
+              <i class="ri-add-line me-1"></i> Add the first one
+            </button>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                @if (isDepartments()) { <th>Head</th> } @else { <th>Where</th> }
+                <th>People</th>
+                <th>Status</th>
+                @if (canManage()) { <th class="text-end">Actions</th> }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.id) {
+                <tr>
+                  <td [style.padding-left]="'calc(0.75rem + ' + indent(row.depth) + ')'">
+                    <span class="d-block">{{ row.name }}</span>
+                    @if (row.description) {
+                      <small class="text-muted">{{ row.description }}</small>
+                    }
+                  </td>
+                  <td><code>{{ row.code }}</code></td>
+
+                  @if (isDepartments()) {
+                    <td>{{ $any(row).headDisplayName || '—' }}</td>
+                  } @else {
+                    <td>
+                      {{ $any(row).city || '—' }}
+                      @if ($any(row).country) {
+                        <small class="text-muted d-block">{{ $any(row).country }}</small>
+                      }
+                    </td>
+                  }
+
+                  <td>
+                    {{ memberCount(row) }}
+                    @if (childCount(row)) {
+                      <small class="text-muted d-block">
+                        {{ childCount(row) }} beneath
+                      </small>
+                    }
+                  </td>
+
+                  <td>
+                    <span class="badge" [ngClass]="statusClass(row.status)">
+                      {{ row.status }}
+                    </span>
+                  </td>
+
+                  @if (canManage()) {
+                    <td class="text-end">
+                      @if (confirmingDelete() === row.id) {
+                        <div class="d-inline-flex align-items-center gap-2">
+                          <span class="small text-muted">Remove it?</span>
+                          <button type="button" class="btn btn-sm btn-danger"
+                                  [disabled]="saving()" (click)="delete(row)">
+                            Yes, remove
+                          </button>
+                          <button type="button" class="btn btn-sm btn-outline-secondary"
+                                  (click)="cancelDelete()">
+                            No
+                          </button>
+                        </div>
+                      } @else {
+                        <button type="button" class="btn btn-sm btn-link"
+                                (click)="startEditing(row)">
+                          <i class="ri-edit-line"></i> Edit
+                        </button>
+
+                        <!--
+                          Removal is refused while anybody is in it or anything sits under it.
+                          Saying so on the button is better than letting somebody press it and
+                          reading the refusal afterwards.
+                        -->
+                        <button type="button" class="btn btn-sm btn-link text-danger"
+                                [disabled]="!canRemove(row)"
+                                [title]="canRemove(row)
+                                  ? 'Remove'
+                                  : 'Move the people and anything beneath it first, or set it to inactive.'"
+                                (click)="confirmDelete(row)">
+                          <i class="ri-delete-bin-line"></i> Remove
+                        </button>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+  </div>
+</div>
+</main>

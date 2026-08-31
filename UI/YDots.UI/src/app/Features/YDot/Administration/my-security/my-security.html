@@ -1,0 +1,413 @@
+<!--
+  My Security — SCR-IAM-005
+  Redesign: "CRM Console" theme — inspired by lead-management console layouts.
+  Signature element: the Security Level pipeline (adapted from a lead-status stepper).
+  Uses RemixIcon (ri-*) classes — already assumed available globally.
+  If previewing standalone, include:
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+-->
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="container-fluid mt-5 mb-5">
+
+    <!-- Header -->
+<div class="sec-header mb-3">
+<div class="sec-header__top">
+<div class="sec-header__identity">
+<span class="avatar-badge"><i class="ri-shield-user-line"></i></span>
+<div>
+<div class="d-flex align-items-center gap-2 flex-wrap">
+<h1 class="sec-header__title">My Security</h1>
+<span class="tag tag--neutral">SCR-IAM-005</span>
+<span class="tag tag--accent">P2 — Extension</span>
+</div>
+<p class="sec-header__subtitle">Manage password, MFA methods, trusted sessions and security activity</p>
+</div>
+</div>
+<!-- <div class="sec-header__icons">
+<button class="icon-btn" type="button" aria-label="Search"><i class="ri-search-line"></i></button>
+<button class="icon-btn" type="button" aria-label="Edit"><i class="ri-pencil-line"></i></button>
+<button class="icon-btn" type="button" aria-label="More options"><i class="ri-more-2-fill"></i></button>
+</div> -->
+</div>
+
+      <div class="sec-header__info-row">
+<div class="info-box">
+<span class="info-box__label">Password Last Changed</span>
+<span class="info-box__value">{{ data()?.passwordLastChanged }}</span>
+</div>
+<div class="info-box">
+<span class="info-box__label">Recovery Codes</span>
+<span class="pill pill--success"><i class="ri-checkbox-circle-fill"></i> Available</span>
+</div>
+<div class="sec-header__actions">
+<button class="btn-primary btn btn-sm" (click)="enrolMfa()">
+<i class="ri-shield-keyhole-line"></i> Enrol MFA
+</button>
+<button class="btn btn-outline-primary btn-sm ms-2" (click)="showChangePassword.set(true)">
+<i class="ri-lock-password-line me-1"></i> Change Password
+</button>
+<!-- <button class="btn btn-primary btn-sm" (click)="showChangePassword.set(true)">
+<i class="ri-lock-line"></i> Change Password
+</button> -->
+</div>
+</div>
+</div>
+
+    <!-- Tabs (section indicator) -->
+<div class="sec-tabs mb-4">
+<span class="sec-tab sec-tab--active">Account Info</span>
+</div>
+
+    <!-- Loading -->
+    @if (loading()) {
+<div class="sec-loading">
+<div class="sec-spinner" role="status"><span class="visually-hidden">Loading...</span></div>
+<p>Loading security data…</p>
+</div>
+    }
+
+    <!-- Content -->
+    @if (!loading() && !loadError()) {
+<div class="row g-4">
+
+        <!-- LEFT COLUMN -->
+<div class="col-lg-7">
+
+          <!-- Account Fields -->
+<div class="sec-card sec-row-anim" id="account-security-section">
+<div class="sec-card__body">
+<div class="field-grid">
+<div class="field">
+<span class="field__label">Display Name</span>
+<span class="field__value">{{ data()?.displayName }}</span>
+</div>
+<div class="field">
+<span class="field__label">Login Email</span>
+<span class="field__value mono">{{ data()?.loginEmail }}</span>
+</div>
+<div class="field">
+<span class="field__label">Password Last Changed</span>
+<span class="field__value">{{ data()?.passwordLastChanged }}</span>
+</div>
+<div class="field">
+<span class="field__label">MFA Requirement</span>
+<span class="pill pill--accent">{{ data()?.mfaRequirement }}</span>
+</div>
+</div>
+</div>
+</div>
+
+          <!-- Security Level pipeline (signature element) -->
+<div class="sec-card mt-4 sec-row-anim">
+<div class="sec-card__header">
+<h6>Security Level</h6>
+</div>
+<div class="sec-card__body">
+<div class="security-steps">
+<div class="step is-complete">
+<span class="step__circle"><i class="ri-check-line"></i></span>
+<span class="step__label">Password Set</span>
+</div>
+<div class="step" [class.is-complete]="(data()?.mfaMethods ?? []).length > 0">
+<span class="step__circle">
+                    @if ((data()?.mfaMethods ?? []).length > 0) {
+<i class="ri-check-line"></i>
+                    } @else {
+                      2
+                    }
+</span>
+<span class="step__label">MFA Enrolled</span>
+</div>
+<div class="step" [class.is-complete]="(data()?.activeSessions ?? []).length > 0">
+<span class="step__circle">
+                    @if ((data()?.activeSessions ?? []).length > 0) {
+<i class="ri-check-line"></i>
+                    } @else {
+                      3
+                    }
+</span>
+<span class="step__label">Sessions Reviewed</span>
+</div>
+<div class="step is-complete">
+<span class="step__circle"><i class="ri-check-line"></i></span>
+<span class="step__label">Recovery Ready</span>
+</div>
+</div>
+</div>
+</div>
+
+          <!-- Active Sessions -->
+<div class="sec-card mt-4 sec-row-anim" id="sessions-section">
+<div class="sec-card__header">
+<h6>Active Sessions</h6>
+<span class="count-pill">{{ (data()?.activeSessions ?? []).length }}</span>
+</div>
+<div class="sec-card__body sec-card__body--flush">
+<div class="sec-list">
+                @for (session of (data()?.activeSessions ?? []); track session.id; let i = $index) {
+<div class="sec-list__row session-row" [style.animation-delay]="(i*0.05)+'s'">
+<div class="session-row__icon"><i class="ri-computer-line"></i></div>
+<div class="session-row__info">
+<strong>
+                        {{ session.device }}
+                        @if (session.isCurrent) {
+<span class="pill pill--accent ms-2">This device</span>
+                        }
+</strong>
+<span class="mono">{{ session.browser }} · {{ session.ipAddress }}</span>
+<span class="muted-sm">Last active: {{ session.lastActive }}</span>
+</div>
+                    <!-- The session you are reading this in has no Revoke button: ending it
+                         would sign you out of this very page. Sign out does that job. -->
+                    @if (!session.isCurrent) {
+<button class="btn-danger-ghost" [disabled]="busy()" (click)="revokeSession(session)">
+<i class="ri-close-circle-line"></i> Revoke
+</button>
+                    }
+</div>
+                } @empty {
+<p class="muted-sm p-3 mb-0">You are not signed in anywhere else.</p>
+                }
+</div>
+</div>
+</div>
+
+          <!-- Trusted Devices -->
+<div class="sec-card mt-4 sec-row-anim" id="devices-section">
+<div class="sec-card__header">
+<h6>Remembered Devices</h6>
+<span class="count-pill">{{ (data()?.trustedDevices ?? []).length }}</span>
+</div>
+<div class="sec-card__body sec-card__body--flush">
+<div class="sec-list">
+                @for (device of (data()?.trustedDevices ?? []); track device.id; let i = $index) {
+<div class="sec-list__row session-row" [style.animation-delay]="(i*0.05)+'s'">
+<div class="session-row__icon"><i class="ri-device-line"></i></div>
+<div class="session-row__info">
+<strong>
+                        {{ device.device }}
+                        @if (device.isExpired) {
+<span class="pill ms-2">Expired</span>
+                        }
+</strong>
+<span class="mono">{{ device.type }}</span>
+<span class="muted-sm">Remembered since {{ device.trustedOn }}</span>
+</div>
+<button class="btn-danger-ghost" [disabled]="busy()" (click)="revokeTrustedDevice(device)">
+<i class="ri-close-circle-line"></i> Forget
+</button>
+</div>
+                } @empty {
+<p class="muted-sm p-3 mb-0">
+                    No device is remembered. You will be asked to verify every time, which is the
+                    safer setting.
+</p>
+                }
+</div>
+</div>
+</div>
+
+          <!-- Backup codes -->
+<div class="sec-card mt-4 sec-row-anim" id="recovery-section">
+<div class="sec-card__header">
+<h6>Backup Codes</h6>
+<span class="count-pill">{{ data()?.recoveryCodesRemaining ?? 0 }}</span>
+</div>
+<div class="sec-card__body">
+<p class="muted-sm">
+                Single-use codes for signing in when you cannot reach your usual method. You have
+                <strong>{{ data()?.recoveryCodesRemaining ?? 0 }}</strong> left.
+</p>
+<p class="muted-sm">
+                Generating a new set stops every earlier code working, including any you have
+                printed.
+</p>
+<button class="btn btn-primary btn-sm" [disabled]="busy()" (click)="generateRecoveryCodes()">
+<i class="ri-key-2-line me-1"></i> Generate new codes
+</button>
+</div>
+</div>
+
+          <!-- MFA Methods -->
+<div class="sec-card mt-4 sec-row-anim" id="mfa-section">
+<div class="sec-card__header">
+<h6>MFA Methods</h6>
+<span class="count-pill">{{ (data()?.mfaMethods ?? []).length }}</span>
+</div>
+<div class="sec-card__body">
+<div class="mfa-grid">
+                @for (m of (data()?.mfaMethods ?? []); track m.id; let i = $index) {
+<div class="mfa-card" [style.animation-delay]="(i*0.05)+'s'">
+<span class="mfa-card__icon"><i class="{{ m.icon }}"></i></span>
+<strong class="mfa-card__name">{{ m.method }}</strong>
+<span class="mfa-card__status">{{ m.status }}</span>
+<span class="muted-sm">Set up {{ m.enrolledOn }}</span>
+<button class="btn-danger-ghost mt-2" [disabled]="busy()" (click)="removeMfaMethod(m)">
+<i class="ri-delete-bin-line"></i> Remove
+</button>
+</div>
+                } @empty {
+<p class="muted-sm mb-0">
+                      No second factor is set up. Anybody with your password can sign in as you.
+</p>
+                }
+</div>
+</div>
+</div>
+
+        </div>
+
+        <!-- RIGHT COLUMN (sidebar) -->
+<div class="col-lg-5">
+
+          <!-- Quick summary -->
+<div class="sec-card sec-row-anim">
+<div class="sec-card__body sec-card__body--flush">
+<div class="quick-list">
+<a class="quick-list__row" href="#sessions-section">
+<span class="quick-list__icon"><i class="ri-device-line"></i></span>
+<span class="quick-list__label">Active Sessions</span>
+<span class="quick-list__count">{{ (data()?.activeSessions ?? []).length }}</span>
+<i class="ri-arrow-right-s-line quick-list__chevron"></i>
+</a>
+<a class="quick-list__row" href="#mfa-section">
+<span class="quick-list__icon"><i class="ri-shield-keyhole-line"></i></span>
+<span class="quick-list__label">MFA Methods</span>
+<span class="quick-list__count">{{ (data()?.mfaMethods ?? []).length }}</span>
+<i class="ri-arrow-right-s-line quick-list__chevron"></i>
+</a>
+<a class="quick-list__row" href="#devices-section">
+<span class="quick-list__icon"><i class="ri-device-line"></i></span>
+<span class="quick-list__label">Remembered Devices</span>
+<span class="quick-list__count">{{ (data()?.trustedDevices ?? []).length }}</span>
+<i class="ri-arrow-right-s-line quick-list__chevron"></i>
+</a>
+<a class="quick-list__row" href="#recovery-section">
+<span class="quick-list__icon"><i class="ri-key-2-line"></i></span>
+<span class="quick-list__label">Backup Codes</span>
+<span class="quick-list__count">{{ data()?.recoveryCodesRemaining ?? 0 }}</span>
+<i class="ri-arrow-right-s-line quick-list__chevron"></i>
+</a>
+<a class="quick-list__row" href="#account-security-section">
+<span class="quick-list__icon"><i class="ri-lock-line"></i></span>
+<span class="quick-list__label">Account Info</span>
+<i class="ri-arrow-right-s-line quick-list__chevron"></i>
+</a>
+</div>
+</div>
+</div>
+
+          <!-- Recent Activity -->
+<div class="sec-card mt-4 sec-row-anim">
+<div class="sec-card__header">
+<h6>Recent Security Activity</h6>
+<span class="count-pill">{{ (data()?.recentActivity ?? []).length }}</span>
+</div>
+<div class="sec-card__body sec-card__body--flush">
+<div class="activity-feed">
+                @for (event of (data()?.recentActivity ?? []); track event.dateTime; let i = $index) {
+<div class="activity-feed__row" [style.animation-delay]="(i*0.05)+'s'">
+<span class="activity-feed__icon"><i class="{{ event.icon }}"></i></span>
+<div class="activity-feed__info">
+<strong>{{ event.event }}</strong>
+<span class="muted-sm">{{ event.details }}</span>
+<span class="muted-sm mono">{{ event.dateTime }}</span>
+</div>
+</div>
+                }
+</div>
+</div>
+</div>
+
+        </div>
+</div>
+    }
+
+    <!-- Load Error -->
+    @if (!loading() && loadError()) {
+<div class="sec-error">
+<i class="ri-error-warning-line"></i>
+<p>We couldn't load your security data. Please try again.</p>
+</div>
+    }
+
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+@if (showChangePassword()) {
+<div class="modal d-block sec-modal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered">
+<div class="modal-content sec-modal__content">
+<div class="sec-modal__header">
+<h5><i class="ri-lock-line"></i> Change Password</h5>
+<button type="button" class="sec-modal__close" (click)="showChangePassword.set(false)">
+<i class="ri-close-line"></i>
+</button>
+</div>
+<div class="sec-modal__body">
+<div class="form-field">
+<label>Current Password</label>
+<input type="password" class="sec-input" [ngModel]="currentPassword()" (ngModelChange)="currentPassword.set($event)">
+</div>
+<div class="form-field">
+<label>New Password</label>
+<input type="password" class="sec-input" [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)">
+</div>
+<div class="form-field">
+<label>Confirm New Password</label>
+<input type="password" class="sec-input" [ngModel]="confirmPassword()" (ngModelChange)="confirmPassword.set($event)">
+</div>
+</div>
+<div class="sec-modal__footer">
+<button class="btn btn-sm" [disabled]="busy()" (click)="showChangePassword.set(false)">Cancel</button>
+<button class="btn btn-primary btn-sm" [disabled]="busy()" (click)="changePassword()">
+                @if (busy()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Change Password
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="modal-backdrop fade show sec-backdrop"></div>
+}
+
+</main>
+
+
+<!-- ======================= BACKUP CODES ======================= -->
+<!--
+  Shown ONCE. The server stores only hashes, so this dialog is the only time these strings
+  exist anywhere a person can read them. Closing it drops them from memory.
+-->
+@if (showRecoveryCodes()) {
+<div class="sec-modal-backdrop">
+<div class="sec-modal" role="dialog" aria-modal="true" aria-labelledby="recoveryCodesTitle">
+<div class="sec-modal__header">
+<h6 class="mb-0" id="recoveryCodesTitle">Your backup codes</h6>
+<button type="button" class="sec-modal__close" (click)="closeRecoveryCodes()">
+<i class="ri-close-line"></i>
+</button>
+</div>
+<div class="sec-modal__body">
+<p class="muted-sm">
+        Save these somewhere safe. Each one works once, and they will not be shown again.
+</p>
+<div class="mfa-grid">
+        @for (code of recoveryCodes(); track code) {
+<div class="mfa-card"><strong class="mono">{{ code }}</strong></div>
+        }
+</div>
+</div>
+<div class="sec-modal__footer">
+<button class="btn btn-sm" (click)="copyRecoveryCodes()">
+<i class="ri-file-copy-line me-1"></i> Copy all
+</button>
+<button class="btn btn-primary btn-sm" (click)="closeRecoveryCodes()">
+        I have saved them
+</button>
+</div>
+</div>
+</div>
+}

@@ -1,0 +1,2 @@
+/*! For license information please see grid.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import GridTheme from"../../Extensions/Themes/Grid.js";H.theme=GridTheme.options,GridTheme.apply();export default H;

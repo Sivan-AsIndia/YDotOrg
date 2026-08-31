@@ -1,0 +1,264 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  @if (notFound()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-error-warning-line"></i></div>
+      <h3 class="org-empty-title">No organisation found for this account</h3>
+      <p class="org-empty-body">Contact your Super Admin if you believe this is incorrect.</p>
+    </div>
+  } @else if (organisation(); as org) {
+    <div class="org-header">
+      <div>
+        <h1 class="org-title">
+          <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+          {{ org.name }}
+          <span class="org-badge" [ngClass]="org.statusClass">{{ org.status }}</span>
+          <span class="org-badge" [ngClass]="verificationClass()">Verification: {{ verificationLabel() }}</span>
+        </h1>
+        <p class="org-meta">{{ org.id }} &middot; {{ org.organisationType }} &middot; {{ org.legalStructure }}</p>
+        <p class="org-meta">Owner: {{ org.ownerName }} &middot; Last Updated {{ org.updatedDate }}</p>
+      </div>
+    </div>
+
+    @if (org.status === 'Changes Requested' && org.changeRequestReason) {
+      <div class="org-banner org-banner-warn">
+        <i class="ri-error-warning-line"></i>
+        <span><strong>Changes requested by Super Admin.</strong><br>{{ org.changeRequestReason }}</span>
+      </div>
+    }
+    @if (org.status === 'Submitted' || org.status === 'Pending Verification') {
+      <div class="org-banner org-banner-info">
+        <i class="ri-time-line"></i>
+        <span>Your Organisation information and documents have been submitted successfully and are awaiting Super Admin verification.</span>
+      </div>
+    }
+    @if (org.status === 'Active' || org.status === 'Verified') {
+      <div class="org-banner org-banner-good">
+        <i class="ri-checkbox-circle-line"></i>
+        <span>Your organisation has been verified and is now Active.</span>
+      </div>
+    }
+    @if (org.status === 'Suspended') {
+      <div class="org-banner org-banner-warn">
+        <i class="ri-pause-circle-line"></i>
+        <span>Your organisation has been suspended by administration. Contact your Super Admin for details.</span>
+      </div>
+    }
+    @if (org.status === 'Deactivated') {
+      <div class="org-banner org-banner-muted">
+        <i class="ri-forbid-2-line"></i>
+        <span>Your organisation is deactivated.</span>
+      </div>
+    }
+    @if (org.status === 'Draft') {
+      <div class="org-banner org-banner-muted">
+        <i class="ri-draft-line"></i>
+        <span>Complete your organisation information and documents, then submit for verification.</span>
+      </div>
+    }
+
+    <div class="org-tabs">
+      <button type="button" class="org-tab" [class.active]="activeTab() === 'info'" (click)="activeTab.set('info')">Organisation Information</button>
+      <button type="button" class="org-tab" [class.active]="activeTab() === 'documents'" (click)="activeTab.set('documents')">Documents</button>
+      <button type="button" class="org-tab" [class.active]="activeTab() === 'review'" (click)="activeTab.set('review')">Review &amp; Submit</button>
+    </div>
+
+    <!-- TAB: Organisation Information -->
+    @if (activeTab() === 'info') {
+      <div class="org-doc">
+        <header class="org-doc-header">
+          <h2 class="org-doc-title">{{ org.name }}</h2>
+          <p class="org-doc-subtitle">{{ org.organisationType }} &middot; {{ org.legalStructure }}</p>
+        </header>
+
+        <div class="org-doc-columns">
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading">Organisation Details</h3>
+          <dl class="org-dl">
+            <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
+            <div class="org-dl-row"><dt>Registration Number</dt><dd>{{ org.registrationNumber || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>Registration Date</dt><dd>{{ org.registrationDate || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>Organisation Type</dt><dd>{{ org.organisationType }}</dd></div>
+            <div class="org-dl-row"><dt>Legal Structure</dt><dd>{{ org.legalStructure }}</dd></div>
+          </dl>
+          <p class="org-doc-note">Organisation Type and Legal Structure are set by Super Admin and cannot be changed here.</p>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--plum">Address</h3>
+          <dl class="org-dl">
+            <div class="org-dl-row"><dt>Address Line 1</dt><dd>{{ org.addressLine1 || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>Address Line 2</dt><dd>{{ org.addressLine2 || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>Country</dt><dd>{{ org.country || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>State / Province</dt><dd>{{ org.state || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>City</dt><dd>{{ org.city || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>PIN / Postal Code</dt><dd>{{ org.pinCode || '—' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--gold">Contact</h3>
+          <dl class="org-dl">
+            <div class="org-dl-row"><dt>Organisation Email</dt><dd>{{ org.email }}</dd></div>
+            <div class="org-dl-row"><dt>Phone Number</dt><dd>{{ org.phone }}</dd></div>
+            <div class="org-dl-row"><dt>Alternate Phone</dt><dd>{{ org.alternatePhone || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>Website</dt><dd>{{ org.website || '—' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--good">Compliance</h3>
+          <p class="org-doc-note" style="margin-top:-6px;">Applicability was set when the organisation was created &mdash; only the identification number can be updated here.</p>
+          <dl class="org-dl">
+            <div class="org-dl-row"><dt>PAN / Tax ID</dt><dd>{{ org.panTaxId || '—' }}</dd></div>
+            <div class="org-dl-row"><dt>12A</dt><dd>{{ org.compliance.twelveA.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>80G</dt><dd>{{ org.compliance.eightyG.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>FCRA</dt><dd>{{ org.compliance.fcra.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>GST</dt><dd>{{ org.compliance.gst.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--blue">Owner Information</h3>
+          <dl class="org-dl">
+            <div class="org-dl-row"><dt>Owner Name</dt><dd>{{ org.ownerName }}</dd></div>
+            <div class="org-dl-row"><dt>Owner Email / Login ID</dt><dd>{{ org.ownerEmail }}</dd></div>
+            <div class="org-dl-row"><dt>Owner Mobile Number</dt><dd>{{ org.ownerMobile }}</dd></div>
+            <div class="org-dl-row"><dt>Designation</dt><dd>{{ org.ownerDesignation || '—' }}</dd></div>
+          </dl>
+          <p class="org-doc-note">To change your name, email/login ID, mobile number or designation, use the existing YDot User Management process.</p>
+        </section>
+        </div>
+      </div>
+    }
+
+    <!-- TAB: Documents -->
+    @if (activeTab() === 'documents') {
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">Documents</h3>
+        <div class="org-doc-list">
+          @for (d of org.documents; track d.id) {
+            <div class="org-doc-row">
+              <span class="org-doc-icon"
+                    [ngClass]="{
+                      'is-good': d.status === 'Accepted',
+                      'is-error': d.status === 'Rejected',
+                      'is-blue': d.status === 'Uploaded' || d.status === 'Under Review'
+                    }"><i class="ri-file-text-line"></i></span>
+              <div class="org-doc-main">
+                <p class="org-doc-name">
+                  {{ d.name }}
+                  <span class="org-doc-req" [ngClass]="d.required ? 'is-required' : 'is-optional'">{{ d.required ? 'Required' : 'Optional' }}</span>
+                </p>
+                <p class="org-doc-meta">
+                  {{ d.status === 'Pending' || d.status === 'Not Applicable' ? 'Not Uploaded' : ('Uploaded ' + (d.uploadedDate || '—')) }}
+                </p>
+                @if (uploadError()[d.id]) {
+                  <p class="org-doc-error">{{ uploadError()[d.id] }}</p>
+                }
+              </div>
+              <span class="org-badge" [ngClass]="documentStatusClass(d.status)">{{ d.status }}</span>
+              <div class="org-doc-actions">
+                @if (d.status !== 'Not Applicable' && d.status !== 'Pending') {
+                  <button type="button" class="org-menu-btn" (click)="viewDocument(d)">View</button>
+                }
+                @if (canUpload(d)) {
+                  <input #fileInput type="file" class="d-none" accept=".pdf,.jpg,.jpeg,.png" (change)="onFileSelected(d.id, $event)">
+                  <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="triggerUpload(d.id, fileInput)">{{ actionLabel(d) }}</button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        @if (!canEdit()) {
+          <p class="org-field-hint" style="margin-top:12px;">Documents can be uploaded or replaced while the organisation is in Draft or Changes Requested status.</p>
+        }
+      </section>
+    }
+
+    <!-- TAB: Review & Submit -->
+    @if (activeTab() === 'review') {
+      <div class="org-doc">
+        <header class="org-doc-header">
+          <h2 class="org-doc-title">Review &amp; Submit</h2>
+          <p class="org-doc-subtitle">Confirm everything below, then submit for Super Admin verification.</p>
+        </header>
+
+        <div class="org-doc-columns">
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading">Submission Checklist</h3>
+          <p class="org-doc-note">{{ checklistProgress().completed }} of {{ checklistProgress().total }} complete ({{ checklistProgress().percent }}%)</p>
+          <div class="org-progress-track"><div class="org-progress-fill" [style.width.%]="checklistProgress().percent"></div></div>
+          <dl class="org-dl" style="margin-top:14px;">
+            @for (item of checklistItems(); track item.label) {
+              <div class="org-dl-row">
+                <dt>{{ item.label }}</dt>
+                <dd [class.is-good]="item.complete" [class.is-warn]="!item.complete">{{ item.detail }}</dd>
+              </div>
+            }
+          </dl>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--gold">Document Checklist</h3>
+          <dl class="org-dl">
+            @for (d of org.documents; track d.id) {
+              <div class="org-dl-row">
+                <dt>{{ d.name }} <span class="org-doc-req" [ngClass]="d.required ? 'is-required' : 'is-optional'">{{ d.required ? 'Required' : 'Optional' }}</span></dt>
+                <dd><span class="org-badge" [ngClass]="documentStatusClass(d.status)">{{ d.status }}</span></dd>
+              </div>
+            }
+          </dl>
+        </section>
+
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--good">Submit to Super Admin</h3>
+          @if (!canEdit()) {
+            <p class="org-doc-note">
+              @if (org.status === 'Submitted' || org.status === 'Pending Verification') {
+                This organisation has already been submitted and is awaiting Super Admin verification.
+              } @else {
+                This organisation is not currently open for submission.
+              }
+            </p>
+          } @else {
+            @if (!readyToSubmit()) {
+              <div class="org-banner org-banner-warn"><i class="ri-error-warning-line"></i><span>{{ submitBlockedReason() }}</span></div>
+            }
+            @if (submitError()) {
+              <div class="org-banner org-banner-error"><i class="ri-error-warning-line"></i><span>{{ submitError() }}</span></div>
+            }
+            <label class="org-check-row" style="margin-bottom:16px;">
+              <input type="checkbox" [ngModel]="declarationChecked()" (ngModelChange)="declarationChecked.set($event)">
+              <span>I confirm that the information and documents submitted for this Organisation are true, complete and accurate to the best of my knowledge.</span>
+            </label>
+            <button type="button" class="org-btn org-btn-primary org-btn-sm" [disabled]="!readyToSubmit() || !declarationChecked() || submitting()" (click)="submit()">
+              @if (submitting()) { <span class="org-spinner"></span> Submitting... } @else { Submit to Super Admin }
+            </button>
+          }
+        </section>
+        </div>
+      </div>
+    }
+  }
+</div>
+</div>
+</main>
+
+@if (viewingDocument(); as doc) {
+  <div class="org-modal-backdrop">
+    <div class="org-modal">
+      <div class="org-modal-header">
+        <h3 class="org-modal-title"><i class="ri-file-text-line"></i>{{ doc.name }}</h3>
+        <button type="button" class="org-modal-close" (click)="closeViewDocument()">&times;</button>
+      </div>
+      <dl class="org-modal-kv"><dt>File</dt><dd>{{ doc.fileName || '—' }}</dd></dl>
+      <dl class="org-modal-kv"><dt>Status</dt><dd><span class="org-badge" [ngClass]="documentStatusClass(doc.status)">{{ doc.status }}</span></dd></dl>
+      <dl class="org-modal-kv"><dt>Uploaded</dt><dd>{{ doc.uploadedDate || '—' }} by {{ doc.uploadedBy || '—' }} &middot; Version {{ doc.version || 1 }}</dd></dl>
+      <div class="org-modal-actions">
+        <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="closeViewDocument()">Close</button>
+      </div>
+    </div>
+  </div>
+}

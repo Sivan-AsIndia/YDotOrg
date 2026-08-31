@@ -1,0 +1,11 @@
+/**
+ * @license Highcharts Gantt JS v12.3.0 (2025-06-21)
+ * @module highcharts/modules/treegrid
+ * @requires highcharts
+ *
+ * Tree Grid
+ *
+ * (c) 2016-2025 Jon Arild Nygard
+ *
+ * License: www.highcharts.com/license
+ */

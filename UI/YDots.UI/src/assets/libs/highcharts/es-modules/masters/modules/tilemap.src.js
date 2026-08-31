@@ -1,0 +1,2 @@
+/*! For license information please see tilemap.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import TilemapSeries from"../../Series/Tilemap/TilemapSeries.js";const G=Highcharts;TilemapSeries.compose(G.Axis);export default Highcharts;

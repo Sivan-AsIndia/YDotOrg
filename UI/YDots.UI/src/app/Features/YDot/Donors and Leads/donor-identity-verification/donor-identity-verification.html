@@ -1,0 +1,643 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3 div-page">
+
+   
+      @if (!permissions()['view']) {
+        <!-- No-access state -->
+        <div class="div-noaccess" role="alert">
+          <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13 13l14 14M27 13L13 27" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <h2>You don't have access to this record</h2>
+          <p>Ask your administrator for the <code>{{ screen.viewPermission }}</code> permission, or return to the donor record.</p>
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="backToDonor()">Back to donor</button>
+        </div>
+      } @else {
+
+      <!-- Header -->
+      <header class="div-header">
+        <div class="div-header-titles">
+          <h1 class="div-title">
+            {{ screen.title }}
+            <span class="div-info-btn" tabindex="0" role="img" [attr.aria-label]="screen.purpose" [title]="screen.purpose">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="10" y1="9" x2="10" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="6.3" r="0.9" fill="currentColor"/></svg>
+            </span>
+          </h1>
+          <p class="div-subtitle">{{ screen.purpose }}</p>
+      
+        </div>
+
+        <div class="div-header-actions">
+          <div class="div-filter-wrap">
+          
+            <div id="savedFilterMenu" popover class="div-filter-menu" role="listbox" [attr.aria-label]="'Saved filters'">
+              @for (option of savedFilters; track option) {
+                <button
+                  type="button"
+                  role="option"
+                  class="div-filter-option"
+                  [class.is-active]="savedFilter() === option"
+                  [attr.aria-selected]="savedFilter() === option"
+                  (click)="savedFilter.set(option)"
+                >
+                  {{ option }}
+                </button>
+              }
+            </div>
+          </div>
+
+          @if (permissions()['escalateReview']) {
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openAction('escalateReview')">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l7 12H3l7-12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14" r="0.8" fill="currentColor"/></svg>
+              Escalate review
+            </button>
+          }
+
+          @if (permissions()['cancelVerification']) {
+            <button type="button" class="btn btn-sm btn-outline-danger" (click)="openAction('cancelVerification')">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 7l6 6M13 7l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Cancel verification
+            </button>
+          }
+
+          @if (permissions()['sendChallenge']) {
+            <button type="button" class="btn btn-primary btn-sm div-primary-action" (click)="openAction('sendChallenge')">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              {{ screen.primaryAction }}
+            </button>
+          }
+        </div>
+      </header>
+
+      @if (activeFilterSummary().length > 0) {
+        <div class="div-chip-row" aria-label="Active filters">
+          @for (chip of activeFilterSummary(); track chip.key) {
+            <span class="div-chip">
+              {{ chip.label }}
+              <button type="button" class="div-chip-remove" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              </button>
+            </span>
+          }
+        </div>
+      }
+
+      <!-- Status banner -->
+      @if (uiState() === 'success' && !resultPanel()) {
+        <div class="div-banner div-banner-success" role="status">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Action completed successfully.</span>
+          <button type="button" class="div-banner-close" (click)="dismissBanner()" aria-label="Dismiss">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      }
+
+      <!-- Loading state -->
+      @if (flowState() === 'loading') {
+        <div class="div-banner div-banner-info" role="status" aria-live="polite">
+          <span class="div-spinner" aria-hidden="true"></span>
+          <span>Submitting your request&hellip;</span>
+        </div>
+      }
+
+      <!-- Validation state -->
+      @if (flowState() === 'validation') {
+        <div class="div-banner div-banner-danger" role="alert">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="10" y1="6" x2="10" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="14" r="0.9" fill="currentColor"/></svg>
+          <span>Fix the highlighted fields before continuing.</span>
+          <button type="button" class="div-banner-close" (click)="dismissFlowBanner()" aria-label="Dismiss">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      }
+
+      <!-- Duplicate-request state -->
+      @if (flowState() === 'duplicate') {
+        <div class="div-banner div-banner-warn div-banner-wide" role="alert">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l7 12H3l7-12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14" r="0.8" fill="currentColor"/></svg>
+          <span>A challenge is already active for this record (expires {{ expiryTime() }}).</span>
+          <div class="div-banner-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="proceedDuplicateChallenge()">Send new challenge anyway</button>
+            <button type="button" class="btn btn-sm div-btn-ghost" (click)="dismissFlowBanner()">Keep existing</button>
+          </div>
+        </div>
+      }
+
+      <!-- Conflict state -->
+      @if (flowState() === 'conflict' && conflictInfo(); as conflict) {
+        <div class="div-banner div-banner-warn div-banner-wide" role="alert">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3v14M14 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 8l8 4M14 8l-8 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <div class="div-banner-body">
+            <span>This record changed while you were editing.</span>
+            <p class="div-banner-sub">{{ conflict.theirChange }} {{ conflict.yourChange }}</p>
+          </div>
+          <div class="div-banner-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="resolveConflict('compare')">Compare</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="resolveConflict('reapply')">Reapply my changes</button>
+            <button type="button" class="btn btn-sm div-btn-ghost" (click)="resolveConflict('cancel')">Cancel</button>
+          </div>
+        </div>
+      }
+
+      <!-- Dependency-failure state -->
+      @if (flowState() === 'dependency-failure') {
+        <div class="div-banner div-banner-danger div-banner-wide" role="alert">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 9l2.5 2.5L13 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="div-banner-body">
+            <span>Recorded locally — the case-management sync failed.</span>
+            <p class="div-banner-sub">{{ dependencyNote() }} Support reference {{ supportCorrelationId() }}.</p>
+          </div>
+          <div class="div-banner-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="retryDependencySync()">Retry sync</button>
+            <a class="btn btn-sm div-btn-ghost" href="mailto:donor-support@ydotfoundation.org?subject=Sync%20failure%20{{ supportCorrelationId() }}">Contact support</a>
+          </div>
+        </div>
+      }
+
+      <!-- KPI cards -->
+      <section class="div-kpi-grid" aria-label="Verification summary">
+        <div class="div-kpi-card">
+          <div class="div-kpi-top">
+            <span class="div-kpi-label">Verification status</span>
+            <span class="div-kpi-icon" [ngClass]="statusClass(verificationStatus())">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2l6 2.5v5c0 4-2.6 6.7-6 8.5-3.4-1.8-6-4.5-6-8.5v-5L10 2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="div-kpi-value">
+            <span class="div-badge" [ngClass]="statusClass(verificationStatus())">{{ verificationStatus() }}</span>
+          </div>
+          <p class="div-kpi-caption">Reference {{ verificationReference() }}</p>
+        </div>
+
+        <div class="div-kpi-card">
+          <div class="div-kpi-top">
+            <span class="div-kpi-label">Attempts used</span>
+            <span class="div-kpi-icon div-kpi-icon-blue">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 6a5.5 5.5 0 10-1 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="div-kpi-value">{{ attemptsUsed() }} <span class="div-kpi-value-of">of {{ maximumAttempts() }}</span></div>
+          <p class="div-kpi-caption">Channel {{ currentChannel() }}</p>
+        </div>
+
+        <div class="div-kpi-card">
+          <div class="div-kpi-top">
+            <span class="div-kpi-label">Identity confidence</span>
+            <span class="div-kpi-icon div-kpi-icon-green">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2l6 2.5v5c0 4-2.6 6.7-6 8.5-3.4-1.8-6-4.5-6-8.5v-5L10 2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.3 10l1.8 1.8L13 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="div-kpi-value div-kpi-value-text">{{ identityConfidence() }}</div>
+          <p class="div-kpi-caption">Evidence {{ evidenceReference() }}</p>
+        </div>
+
+        <div class="div-kpi-card">
+          <div class="div-kpi-top">
+            <span class="div-kpi-label">Expires</span>
+            <span class="div-kpi-icon div-kpi-icon-amber">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 6v4.2l3 1.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <div class="div-kpi-value div-kpi-value-text">{{ expiryTime() }}</div>
+          <p class="div-kpi-caption">Challenge window</p>
+        </div>
+      </section>
+
+      <!-- Persistent result panel (non-toast outcome of the last committed action) -->
+      @if (resultPanel(); as result) {
+        <section class="div-result-panel" [class.is-dependency-failure]="result.isDependencyFailure" aria-label="Last action result">
+          <div class="div-result-icon" [class.is-dependency-failure]="result.isDependencyFailure">
+            @if (result.isDependencyFailure) {
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 9l2.5 2.5L13 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            } @else {
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            }
+          </div>
+          <div class="div-result-body">
+            <div class="div-result-head">
+              <h2>{{ result.actionLabel }} committed</h2>
+              <button type="button" class="div-banner-close" (click)="dismissResultPanel()" aria-label="Dismiss result">
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <dl class="div-result-grid">
+              <div class="div-result-row"><dt>Stable reference</dt><dd>{{ result.reference }}</dd></div>
+              <div class="div-result-row"><dt>Resulting state</dt><dd><span class="div-badge" [ngClass]="statusClass(result.status)">{{ result.status }}</span></dd></div>
+              <div class="div-result-row"><dt>Effective time</dt><dd>{{ result.effectiveTime }}</dd></div>
+              <div class="div-result-row"><dt>Pending dependency</dt><dd>{{ result.dependency }}</dd></div>
+            </dl>
+            <p class="div-result-next"><strong>Next:</strong> {{ result.nextAction }}</p>
+          </div>
+        </section>
+      }
+
+      <!-- Main content -->
+      <div class="div-content-grid">
+
+        <!-- Left: tabbed workspace -->
+        <section class="div-panel div-panel-main">
+          <div class="div-tablist" role="tablist" aria-label="Verification sections">
+            <button type="button" role="tab" id="tab-overview" [attr.aria-selected]="activeTab() === 'overview'" aria-controls="panel-overview" class="div-tab" [class.is-active]="activeTab() === 'overview'" (click)="setTab('overview')">Overview</button>
+            <button type="button" role="tab" id="tab-history" [attr.aria-selected]="activeTab() === 'history'" aria-controls="panel-history" class="div-tab" [class.is-active]="activeTab() === 'history'" (click)="setTab('history')">History</button>
+            <button type="button" role="tab" id="tab-actions" [attr.aria-selected]="activeTab() === 'actions'" aria-controls="panel-actions" class="div-tab" [class.is-active]="activeTab() === 'actions'" (click)="setTab('actions')">Actions</button>
+          </div>
+
+          <!-- Overview -->
+          @if (activeTab() === 'overview') {
+            <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" class="div-tabpanel">
+              <div class="div-progress-row">
+                <span class="div-progress-label">Attempt {{ attemptsUsed() }} of {{ maximumAttempts() }}</span>
+                <div class="div-progress-track" role="progressbar" [attr.aria-valuenow]="attemptsUsed()" aria-valuemin="0" [attr.aria-valuemax]="maximumAttempts()">
+                  <div class="div-progress-fill" [style.width.%]="(attemptsUsed() / maximumAttempts()) * 100"></div>
+                </div>
+              </div>
+
+              <!-- Verify code (shown while a challenge is outstanding) -->
+              @if (verificationStatus() === 'Challenge sent' && permissions()['verifyCode']) {
+                <div class="div-otp-card">
+                  <div class="div-otp-head">
+                    <span class="div-otp-title">Enter verification code</span>
+                    <span class="div-otp-sub">Sent via {{ currentChannel() }} to {{ currentDestination() }}</span>
+                  </div>
+                  <div class="div-otp-row">
+                    <input
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="one-time-code"
+                      class="div-otp-input"
+                      [class.has-error]="codeError()"
+                      maxlength="6"
+                      placeholder="••••••"
+                      [ngModel]="codeInput()"
+                      (ngModelChange)="onCodeInputChange($event)"
+                      aria-label="Verification code"
+                    />
+                    <button type="button" class="btn btn-primary btn-sm" (click)="submitVerifyCode()">Verify code</button>
+                  </div>
+                  @if (codeError()) {
+                    <p class="div-field-error">{{ codeError() }}</p>
+                  }
+                </div>
+              }
+
+              <div class="div-detail-head">
+                <span class="div-detail-head-label">Record details</span>
+                @if (!isEditingDetails() && canEditDetails()) {
+                  <button type="button" class="div-edit-link" (click)="startEditDetails()">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2l3 3-8 8-3.5 1L3.5 11l7.5-9z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                    Edit
+                  </button>
+                }
+              </div>
+
+              @if (!isEditingDetails()) {
+                <dl class="div-detail-grid">
+                  <div class="div-detail-row">
+                    <dt>Donor reference</dt>
+                    <dd>{{ donorReference() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Verification purpose</dt>
+                    <dd>{{ currentPurpose() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Verification channel</dt>
+                    <dd>{{ currentChannel() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Masked destination</dt>
+                    <dd>{{ currentDestination() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Verification status</dt>
+                    <dd><span class="div-badge" [ngClass]="statusClass(verificationStatus())">{{ verificationStatus() }}</span></dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Expiry time</dt>
+                    <dd>{{ expiryTime() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Identity confidence</dt>
+                    <dd>{{ identityConfidence() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Reviewer</dt>
+                    <dd>{{ reviewer() }}</dd>
+                  </div>
+                </dl>
+              } @else {
+                <div class="div-edit-grid">
+                  <div class="div-edit-row">
+                    <dt>Donor reference</dt>
+                    <dd>{{ donorReference() }}</dd>
+                  </div>
+
+                  <div class="div-edit-row div-edit-row-full">
+                    <label for="fieldPurpose">Verification purpose</label>
+                    <textarea
+                      id="fieldPurpose"
+                      class="div-field-textarea"
+                      [class.has-error]="purposeError()"
+                      rows="3"
+                      minlength="10"
+                      maxlength="2000"
+                      [ngModel]="draftPurpose()"
+                      (ngModelChange)="draftPurpose.set($event)"
+                    ></textarea>
+                    <div class="div-field-footer">
+                      @if (purposeError()) {
+                        <span class="div-field-error">{{ purposeError() }}</span>
+                      } @else {
+                        <span class="div-field-hint">10–2,000 characters</span>
+                      }
+                      <span class="div-field-count">{{ draftPurpose().trim().length }}/2000</span>
+                    </div>
+                  </div>
+
+                  <div class="div-edit-row">
+                    <label id="labelChannel">Verification channel</label>
+                    <div class="div-field-select-wrap">
+                      <button type="button" class="div-field-select-trigger" popovertarget="channelMenu" aria-haspopup="listbox" aria-labelledby="labelChannel">
+                        {{ draftChannel() }}
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <div id="channelMenu" popover class="div-searchable-menu" role="listbox" aria-label="Verification channel">
+                        <input
+                          type="text"
+                          class="div-searchable-filter-input"
+                          placeholder="Search channel&hellip;"
+                          [ngModel]="channelFilter()"
+                          (ngModelChange)="channelFilter.set($event)"
+                        />
+                        @for (ch of filteredChannelOptions(); track ch) {
+                          <button type="button" role="option" class="div-filter-option" [class.is-active]="draftChannel() === ch" [attr.aria-selected]="draftChannel() === ch" (click)="selectChannel(ch)">
+                            {{ ch }}
+                          </button>
+                        } @empty {
+                          <p class="div-searchable-empty">No matching channel.</p>
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="div-edit-row">
+                    <label for="fieldDestination">Masked destination</label>
+                    <input
+                      id="fieldDestination"
+                      type="text"
+                      class="div-field-input"
+                      [class.has-error]="destinationError()"
+                      [ngModel]="draftDestination()"
+                      (ngModelChange)="draftDestination.set($event)"
+                    />
+                    @if (destinationError()) {
+                      <span class="div-field-error">{{ destinationError() }}</span>
+                    }
+                  </div>
+
+                  <div class="div-edit-row">
+                    <label id="labelStatus">Verification status</label>
+                    <div class="div-field-select-wrap">
+                      <button type="button" class="div-field-select-trigger" popovertarget="statusMenu" aria-haspopup="listbox" aria-labelledby="labelStatus">
+                        {{ draftStatus() }}
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <div id="statusMenu" popover class="div-searchable-menu" role="listbox" aria-label="Verification status">
+                        <input
+                          type="text"
+                          class="div-searchable-filter-input"
+                          placeholder="Search status&hellip;"
+                          [ngModel]="statusFilter()"
+                          (ngModelChange)="statusFilter.set($event)"
+                        />
+                        @for (st of filteredStatusOptions(); track st) {
+                          <button
+                            type="button"
+                            role="option"
+                            class="div-filter-option"
+                            [class.is-active]="draftStatus() === st"
+                            [class.is-locked]="lockedStatusReasons[st]"
+                            [attr.aria-selected]="draftStatus() === st"
+                            [attr.aria-disabled]="!!lockedStatusReasons[st]"
+                            [title]="lockedStatusReasons[st] || ''"
+                            (click)="selectStatus(st)"
+                          >
+                            {{ st }}
+                            @if (lockedStatusReasons[st]) {
+                              <span class="div-locked-hint">{{ lockedStatusReasons[st] }}</span>
+                            }
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="div-edit-row">
+                    <dt>Expiry time</dt>
+                    <dd>{{ expiryTime() }}</dd>
+                  </div>
+                  <div class="div-edit-row">
+                    <dt>Identity confidence</dt>
+                    <dd>{{ identityConfidence() }}</dd>
+                  </div>
+                  <div class="div-edit-row">
+                    <dt>Reviewer</dt>
+                    <dd>{{ reviewer() }}</dd>
+                  </div>
+
+                  <div class="d-flex justify-content-start gap-2 w-100">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" style="width:fit-content" (click)="cancelEditDetails()">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" (click)="saveEditDetails()" style="width:fit-content">Save changes</button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- History -->
+          @if (activeTab() === 'history') {
+            <div id="panel-history" role="tabpanel" aria-labelledby="tab-history" class="div-tabpanel">
+              @if (filteredHistory().length > 0) {
+                <div class="div-table-wrap">
+                  <table class="div-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Event</th>
+                        <th scope="col">Detail</th>
+                        <th scope="col">By &amp; when</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (event of filteredHistory(); track $index) {
+                        <tr>
+                          <td data-label="Event"><span class="div-cell-strong">{{ event.primary }}</span></td>
+                          <td data-label="Detail">{{ event.secondary }}</td>
+                          <td data-label="By & when">{{ event.meta }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
+                <div class="div-empty">
+                  <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="10" width="24" height="22" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M13 17h14M13 22h14M13 27h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <p>No verification activity available.</p>
+                </div>
+              }
+
+              <div class="div-linked-section">
+                <h3>Linked records &amp; integration</h3>
+                <div class="div-table-wrap">
+                  <table class="div-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (rec of relatedRecords(); track rec.reference) {
+                        <tr>
+                          <td data-label="Type">{{ rec.type }}</td>
+                          <td data-label="Reference"><span class="div-cell-strong">{{ rec.reference }}</span></td>
+                          <td data-label="Status">{{ rec.status }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <dl class="div-detail-grid div-linked-meta">
+                  <div class="div-detail-row">
+                    <dt>Integration status</dt>
+                    <dd>{{ integrationStatus() }}</dd>
+                  </div>
+                  <div class="div-detail-row">
+                    <dt>Support correlation</dt>
+                    <dd>{{ supportCorrelationId() }}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          }
+
+          <!-- Actions -->
+          @if (activeTab() === 'actions') {
+            <div id="panel-actions" role="tabpanel" aria-labelledby="tab-actions" class="div-tabpanel">
+              <div class="div-action-grid">
+                @for (action of actions; track action.id) {
+                  <div class="div-action-card" [class.is-danger]="action.placement === 'danger'">
+                    <div class="div-action-head">
+                      <span class="div-action-label">{{ action.label }}</span>
+                      @if (!permissions()[action.id]) {
+                        <span class="div-badge div-badge-blue div-badge-sm">No permission</span>
+                      }
+                    </div>
+                    <p class="div-action-result">{{ action.result }}</p>
+                    <div class="div-action-tags">
+                      @if (action.requiresReason) {
+                        <span class="div-tag">Reason required</span>
+                      }
+                      @if (action.typedConfirm) {
+                        <span class="div-tag">Typed confirmation</span>
+                      }
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-sm div-action-btn"
+                      [ngClass]="action.placement === 'danger' ? 'div-btn-danger' : (action.placement === 'primary' ? 'btn-primary' : 'btn-outline-primary')"
+                      [disabled]="!permissions()[action.id]"
+                      (click)="openAction(action.id)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- Right: verification details -->
+        <aside class="div-panel div-panel-side">
+          <div class="div-side-head">
+            <span class="div-side-icon">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="12" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </span>
+            <div class="div-side-titles">
+              <h2>Verification details</h2>
+              <p>{{ verificationReference() }} &middot; Identity verification</p>
+            </div>
+            <span class="div-badge" [ngClass]="statusClass(verificationStatus())">{{ verificationStatus() }}</span>
+          </div>
+
+          <div class="div-side-divider" role="separator"></div>
+
+          <dl class="div-side-fields">
+            <div class="div-side-row">
+              <dt>Verification reference</dt>
+              <dd>{{ verificationReference() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Donor reference</dt>
+              <dd>{{ donorReference() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Channel</dt>
+              <dd>{{ currentChannel() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Masked destination</dt>
+              <dd>{{ currentDestination() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Attempts</dt>
+              <dd>{{ attemptsUsed() }} of {{ maximumAttempts() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Expiry time</dt>
+              <dd>{{ expiryTime() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Identity confidence</dt>
+              <dd>{{ identityConfidence() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>
+                Evidence reference
+                <svg class="div-lock-icon" viewBox="0 0 16 16" aria-label="Confidential" role="img"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+              </dt>
+              <dd>{{ evidenceReference() }}</dd>
+            </div>
+            <div class="div-side-row">
+              <dt>Reviewer</dt>
+              <dd>{{ reviewer() }}</dd>
+            </div>
+          </dl>
+
+          <div class="div-side-divider" role="separator"></div>
+
+          <div class="div-side-section">
+            <h3>Available channels</h3>
+            <div class="div-channel-list">
+              @for (ch of channelOptions(); track ch) {
+                <span class="div-channel-pill" [class.is-active]="ch === currentChannel()">{{ ch }}</span>
+              }
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      }
+    </div>
+  </div>
+
+  <!-- Confirmation modal -->
+  @if (confirmConfig(); as cfg) {
+    <app-confirm-modal
+      [config]="cfg"
+      (confirm)="onConfirm($event)"
+      (cancel)="onCancel()"
+    ></app-confirm-modal>
+  }
+</main>

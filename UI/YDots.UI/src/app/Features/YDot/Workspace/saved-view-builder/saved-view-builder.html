@@ -1,0 +1,657 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div class="svb-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.8.1) ============ -->
+  <header class="svb-header">
+    <div class="svb-header-lead">
+      <!-- Breadcrumbs (4.8.1 Application shell) -->
+     
+      <h1 class="svb-title">{{ pageTitle }}</h1>
+      <p class="svb-subtitle">{{ pageSubtitle }}</p>
+    </div>
+
+    <!-- Primary action = Preview; secondary/overflow actions (4.8.3) -->
+    <div class="svb-header-actions">
+      <button type="button" class="svb-btn svb-btn-ghost" (click)="cancel()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="!previewAllowed()" (click)="preview()">
+        Next: Preview <span aria-hidden="true">→</span>
+      </button>
+      <div class="svb-overflow-wrap">
+        <button type="button" class="svb-icon-btn" [attr.aria-expanded]="overflowOpen()" aria-label="More actions"
+                (click)="toggleOverflow()">⋯</button>
+        @if (overflowOpen()) {
+          <div class="svb-overflow-menu" role="menu">
+            <button type="button" role="menuitem" (click)="savePrivateView()">Save private view</button>
+            <button type="button" role="menuitem" (click)="requestSharedView()">Request shared view</button>
+            <button type="button" role="menuitem" (click)="setDefault()">Set default</button>
+          </div>
+        }
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ LOADING (4.8.4) ============ -->
+  @if (uiState() === 'loading') {
+    <section class="svb-state-panel" aria-busy="true" aria-live="polite">
+      <div class="svb-skeleton-head">Loading Saved View Builder — {{ selectedModule() }} · {{ lastRefresh() }}</div>
+      <div class="svb-skel svb-skel-lg"></div>
+      <div class="svb-skel"></div>
+      <div class="svb-skel"></div>
+      <div class="svb-skel svb-skel-sm"></div>
+    </section>
+  }
+
+  <!-- ============ NO ACCESS (4.8.4) ============ -->
+  @else if (uiState() === 'no-access') {
+    <section class="svb-state-panel svb-state-noaccess" aria-live="polite">
+      <h2>You cannot open this saved view</h2>
+      <p>Restricted menus, records, fields, counts, actions and search suggestions are hidden.</p>
+      <button type="button" class="svb-btn svb-btn-primary" (click)="setUiState('ready')">Return to permitted landing page</button>
+    </section>
+  }
+
+  <!-- ============ MAIN WORK + SIDE PANELS ============ -->
+  @else {
+    <div class="svb-layout">
+
+      <!-- ---------- MAIN WORK (4.8.1) ---------- -->
+      <section class="svb-main">
+
+        <!-- Stepper (guided task) -->
+        <ol class="svb-stepper">
+          @for (step of steps; track step.key) {
+            <li class="svb-step" [class.is-active]="currentStep() === step.key"
+                [class.is-done]="step.key === 'save' && false">
+              <button type="button" class="svb-step-btn" (click)="goToStep(step.key)">
+                <span class="svb-step-dot">{{ step.index }}</span>
+                <span class="svb-step-text">
+                  <span class="svb-step-title">{{ step.title }}</span>
+                  <span class="svb-step-caption">{{ step.caption }}</span>
+                </span>
+              </button>
+              @if (step.key !== 'save') { <span class="svb-step-line" aria-hidden="true"></span> }
+            </li>
+          }
+        </ol>
+
+        <!-- Validation summary (4.8.4 / 4.8.6) -->
+        @if (uiState() === 'validation' && validationErrors().length) {
+          <div class="svb-banner svb-banner-error" role="alert">
+            <strong>Check the highlighted fields</strong>
+            <ul>
+              @for (e of validationErrors(); track e.field) {
+                <li><a href="javascript:void(0)">{{ e.message }}</a></li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Conflict (4.8.4) -->
+        @if (uiState() === 'conflict') {
+          <div class="svb-banner svb-banner-warn" role="alert">
+            <strong>This record changed after you opened it.</strong>
+            <span>Review the latest version before continuing. Your proposed values are retained.</span>
+            <div class="svb-banner-actions">
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Compare</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Reapply eligible changes</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Cancel</button>
+            </div>
+          </div>
+        }
+
+        <!-- Duplicate (4.8.4) -->
+        @if (uiState() === 'duplicate') {
+          <div class="svb-banner svb-banner-warn" role="alert">
+            <strong>A similar saved view may already exist.</strong>
+            <span>Compare before saving; another person's protected details are not shown.</span>
+            <div class="svb-banner-actions">
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Compare</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="goToStep('save')">Change the name</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Request review</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Cancel</button>
+            </div>
+          </div>
+        }
+
+        <!-- Dependency failure (4.8.4) -->
+        @if (uiState() === 'dependency-failure') {
+          <div class="svb-banner svb-banner-warn" role="alert">
+            <strong>We could not complete the dependent service step.</strong>
+            <span>Your confirmed local result is unchanged. Correlation reference: DEP-88431.</span>
+            <div class="svb-banner-actions">
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Retry dependency</button>
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="setUiState('ready')">Contact support</button>
+            </div>
+          </div>
+        }
+
+        <!-- ===== CONFIGURE STEP ===== -->
+        @if (currentStep() === 'configure') {
+
+          <!-- Source screen: Module + Base view (4.8.2) -->
+          <div class="svb-source">
+            <div class="svb-field">
+              <label class="svb-label" for="svb-module">Select Module</label>
+              <div class="svb-select-wrap">
+                <span class="svb-select-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18" stroke="currentColor" stroke-width="1.6"/></svg>
+                </span>
+                <select id="svb-module" class="svb-select svb-select-lead" [ngModel]="selectedModule()" (ngModelChange)="onModuleChange($event)">
+                  @for (m of modules; track m.value) { <option [value]="m.value">{{ m.label }}</option> }
+                </select>
+                <span class="svb-caret" aria-hidden="true">⌄</span>
+              </div>
+            </div>
+            <div class="svb-field">
+              <label class="svb-label" for="svb-baseview">Base View (Optional)</label>
+              <div class="svb-baseview-row">
+                <div class="svb-select-wrap">
+                  <select id="svb-baseview" class="svb-select" [ngModel]="selectedBaseView()" (ngModelChange)="selectedBaseView.set($event)">
+                    @for (b of baseViews(); track b) { <option [value]="b">{{ b }}</option> }
+                  </select>
+                  <span class="svb-caret" aria-hidden="true">⌄</span>
+                </div>
+                <span class="svb-info" aria-label="Base view starts from an existing arrangement" title="Base view starts from an existing arrangement">ⓘ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1. Filters (4.8.2 Filter definition) — grouped conditions -->
+          <section class="svb-card svb-filters">
+            <div class="svb-card-head">
+              <div class="svb-card-title">
+                <span class="svb-ico" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                </span>
+                <span class="svb-card-title-text">1. Filters</span>
+              </div>
+              <div class="svb-card-head-actions">
+                <button type="button" class="svb-link" (click)="clearAllFilters()">Clear All</button>
+              </div>
+            </div>
+
+            @if (groups().length === 0) {
+              <p class="svb-empty-hint">No filter groups. Add a filter group to narrow the records shown.</p>
+            }
+
+            @for (g of groups(); track g.id; let gi = $index) {
+              <div class="svb-fgroup">
+                <div class="svb-fgroup-head">
+                  <span class="svb-fgroup-title">Filter Group {{ gi + 1 }}</span>
+                  @if (groups().length > 1) {
+                    <button type="button" class="svb-link svb-link-muted" (click)="removeFilterGroup(g.id)">Remove group</button>
+                  }
+                </div>
+
+                @for (f of g.filters; track f.id) {
+                  <div class="svb-filter-row">
+                    <span class="svb-drag" aria-hidden="true">⋮⋮</span>
+                    <div class="svb-select-wrap svb-filter-field">
+                      <select class="svb-select" [ngModel]="f.field" (ngModelChange)="updateFilterField(g.id, f.id, $event)" aria-label="Filter field">
+                        @for (ff of filterFields(); track ff) { <option [value]="ff">{{ ff }}</option> }
+                      </select>
+                      <span class="svb-caret" aria-hidden="true">⌄</span>
+                    </div>
+                    <div class="svb-select-wrap svb-filter-op">
+                      <select class="svb-select" [ngModel]="f.operator" (ngModelChange)="updateFilterOperator(g.id, f.id, $event)" aria-label="Filter operator">
+                        @for (op of operators; track op) { <option [value]="op">{{ op }}</option> }
+                      </select>
+                      <span class="svb-caret" aria-hidden="true">⌄</span>
+                    </div>
+
+                    <div class="svb-filter-value">
+                      @switch (f.kind) {
+                        @case ('chips') {
+                          <div class="svb-chips-wrap">
+                            <div class="svb-chips">
+                              @for (v of f.values; track v) {
+                                <span class="svb-chip">{{ v }}
+                                  <button type="button" class="svb-chip-x" (click)="removeFilterValue(g.id, f.id, v)" aria-label="Remove {{ v }}">×</button>
+                                </span>
+                              }
+                              @if (!f.values.length) { <span class="svb-chip-placeholder">Select {{ f.field }}…</span> }
+                            </div>
+                            @if (chipOptionsFor(f).length) {
+                              <div class="svb-select-wrap svb-chip-picker">
+                                <select class="svb-select" [ngModel]="''" (ngModelChange)="addFilterValue(g.id, f.id, $event)" aria-label="Add {{ f.field }} value">
+                                  <option value="">+ Add {{ f.field }}…</option>
+                                  @for (opt of chipOptionsFor(f); track opt) { <option [value]="opt">{{ opt }}</option> }
+                                </select>
+                                <span class="svb-caret" aria-hidden="true">⌄</span>
+                              </div>
+                            }
+                          </div>
+                        }
+                        @case ('date-range') {
+                          <div class="svb-daterange">
+                            <span class="svb-date-input">
+                              <input type="text" class="svb-input" [ngModel]="f.from" (ngModelChange)="updateFilterFrom(g.id, f.id, $event)" aria-label="From date" placeholder="From" />
+                              <span class="svb-date-ico" aria-hidden="true">▦</span>
+                            </span>
+                            <span class="svb-date-sep">to</span>
+                            <span class="svb-date-input">
+                              <input type="text" class="svb-input" [ngModel]="f.to" (ngModelChange)="updateFilterTo(g.id, f.id, $event)" aria-label="To date" placeholder="To" />
+                              <span class="svb-date-ico" aria-hidden="true">▦</span>
+                            </span>
+                          </div>
+                        }
+                        @case ('text') {
+                          <input type="text" class="svb-input" [ngModel]="f.text" (ngModelChange)="updateFilterText(g.id, f.id, $event)" aria-label="Filter value" placeholder="Enter {{ f.field }}" />
+                        }
+                      }
+                    </div>
+
+                    <button type="button" class="svb-row-del" (click)="removeFilter(g.id, f.id)" aria-label="Delete filter">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                  </div>
+                }
+
+                <button type="button" class="svb-add-row" (click)="addFilterToGroup(g.id)">+ Add Filter</button>
+              </div>
+            }
+
+            <button type="button" class="svb-add-row svb-add-group" (click)="addFilterGroup()">+ Add Filter Group</button>
+          </section>
+
+          <!-- Columns + Sorting + Display Preferences grid -->
+          <div class="svb-grid2">
+
+            <!-- 2. Columns (4.8.2 Column order) -->
+            <section class="svb-card svb-columns">
+              <div class="svb-card-head">
+                <div class="svb-card-title">
+                  <span class="svb-ico" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M9 4v16M15 4v16" stroke="currentColor" stroke-width="1.5"/></svg>
+                  </span>
+                  <span class="svb-card-title-text">2. Columns</span>
+                  <span class="svb-card-note">Customize the columns and their order.</span>
+                </div>
+                <button type="button" class="svb-link" (click)="resetColumnsToDefault()">Reset to Default</button>
+              </div>
+
+              <ul class="svb-col-list">
+                @for (c of columns(); track c.key) {
+                  <li class="svb-col-item" [class.is-off]="!c.selected">
+                    <span class="svb-drag" (click)="moveColumn(c.key, -1)" role="button" aria-label="Move up" title="Move up">⋮⋮</span>
+                    <label class="svb-check">
+                      <input type="checkbox" [checked]="c.selected" (change)="toggleColumn(c.key)" />
+                      <span class="svb-check-box" aria-hidden="true"></span>
+                      <span class="svb-col-label">{{ c.label }}</span>
+                    </label>
+                    <span class="svb-col-actions">
+                      <button type="button" class="svb-eye" [class.is-off]="!c.visible" (click)="toggleColumnVisibility(c.key)" aria-label="Toggle visibility">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.4"/></svg>
+                      </button>
+                      <button type="button" class="svb-col-x" (click)="removeColumn(c.key)" aria-label="Remove column">×</button>
+                    </span>
+                  </li>
+                }
+              </ul>
+
+              <button type="button" class="svb-add-row" (click)="addColumn()">+ Add Column</button>
+            </section>
+
+            <!-- Right column: Sorting + Display Preferences -->
+            <div class="svb-right-stack">
+
+              <!-- Sorting (4.8.2 Sort order) -->
+              <section class="svb-card svb-sorting">
+                <div class="svb-card-head">
+                  <div class="svb-card-title">
+                    <span class="svb-ico" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span>
+                    <span class="svb-card-title-text">Sorting</span>
+                    <span class="svb-card-note">Set the default sorting order.</span>
+                  </div>
+                </div>
+
+                @for (s of sortLevels(); track s.id; let i = $index) {
+                  <div class="svb-sort-block">
+                    <label class="svb-label-sm">{{ i === 0 ? 'Sort by' : 'Then by' }}</label>
+                    <div class="svb-sort-row">
+                      <div class="svb-select-wrap svb-sort-field">
+                        <select class="svb-select" [ngModel]="s.field" (ngModelChange)="updateSortField(s.id, $event)" aria-label="Sort field">
+                          @for (ff of filterFields(); track ff) { <option [value]="ff">{{ ff }}</option> }
+                        </select>
+                        <span class="svb-caret" aria-hidden="true">⌄</span>
+                      </div>
+                      <div class="svb-select-wrap svb-sort-dir">
+                        <select class="svb-select" [ngModel]="s.direction" (ngModelChange)="updateSortDirection(s.id, $event)" aria-label="Sort direction">
+                          @for (d of sortDirections; track d) { <option [value]="d">{{ d }}</option> }
+                        </select>
+                        <span class="svb-caret" aria-hidden="true">⌄</span>
+                      </div>
+                      @if (sortLevels().length > 1) {
+                        <button type="button" class="svb-row-del" (click)="removeSortLevel(s.id)" aria-label="Remove sort level">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <button type="button" class="svb-add-row" (click)="addSortLevel()">+ Add Sort Level</button>
+              </section>
+
+              <!-- 4. Display Preferences -->
+              <section class="svb-card svb-display">
+                <div class="svb-card-head">
+                  <div class="svb-card-title">
+                    <span class="svb-ico" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </span>
+                    <span class="svb-card-title-text">4. Display Preferences</span>
+                  </div>
+                </div>
+
+                <div class="svb-display-grid">
+                  <div class="svb-display-checks">
+                    <label class="svb-check">
+                      <input type="checkbox" [checked]="showGroupHeaders()" (change)="showGroupHeaders.set(!showGroupHeaders())" />
+                      <span class="svb-check-box" aria-hidden="true"></span>
+                      <span>Show group headers</span>
+                    </label>
+                    <label class="svb-check">
+                      <input type="checkbox" [checked]="compactRowHeight()" (change)="compactRowHeight.set(!compactRowHeight())" />
+                      <span class="svb-check-box" aria-hidden="true"></span>
+                      <span>Compact row height</span>
+                    </label>
+                    <label class="svb-check">
+                      <input type="checkbox" [checked]="enableRowSelection()" (change)="enableRowSelection.set(!enableRowSelection())" />
+                      <span class="svb-check-box" aria-hidden="true"></span>
+                      <span>Enable row selection by default</span>
+                    </label>
+                    <label class="svb-check">
+                      <input type="checkbox" [checked]="rememberColumnWidths()" (change)="rememberColumnWidths.set(!rememberColumnWidths())" />
+                      <span class="svb-check-box" aria-hidden="true"></span>
+                      <span>Remember column widths</span>
+                    </label>
+                  </div>
+
+                  <div class="svb-display-right">
+                    <label class="svb-label-sm" for="svb-rows">Rows per page</label>
+                    <div class="svb-select-wrap svb-rows-select">
+                      <select id="svb-rows" class="svb-select" [ngModel]="rowsPerPage()" (ngModelChange)="rowsPerPage.set(+$event)">
+                        @for (r of rowsPerPageOptions; track r) { <option [value]="r">{{ r }}</option> }
+                      </select>
+                      <span class="svb-caret" aria-hidden="true">⌄</span>
+                    </div>
+
+                    <span class="svb-label-sm svb-default-view-label">Default View</span>
+                    <div class="svb-segmented" role="group" aria-label="Default view">
+                      <button type="button" class="svb-seg" [class.is-active]="defaultView() === 'Table'" (click)="setDefaultView('Table')">Table</button>
+                      <button type="button" class="svb-seg" [class.is-active]="defaultView() === 'Card'" (click)="setDefaultView('Card')">Card</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        }
+
+        <!-- ===== PREVIEW STEP (4.8.1 / primary action result) ===== -->
+        @if (currentStep() === 'preview') {
+          <section class="svb-card svb-preview-step">
+            <h2 class="svb-step-heading">Preview your results</h2>
+            <p class="svb-card-note">
+              This preview refreshes only the records inside your effective scope; underlying records are not changed.
+            </p>
+            @if (uiState() === 'empty') {
+              <div class="svb-empty">
+                <p><strong>No records match this arrangement.</strong></p>
+                <p>Zero results here come from the current filters within your scope — not a global zero.</p>
+                <button type="button" class="svb-btn svb-btn-ghost" (click)="clearAllFilters(); goToStep('configure')">Reset filters</button>
+              </div>
+            } @else {
+              <div class="svb-preview-table" aria-label="Preview results">
+                <div class="svb-pt-head">
+                  @for (c of selectedColumns(); track c.key) { <span>{{ c.label }}</span> }
+                </div>
+                @for (n of [1,2,3]; track n) {
+                  <div class="svb-pt-row">
+                    @for (c of selectedColumns(); track c.key) { <span class="svb-pt-cell">{{ c.label }} #{{ n }}</span> }
+                  </div>
+                }
+              </div>
+            }
+            <div class="svb-step-nav">
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="goToStep('configure')">Back to Configure</button>
+              <button type="button" class="svb-btn svb-btn-primary" (click)="goToStep('save')">Next: Save →</button>
+            </div>
+          </section>
+        }
+
+        <!-- ===== SAVE STEP (4.8.2 View name / Owner / Visibility / Shared role / Last used time) ===== -->
+        @if (currentStep() === 'save') {
+          <section class="svb-card svb-save-step">
+            <h2 class="svb-step-heading">Name, share and finalise</h2>
+
+            <div class="svb-field">
+              <label class="svb-label" for="svb-name">View name</label>
+              <input id="svb-name" type="text" class="svb-input" [ngModel]="viewName()" (ngModelChange)="viewName.set($event)"
+                     placeholder="Enter a name for this view" maxlength="120" />
+            </div>
+
+            <div class="svb-field">
+              <label class="svb-label" for="svb-owner">Owner</label>
+              <div class="svb-select-wrap">
+                <select id="svb-owner" class="svb-select" [ngModel]="viewOwner()" (ngModelChange)="viewOwner.set($event)">
+                  @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
+                </select>
+                <span class="svb-caret" aria-hidden="true">⌄</span>
+              </div>
+            </div>
+
+            <div class="svb-field">
+              <span class="svb-label">Visibility</span>
+              <div class="svb-segmented" role="group" aria-label="Visibility">
+                <button type="button" class="svb-seg" [class.is-active]="visibility() === 'Private'" (click)="visibility.set('Private')">Private</button>
+                <button type="button" class="svb-seg" [class.is-active]="visibility() === 'Shared'" (click)="visibility.set('Shared')">Shared</button>
+              </div>
+            </div>
+
+            @if (visibility() === 'Shared') {
+              <div class="svb-field">
+                <label class="svb-label" for="svb-sharedrole">Shared role</label>
+                <div class="svb-select-wrap">
+                  <select id="svb-sharedrole" class="svb-select" [ngModel]="sharedRole()" (ngModelChange)="sharedRole.set($event)">
+                    <option value="">Select a role to share with…</option>
+                    @for (r of sharedRoles; track r) { <option [value]="r">{{ r }}</option> }
+                  </select>
+                  <span class="svb-caret" aria-hidden="true">⌄</span>
+                </div>
+              </div>
+            }
+
+            <div class="svb-field">
+              <span class="svb-label">Last used time</span>
+              <p class="svb-readonly">{{ lastUsedTime() }} <span class="svb-tz">· {{ operatingTimeZone }}</span></p>
+            </div>
+
+            <div class="svb-step-nav">
+              <button type="button" class="svb-btn svb-btn-ghost" (click)="goToStep('preview')">Back to Preview</button>
+              @if (visibility() === 'Private') {
+                <button type="button" class="svb-btn svb-btn-primary" (click)="savePrivateView()">Save private view</button>
+              } @else {
+                <button type="button" class="svb-btn svb-btn-primary" (click)="requestSharedView()">Request shared view</button>
+              }
+            </div>
+          </section>
+        }
+      </section>
+
+      <!-- ---------- VIEW SUMMARY = Decision/review + Persistent outcome (4.8.1) ---------- -->
+      <aside class="svb-summary" aria-label="View Summary">
+        <div class="svb-summary-head">
+          <span class="svb-summary-title">
+            <span class="svb-ico" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.4"/></svg>
+            </span>
+            View Summary
+          </span>
+          <button type="button" class="svb-link" (click)="preview()">Preview</button>
+        </div>
+
+        <div class="svb-summary-block">
+          <span class="svb-summary-key">MODULE</span>
+          <p class="svb-summary-val">{{ selectedModule() }}</p>
+        </div>
+
+        <div class="svb-summary-block">
+          <span class="svb-summary-key">BASE VIEW</span>
+          <p class="svb-summary-val">{{ selectedBaseView() }}</p>
+        </div>
+
+        <div class="svb-summary-block">
+          <div class="svb-summary-row">
+            <span class="svb-summary-key">FILTERS ({{ filtersCount() }})</span>
+            <button type="button" class="svb-link" (click)="goToStep('configure')">View</button>
+          </div>
+          <ul class="svb-summary-filters">
+            @for (f of allFilters(); track f.id) {
+              <li class="svb-sf">
+                <span class="svb-sf-ico" aria-hidden="true">▤</span>
+                <span class="svb-sf-body">
+                  <span class="svb-sf-field">{{ f.field }} <span class="svb-sf-op">{{ f.operator }}</span></span>
+                  <span class="svb-sf-val">{{ filterSummary(f) }}</span>
+                </span>
+              </li>
+            }
+          </ul>
+        </div>
+
+        <div class="svb-summary-block">
+          <div class="svb-summary-row">
+            <span class="svb-summary-key">COLUMNS ({{ columnsCount() }})</span>
+            <button type="button" class="svb-link" (click)="goToStep('configure')">Edit</button>
+          </div>
+          <p class="svb-summary-list">
+            @for (c of selectedColumns(); track c.key; let last = $last) {{{ c.label }}{{ last ? '' : ', ' }}}
+          </p>
+        </div>
+
+        <div class="svb-summary-block">
+          <div class="svb-summary-row">
+            <span class="svb-summary-key">SORTING ({{ sortCount() }})</span>
+            <button type="button" class="svb-link" (click)="goToStep('configure')">Edit</button>
+          </div>
+          <ol class="svb-summary-sort">
+            @for (s of sortLevels(); track s.id; let i = $index) {
+              <li>{{ i + 1 }}. {{ s.field }} ({{ s.direction }})</li>
+            }
+          </ol>
+        </div>
+
+        <div class="svb-summary-block">
+          <span class="svb-summary-key">DISPLAY</span>
+          <p class="svb-summary-val svb-summary-muted">{{ displaySummary() }}</p>
+          @if (enableRowSelection()) { <p class="svb-summary-val svb-summary-muted">Row selection enabled</p> }
+        </div>
+
+        <!-- Validity (Decision/review) -->
+        @if (isValid()) {
+          <div class="svb-valid-box svb-valid-ok">
+            <span class="svb-valid-ico" aria-hidden="true">✓</span>
+            <span class="svb-valid-text">
+              <strong>Your view is valid</strong>
+              <span>This view will only show records you have access to.</span>
+            </span>
+          </div>
+        } @else {
+          <div class="svb-valid-box svb-valid-bad">
+            <span class="svb-valid-ico" aria-hidden="true">!</span>
+            <span class="svb-valid-text">
+              <strong>Your view is not ready</strong>
+              <span>Select a module and at least one column to continue.</span>
+            </span>
+          </div>
+        }
+
+        <!-- Persistent outcome (4.8.1) -->
+        @if (persistentOutcome(); as po) {
+          <div class="svb-outcome" role="status">
+            <p class="svb-outcome-title">{{ po.state }}</p>
+            <dl class="svb-outcome-grid">
+              <dt>Reference</dt><dd>{{ po.reference }}</dd>
+              <dt>Effective</dt><dd>{{ po.effectiveTime }}</dd>
+              <dt>Downstream</dt><dd>{{ po.downstreamStatus }}</dd>
+              <dt>Next action</dt><dd>{{ po.nextAction }}</dd>
+            </dl>
+          </div>
+        }
+
+        <!-- Save actions (4.8.3) -->
+        <div class="svb-summary-actions">
+          <button type="button" class="svb-btn svb-btn-primary svb-btn-block" (click)="savePrivateView()">Save as New View</button>
+          <button type="button" class="svb-btn svb-btn-outline svb-btn-block" (click)="requestSharedView()">Save Over Base View</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ---------- RECENT SAVED VIEWS = Related and history (4.8.1) ---------- -->
+    <section class="svb-recent" aria-label="Recent Saved Views">
+      <div class="svb-recent-head">
+        <h2 class="svb-recent-title">Recent Saved Views</h2>
+        <a href="javascript:void(0)" class="svb-link">View all saved views →</a>
+      </div>
+      <div class="svb-recent-grid">
+        @for (v of recentViews; track v.reference) {
+          <article class="svb-recent-card">
+            <span class="svb-recent-bm" [class.is-shared]="v.visibility === 'Shared'" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            </span>
+            <div class="svb-recent-body">
+              <p class="svb-recent-name">{{ v.name }}</p>
+              <p class="svb-recent-share">{{ v.shareLabel }}</p>
+              <p class="svb-recent-updated">{{ v.updated }}</p>
+            </div>
+            <!-- Delete unused view — Danger action; gated by History rule (4.8.3) -->
+            @if (!v.hasDownstreamReferences) {
+              <button type="button" class="svb-recent-del" (click)="openDeleteDialog(v)" aria-label="Delete {{ v.name }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            }
+          </article>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ============ DELETE CONFIRMATION (Danger / confirmation — 4.8.3 / 4.8.6) ============ -->
+  @if (deleteDialogOpen() && deleteTarget(); as target) {
+    <div class="svb-modal-backdrop" (click)="cancelDelete()"></div>
+    <div class="svb-modal" role="dialog" aria-modal="true" aria-labelledby="svb-del-title">
+      <h2 id="svb-del-title" class="svb-modal-title">Confirm Delete unused view</h2>
+      <p class="svb-modal-body">
+        Review the affected record, consequence, reason and effective time. Linked history is preserved.
+      </p>
+      <dl class="svb-modal-facts">
+        <dt>Record</dt><dd>{{ target.reference }} · {{ target.name }}</dd>
+        <dt>Consequence</dt><dd>The unused draft is permanently removed; linked history is kept.</dd>
+        <dt>Effective time</dt><dd>{{ lastRefresh() }} · {{ operatingTimeZone }}</dd>
+      </dl>
+      <label class="svb-label" for="svb-del-reason">Reason (required)</label>
+      <input id="svb-del-reason" type="text" class="svb-input" [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($event)"
+             placeholder="State why this view is being deleted" />
+      <div class="svb-modal-actions">
+        <button type="button" class="svb-btn svb-btn-ghost" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="svb-btn svb-btn-danger" [disabled]="!deleteReason().trim()" (click)="confirmDelete()">Delete unused view</button>
+      </div>
+    </div>
+  }
+
+  <!-- ============ SUCCESS (4.8.4) — persistent, not a toast ============ -->
+  @if (uiState() === 'success' && persistentOutcome(); as po) {
+    <div class="svb-toast svb-toast-success" role="status">
+      <span aria-hidden="true">✓</span>
+      <span>Saved successfully. Reference {{ po.reference }}; state {{ po.state }}; effective {{ po.effectiveTime }}.</span>
+    </div>
+  }
+</div>
+</div>
+</div>
+</main>

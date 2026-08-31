@@ -1,0 +1,2 @@
+/*! For license information please see apo.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/APO/APOIndicator.js";export default Highcharts;

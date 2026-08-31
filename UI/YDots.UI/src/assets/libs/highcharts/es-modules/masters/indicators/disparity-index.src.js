@@ -1,0 +1,2 @@
+/*! For license information please see disparity-index.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/DisparityIndex/DisparityIndexIndicator.js";export default Highcharts;

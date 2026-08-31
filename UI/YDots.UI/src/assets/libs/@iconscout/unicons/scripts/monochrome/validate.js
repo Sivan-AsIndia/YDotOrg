@@ -1,0 +1,1 @@
+const path=require("path"),glob=require("glob"),fs=require("fs-plus"),sourcePath=path.join(process.cwd(),"dist/test","**/*.svg"),replaceFill=require("./replaceFill");glob(sourcePath,function(e,r){if(e)return console.log(e),!1;(r=r.map(e=>path.normalize(e))).forEach(e=>{const r=fs.readFileSync(e,"utf-8");replaceFill(r,e)})});

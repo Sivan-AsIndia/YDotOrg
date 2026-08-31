@@ -1,0 +1,226 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div  [attr.data-ui-state]="effectiveUiState()">
+
+  <!-- ============ TASK HEADER (4.3.1 Task header) ============ -->
+  <header class="pvp-task-header" aria-labelledby="pvp-title">
+    <div class="pvp-header-text">
+      <div class="pvp-title-row">
+        <h1 class="pvp-title" id="pvp-title">Payment verification page</h1>
+    
+      </div>
+      <p class="pvp-subtitle">Display pending, confirmed or failed state based on backend evidence.</p>
+  
+    </div>
+
+ 
+  </header>
+
+    <div class="pvp-context-left">
+     
+
+
+  @if (effectiveUiState() !== 'loading' && effectiveUiState() !== 'no-access' && effectiveUiState() !== 'empty' && record()) {
+
+  <!-- ============ TWO-REGION TASK LAYOUT (4.3.5 Desktop) ============ -->
+  <div class="pvp-layout">
+
+    <!-- ---------- WORK AREA (4.3.1 Main work) ---------- -->
+    <div class="pvp-work">
+
+      <!-- Payment status: Donation reference, Requested amount, Backend payment state, Last verified time (4.3.2) -->
+      <section class="pvp-card">
+        <div class="pvp-card-head"><h2 class="pvp-card-title">Payment status</h2></div>
+        <dl class="pvp-facts">
+          <div class="pvp-fact">
+            <dt>Donation reference</dt>
+            <dd>
+              {{ record()!.donationReference }}
+              <button type="button" class="pvp-copy" (click)="copyToClipboard(record()!.donationReference)" aria-label="Copy donation reference">
+                {{ copiedField() === record()!.donationReference ? 'Copied' : 'Copy' }}
+              </button>
+            </dd>
+          </div>
+          <div class="pvp-fact"><dt>Requested amount</dt><dd class="pvp-amount">{{ formatAmount(record()!.requestedAmount, record()!.currency) }}</dd></div>
+          <div class="pvp-fact"><dt>payment state</dt><dd><span class="pvp-badge pvp-inline-badge" [class]="stateClass(record()!.backendPaymentState)">{{ record()!.backendPaymentState }}</span></dd></div>
+          <div class="pvp-fact"><dt>Last verified time</dt><dd>{{ record()!.lastVerifiedTime }}</dd></div>
+        </dl>
+
+   
+      </section>
+
+ 
+
+      <!-- Gateway & receipt: Gateway reference, Receipt eligibility, Receipt link, Support correlation reference (4.3.2) -->
+      <section class="pvp-card">
+        <div class="pvp-card-head"><h2 class="pvp-card-title">Gateway &amp; receipt</h2></div>
+        <dl class="pvp-facts">
+          <div class="pvp-fact">
+            <dt>Gateway reference</dt>
+            <dd>
+              {{ record()!.gatewayReference }}
+              <button type="button" class="pvp-copy" (click)="copyToClipboard(record()!.gatewayReference)" aria-label="Copy gateway reference">
+                {{ copiedField() === record()!.gatewayReference ? 'Copied' : 'Copy' }}
+              </button>
+            </dd>
+          </div>
+          <div class="pvp-fact"><dt>Receipt eligibility</dt><dd><span class="pvp-badge pvp-inline-badge" [class]="eligibilityClass(record()!.receiptEligibility)">{{ record()!.receiptEligibility }}</span></dd></div>
+          <div class="pvp-fact">
+            <dt>Receipt link</dt>
+            <dd>
+              @if (record()!.receiptLink) {
+                {{ record()!.receiptLink }}
+                <button type="button" class="pvp-copy" (click)="copyToClipboard(record()!.receiptLink!)" aria-label="Copy receipt link">
+                  {{ copiedField() === record()!.receiptLink ? 'Copied' : 'Copy' }}
+                </button>
+              } @else {
+                <span class="pvp-muted">Not available</span>
+              }
+            </dd>
+          </div>
+          <div class="pvp-fact">
+            <dt>Support correlation reference</dt>
+            <dd>
+              {{ record()!.supportCorrelationReference }}
+              <button type="button" class="pvp-copy" (click)="copyToClipboard(record()!.supportCorrelationReference)" aria-label="Copy support correlation reference">
+                {{ copiedField() === record()!.supportCorrelationReference ? 'Copied' : 'Copy' }}
+              </button>
+            </dd>
+          </div>
+        </dl>
+
+        <!-- Retrieve receipt when eligible: workflow action (4.3.3) -->
+        <div class="pvp-retrieve-row">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="retrieveReceipt()">
+            Retrieve receipt
+          </button>
+       
+        </div>
+      </section>
+
+      <!-- Decision / review: before-and-after, warning, effective permission, evidence, reason, resulting state (4.3.1 Decision / review) -->
+      <section class="pvp-card">
+        <div class="pvp-card-head"><h2 class="pvp-card-title">Decision &amp; review</h2></div>
+       
+        <div class="pvp-decision">
+          <div class="pvp-decision-col">
+            <span class="pvp-decision-label">Before</span>
+            <span class="pvp-badge pvp-inline-badge" [class]="stateClass(record()!.backendPaymentState)">{{ record()!.backendPaymentState }}</span>
+          </div>
+          <svg class="pvp-decision-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          <div class="pvp-decision-col">
+            <span class="pvp-decision-label">After (proposed)</span>
+            <span class="pvp-badge pvp-inline-badge" [class]="stateClass(proposedState())">{{ proposedState() }}</span>
+          </div>
+          <div class="pvp-decision-col">
+            <span class="pvp-decision-label">Effective permission</span>
+            <span class="pvp-decision-value">Granted — refresh safe status</span>
+          </div>
+          <div class="pvp-decision-col">
+            <span class="pvp-decision-label">Effective time</span>
+            <span class="pvp-decision-value">{{ effectiveTime }}</span>
+          </div>
+        </div>
+    
+      </section>
+    </div>
+
+    <!-- ---------- SECONDARY PANEL: Related and history (4.3.1 Related and history) ---------- -->
+    <aside class="pvp-side" aria-label="Related and history">
+      <section class="pvp-card pvp-side-card">
+        <div class="pvp-card-head"><h2 class="pvp-card-title">Related &amp; history</h2></div>
+        <div class="pvp-subtabs" role="tablist" aria-label="Related and history">
+          @for (rt of relatedTabs; track rt.key) {
+            <button type="button" class="pvp-subtab" role="tab"
+                    [class.pvp-subtab-active]="activeRelatedTab() === rt.key"
+                    [attr.aria-selected]="activeRelatedTab() === rt.key"
+                    (click)="selectRelatedTab(rt.key)">{{ rt.label }}</button>
+          }
+        </div>
+        <div class="pvp-side-body">
+          @switch (activeRelatedTab()) {
+            @case ('linked') { <ng-container *ngTemplateOutlet="rowList; context: { $implicit: linkedRecords() }"></ng-container> }
+            @case ('documents') {
+              <p class="pvp-confidential">Confidential — visible only within record scope and purpose.</p>
+              <ng-container *ngTemplateOutlet="rowList; context: { $implicit: documents }"></ng-container>
+            }
+            @case ('activity') { <ng-container *ngTemplateOutlet="rowList; context: { $implicit: activityRows() }"></ng-container> }
+            @case ('integration') { <ng-container *ngTemplateOutlet="rowList; context: { $implicit: integrationRows }"></ng-container> }
+            @case ('support') { <ng-container *ngTemplateOutlet="rowList; context: { $implicit: supportRows() }"></ng-container> }
+            @case ('audit') { <ng-container *ngTemplateOutlet="rowList; context: { $implicit: auditRows() }"></ng-container> }
+          }
+        </div>
+      </section>
+
+      <!-- ============ PERSISTENT OUTCOME (4.3.1) — below Related and history ============ -->
+      <section class="pvp-card pvp-outcome-card">
+        <div class="pvp-card-head"><h2 class="pvp-card-title">Persistent outcome</h2></div>
+        <dl class="pvp-facts">
+          <div class="pvp-fact"><dt>Reference</dt><dd>{{ persistentOutcome().reference }}</dd></div>
+          <!-- <div class="pvp-fact"><dt>State</dt><dd><span class="pvp-badge pvp-inline-badge" [class]="stateClass(persistentOutcome().state)">{{ persistentOutcome().state }}</span></dd></div> -->
+          <div class="pvp-fact"><dt>Effective time</dt><dd>{{ persistentOutcome().effectiveTime }}</dd></div>
+          <div class="pvp-fact"><dt>Downstream status</dt><dd>{{ persistentOutcome().downstreamStatus }}</dd></div>
+          <div class="pvp-fact"><dt>Accountable owner</dt><dd>{{ persistentOutcome().owner }}</dd></div>
+          <div class="pvp-fact"><dt>Next action</dt><dd>{{ persistentOutcome().nextAction }}</dd></div>
+        </dl>
+      </section>
+    </aside>
+  </div>
+
+  }
+
+  <!-- Shared read-only related/list template -->
+  <ng-template #rowList let-rows>
+    <ul class="pvp-list">
+      @for (r of rows; track r.primary) {
+        <li class="pvp-list-row pvp-list-stack">
+          <span class="pvp-list-primary">{{ r.primary }}</span>
+          @if (r.secondary) { <span class="pvp-list-secondary">{{ r.secondary }}</span> }
+          <span class="pvp-list-meta">{{ r.meta }}</span>
+        </li>
+      }
+    </ul>
+  </ng-template>
+
+  <!-- ============ HIGH-RISK CONFIRM: Refresh safe status (4.3.3 + 4.3.6 High-risk action) ============ -->
+  @if (refreshDialogOpen() && record()) {
+    <div class="pvp-modal-backdrop" (click)="cancelRefresh()">
+      <div class="pvp-modal" role="dialog" aria-modal="true" aria-labelledby="pvp-refresh-title" (click)="$event.stopPropagation()">
+        <h2 class="pvp-modal-title" id="pvp-refresh-title">Confirm Refresh safe status</h2>
+        <p class="pvp-modal-lead">Review the affected record, consequence, reason and effective time. This decision requires explicit confirmation.</p>
+
+        <dl class="pvp-facts pvp-modal-facts">
+          <div class="pvp-fact"><dt>Affected record</dt><dd>{{ record()!.donationReference }}</dd></div>
+          <div class="pvp-fact"><dt>Consequence</dt><dd>State {{ record()!.backendPaymentState }} → {{ proposedState() }}</dd></div>
+          <div class="pvp-fact"><dt>Effective permission</dt><dd>pay.payments.verify</dd></div>
+          <div class="pvp-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
+        </dl>
+
+        <label class="pvp-modal-field">
+          <span class="pvp-field-label">Reason <span class="pvp-req">required</span></span>
+          <textarea class="pvp-textarea" rows="3" [ngModel]="refreshReason()" (ngModelChange)="refreshReason.set($event)"
+                    (blur)="refreshReasonTouched.set(true)"
+                    placeholder="State why you are refreshing this payment's safe status…"
+                    [attr.aria-invalid]="refreshReasonTouched() && !refreshReasonValid()"></textarea>
+          <span class="pvp-field-foot">
+            <span class="pvp-count" [class.pvp-count-bad]="refreshReasonCount() > refreshReasonMax">{{ refreshReasonCount() }} / {{ refreshReasonMax }}</span>
+          </span>
+          @if (refreshReasonTouched() && !refreshReasonValid()) {
+            <span class="pvp-field-error" role="alert">Enter Reason. Provide between {{ refreshReasonMin }} and {{ refreshReasonMax }} characters.</span>
+          }
+        </label>
+
+        <div class="pvp-modal-actions">
+          <button type="button" class="pvp-btn pvp-btn-outline" (click)="cancelRefresh()">Cancel</button>
+          <button type="button" class="pvp-btn pvp-btn-primary" (click)="confirmRefresh()" [disabled]="!refreshReasonValid()">Confirm</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</div>
+</main>

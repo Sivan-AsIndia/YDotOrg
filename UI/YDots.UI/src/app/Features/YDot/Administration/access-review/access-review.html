@@ -1,0 +1,361 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between gap-3 position-relative" style="z-index:1;">
+        <div style="    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;">
+    <div>
+            <h3 class="mb-1 fw-bold fs-24">Access Review Campaign</h3>
+          <p class="mb-0 fs-14">Certify or revoke existing assignments by review period</p>
+</div>
+          <button class="btn btn-sm btn-outline-secondary mb-2" (click)="goBack()">
+            <i class="ri-arrow-left-line me-1"></i> Back to Directory
+          </button>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    @if (loading()) {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading campaign...</p>
+      </div>
+    }
+
+    @if (!loading()) {
+      <!-- Stats -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+          <div class="card border p-3 text-center">
+            <label class="text-muted small text-uppercase fw-semibold">Campaign</label>
+            <p class="fw-bold mb-0 fs-5">{{ campaignRef() }}</p>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border p-3 text-center">
+            <label class="text-muted small text-uppercase fw-semibold">Review Period</label>
+            <p class="fw-bold mb-0">{{ reviewPeriod() }}</p>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border p-3 text-center">
+            <label class="text-muted small text-uppercase fw-semibold">Completion</label>
+            <p class="fw-bold mb-0 text-success fs-5">{{ completionProgress() }}</p>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border p-3 text-center">
+            <label class="text-muted small text-uppercase fw-semibold">Reviewers</label>
+            <p class="fw-bold mb-0">{{ reviewerProgress() }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Section -->
+      <div class="filter-bar-wrap mb-4">
+        <input type="checkbox" id="filterPanelToggle" class="filter-panel-toggle-input" hidden>
+
+        <div class="filter-topbar">
+          <div class="filter-topbar-search">
+            <i class="ri-search-line"></i>
+            <input type="text" placeholder="Search by user, role or scope..."
+                   [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+          </div>
+          <label for="filterPanelToggle" class="filter-topbar-btn ">
+            <i class="ri-filter-3-line"></i> Filter
+            @if (filterRisk() || filterRole() || filterScope()) { <span class="filter-topbar-dot"></span> }
+          </label>
+        </div>
+
+        <!-- Backdrop -->
+        <label for="filterPanelToggle" class="filter-offcanvas-backdrop" aria-hidden="true"></label>
+
+        <!-- Offcanvas drawer -->
+        <aside class="filter-offcanvas">
+          <div class="filter-offcanvas__header">
+            <div>
+              <h6>Filter</h6>
+              <p>Combine multiple filters to get precise results</p>
+            </div>
+            <label for="filterPanelToggle" class="filter-offcanvas__close" aria-label="Close filter panel">
+              <i class="ri-close-line"></i>
+            </label>
+          </div>
+
+          <div class="filter-offcanvas__body">
+
+            <!-- Smart Filter wheel -->
+            <div class="filter-wheel">
+              <div class="filter-wheel__ring"></div>
+
+              <button type="button" class="filter-wheel__center " (click)="clearFilters()" title="Reset all filters">
+                <i class="ri-filter-3-line"></i>
+                <span> Filter</span>
+              </button>
+
+              <div class="filter-wheel__node filter-wheel__node--risk" [class.is-active]="filterRisk()">
+                <i class="ri-shield-flash-line"></i>
+                <span>Risk</span>
+              </div>
+
+              <div class="filter-wheel__node filter-wheel__node--role" [class.is-active]="filterRole()">
+                <i class="ri-shield-user-line"></i>
+                <span>Role</span>
+              </div>
+
+              <div class="filter-wheel__node filter-wheel__node--scope" [class.is-active]="filterScope()">
+                <i class="ri-building-line"></i>
+                <span>Scope</span>
+              </div>
+            </div>
+
+            <!-- Build your filter -->
+            <div class="filter-build">
+              <div class="filter-build__header">
+                <h6>Build your filter</h6>
+                <button type="button" class="filter-clear-link" (click)="clearFilters()">
+                  <i class="ri-refresh-line"></i> Clear All
+                </button>
+              </div>
+
+              <div class="filter-build__cards">
+
+                <div class="filter-build-card">
+                  <div class="filter-build-card__top">
+                    <span class="filter-build-card__icon filter-build-card__icon--risk"><i class="ri-shield-flash-line"></i></span>
+                    <span class="filter-build-card__title">Risk Flags</span>
+                    @if (filterRisk()) {
+                      <button type="button" class="filter-build-card__clear" (click)="filterRisk.set('')" aria-label="Clear risk filter">
+                        <i class="ri-close-line"></i>
+                      </button>
+                    }
+                  </div>
+                  <select class="filter-build-card__select" [ngModel]="filterRisk()" (ngModelChange)="filterRisk.set($event)">
+                    <option value="">All items</option>
+                    <option value="flagged">Flagged only</option>
+                    <option value="none">No flags</option>
+                  </select>
+                  <span class="filter-build-card__caption">{{ filterRisk() ? '1 selected' : 'None selected' }}</span>
+                </div>
+
+                <div class="filter-build-card">
+                  <div class="filter-build-card__top">
+                    <span class="filter-build-card__icon filter-build-card__icon--role"><i class="ri-shield-user-line"></i></span>
+                    <span class="filter-build-card__title">Role</span>
+                    @if (filterRole()) {
+                      <button type="button" class="filter-build-card__clear" (click)="filterRole.set('')" aria-label="Clear role filter">
+                        <i class="ri-close-line"></i>
+                      </button>
+                    }
+                  </div>
+                  <select class="filter-build-card__select" [ngModel]="filterRole()" (ngModelChange)="filterRole.set($event)">
+                    <option value="">All roles</option>
+                    @for (r of uniqueRoles(); track r) {
+                      <option [value]="r">{{ r }}</option>
+                    }
+                  </select>
+                  <span class="filter-build-card__caption">{{ filterRole() ? '1 selected' : 'None selected' }}</span>
+                </div>
+
+                <div class="filter-build-card">
+                  <div class="filter-build-card__top">
+                    <span class="filter-build-card__icon filter-build-card__icon--scope"><i class="ri-building-line"></i></span>
+                    <span class="filter-build-card__title">Scope</span>
+                    @if (filterScope()) {
+                      <button type="button" class="filter-build-card__clear" (click)="filterScope.set('')" aria-label="Clear scope filter">
+                        <i class="ri-close-line"></i>
+                      </button>
+                    }
+                  </div>
+                  <select class="filter-build-card__select" [ngModel]="filterScope()" (ngModelChange)="filterScope.set($event)">
+                    <option value="">All scopes</option>
+                    @for (s of uniqueScopes(); track s) {
+                      <option [value]="s">{{ s }}</option>
+                    }
+                  </select>
+                  <span class="filter-build-card__caption">{{ filterScope() ? '1 selected' : 'None selected' }}</span>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          <div class="filter-offcanvas__footer">
+            <div class="filter-build__active">
+              <i class="ri-equalizer-line"></i>
+              <strong>Active</strong>
+              <span class="filter-build__count">{{ (filterRisk() ? 1 : 0) + (filterRole() ? 1 : 0) + (filterScope() ? 1 : 0) }}</span>
+
+              @if (filterRisk()) {
+                <span class="filter-build__chip">
+                  Risk
+                  <button type="button" (click)="filterRisk.set('')" aria-label="Remove risk filter"><i class="ri-close-line"></i></button>
+                </span>
+              }
+              @if (filterRole()) {
+                <span class="filter-build__chip">
+                  {{ filterRole() }}
+                  <button type="button" (click)="filterRole.set('')" aria-label="Remove role filter"><i class="ri-close-line"></i></button>
+                </span>
+              }
+              @if (filterScope()) {
+                <span class="filter-build__chip">
+                  {{ filterScope() }}
+                  <button type="button" (click)="filterScope.set('')" aria-label="Remove scope filter"><i class="ri-close-line"></i></button>
+                </span>
+              }
+            </div>
+
+            <label for="filterPanelToggle" class="btn-apply-filters">
+              <i class="ri-filter-3-line"></i> Apply Filters
+            </label>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Empty State -->
+      @if (filteredItems().length === 0) {
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i class="ri-file-search-line"></i>
+          </div>
+          <h5 class="fw-bold">No Items Found</h5>
+          <p class="text-muted mb-3">No review items match the current filters.</p>
+          <button class="btn btn-outline-primary" (click)="clearFilters()">
+            <i class="ri-filter-off-line me-1"></i> Clear filters
+          </button>
+        </div>
+      }
+
+      <!-- Table -->
+      @if (filteredItems().length > 0) {
+        <div class="card border">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Scope</th>
+                  <th>Access End</th>
+                  <th>Last Used</th>
+                  <th>Risk Flags</th>
+                  <th>Decision</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of filteredItems(); track item.reference; let i = $index) {
+                  <tr [class]="getRowClass(item.decision)">
+                    <td>
+                      <div class="fw-medium">{{ item.user }}</div>
+                      <div class="text-muted small">{{ item.reference }}</div>
+                    </td>
+                    <td>{{ item.role }}</td>
+                    <td>{{ item.scope }}</td>
+                    <td class="small">{{ item.accessEnd }}</td>
+                    <td class="small text-muted">{{ item.lastUsed }}</td>
+                    <td>
+                      @if (item.riskFlags !== 'None') {
+                        <span class="badge-soft badge-soft--warning">{{ item.riskFlags }}</span>
+                      } @else {
+                        <span class="text-muted">—</span>
+                      }
+                    </td>
+                    <td>
+                      @if (item.decision) {
+                        <span [class]="getDecisionClass(item.decision)">
+                          @if (item.decision === 'Certified') { <i class="ri-check-double-line"></i> }
+                          @if (item.decision === 'Revoked')   { <i class="ri-close-circle-line"></i> }
+                          @if (item.decision === 'Escalated') { <i class="ri-arrow-up-circle-line"></i> }
+                          {{ item.decision }}
+                        </span>
+                      } @else {
+                        <span class="decision-pending">Pending</span>
+                      }
+                    </td>
+                    <td>
+                      @if (!hasDecision(item.user)) {
+                        <div class="d-flex gap-1">
+                          <button class="btn-soft btn-soft--success" (click)="certify(item.user)" title="Certify">
+                            <i class="ri-check-line"></i> Certify
+                          </button>
+                          <button class="btn-soft btn-soft--danger" (click)="revoke(item.user)" title="Revoke">
+                            <i class="ri-close-line"></i> Revoke
+                          </button>
+                          <button class="btn-soft btn-soft--warning btn-soft--icon" (click)="escalate(item.user)" title="Escalate">
+                            <i class="ri-arrow-up-line"></i>
+                          </button>
+                          <button class="btn-soft btn-soft--info btn-soft--icon" (click)="openDelegateModal(item)" title="Delegate review">
+                            <i class="ri-user-share-line"></i>
+                          </button>
+                        </div>
+                      } @else {
+                        <span class="decision-complete">
+                          <i class="ri-checkbox-circle-line"></i> Reviewed
+                        </span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>
+</main>
+
+<!-- ===== DELEGATE REVIEW MODAL ===== -->
+@if (showDelegateModal() && delegateTarget(); as item) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-user-share-line me-2 text-info"></i>Delegate Review</h5>
+          <button type="button" class="btn-close" (click)="closeDelegateModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small mb-3">
+            <i class="ri-information-line me-1"></i>
+            This delegates the review to another reviewer. The review history is preserved.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Review</div>
+            <code>{{ item.reviewNumber }}</code> — {{ item.user }} → <strong>{{ item.role }}</strong>
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Scope</div>
+            <span class="badge bg-primary bg-opacity-10 text-primary">{{ item.scope }}</span>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Delegate Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="delegateReason()" (ngModelChange)="delegateReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters.</div>
+            @if (delegateError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ delegateError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeDelegateModal()">Cancel</button>
+          <button class="btn btn-info" (click)="confirmDelegate()">
+            <i class="ri-user-share-line me-1"></i> Confirm Delegate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}

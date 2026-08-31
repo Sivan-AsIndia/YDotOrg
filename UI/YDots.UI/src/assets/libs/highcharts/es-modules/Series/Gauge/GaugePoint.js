@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{series:{prototype:{pointClass:Point}}}=SeriesRegistry;class GaugePoint extends Point{setState(e){this.state=e}}export default GaugePoint;

@@ -1,0 +1,452 @@
+<main class="app-wrapper">
+<div class="screen" [class.is-dense]="composerOpen">
+
+  <!-- ==================== Utility strip (shell context — no nav menu) ==================== -->
+  <header class="utility-bar">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <span>Engagement</span>
+      <span class="crumb-sep" aria-hidden="true">/</span>
+      <span>Communications</span>
+      <span class="crumb-sep" aria-hidden="true">/</span>
+      <span class="crumb-current" aria-current="page">Conversation detail</span>
+    </nav>
+    <div class="utility-actions">
+      <span class="scope-chip" title="Active data scope">{{ owner.unit }}</span>
+      <button type="button" class="icon-btn" aria-label="Help">?</button>
+      <div class="user-chip">
+        <span class="user-avatar" aria-hidden="true">{{ owner.name.charAt(0) }}</span>
+        <span class="user-meta">
+          <strong>{{ owner.name }}</strong>
+          <small>{{ role === 'supervisor' ? 'Supervisor' : role === 'agent' ? 'Assigned agent' : 'Restricted view' }}</small>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== Access &amp; scenario simulator ==================== -->
+  <section class="simulator" aria-label="Access and scenario simulator">
+    <div class="simulator-title">ACCESS &amp; SCENARIO SIMULATOR</div>
+    <div class="simulator-grid">
+      <div class="simulator-field">
+        <label for="sim-role">Effective role</label>
+        <select id="sim-role" [(ngModel)]="role" name="sim-role">
+          <option *ngFor="let r of roleOptions" [value]="r.id">{{ r.label }}</option>
+        </select>
+      </div>
+      <div class="simulator-field">
+        <label for="sim-state">Record lifecycle state</label>
+        <select id="sim-state" [(ngModel)]="recordState" name="sim-state">
+          <option *ngFor="let s of stateOptions" [value]="s.id">{{ s.label }}</option>
+        </select>
+      </div>
+      <div class="simulator-field">
+        <label for="sim-scenario">Demonstrate UI state</label>
+        <select id="sim-scenario" [(ngModel)]="scenario" name="sim-scenario">
+          <option *ngFor="let sc of scenarioOptions" [value]="sc.id">{{ sc.label }}</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== No access ==================== -->
+  <section class="state-panel no-access" *ngIf="!canView" role="alert">
+    <div class="state-icon" aria-hidden="true">⦸</div>
+    <h2>You don't have access to this conversation</h2>
+    <p>This route is only available to people with the conversation-detail view permission for this record's scope.</p>
+    <button type="button" class="btn btn-primary" (click)="returnToLanding()">Return to unified inbox</button>
+  </section>
+
+  <!-- ==================== Loading ==================== -->
+  <section class="state-panel loading" *ngIf="canView &amp;&amp; isLoading" aria-busy="true" aria-live="polite">
+    <div class="task-header skeleton-header">
+      <div class="skel skel-title"></div>
+      <div class="skel skel-sub"></div>
+    </div>
+    <div class="skeleton-body">
+      <div class="skel skel-block" *ngFor="let i of [1,2,3]"></div>
+    </div>
+    <p class="sr-only">Loading conversation detail…</p>
+  </section>
+
+  <!-- ==================== Main content ==================== -->
+  <ng-container *ngIf="canView &amp;&amp; !isLoading">
+
+    <!-- Persistent success / outcome banner — survives beyond a toast -->
+    <section class="outcome-banner" *ngIf="persistentOutcome" role="status">
+      <div class="outcome-main">
+        <span class="outcome-badge">Saved successfully</span>
+        <p>
+          Reference <strong>{{ persistentOutcome.reference }}</strong>;
+          state <strong>{{ persistentOutcome.state }}</strong>;
+          effective <strong>{{ persistentOutcome.effectiveTime }}</strong>.
+        </p>
+        <p class="outcome-next">Next: {{ persistentOutcome.nextAction }}</p>
+      </div>
+      <button type="button" class="icon-btn" (click)="dismissOutcome()" aria-label="Dismiss confirmation">✕</button>
+    </section>
+
+    <!-- Dependency failure — separates committed local result from failed downstream step -->
+    <section class="banner banner-warning" *ngIf="isDependencyFailure" role="alert">
+      <div>
+        <strong>We could not complete the dependent service step.</strong>
+        <p>Your confirmed local result is unchanged. Correlation reference {{ reference }}-DLV.</p>
+      </div>
+      <button type="button" class="btn btn-outline" (click)="retryDependency()">Retry delivery step</button>
+    </section>
+
+    <!-- Duplicate candidate -->
+    <section class="banner banner-info" *ngIf="isDuplicate" role="alert">
+      <div>
+        <strong>Possible duplicate conversation</strong>
+        <p>A similar open conversation exists for this donor and campaign. Review before continuing.</p>
+      </div>
+      <div class="banner-actions">
+        <button type="button" class="btn btn-outline" (click)="resolveDuplicate('compare')">Compare</button>
+        <button type="button" class="btn btn-outline" (click)="resolveDuplicate('merge')">Merge</button>
+        <button type="button" class="btn btn-outline" (click)="resolveDuplicate('change')">Change value</button>
+        <button type="button" class="btn btn-text" (click)="resolveDuplicate('cancel')">Cancel</button>
+      </div>
+    </section>
+
+    <!-- Conflict -->
+    <section class="banner banner-warning" *ngIf="isConflict" role="alert">
+      <div>
+        <strong>This record changed after you opened it.</strong>
+        <p>Review the latest version before continuing.</p>
+      </div>
+      <div class="banner-actions">
+        <button type="button" class="btn btn-outline" (click)="resolveConflict('compare')">Compare</button>
+        <button type="button" class="btn btn-outline" (click)="resolveConflict('reapply')">Reapply eligible changes</button>
+        <button type="button" class="btn btn-text" (click)="resolveConflict('cancel')">Cancel</button>
+      </div>
+    </section>
+
+    <!-- ==================== Task header ==================== -->
+    <header class="task-header">
+      <div class="task-header-main">
+        <div class="task-title-row">
+          <h1>Conversation detail</h1>
+          <span class="state-badge" [attr.data-state]="recordState">{{ stateLabel(recordState) }}</span>
+        </div>
+        <div class="task-meta">
+          <span>Ref <button type="button" class="ref-copy" title="Copy reference">{{ reference }}</button></span>
+          <span class="meta-sep">•</span>
+          <span>Owner {{ owner.name }}</span>
+          <span class="meta-sep">•</span>
+          <span>{{ freshnessLabel }}</span>
+        </div>
+      </div>
+      <div class="task-header-actions">
+        <button type="button" class="btn btn-primary" [disabled]="!canSend.allowed" [title]="canSend.reason || ''" (click)="composerOpen = true; focusField('replyChannel')">
+          Send reply
+        </button>
+        <div class="overflow" #overflowMenu>
+          <details>
+            <summary class="btn btn-outline" aria-label="More actions">More</summary>
+            <div class="overflow-menu" role="menu">
+              <button type="button" role="menuitem" [disabled]="!canCallLog.allowed" [title]="canCallLog.reason || ''" (click)="logCall()">Log a call</button>
+              <button type="button" role="menuitem" [disabled]="!canCreateTask.allowed" [title]="canCreateTask.reason || ''" (click)="createTask()">Create follow-up task</button>
+              <button type="button" role="menuitem" class="danger" [disabled]="!canClose.allowed" [title]="canClose.reason || ''" (click)="openCloseDialog()">Close conversation</button>
+              <button type="button" role="menuitem" class="danger" *ngIf="recordState === 'draft'" [disabled]="!canDeleteDraft.allowed" [title]="canDeleteDraft.reason || ''" (click)="openDeleteDialog()">Delete unused draft</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==================== Context / filter strip ==================== -->
+    <section class="context-strip">
+      <div class="search-field">
+        <label for="conv-search" class="sr-only">Search within this conversation</label>
+        <input id="conv-search" type="search" placeholder="Search within this conversation…" [(ngModel)]="searchWithinConversation" name="conv-search" />
+      </div>
+      <div class="context-tabs" role="tablist" aria-label="Conversation sections">
+        <button type="button" role="tab" [attr.aria-selected]="activeTab === 'overview'" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">Overview</button>
+        <button type="button" role="tab" [attr.aria-selected]="activeTab === 'messages'" [class.active]="activeTab === 'messages'" (click)="setTab('messages')">Messages <span class="count-pill">{{ visibleMessages.length }}</span></button>
+        <button type="button" role="tab" [attr.aria-selected]="activeTab === 'attachments'" [class.active]="activeTab === 'attachments'" (click)="setTab('attachments')">Attachments <span class="count-pill">{{ visibleAttachments.length }}</span></button>
+        <button type="button" role="tab" [attr.aria-selected]="activeTab === 'events'" [class.active]="activeTab === 'events'" (click)="setTab('events')">Delivery events <span class="count-pill">{{ visibleEvents.length }}</span></button>
+      </div>
+      <div class="context-refresh">{{ freshnessLabel }}</div>
+    </section>
+
+    <!-- ==================== Body: main work + related/history rail ==================== -->
+    <div class="body-grid">
+
+      <div class="main-column">
+
+        <!-- Overview -->
+        <section class="panel" *ngIf="activeTab === 'overview'" aria-labelledby="overview-heading">
+          <h2 id="overview-heading" class="panel-title">Participant &amp; case overview</h2>
+          <dl class="kv-grid">
+            <div class="kv-row">
+              <dt>Conversation reference</dt>
+              <dd>{{ reference }}</dd>
+            </div>
+            <div class="kv-row">
+              <dt>Participant identity</dt>
+              <dd>
+                <span *ngIf="!participantMasked">{{ participant.displayName }} · {{ participant.channelHandle }}</span>
+                <span *ngIf="participantMasked" class="masked" title="This value cannot be displayed with your current access.">
+                  This value cannot be displayed with your current access.
+                </span>
+              </dd>
+            </div>
+            <div class="kv-row">
+              <dt>Identity confidence</dt>
+              <dd><span class="badge" [attr.data-tone]="identityConfidence.tone">{{ identityConfidence.label }}</span></dd>
+            </div>
+            <div class="kv-row">
+              <dt>Consent and opt-out state</dt>
+              <dd><span class="badge" [attr.data-tone]="consent.tone">● {{ consent.label }}</span></dd>
+            </div>
+            <div class="kv-row">
+              <dt>Campaign</dt>
+              <dd>{{ campaign.name }} <span class="muted">({{ campaign.reference }})</span></dd>
+            </div>
+            <div class="kv-row">
+              <dt>Assigned owner</dt>
+              <dd>{{ owner.name }} <span class="muted">· {{ owner.unit }}</span></dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- Messages -->
+        <section class="panel" *ngIf="activeTab === 'messages'" aria-labelledby="messages-heading">
+          <h2 id="messages-heading" class="panel-title">Message timeline</h2>
+
+          <div class="empty-state" *ngIf="visibleMessages.length === 0">
+            <p>No messages match the current scope or filters.</p>
+            <p class="muted">This conversation has not been contacted yet, or search is filtering every entry.</p>
+            <button type="button" class="btn btn-text" (click)="searchWithinConversation = ''">Clear search</button>
+          </div>
+
+          <ul class="message-list" *ngIf="visibleMessages.length > 0">
+            <li class="message-row" *ngFor="let m of visibleMessages" [attr.data-direction]="m.direction">
+              <div class="message-meta">
+                <span class="message-channel">{{ m.channel }}</span>
+                <span class="message-direction">{{ m.direction === 'inbound' ? 'From participant' : 'From agent' }}</span>
+                <span class="message-time">{{ m.timestamp }}</span>
+                <span class="message-status" [attr.data-status]="m.status">{{ m.status }}</span>
+              </div>
+              <p class="message-body">{{ m.body }}</p>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Attachments -->
+        <section class="panel" *ngIf="activeTab === 'attachments'" aria-labelledby="attachments-heading">
+          <h2 id="attachments-heading" class="panel-title">Attachments</h2>
+
+          <div class="empty-state" *ngIf="!attachmentsVisible">
+            <p>This value cannot be displayed with your current access.</p>
+          </div>
+
+          <div class="empty-state" *ngIf="attachmentsVisible &amp;&amp; visibleAttachments.length === 0">
+            <p>No attachments on this conversation yet.</p>
+          </div>
+
+          <table class="data-table" *ngIf="attachmentsVisible &amp;&amp; visibleAttachments.length > 0">
+            <thead>
+              <tr><th scope="col">File</th><th scope="col">Type</th><th scope="col">Size</th><th scope="col">Added by</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let a of visibleAttachments">
+                <td>{{ a.name }}</td>
+                <td>{{ a.kind }}</td>
+                <td>{{ a.sizeLabel }}</td>
+                <td>{{ a.addedBy }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Delivery events -->
+        <section class="panel" *ngIf="activeTab === 'events'" aria-labelledby="events-heading">
+          <h2 id="events-heading" class="panel-title">Delivery events</h2>
+
+          <div class="empty-state" *ngIf="visibleEvents.length === 0">
+            <p>No delivery events recorded yet.</p>
+          </div>
+
+          <ol class="event-list" *ngIf="visibleEvents.length > 0">
+            <li class="event-row" *ngFor="let e of visibleEvents" [attr.data-status]="e.status">
+              <span class="event-dot" aria-hidden="true"></span>
+              <div>
+                <p class="event-label">{{ e.label }}</p>
+                <p class="event-time muted">{{ e.timestamp }}</p>
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <!-- ==================== Reply composer (guided response) ==================== -->
+        <section class="panel composer" aria-labelledby="composer-heading" *ngIf="!showReview">
+          <div class="panel-header-row">
+            <h2 id="composer-heading" class="panel-title">Prepare response</h2>
+            <span class="permission-note" *ngIf="!canSend.allowed">{{ canSend.reason }}</span>
+          </div>
+
+          <div class="field-group" *ngIf="canSend.allowed">
+            <div class="field">
+              <label for="field-replyChannel">Reply channel</label>
+              <select id="field-replyChannel" [(ngModel)]="replyChannel" name="replyChannel" (ngModelChange)="onChannelChange()" [attr.aria-invalid]="!!fieldErrors.replyChannel" [attr.aria-describedby]="fieldErrors.replyChannel ? 'err-replyChannel' : null">
+                <option *ngFor="let c of replyChannels" [value]="c.id">{{ c.label }}</option>
+              </select>
+              <p class="field-error" id="err-replyChannel" *ngIf="fieldErrors.replyChannel">{{ fieldErrors.replyChannel }}</p>
+            </div>
+
+            <div class="field combobox" [class.open]="templateMenuOpen">
+              <label for="field-approvedTemplate">Approved template</label>
+              <input
+                id="field-approvedTemplate"
+                type="text"
+                role="combobox"
+                aria-autocomplete="list"
+                [attr.aria-expanded]="templateMenuOpen"
+                placeholder="Search approved templates…"
+                [(ngModel)]="templateQuery"
+                name="approvedTemplate"
+                (focus)="templateMenuOpen = true"
+                [attr.aria-invalid]="!!fieldErrors.approvedTemplate"
+                [attr.aria-describedby]="fieldErrors.approvedTemplate ? 'err-approvedTemplate' : null"
+              />
+              <ul class="combobox-menu" *ngIf="templateMenuOpen" role="listbox">
+                <li *ngFor="let t of filteredTemplates" role="option" (click)="chooseTemplate(t)">{{ t.label }}</li>
+                <li class="combobox-empty" *ngIf="filteredTemplates.length === 0">No approved templates match.</li>
+              </ul>
+              <p class="field-error" id="err-approvedTemplate" *ngIf="fieldErrors.approvedTemplate">{{ fieldErrors.approvedTemplate }}</p>
+            </div>
+
+            <div class="field field-wide">
+              <label for="field-replyBody">Reply body</label>
+              <textarea
+                id="field-replyBody"
+                rows="4"
+                [(ngModel)]="replyBody"
+                name="replyBody"
+                [maxlength]="replyBodyMaxLength"
+                [attr.aria-invalid]="!!fieldErrors.replyBody"
+                [attr.aria-describedby]="fieldErrors.replyBody ? 'err-replyBody' : 'hint-replyBody'"
+              ></textarea>
+              <p class="field-hint" id="hint-replyBody" *ngIf="!fieldErrors.replyBody">{{ replyBodyRemaining }} characters remaining</p>
+              <p class="field-error" id="err-replyBody" *ngIf="fieldErrors.replyBody">{{ fieldErrors.replyBody }}</p>
+            </div>
+
+            <div class="field field-wide">
+              <label for="field-internalNote">Internal note <span class="muted">(not sent to participant)</span></label>
+              <textarea id="field-internalNote" rows="2" [(ngModel)]="internalNote" name="internalNote"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="field-outcome">Outcome</label>
+              <select id="field-outcome" [(ngModel)]="outcomeId" name="outcome" [attr.aria-invalid]="!!fieldErrors.outcome" [attr.aria-describedby]="fieldErrors.outcome ? 'err-outcome' : null">
+                <option value="" disabled>Select an outcome…</option>
+                <option *ngFor="let o of outcomeOptions" [value]="o.id" [disabled]="o.disabled" [title]="o.disabledReason || ''">
+                  {{ o.label }}{{ o.disabled ? ' — ' + o.disabledReason : '' }}
+                </option>
+              </select>
+              <p class="field-error" id="err-outcome" *ngIf="fieldErrors.outcome">{{ fieldErrors.outcome }}</p>
+            </div>
+
+            <div class="field" *ngIf="outcomeId === 'follow_up'">
+              <label for="field-nextFollowUp">Next follow-up</label>
+              <input id="field-nextFollowUp" type="text" placeholder="e.g. 10 Aug 2026, Asia/Kolkata" [(ngModel)]="nextFollowUp" name="nextFollowUp" />
+            </div>
+          </div>
+
+          <div class="composer-actions" *ngIf="canSend.allowed">
+            <button type="button" class="btn btn-outline" [disabled]="!canAddNote.allowed || !internalNote.trim()" (click)="addNote()">Save internal note</button>
+            <button type="button" class="btn btn-primary" (click)="openReview()">Review &amp; send</button>
+          </div>
+        </section>
+
+        <!-- ==================== Review &amp; confirmation ==================== -->
+        <section class="panel review" aria-labelledby="review-heading" *ngIf="showReview">
+          <h2 id="review-heading" class="panel-title">Confirm send</h2>
+          <p class="review-lead">Review the affected record, consequence, reason and effective time.</p>
+
+          <dl class="review-grid">
+            <div><dt>Record</dt><dd>{{ reference }} · {{ participant.displayName }}</dd></div>
+            <div><dt>Channel</dt><dd>{{ replyChannel.toUpperCase() }}</dd></div>
+            <div><dt>Template</dt><dd>{{ selectedTemplate?.label }}</dd></div>
+            <div><dt>Outcome</dt><dd>
+              <ng-container *ngFor="let o of outcomeOptions"><ng-container *ngIf="o.id === outcomeId">{{ o.label }}</ng-container></ng-container>
+            </dd></div>
+            <div class="review-wide"><dt>Message preview</dt><dd class="review-preview">{{ replyBody }}</dd></div>
+            <div><dt>Effective time</dt><dd>Immediately on confirm · Asia/Kolkata</dd></div>
+          </dl>
+
+          <div class="review-actions">
+            <button type="button" class="btn btn-text" (click)="cancelReview()">Cancel</button>
+            <button type="button" class="btn btn-primary" (click)="confirmSend()">Confirm send</button>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ==================== Related &amp; history rail ==================== -->
+      <aside class="side-column">
+        <section class="panel side-panel">
+          <h2 class="panel-title">Related records</h2>
+          <ul class="related-list">
+            <li *ngFor="let r of relatedRecords">
+              <strong>{{ r.label }}</strong>
+              <p class="muted">{{ r.detail }}</p>
+            </li>
+          </ul>
+        </section>
+
+        <section class="panel side-panel">
+          <h2 class="panel-title">Activity &amp; audit</h2>
+          <ol class="audit-list">
+            <li *ngFor="let entry of auditTrail">
+              <p>{{ entry.label }}</p>
+              <p class="muted">{{ entry.by }} · {{ entry.timestamp }}</p>
+            </li>
+          </ol>
+        </section>
+      </aside>
+    </div>
+  </ng-container>
+
+  <!-- ==================== Close dialog ==================== -->
+  <div class="modal-backdrop" *ngIf="showCloseDialog" (click)="cancelClose()">
+    <div class="modal danger" role="dialog" aria-modal="true" aria-labelledby="close-title" (click)="$event.stopPropagation()">
+      <h2 id="close-title">Close this conversation?</h2>
+      <p>Linked history and evidence are preserved. This action moves the record to Closed.</p>
+      <div class="field">
+        <label for="close-reason-code">Reason</label>
+        <select id="close-reason-code" [(ngModel)]="closeReasonCode" name="closeReasonCode">
+          <option value="" disabled selected>Select a reason…</option>
+          <option *ngFor="let r of closeReasonCodes" [value]="r.id">{{ r.label }}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="close-reason-text">Additional detail (optional)</label>
+        <textarea id="close-reason-text" rows="2" [(ngModel)]="closeReasonText" name="closeReasonText"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-text" (click)="cancelClose()">Cancel</button>
+        <button type="button" class="btn btn-danger" [disabled]="!closeReasonCode" (click)="confirmClose()">Close conversation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Delete draft dialog ==================== -->
+  <div class="modal-backdrop" *ngIf="showDeleteDialog" (click)="cancelDelete()">
+    <div class="modal danger" role="dialog" aria-modal="true" aria-labelledby="delete-title" (click)="$event.stopPropagation()">
+      <h2 id="delete-title">Delete this unused draft?</h2>
+      <p>This draft has no downstream reference. Deleting it cannot be undone; this reason is kept for accountability.</p>
+      <div class="field">
+        <label for="delete-reason-text">Reason</label>
+        <textarea id="delete-reason-text" rows="2" [(ngModel)]="deleteReasonText" name="deleteReasonText"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-text" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="btn btn-danger" [disabled]="!deleteReasonText.trim()" (click)="confirmDelete()">Delete draft</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>

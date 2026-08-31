@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The domain layer is almost dependency free: entities, enums, value objects and
+    event records.
+
+    THE ONE EXCEPTION is Microsoft.Extensions.Identity.Stores, which carries
+    IdentityUser<TKey>, IdentityRole<TKey> and the join-table base classes. User and
+    Role derive from those, because the brief requires the real ASP.NET Core
+    IdentityCore tables customised for this application rather than a hand-rolled
+    lookalike.
+
+    This package is the store abstractions only - no ASP.NET, no HTTP, no DbContext -
+    so the domain keeps its independence from the web and persistence layers.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{seriesTypes:{column:ColumnSeries}}=SeriesRegistry;import U from"../../Core/Utilities.js";const{extend:extend}=U;class Funnel3DPoint extends ColumnSeries.prototype.pointClass{}extend(Funnel3DPoint.prototype,{shapeType:"funnel3d"});export default Funnel3DPoint;

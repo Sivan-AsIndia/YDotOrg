@@ -1,0 +1,2 @@
+/*! For license information please see series-label.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import SeriesLabel from"../../Extensions/SeriesLabel/SeriesLabel.js";const G=Highcharts;SeriesLabel.compose(G.Chart,G.SVGRenderer);export default Highcharts;

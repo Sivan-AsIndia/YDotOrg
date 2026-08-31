@@ -1,0 +1,750 @@
+/* ==========================================================================
+   SCR-FIN-006 — Period / campaign close
+   Professional indigo theme — two-column layout with sticky rail.
+   ========================================================================== */
+
+:host {
+  --pci-indigo: #4F46E5;
+  --pci-indigo-dark: #4338CA;
+  --pci-indigo-soft: #E0E7FF;
+  --pci-indigo-tint: rgba(79, 70, 229, 0.12);
+
+  --pci-violet: #7C3AED;
+  --pci-violet-soft: #EDE9FE;
+  --pci-green: #16A34A;
+  --pci-green-soft: #DCFCE7;
+  --pci-blue: #3B82F6;
+  --pci-blue-soft: #DBEAFE;
+  --pci-amber: #D97706;
+  --pci-amber-soft: #FEF3C7;
+  --pci-red: #DC2626;
+  --pci-red-soft: #FEE2E2;
+  --pci-navy: #1B2A4A;
+  --pci-navy-soft: #E8ECF5;
+
+  --pci-surface: #ffffff;
+  --pci-surface-muted: #F5F6FA;
+  --pci-border: #E5E7EB;
+  --pci-border-strong: #D1D5DB;
+
+  --pci-ink: #111827;
+  --pci-ink-2: #374151;
+  --pci-muted: #6B7280;
+  --pci-muted-2: #9CA3AF;
+
+  --pci-error: #DC2626;
+  --pci-error-soft: #FEE2E2;
+  --pci-warn: #B45309;
+  --pci-warn-soft: #FEF3C7;
+
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 2px 12px rgba(16, 24, 40, 0.06);
+
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--pci-surface-muted);
+  color: var(--pci-ink);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.pci-wrapper { width: 100%; min-height: 100vh; }
+
+.pci-page {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: clamp(16px, 2.4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--pe-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   Page header — flat, clean
+   ========================================================================== */
+
+.pci-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.pci-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pe-primary);
+  margin: 0 0 4px;
+}
+
+.pci-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pci-title {
+  font-family: ui-serif, 'Cambria', 'Times New Roman', 'Times', serif;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.4px;
+  color: #000;
+}
+
+.pci-state-pill {
+  display: inline-flex;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--pci-indigo-soft);
+  color: var(--pci-indigo-dark);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.pci-subtitle {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pci-ink-2);
+  margin: 6px 0 0;
+}
+
+.pci-meta {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pci-muted);
+  flex-wrap: wrap;
+}
+
+.pci-dot { color: var(--pci-border-strong); }
+
+.pci-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.pci-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: var(--radius-s);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pci-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pci-btn-primary {
+  background: var(--pe-primary);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+}
+.pci-btn-primary:hover:not(:disabled) {
+  background: var(--pci-indigo-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.pci-btn-outline {
+  background: #fff;
+  color: var(--pci-indigo-dark);
+  border-color: var(--pci-border-strong);
+}
+.pci-btn-outline:hover:not(:disabled) {
+  border-color: var(--pe-primary);
+  background: var(--pci-indigo-soft);
+}
+
+.pci-btn-sm { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+.pci-ic { width: 18px; height: 18px; flex: none; }
+
+.pci-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pe-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-s);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.pci-link:hover { background: var(--pci-indigo-soft); }
+
+/* ==========================================================================
+   Outcome panels
+   ========================================================================== */
+
+.pci-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--pci-surface);
+  border: 1px solid var(--pci-border);
+  border-radius: var(--radius-m);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-xs);
+}
+
+.pci-outcome-warn {
+  background: var(--pci-warn-soft);
+  border-color: #fde68a;
+}
+
+.pci-outcome-danger {
+  background: var(--pci-error-soft);
+  border-color: #fecaca;
+}
+
+.pci-outcome-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pci-green-soft);
+  color: var(--pci-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex: none;
+}
+
+.pci-outcome-icon-warn {
+  background: var(--pci-warn-soft);
+  color: var(--pci-warn);
+}
+
+.pci-outcome-icon-danger {
+  background: var(--pci-error-soft);
+  color: var(--pci-error);
+}
+
+.pci-outcome-text { flex: 1; min-width: 0; }
+
+.pci-outcome-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.pci-outcome-detail {
+  font-size: 13px;
+  color: var(--pci-muted);
+  margin: 0;
+}
+
+.pci-outcome-x {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: inherit;
+  opacity: 0.6;
+  padding: 4px;
+}
+.pci-outcome-x:hover { opacity: 1; }
+
+.pci-outcome-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Two-column layout
+   ========================================================================== */
+
+.pci-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.pci-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Cards
+   ========================================================================== */
+
+.pci-card {
+  background: var(--pci-surface);
+  border: 1px solid var(--pci-border);
+  border-radius: var(--radius-m);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-xs);
+}
+
+.pci-card-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--pci-ink-2);
+  text-transform: uppercase;
+  margin: 0 0 4px;
+}
+
+.pci-card-lead {
+  font-size: 13px;
+  color: var(--pci-muted);
+  margin: 0 0 12px;
+}
+
+.pci-card-outcome {
+  position: relative;
+  overflow: hidden;
+}
+.pci-card-outcome::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: var(--pe-primary);
+}
+
+/* ==========================================================================
+   Context form
+   ========================================================================== */
+
+.pci-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px 20px;
+  align-items: baseline;
+}
+
+.pci-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.pci-field-full { grid-column: 1 / -1; }
+.pci-field-actions { align-self: end; }
+
+.pci-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--pci-ink-2);
+  text-transform: uppercase;
+}
+
+.pci-req { color: var(--pci-error); }
+
+.pci-tz {
+  font-weight: 400;
+  color: var(--pci-muted);
+  font-size: 10px;
+  text-transform: none;
+}
+
+.pci-input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--pci-border);
+  border-radius: var(--radius-s);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pci-ink);
+  background: #fff;
+  min-height: 44px;
+}
+
+.pci-input:focus {
+  outline: none;
+  border-color: var(--pe-primary);
+  box-shadow: 0 0 0 3px var(--pci-indigo-tint);
+}
+
+.pci-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.pci-select-wrap { position: relative; display: block; }
+
+.pci-select {
+  width: 100%;
+  padding: 9px 32px 9px 14px;
+  border: 1px solid var(--pci-border);
+  border-radius: var(--radius-s);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pci-ink);
+  background: #fff;
+  appearance: none;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.pci-select:focus {
+  outline: none;
+  border-color: var(--pe-primary);
+  box-shadow: 0 0 0 3px var(--pci-indigo-tint);
+}
+
+.pci-chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--pci-muted);
+  pointer-events: none;
+}
+
+.pci-field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--pci-muted);
+  line-height: 1.45;
+}
+
+.pci-field-error {
+  color: var(--pci-error);
+  font-weight: 600;
+}
+
+.pci-checklist-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 44px;
+}
+.pci-cb-danger { background: var(--pci-red-soft); color: var(--pci-red); }
+.pci-cb-warn { background: var(--pci-amber-soft); color: var(--pci-amber); }
+.pci-cb-success { background: var(--pci-green-soft); color: var(--pci-green); }
+
+/* ==========================================================================
+   Totals grid
+   ========================================================================== */
+
+.pci-totals-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.pci-total-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--pci-surface);
+  border: 1px solid var(--pci-border);
+  border-radius: var(--radius-m);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+  min-width: 0;
+}
+
+.pci-total-card.pci-total-warn { border-color: #fde68a; background: #fffbeb; }
+.pci-total-wide { grid-column: span 2; }
+
+.pci-total-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.pci-total-icon svg { width: 18px; height: 18px; }
+
+.pci-total-icon-indigo { background: var(--pci-indigo-soft); color: var(--pe-primary); }
+.pci-total-icon-violet { background: var(--pci-violet-soft); color: var(--pci-violet); }
+.pci-total-icon-green { background: var(--pci-green-soft); color: var(--pci-green); }
+.pci-total-icon-blue { background: var(--pci-blue-soft); color: var(--pci-blue); }
+.pci-total-icon-amber { background: var(--pci-amber-soft); color: var(--pci-amber); }
+.pci-total-icon-red { background: var(--pci-red-soft); color: var(--pci-red); }
+.pci-total-icon-navy { background: var(--pci-navy-soft); color: var(--pci-navy); }
+
+.pci-total-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--pci-muted);
+  text-transform: uppercase;
+}
+
+.pci-total-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pci-ink);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+.pci-total-sub {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pci-ink-2);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+/* ==========================================================================
+   Checklist
+   ========================================================================== */
+
+.pci-checklist-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pci-checklist-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--pci-border);
+}
+
+.pci-checklist-row:last-child { border-bottom: none; }
+
+.pci-checklist-state {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+  white-space: nowrap;
+}
+
+.pci-checklist-state.pc-state-complete { background: var(--pci-green-soft); color: var(--pci-green); }
+.pci-checklist-state.pc-state-pending { background: var(--pci-amber-soft); color: var(--pci-amber); }
+.pci-checklist-state.pc-state-blocking { background: var(--pci-red-soft); color: var(--pci-red); }
+.pci-checklist-state.pc-state-exempt { background: var(--pci-navy-soft); color: var(--pci-navy); }
+
+.pci-checklist-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pci-checklist-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pci-checklist-detail {
+  font-size: 12px;
+  color: var(--pci-muted);
+}
+
+/* ==========================================================================
+   Key-value
+   ========================================================================== */
+
+.pci-kv { margin: 0; }
+
+.pci-kv div {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pci-border);
+}
+
+.pci-kv div:last-child { border-bottom: none; }
+
+.pci-kv dt {
+  font-weight: 600;
+  color: var(--pci-muted);
+  min-width: 120px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.pci-kv dd {
+  margin: 0;
+  color: var(--pci-ink);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+/* ==========================================================================
+   Related tabs + list
+   ========================================================================== */
+
+.pci-rel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pci-rel-tab {
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pci-muted);
+  cursor: pointer;
+}
+
+.pci-rel-tab:hover {
+  color: var(--pci-ink);
+  background: var(--pci-surface-muted);
+}
+
+.pci-rel-tab.active {
+  color: var(--pci-indigo-dark);
+  background: var(--pci-indigo-soft);
+}
+
+.pci-rel-list { list-style: none; margin: 0; padding: 0; }
+
+.pci-rel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pci-border);
+}
+
+.pci-rel-row:last-child { border-bottom: none; }
+
+.pci-rel-primary { font-weight: 600; font-size: 13px; }
+.pci-rel-secondary { font-size: 12px; color: var(--pci-muted); }
+.pci-rel-meta { font-size: 11px; color: var(--pci-muted-2); }
+.pci-rel-empty { color: var(--pci-muted-2); font-size: 13px; padding: 8px 0; }
+
+/* ==========================================================================
+   Modals
+   ========================================================================== */
+
+.pci-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(17, 17, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pci-modal {
+  display: block;
+  background: var(--pci-surface);
+  border-radius: var(--radius-l);
+  padding: 28px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.pci-modal-title {
+  font-size: 21px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.pci-modal-lead {
+  font-size: 13px;
+  color: var(--pci-muted);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.pci-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 1280px) {
+  .pci-layout { grid-template-columns: 1fr; }
+  .pci-rail-sticky { position: static; }
+}
+
+@media (max-width: 1080px) {
+  .pci-form-grid { grid-template-columns: 1fr 1fr; }
+  .pci-totals-grid { grid-template-columns: repeat(2, 1fr); }
+  .pci-total-wide { grid-column: span 2; }
+}
+
+@media (max-width: 680px) {
+  .pci-page { padding: 16px 14px 48px; }
+  .pci-header { flex-direction: column; align-items: stretch; }
+  .pci-header-actions { width: 100%; }
+  .pci-header-actions .pci-btn { flex: 1; justify-content: center; }
+  .pci-form-grid { grid-template-columns: 1fr; }
+  .pci-totals-grid { grid-template-columns: 1fr; }
+  .pci-total-wide { grid-column: auto; }
+  .pci-outcome { flex-direction: column; }
+}

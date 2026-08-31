@@ -1,0 +1,230 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  <div class="org-breadcrumb">
+    <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+    <span class="sep">/</span>
+    <span class="current">Create</span>
+  </div>
+
+  <div class="org-header">
+    <div>
+      <h1 class="org-title"><span class="org-title-icon"><i class="ri-add-circle-line"></i></span>Create Organisation</h1>
+      <p class="org-subtitle">Register the Organisation Master Record. Owner login access is handed off on the next screen.</p>
+    </div>
+  </div>
+
+      <div class="org-doc-columns">
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading">Organisation Information</h3>
+        <div class="org-grid org-grid-1">
+          <div class="org-field">
+            <label class="org-field-label">Organisation Name<span class="req">*</span></label>
+            <input class="org-input" [class.is-invalid]="nameError() || duplicateError()" [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Green Earth Foundation">
+            @if (nameError()) { <span class="org-field-error">{{ nameError() }}</span> }
+            @if (!nameError() && duplicateError()) { <span class="org-field-error">{{ duplicateError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Organisation Type<span class="req">*</span></label>
+            <select class="org-select" [ngModel]="organisationType()" (ngModelChange)="organisationType.set($event)">
+              @for (t of organisationTypes; track t) { <option [value]="t">{{ t }}</option> }
+            </select>
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Legal Structure<span class="req">*</span></label>
+            <select class="org-select" [ngModel]="legalStructure()" (ngModelChange)="legalStructure.set($event)">
+              @for (t of legalStructures; track t) { <option [value]="t">{{ t }}</option> }
+            </select>
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Registration Number</label>
+            <input class="org-input" [ngModel]="registrationNumber()" (ngModelChange)="registrationNumber.set($event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Registration Date</label>
+            <input type="date" class="org-input" [ngModel]="registrationDate()" (ngModelChange)="registrationDate.set($event)">
+          </div>
+        </div>
+      </section>
+
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--plum">Address</h3>
+        <div class="org-grid org-grid-2">
+          <div class="org-field org-span-2">
+            <label class="org-field-label">Address Line 1</label>
+            <input class="org-input" [ngModel]="addressLine1()" (ngModelChange)="addressLine1.set($event)">
+          </div>
+          <div class="org-field org-span-2">
+            <label class="org-field-label">Address Line 2</label>
+            <input class="org-input" [ngModel]="addressLine2()" (ngModelChange)="addressLine2.set($event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Country</label>
+            <app-searchable-select [options]="geo.countryNames()" [value]="country()" (valueChange)="onCountryChange($event)" placeholder="Search country..."></app-searchable-select>
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">State / Province</label>
+            <!-- A dropdown when the catalogue knows this country's subdivisions, a text box when
+                 it does not. Singapore has none to know, so typing is the only sensible answer. -->
+            @if (hasStateOptions()) {
+              <app-searchable-select [options]="geo.stateNames()" [value]="state()" (valueChange)="onStateChange($event)" placeholder="Search state..."></app-searchable-select>
+            } @else {
+              <input class="org-input" [ngModel]="state()" (ngModelChange)="onStateChange($event)" placeholder="State / Province">
+            }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">City</label>
+            @if (availableCities().length) {
+              <app-searchable-select [options]="availableCities()" [value]="city()" (valueChange)="city.set($event)" [disabled]="!state()" placeholder="Search city..." disabledPlaceholder="Select a state first"></app-searchable-select>
+            } @else {
+              <input class="org-input" [ngModel]="city()" (ngModelChange)="city.set($event)" placeholder="City">
+            }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">PIN / Postal Code</label>
+            <input class="org-input" [ngModel]="pinCode()" (ngModelChange)="pinCode.set($event)">
+          </div>
+        </div>
+      </section>
+
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--gold">Contact</h3>
+        <div class="org-grid org-grid-2">
+          <div class="org-field">
+            <label class="org-field-label">Email Address<span class="req">*</span></label>
+            <input type="email" class="org-input" [class.is-invalid]="emailError()" [ngModel]="email()" (ngModelChange)="email.set($event)">
+            @if (emailError()) { <span class="org-field-error">{{ emailError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Phone Number<span class="req">*</span></label>
+            <input class="org-input" [class.is-invalid]="phoneError()" [ngModel]="phone()" (ngModelChange)="phone.set($event)">
+            @if (phoneError()) { <span class="org-field-error">{{ phoneError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Alternate Phone Number</label>
+            <input class="org-input" [ngModel]="alternatePhone()" (ngModelChange)="alternatePhone.set($event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Website</label>
+            <input class="org-input" [ngModel]="website()" (ngModelChange)="website.set($event)">
+          </div>
+        </div>
+      </section>
+
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">Owner / Primary Contact</h3>
+        <div class="org-grid org-grid-2">
+          <div class="org-field">
+            <label class="org-field-label">Owner Name<span class="req">*</span></label>
+            <input class="org-input" [class.is-invalid]="ownerNameError()" [ngModel]="ownerName()" (ngModelChange)="ownerName.set($event)">
+            @if (ownerNameError()) { <span class="org-field-error">{{ ownerNameError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Owner Email / Login ID<span class="req">*</span></label>
+            <input type="email" class="org-input" [class.is-invalid]="ownerEmailError()" [ngModel]="ownerEmail()" (ngModelChange)="ownerEmail.set($event)">
+            @if (ownerEmailError()) { <span class="org-field-error">{{ ownerEmailError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Owner Mobile Number<span class="req">*</span></label>
+            <input class="org-input" [class.is-invalid]="ownerMobileError()" [ngModel]="ownerMobile()" (ngModelChange)="ownerMobile.set($event)">
+            @if (ownerMobileError()) { <span class="org-field-error">{{ ownerMobileError() }}</span> }
+          </div>
+          <div class="org-field">
+            <label class="org-field-label">Designation</label>
+            <input class="org-input" [ngModel]="ownerDesignation()" (ngModelChange)="ownerDesignation.set($event)">
+          </div>
+        </div>
+        <p class="org-field-hint">Owner login access will be handed off through the existing YDot Login/User Management process on the next screen.</p>
+      </section>
+
+      <section class="org-doc-section org-doc-section--full">
+        <h3 class="org-doc-heading org-doc-heading--good">Compliance / Identification</h3>
+        <p class="org-doc-note">Only mark the certificates that actually apply &mdash; none are mandatory by default.</p>
+        <div class="org-field" style="max-width:320px;">
+          <label class="org-field-label">PAN / Tax ID</label>
+          <input class="org-input" [ngModel]="panTaxId()" (ngModelChange)="panTaxId.set($event)">
+        </div>
+        <div class="org-compliance-row-list">
+          <label class="org-compliance-row" [class.is-active]="twelveAApplicable()">
+            <span class="org-compliance-row-icon"><i class="ri-file-shield-2-line"></i></span>
+            <span class="org-compliance-row-text">
+              <span class="org-compliance-row-title">12A / 12AB</span>
+              <span class="org-compliance-row-desc">Income-tax exemption registration for the organisation itself.</span>
+            </span>
+            <span class="org-toggle">
+              <input type="checkbox" [ngModel]="twelveAApplicable()" (ngModelChange)="twelveAApplicable.set($event)">
+              <span class="org-toggle-track"></span>
+            </span>
+          </label>
+          <label class="org-compliance-row" [class.is-active]="eightyGApplicable()">
+            <span class="org-compliance-row-icon"><i class="ri-hand-coin-line"></i></span>
+            <span class="org-compliance-row-text">
+              <span class="org-compliance-row-title">80G</span>
+              <span class="org-compliance-row-desc">Lets donors claim a tax deduction on their contributions.</span>
+            </span>
+            <span class="org-toggle">
+              <input type="checkbox" [ngModel]="eightyGApplicable()" (ngModelChange)="eightyGApplicable.set($event)">
+              <span class="org-toggle-track"></span>
+            </span>
+          </label>
+          <label class="org-compliance-row" [class.is-active]="fcraApplicable()">
+            <span class="org-compliance-row-icon"><i class="ri-global-line"></i></span>
+            <span class="org-compliance-row-text">
+              <span class="org-compliance-row-title">FCRA</span>
+              <span class="org-compliance-row-desc">Required to legally receive donations from foreign sources.</span>
+            </span>
+            <span class="org-toggle">
+              <input type="checkbox" [ngModel]="fcraApplicable()" (ngModelChange)="fcraApplicable.set($event)">
+              <span class="org-toggle-track"></span>
+            </span>
+          </label>
+          <label class="org-compliance-row" [class.is-active]="gstApplicable()">
+            <span class="org-compliance-row-icon"><i class="ri-receipt-line"></i></span>
+            <span class="org-compliance-row-text">
+              <span class="org-compliance-row-title">GST</span>
+              <span class="org-compliance-row-desc">Goods &amp; Services Tax registration, where applicable.</span>
+            </span>
+            <span class="org-toggle">
+              <input type="checkbox" [ngModel]="gstApplicable()" (ngModelChange)="gstApplicable.set($event)">
+              <span class="org-toggle-track"></span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="org-doc-section org-doc-section--full">
+        <h3 class="org-doc-heading">Initial Status &amp; Submit</h3>
+        <div class="org-status-row">
+          <span class="org-badge org-badge-lg org-badge-muted">Draft</span>
+          <span class="org-status-arrow"><i class="ri-arrow-right-line"></i></span>
+          <span class="org-badge org-badge-lg org-badge-warn">Not Submitted</span>
+        </div>
+        <div class="org-next-steps">
+          <div class="org-next-step">
+            <span class="org-next-step-num">1</span>
+            <p>Record is created in <strong>Draft</strong> status.</p>
+          </div>
+          <div class="org-next-step">
+            <span class="org-next-step-num">2</span>
+            <p>Owner receives login access on the next screen.</p>
+          </div>
+          <div class="org-next-step">
+            <span class="org-next-step-num">3</span>
+            <p>Owner completes the profile and submits it.</p>
+          </div>
+          <div class="org-next-step">
+            <span class="org-next-step-num">4</span>
+            <p>Super Admin reviews and approves.</p>
+          </div>
+        </div>
+        <div class="org-submit-actions">
+          <button type="button" class="org-btn org-btn-ghost org-btn-sm" [disabled]="submitting()" (click)="cancel()">Cancel</button>
+          <button type="button" class="org-btn org-btn-primary org-btn-sm" [disabled]="submitting()" (click)="submit()">
+            @if (submitting()) { <span class="org-spinner"></span> Creating... } @else { <i class="ri-save-line"></i> Create Organisation }
+          </button>
+        </div>
+      </section>
+      </div>
+</div>
+</div>
+</main>

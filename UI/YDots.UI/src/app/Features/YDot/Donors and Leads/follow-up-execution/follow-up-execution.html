@@ -1,0 +1,584 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+
+      <!-- ============ LOADING STATE ============ -->
+      @if (loading()) {
+        <div class="skeleton-block" aria-live="polite" aria-busy="true">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-line" style="width: 40%"></div>
+          <div class="stat-grid mt-3">
+            @for (i of [1,2,3,4]; track i) {
+              <div class="skeleton skeleton-card"></div>
+            }
+          </div>
+          <div class="skeleton skeleton-card mt-3" style="height: 320px"></div>
+        </div>
+      }
+
+      <!-- ============ LOAD ERROR STATE ============ -->
+      @else if (loadError()) {
+        <div class="empty-state card" role="alert">
+          <div class="empty-state-icon" aria-hidden="true">!</div>
+          <h2 class="empty-state-title">{{ loadError() }}</h2>
+          <p class="empty-state-copy">The follow-up record could not be retrieved. Check your connection and try again.</p>
+          <div class="empty-state-actions">
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="backToQueue()">Return to queue</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="retryLoad()">Reload</button>
+          </div>
+        </div>
+      }
+
+      <!-- ============ MAIN CONTENT ============ -->
+      @else if (snapshot(); as data) {
+
+        <!-- ---------- HEADER ---------- -->
+        <header class="page-header">
+      
+          <div class="page-header-row">
+            <div class="page-header-titleblock">
+              <div class="title-line">
+                <h1 class="page-title">{{ data.lead.fullName }}</h1>
+                <span class="badge" [class]="'badge-' + tempTone(data.lead.currentTemperature)">
+                  {{ data.lead.currentTemperature }}
+                </span>
+              </div>
+              <p class="page-subtitle">Record follow-up results and relationship progress.</p>
+           
+            </div>
+
+            <div class="page-header-actions">
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="backToQueue()">
+                Back to queue
+              </button>
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="openCommunicationTimeline()">
+                Timeline
+              </button>
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="openLead()">
+                Open lead
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancel()">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div class="chip-row">
+            <span class="chip">
+              <svg viewBox="0 0 20 20" class="chip-icon" aria-hidden="true"><path d="M10 2a6 6 0 0 0-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 0 0-6-6Zm0 8.25A2.25 2.25 0 1 1 10 5.75a2.25 2.25 0 0 1 0 4.5Z" fill="currentColor"/></svg>
+              {{ data.lead.campaign }} &middot; {{ data.lead.leadSource }}
+            </span>
+          </div>
+        </header>
+
+        <!-- ---------- STAT CARDS ---------- -->
+        <section class="stat-grid" aria-label="Lead follow-up summary">
+          <div class="stat-card">
+            <span class="stat-icon stat-icon-neutral" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><path d="M4 4h12v2H4V4Zm0 5h12v2H4V9Zm0 5h8v2H4v-2Z" fill="currentColor"/></svg>
+            </span>
+            <p class="stat-label">Open follow-ups</p>
+            <p class="stat-value">{{ data.lead.followUpStats.open }}</p>
+            <p class="stat-sub">For this lead</p>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-icon stat-icon-success" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><path d="m8.5 13.5-3-3 1.4-1.4 1.6 1.6 4.6-4.6 1.4 1.4-6 6Z" fill="currentColor"/></svg>
+            </span>
+            <p class="stat-label">Completed follow-ups</p>
+            <p class="stat-value">{{ data.lead.followUpStats.completed }}</p>
+            <p class="stat-sub">All time</p>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-icon" [class]="data.lead.followUpStats.overdue > 0 ? 'stat-icon-danger' : 'stat-icon-neutral'" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><path d="M10 2 1 18h18L10 2Zm1 13H9v-2h2v2Zm0-4H9V7h2v4Z" fill="currentColor"/></svg>
+            </span>
+            <p class="stat-label">Overdue follow-ups</p>
+            <p class="stat-value">{{ data.lead.followUpStats.overdue }}</p>
+            <p class="stat-sub">Needs scheduling</p>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-icon" [class]="'stat-icon-' + qualTone(qualificationStatus())" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><path d="M10 1 3 4.5v5.4C3 14.6 6 18 10 19c4-1 7-4.4 7-9.1V4.5L10 1Z" fill="currentColor"/></svg>
+            </span>
+            <p class="stat-label">Qualification readiness</p>
+            <p class="stat-value stat-value-text">{{ qualificationStatus() }}</p>
+            <p class="stat-sub">Score {{ readinessScore() }}/100</p>
+          </div>
+        </section>
+
+        <!-- ---------- INLINE MESSAGES ---------- -->
+        @if (formError()) {
+          <div class="alert alert-danger" role="alert">{{ formError() }}</div>
+        }
+        @if (successMessage()) {
+          <div class="alert alert-success" role="status">{{ successMessage() }}</div>
+        }
+
+        <!-- ---------- MAIN GRID ---------- -->
+        <div class="main-grid">
+
+          <!-- ================= LEFT: EXECUTION FORM ================= -->
+          <section class="card form-card" aria-labelledby="execution-form-heading">
+            <div class="card-header">
+              <h2 id="execution-form-heading" class="card-title">Execution form</h2>
+              <p class="card-subtitle">Purpose: {{ data.followUp.originalPurpose }}</p>
+            </div>
+
+            <form [formGroup]="executionForm" class="card-body form-grid" novalidate>
+
+              <div class="field">
+                <label for="actualContactDate">Actual contact date</label>
+                <input
+                  id="actualContactDate"
+                  type="date"
+                  formControlName="actualContactDate"
+                  class="input"
+                  [class.input-invalid]="executionForm.controls.actualContactDate.invalid && executionForm.controls.actualContactDate.touched"
+                  required
+                  [attr.aria-invalid]="executionForm.controls.actualContactDate.invalid && executionForm.controls.actualContactDate.touched" />
+                @if (executionForm.controls.actualContactDate.hasError('futureDate')) {
+                  <p class="field-error">Future dates are not allowed.</p>
+                }
+              </div>
+
+              <div class="field">
+                <label for="actualContactTime">Actual contact time</label>
+                <input id="actualContactTime" type="time" formControlName="actualContactTime" class="input" required />
+              </div>
+
+              <div class="field">
+                <label for="executionStatus">Execution status</label>
+                <select id="executionStatus" formControlName="executionStatus" class="input" required>
+                  <option [ngValue]="null" disabled>Select status</option>
+                  @for (opt of executionStatusOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="completionReason">Completion reason</label>
+                <select id="completionReason" formControlName="completionReason" class="input" required>
+                  <option [ngValue]="null" disabled>Select reason</option>
+                  @for (opt of completionReasonOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="outcome">Outcome</label>
+                <select id="outcome" formControlName="outcome" class="input" required
+                  [class.input-invalid]="executionForm.controls.outcome.invalid && executionForm.controls.outcome.touched">
+                  <option [ngValue]="null" disabled>Select outcome</option>
+                  @for (opt of outcomeOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="communicationQuality">Communication quality</label>
+                <select id="communicationQuality" formControlName="communicationQuality" class="input" required>
+                  <option [ngValue]="null" disabled>Select quality</option>
+                  @for (opt of communicationQualityOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="field field-span-2">
+                <span class="field-legend-label" id="engagement-level-label">Engagement level</span>
+                <div class="segmented" role="radiogroup" aria-labelledby="engagement-level-label">
+                  @for (opt of engagementLevelOptions; track opt) {
+                    <label class="segmented-option" [class.is-selected]="executionForm.controls.engagementLevel.value === opt">
+                      <input type="radio" name="engagementLevel" formControlName="engagementLevel" [value]="opt" />
+                      {{ opt }}
+                    </label>
+                  }
+                </div>
+              </div>
+
+              <div class="field field-span-2">
+                <label for="completionNotes">Completion notes</label>
+                <textarea
+                  id="completionNotes"
+                  formControlName="completionNotes"
+                  class="input textarea"
+                  rows="4"
+                  required
+                  placeholder="Lead expressed strong interest in monthly contributions and requested detailed proposal information."
+                  [class.input-invalid]="executionForm.controls.completionNotes.invalid && executionForm.controls.completionNotes.touched"
+                  [attr.aria-describedby]="'completionNotes-count'"></textarea>
+                <p id="completionNotes-count" class="field-hint">
+                  {{ executionForm.controls.completionNotes.value.length }}/3000 &middot; minimum 20 characters
+                </p>
+                @if (executionForm.controls.completionNotes.invalid && executionForm.controls.completionNotes.touched) {
+                  <p class="field-error">Completion notes are required (minimum 20 characters).</p>
+                }
+              </div>
+
+              <div class="field field-span-2">
+                <label for="internalNotes">Internal notes <span class="optional-tag">Optional</span></label>
+                <textarea
+                  id="internalNotes"
+                  formControlName="internalNotes"
+                  class="input textarea"
+                  rows="3"
+                  placeholder="Potential family foundation donor. Discuss internally before next call."></textarea>
+                <p class="field-hint">{{ executionForm.controls.internalNotes.value.length }}/3000</p>
+              </div>
+            </form>
+
+            <!-- ---- Outcome recommendation panel ---- -->
+            @if (outcomeRecommendations().length) {
+              <div class="card-section recommendation-panel">
+                <h3 class="card-section-title">Recommended next actions</h3>
+                <ul class="recommendation-list">
+                  @for (action of outcomeRecommendations(); track action) {
+                    <li class="recommendation-pill">{{ action }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
+            <!-- ---- Temperature / Stage / Disposition ---- -->
+            <div class="card-section three-col">
+              <div class="mini-field">
+                <span class="mini-field-label">Temperature</span>
+                <div class="readonly-badge">
+                  <span class="badge" [class]="'badge-' + tempTone(data.lead.currentTemperature)">{{ data.lead.currentTemperature }}</span>
+                  <span class="arrow" aria-hidden="true">&rarr;</span>
+                  <select [formControl]="temperatureForm.controls.newTemperature" class="input input-compact" aria-label="New temperature">
+                    @for (opt of temperatureOptions; track opt) {
+                      <option [value]="opt">{{ opt }}</option>
+                    }
+                  </select>
+                </div>
+                @if (temperatureChanged()) {
+                  <div class="inline-note">
+                    <p class="inline-note-text">Lead temperature will be updated to {{ temperatureForm.controls.newTemperature.value }}.</p>
+                    <input
+                      type="text"
+                      class="input input-compact"
+                      [formControl]="temperatureForm.controls.reasonForChange"
+                      placeholder="Reason for change"
+                      required
+                      [class.input-invalid]="temperatureForm.controls.reasonForChange.invalid" />
+                  </div>
+                }
+              </div>
+
+              <div class="mini-field">
+                <span class="mini-field-label">Stage</span>
+                <div class="readonly-badge">
+                  <span class="badge badge-neutral">{{ data.lead.currentStage }}</span>
+                  <span class="arrow" aria-hidden="true">&rarr;</span>
+                  <select [formControl]="stageForm.controls.newStage" class="input input-compact" aria-label="New stage">
+                    @for (opt of stageOptions; track opt) {
+                      <option [value]="opt">{{ opt }}</option>
+                    }
+                  </select>
+                </div>
+                @if (stageTransitionBlocked()) {
+                  <p class="field-error">Requires a recorded engagement level before moving to Qualified.</p>
+                }
+              </div>
+
+              <div class="mini-field">
+                <label class="mini-field-label" for="disposition">Disposition</label>
+                <select id="disposition" [formControl]="dispositionForm.controls.disposition" class="input input-compact" required>
+                  <option [ngValue]="null" disabled>Select disposition</option>
+                  @for (opt of dispositionOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <!-- ---- Attachments ---- -->
+            <div class="card-section">
+              <div class="section-heading-row">
+                <h3 class="card-section-title">Attachments</h3>
+                <label class="btn btn-outline-primary btn-sm file-btn">
+                  Upload file
+                  <input type="file" class="visually-hidden" [accept]="acceptedAttachmentTypes" (change)="onFileSelected($event)" />
+                </label>
+              </div>
+              <p class="field-hint">PDF, DOCX, PNG or JPG &middot; up to 10 MB</p>
+              @if (attachmentError()) {
+                <p class="field-error">{{ attachmentError() }}</p>
+              }
+              @if (attachments().length) {
+                <ul class="attachment-list">
+                  @for (file of attachments(); track file.id) {
+                    <li class="attachment-item">
+                      <span class="attachment-type">{{ file.type }}</span>
+                      <span class="attachment-name">{{ file.name }}</span>
+                      <span class="attachment-size">{{ file.sizeLabel }}</span>
+                      <button type="button" class="icon-btn" (click)="removeAttachment(file.id)" [attr.aria-label]="'Remove ' + file.name">&times;</button>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="empty-inline">No attachments added yet.</p>
+              }
+            </div>
+
+            <!-- ---- Create next follow-up ---- -->
+            <div class="card-section" [formGroup]="nextFollowUpForm">
+              <div class="section-heading-row">
+                <h3 class="card-section-title">Create next follow-up?</h3>
+                <label class="switch">
+                  <input type="checkbox" formControlName="enabled" />
+                  <span class="switch-track" aria-hidden="true"></span>
+                  <span class="visually-hidden">Toggle create next follow-up</span>
+                </label>
+              </div>
+
+              @if (nextFollowUpEnabled()) {
+                <div class="form-grid mt-2">
+                  <div class="field">
+                    <label for="nfuType">Type</label>
+                    <select id="nfuType" formControlName="type" class="input">
+                      <option [ngValue]="null" disabled>Select type</option>
+                      @for (opt of followUpTypeOptions; track opt) {
+                        <option [value]="opt">{{ opt }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="nfuPriority">Priority</label>
+                    <select id="nfuPriority" formControlName="priority" class="input">
+                      <option [ngValue]="null" disabled>Select priority</option>
+                      @for (opt of priorityOptions; track opt) {
+                        <option [value]="opt">{{ opt }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="nfuDate">Date</label>
+                    <input id="nfuDate" type="date" formControlName="date" class="input" />
+                  </div>
+                  <div class="field">
+                    <label for="nfuTime">Time</label>
+                    <input id="nfuTime" type="time" formControlName="time" class="input" />
+                  </div>
+                  <div class="field field-span-2">
+                    <label for="nfuPurpose">Purpose</label>
+                    <textarea id="nfuPurpose" formControlName="purpose" class="input textarea" rows="2" maxlength="500"></textarea>
+                  </div>
+                  <div class="field field-span-2">
+                    <label for="nfuOwner">Owner</label>
+                    <input id="nfuOwner" type="text" formControlName="owner" class="input" />
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- ================= RIGHT: INSIGHT PANELS ================= -->
+          <aside class="side-column">
+
+            <!-- Follow-up summary -->
+            <section class="card detail-card" aria-labelledby="followup-details-heading">
+              <div class="card-header">
+                <h2 id="followup-details-heading" class="card-title-sm">Follow-up details</h2>
+              </div>
+              <dl class="detail-list">
+                <div class="detail-row">
+                  <dt>Follow-up reference</dt>
+                  <dd>{{ data.followUp.followUpId }}</dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Type</dt>
+                  <dd>{{ data.followUp.type }}</dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Subject</dt>
+                  <dd>{{ data.followUp.subject }}</dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Priority</dt>
+                  <dd><span class="badge" [class]="'badge-' + priorityTone(data.followUp.priority)">{{ data.followUp.priority }}</span></dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Scheduled</dt>
+                  <dd>{{ data.followUp.scheduledDate }}, {{ data.followUp.scheduledTime }}</dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Assigned to</dt>
+                  <dd>{{ data.followUp.assignedUser }}</dd>
+                </div>
+                <div class="detail-row">
+                  <dt>Expected outcome</dt>
+                  <dd>{{ data.followUp.expectedOutcome }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <!-- Relationship readiness -->
+            <section class="card gauge-card" aria-labelledby="readiness-heading">
+              <div class="card-header">
+                <h2 id="readiness-heading" class="card-title-sm">Relationship readiness</h2>
+              </div>
+              <div class="gauge-wrap">
+                <svg viewBox="0 0 100 100" class="gauge" role="img" [attr.aria-label]="'Readiness score ' + readinessScore() + ' of 100'">
+                  <circle class="gauge-track" cx="50" cy="50" r="42" />
+                  <circle
+                    class="gauge-value"
+                    cx="50" cy="50" r="42"
+                    [attr.stroke-dasharray]="gaugeCircumference"
+                    [attr.stroke-dashoffset]="gaugeOffset()" />
+                </svg>
+                <!-- <div class="gauge-center">
+                  <span class="gauge-number">{{ readinessScore() }}</span>
+                  <span class="gauge-max">/100</span>
+                </div> -->
+              </div>
+
+              @if (riskIndicator(); as risk) {
+                <div class="risk-row">
+                  <span class="badge" [class]="'badge-' + riskTone(risk.level)">{{ risk.level }}</span>
+                  <p class="risk-reason">{{ risk.reason }}</p>
+                </div>
+              }
+            </section>
+
+            <!-- Qualification readiness -->
+            @if (!donorId()) {
+            <section class="card" aria-labelledby="qualification-heading">
+              <div class="card-header">
+                <h2 id="qualification-heading" class="card-title-sm">Qualification readiness</h2>
+                <span class="badge" [class]="'badge-' + qualTone(qualificationStatus())">{{ qualificationStatus() }}</span>
+              </div>
+              <ul class="checklist">
+                @for (check of qualificationChecks(); track check.label) {
+                  <li class="checklist-item" [class.is-complete]="check.complete">
+                    <span class="checklist-icon" aria-hidden="true">{{ check.complete ? '✓' : '' }}</span>
+                    {{ check.label }}
+                  </li>
+                }
+              </ul>
+              @if (qualificationStatus() === 'Ready') {
+                <button type="button" class="btn btn-primary btn-sm w-full mt-2" (click)="startQualification()">
+                  Start qualification
+                </button>
+              }
+            </section>
+            }
+
+            <!-- Immediate actions -->
+            <section class="card" aria-labelledby="immediate-actions-heading">
+              <div class="card-header">
+                <h2 id="immediate-actions-heading" class="card-title-sm">Immediate actions</h2>
+              </div>
+              <div class="action-list">
+                <button type="button" class="btn btn-outline-primary btn-sm w-full" (click)="openCommunicationTimeline()">Open communication timeline</button>
+                <button type="button" class="btn btn-outline-primary btn-sm w-full" (click)="openLead()">{{ donorId() ? 'Open donor' : 'Open lead' }}</button>
+                <button type="button" class="btn btn-outline-danger btn-sm w-full" (click)="openEscalationModal()">{{ donorId() ? 'Escalate donor' : 'Escalate lead' }}</button>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <!-- ---------- EXECUTION HISTORY ---------- -->
+        <section class="card mt-3" aria-labelledby="history-heading">
+          <div class="card-header">
+            <h2 id="history-heading" class="card-title-sm">Execution history</h2>
+          </div>
+
+          @if (executionHistory().length) {
+            <ul class="timeline">
+              @for (entry of executionHistory(); track entry.id) {
+                <li class="timeline-item">
+                  <button
+                    type="button"
+                    class="timeline-row"
+                    [attr.aria-expanded]="expandedHistoryId() === entry.id"
+                    (click)="toggleHistoryEntry(entry.id)">
+                    <span class="timeline-date">{{ entry.date }}</span>
+                    <span class="timeline-type">{{ entry.type }}</span>
+                    <span class="timeline-outcome">{{ entry.outcome }}</span>
+                    <span class="timeline-caret" aria-hidden="true">{{ expandedHistoryId() === entry.id ? '−' : '+' }}</span>
+                  </button>
+                  @if (expandedHistoryId() === entry.id) {
+                    <div class="timeline-detail">
+                      {{ entry.detail || ('Recorded as ' + entry.type + ' with outcome "' + entry.outcome + '".') }}
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="empty-inline">No previous follow-up executions recorded.</p>
+          }
+        </section>
+
+      }
+
+
+         <div class="sticky-footer-inner">
+          <div class="sticky-footer-primary">
+                      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancel()">Cancel</button>
+
+            <button type="button" class="btn btn-outline-primary btn-sm" [disabled]="saving()" (click)="saveDraft()">
+              @if (saving()) { Saving&hellip; } @else { Save draft }
+            </button>
+            @if (nextFollowUpEnabled()) {
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="saving()" (click)="completeAndCreateFollowUp()">
+                Complete &amp; create follow-up
+              </button>
+            } @else {
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="saving()" (click)="completeFollowUp()">
+                @if (saving()) { Completing&hellip; } @else { Complete follow-up }
+              </button>
+            }
+          </div>
+        </div>
+    </div>
+
+
+
+  <!-- ============ ESCALATION MODAL ============ -->
+  @if (showEscalationModal()) {
+    <div class="modal-overlay" (click)="closeEscalationModal()">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="escalation-title"
+        (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2 id="escalation-title" class="modal-title">Escalation</h2>
+          <button type="button" class="icon-btn" aria-label="Close escalation dialog" (click)="closeEscalationModal()">&times;</button>
+        </div>
+        <form [formGroup]="escalationForm" class="modal-body form-grid" novalidate>
+          <div class="field field-span-2">
+            <label for="escalateTo">Escalate to</label>
+            <input id="escalateTo" type="text" formControlName="escalateTo" class="input" required
+              [class.input-invalid]="escalationForm.controls.escalateTo.invalid && escalationForm.controls.escalateTo.touched" />
+          </div>
+          <div class="field field-span-2">
+            <label for="escalationReason">Reason</label>
+            <input id="escalationReason" type="text" formControlName="reason" class="input" required
+              [class.input-invalid]="escalationForm.controls.reason.invalid && escalationForm.controls.reason.touched" />
+          </div>
+          <div class="field field-span-2">
+            <label for="escalationNotes">Notes <span class="optional-tag">Optional</span></label>
+            <textarea id="escalationNotes" formControlName="notes" class="input textarea" rows="3"></textarea>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-tertiary btn-sm" (click)="closeEscalationModal()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="submitEscalation()">Save</button>
+        </div>
+      </div>
+    </div>
+  }
+  </div>
+</main>

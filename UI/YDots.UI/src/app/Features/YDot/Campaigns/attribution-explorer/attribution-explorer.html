@@ -1,0 +1,920 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <div [attr.data-ui-state]="uiState()">
+        <!-- ============ HEADER: Clean title bar (above search) ============ -->
+        <header class="ae-header">
+          <div class="ae-header-main">
+            <div class="ae-title-row">
+              <div class="ae-title-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </div>
+              <div>
+                <h1 class="ae-title">{{ pageTitle }}</h1>
+                <p class="ae-subtitle">{{ pageSubtitle }}</p>
+              </div>
+            </div>
+            <div class="ae-header-meta">
+              <span class="ae-badge ae-badge-ref">{{ taskReference() }}</span>
+              <span class="ae-badge ae-badge-state">{{ lifecycleState() }}</span>
+              <button
+                #aeFiltersToggle
+                type="button"
+                class="ae-btn ae-btn-outline ae-btn-sm ae-filter-toggle"
+                (click)="toggleFilters()"
+                [attr.aria-expanded]="filtersOpen()"
+              >
+                <svg
+                  class="ae-ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z" />
+                </svg>
+                {{ filtersOpen() ? 'Hide filters' : 'Filters' }}
+                @if (activeFilterSummary().length) {
+                  <span class="ae-filter-count">{{ activeFilterSummary().length }}</span>
+                }
+              </button>
+            </div>
+          </div>
+          <div class="ae-header-foot">
+            <span class="ae-meta-item">👤 {{ owner() }}</span>
+            <span class="ae-meta-dot">·</span>
+            <span class="ae-meta-item">🕘 Updated {{ lastRefresh() }}</span>
+            <span class="ae-meta-dot">·</span>
+            <span class="ae-meta-item"
+              >{{ recordCount() }} of {{ totalRecords() }} donations shown</span
+            >
+          </div>
+        </header>
+
+        <!-- ============ FILTERS: Card panel — shown only via the Filters button ============ -->
+        @if (filtersOpen()) {
+        <section class="ae-filters-card" aria-label="Scope, search and filters"
+                 appClickOutside [clickOutsideExcept]="aeFiltersToggle" (appClickOutside)="filtersOpen.set(false)">
+          <div class="ae-filters-toolbar">
+            <span class="ae-filters-heading">Filters</span>
+            <button type="button" class="ae-link" (click)="toggleFilters()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              Hide filters
+            </button>
+          </div>
+          <div class="ae-filter-grid">
+            <label class="ae-field">
+              <span class="ae-field-label">Scope</span>
+              <span class="ae-select-wrap">
+                <select
+                  class="ae-select"
+                  [ngModel]="scope()"
+                  (ngModelChange)="scope.set($event)"
+                  aria-label="Data scope"
+                >
+                  @for (sc of scopeOptions; track sc) {
+                    <option [value]="sc">{{ sc }}</option>
+                  }
+                </select>
+                <svg
+                  class="ae-chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+
+            <label class="ae-field ae-field-search">
+              <span class="ae-field-label"> Search donation</span>
+              <span class="ae-input-wrap">
+                <input
+                  type="search"
+                  class="ae-input"
+                  placeholder="Search by donation, donor, campaign or asset…"
+                  [ngModel]="searchTerm()"
+                  (ngModelChange)="searchTerm.set($event); searchError.set('')"
+                  (keyup.enter)="runSearch()"
+                  aria-label="Search donation or payment reference"
+                />
+                @if (searchError()) {
+                  <span class="ae-input-error">{{ searchError() }}</span>
+                }
+              </span>
+            </label>
+
+            <div class="ae-filter-search-row">
+              <button
+                type="button"
+                class="ae-btn-search"
+                (click)="runSearch()"
+                [disabled]="!searchAllowed()"
+              >
+                <svg
+                  class="ae-ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                Search
+              </button>
+            </div>
+          </div>
+
+          @if (searchError()) {
+            <div class="ae-search-error" role="alert">{{ searchError() }}</div>
+          }
+
+          <div class="ae-active-row">
+            <span class="ae-active-label">Active filters:</span>
+            @for (chip of activeFilterSummary(); track chip.key) {
+              <span class="ae-chip">
+                {{ chip.label }}
+                <button
+                  type="button"
+                  class="ae-chip-x"
+                  (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label"
+                  title="Remove filter {{ chip.label }}"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </span>
+            } @empty {
+              <span class="ae-active-none">None applied</span>
+            }
+            <button
+              type="button"
+              class="ae-link"
+              (click)="clearFilters()"
+              aria-label="Clear all filters"
+              title="Clear all filters"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+                <path d="M20 4.5v4h-4" />
+              </svg>
+              Clear all
+            </button>
+          </div>
+        </section>
+        }
+
+        <!-- ============ STATUS BANNERS ============ -->
+        @if (uiState() === 'validation') {
+          <div class="ae-banner ae-banner-error" role="alert">
+            <strong>Review the highlighted fields.</strong>
+            A value does not meet the stated format or range. Correct it to continue; entered safe
+            values remain.
+            <button
+              type="button"
+              class="ae-banner-x"
+              (click)="setUiState('ready')"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        }
+        @if (uiState() === 'duplicate') {
+          <div class="ae-banner ae-banner-warn" role="alert">
+            A correction request already exists for this donation. Link, merge, change the value,
+            request review or cancel — nothing is overwritten silently.
+            <span class="ae-banner-actions">
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Link existing</a>
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Request review</a>
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Cancel</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'conflict') {
+          <div class="ae-banner ae-banner-warn" role="alert">
+            This record changed after you opened it. Review the latest version before continuing.
+            <span class="ae-banner-actions">
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Compare</a>
+              <a href="javascript:void(0)" (click)="setUiState('ready')"
+                >Reapply eligible changes</a
+              >
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Cancel</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'dependency-failure') {
+          <div class="ae-banner ae-banner-warn" role="alert">
+            We could not complete the dependent service step. Your confirmed local result is
+            unchanged.
+            <span class="ae-banner-actions">
+              <span class="ae-corr">Correlation {{ correlationReference }}</span>
+              <a href="javascript:void(0)" (click)="retryDependency()">Retry dependency</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'success') {
+          <div class="ae-banner ae-banner-success" role="status">
+            Saved successfully. Reference {{ persistentOutcome().reference }}; state
+            {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.
+            <button
+              type="button"
+              class="ae-banner-x"
+              (click)="setUiState('ready')"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        }
+
+        <!-- ============ WORK AREA: Table + Detail ============ -->
+        <div class="ae-work" [class.ae-has-trace]="!!selected()">
+          <!-- ---------- RESULTS TABLE ---------- -->
+          <section class="ae-results" aria-labelledby="ae-results-heading">
+            <div class="ae-panel-head">
+              <h2 id="ae-results-heading" class="ae-section-title">Donations in scope</h2>
+              <span class="ae-panel-count">{{ recordCount() }} records</span>
+            </div>
+
+            @if (uiState() === 'loading') {
+              <div class="ae-state-block" role="status" aria-live="polite">
+                <div class="ae-spinner" aria-hidden="true"></div>
+                <p class="ae-state-title">Searching attribution records…</p>
+                <button
+                  type="button"
+                  class="ae-btn ae-btn-outline ae-btn-sm"
+                  (click)="setUiState('ready')"
+                >
+                  Cancel
+                </button>
+              </div>
+            } @else if (uiState() === 'empty') {
+              <div class="ae-state-block">
+                <div class="ae-empty-ic" aria-hidden="true">🔍</div>
+                <p class="ae-state-title">No donations match this search and scope.</p>
+                <p class="ae-state-body">
+                  Zero results come from the current search and scope, not a global zero.
+                </p>
+                <button
+                  type="button"
+                  class="ae-btn ae-btn-outline ae-btn-sm"
+                  (click)="clearFilters()"
+                >
+                  Reset filters
+                </button>
+              </div>
+            } @else if (uiState() === 'no-access') {
+              <div class="ae-state-block">
+                <div class="ae-empty-ic" aria-hidden="true">🔒</div>
+                <p class="ae-state-title">
+                  This value cannot be displayed with your current access.
+                </p>
+                <p class="ae-state-body">
+                  Restricted records, fields, counts, actions and search suggestions are hidden.
+                </p>
+                <a
+                  class="ae-btn ae-btn-outline ae-btn-sm"
+                  href="javascript:void(0)"
+                  (click)="setUiState('ready')"
+                  >Return to My Workspace</a
+                >
+              </div>
+            } @else {
+              <div class="ae-table-wrap">
+                <table class="ae-table" role="table" aria-label="Donation records">
+                  <thead>
+                    <tr>
+                      <th scope="col">Donation</th>
+                      <th scope="col">Campaign</th>
+                      <th scope="col">Source / medium</th>
+                      <th scope="col">Lead / donor</th>
+                      <th scope="col">Amount</th>
+                      <th scope="col">Reconciliation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (r of pagedRecords(); track r.reference) {
+                      <tr
+                        [class.is-selected]="isSelected(r.reference)"
+                        (click)="selectDonation(r.reference)"
+                        tabindex="0"
+                        (keydown.enter)="selectDonation(r.reference)"
+                        role="row"
+                      >
+                        <td class="ae-cell-ref">
+                          <div class="ae-ref-main">{{ r.reference }}</div>
+                          <div class="ae-ref-sub">{{ r.trackingAsset }}</div>
+                        </td>
+                        <td class="ae-cell-campaign">{{ r.campaign }}</td>
+                        <td>
+                          <div class="ae-cell-primary">{{ sourceOf(r) }}</div>
+                          <div class="ae-cell-sub">{{ mediumOf(r) }}</div>
+                        </td>
+                        <td>
+                          @if (r.restricted || !canViewDonorIdentity()) {
+                            <span class="ae-mask">••••••••</span>
+                          } @else {
+                            {{ r.leadOrDonor }}
+                          }
+                        </td>
+                        <td class="ae-cell-amount">{{ r.amount }}</td>
+                        <td>
+                          <span
+                            class="ae-pill"
+                            [class]="'ae-pill-' + r.reconciliation.toLowerCase()"
+                            >{{ r.reconciliation }}</span
+                          >
+                          @if (r.restricted) {
+                            <span class="ae-mask-tag">🔒 Restricted</span>
+                          }
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="6" class="ae-table-empty">No donations match this search.</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              @if (visibleRecords().length > 0) {
+                <div class="ae-pagination">
+                  <span class="ae-pagination-info">
+                    Showing {{ pagedStart() }}–{{ pagedEnd() }} of {{ visibleRecords().length }}
+                  </span>
+                  <div class="ae-pagination-controls">
+                    <button
+                      type="button"
+                      class="ae-page-btn"
+                      (click)="prevPage()"
+                      [disabled]="currentPage() === 1"
+                      aria-label="Previous page"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+                    @for (p of pageNumbers(); track p) {
+                      <button
+                        type="button"
+                        class="ae-page-btn"
+                        [class.active]="currentPage() === p"
+                        (click)="goToPage(p)"
+                        [attr.aria-label]="'Page ' + p"
+                        [attr.aria-current]="currentPage() === p ? 'page' : null"
+                      >
+                        {{ p }}
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="ae-page-btn"
+                      (click)="nextPage()"
+                      [disabled]="currentPage() === totalPages()"
+                      aria-label="Next page"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            }
+          </section>
+
+          <!-- ---------- WORK AREA: trace / decision / related ---------- -->
+          @if (selected(); as r) {
+            <aside class="ae-trace" aria-label="Donation trace">
+              <div class="ae-trace-head">
+                <div class="ae-trace-id">
+                  <h2 class="ae-trace-title">{{ r.reference }}</h2>
+                  <p class="ae-trace-sub">{{ r.campaign }} · {{ r.trackingAsset }}</p>
+                </div>
+                <div class="ae-trace-head-right">
+                  <span class="ae-pill" [class]="'ae-pill-' + r.reconciliation.toLowerCase()">{{
+                    r.lifecycle
+                  }}</span>
+                  <button
+                    type="button"
+                    class="ae-trace-close"
+                    (click)="closeTrace()"
+                    aria-label="Close donation trace"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div class="ae-trace-tabs" role="tablist" aria-label="Donation trace views">
+                @for (t of workTabs; track t.key) {
+                  <button
+                    type="button"
+                    class="ae-trace-tab"
+                    role="tab"
+                    [class.active]="activeWorkTab() === t.key"
+                    [attr.aria-selected]="activeWorkTab() === t.key"
+                    (click)="selectWorkTab(t.key)"
+                  >
+                    {{ t.label }}
+                  </button>
+                }
+              </div>
+
+              @if (r.restricted) {
+                <div class="ae-trace-body">
+                  <div class="ae-state-block">
+                    <div class="ae-empty-ic" aria-hidden="true">🔒</div>
+                    <p class="ae-state-title">
+                      This value cannot be displayed with your current access.
+                    </p>
+                  </div>
+                </div>
+              } @else if (activeWorkTab() === 'trace') {
+                <div class="ae-trace-body" role="tabpanel">
+                  <ol class="ae-timeline">
+                    @for (g of traceGroups(); track g.key) {
+                      <li class="ae-step">
+                        <span class="ae-step-marker" aria-hidden="true">{{ g.step }}</span>
+                        <div class="ae-step-body">
+                          <h3 class="ae-step-title">{{ g.title }}</h3>
+                          <p class="ae-step-caption">{{ g.caption }}</p>
+                          <dl class="ae-field-list">
+                            @for (f of g.fields; track f.key) {
+                              <div class="ae-field-row">
+                                <dt>{{ f.label }}</dt>
+                                <dd>
+                                  <span class="ae-field-value">{{ f.value }}</span>
+                                  @if (f.copyable) {
+                                    <button
+                                      type="button"
+                                      class="ae-copy"
+                                      (click)="copyValue(f.key, f.value)"
+                                      [attr.aria-label]="'Copy ' + f.label"
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        aria-hidden="true"
+                                      >
+                                        <rect x="9" y="9" width="11" height="11" rx="2" />
+                                        <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                                      </svg>
+                                      {{ copiedKey() === f.key ? 'Copied' : 'Copy' }}
+                                    </button>
+                                  }
+                                </dd>
+                              </div>
+                            }
+                          </dl>
+                        </div>
+                      </li>
+                    }
+                  </ol>
+                </div>
+              } @else if (activeWorkTab() === 'decision') {
+                <div class="ae-trace-body" role="tabpanel">
+                  <p class="ae-trace-lead">
+                    Risky decisions require review and explicit confirmation before they take
+                    effect.
+                  </p>
+                  <dl class="ae-kv">
+                    <div>
+                      <dt>Before → after</dt>
+                      <dd>
+                        Attribution {{ r.attributionSnapshot }} → superseded by a correction
+                        snapshot
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Warnings</dt>
+                      <dd>
+                        {{
+                          r.reconciliation === 'Reconciled'
+                            ? 'Record is reconciled — a correction supersedes a sealed snapshot'
+                            : 'Settlement is not yet reconciled'
+                        }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Effective permission</dt>
+                      <dd>{{ correctionEffectivePermission }}</dd>
+                    </div>
+                    <div>
+                      <dt>Evidence</dt>
+                      <dd>Audit chain {{ r.auditChain }} · last refresh {{ lastRefresh() }}</dd>
+                    </div>
+                    <div>
+                      <dt>Reason</dt>
+                      <dd>Named reason required and captured at confirmation</dd>
+                    </div>
+                    <div>
+                      <dt>Resulting state</dt>
+                      <dd>
+                        Confirmed lifecycle state shown persistently; linked history preserved
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div class="ae-decision-actions">
+                    <button
+                      type="button"
+                      class="ae-btn ae-btn-outline ae-btn-sm"
+                      (click)="inspectChain(r)"
+                    >
+                      <svg
+                        class="ae-ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 7h16M4 12h16M4 17h10" />
+                      </svg>
+                      Inspect chain
+                    </button>
+                    <button
+                      type="button"
+                      class="ae-btn ae-btn-primary ae-btn-sm"
+                      (click)="openCorrection()"
+                      [disabled]="!requestCorrectionAllowed(r)"
+                    >
+                      <svg
+                        class="ae-ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+                      </svg>
+                      Request correction
+                    </button>
+                    @if (canDeleteDraft(r)) {
+                      <button
+                        type="button"
+                        class="ae-btn ae-btn-danger ae-btn-sm"
+                        (click)="openDeleteDraft()"
+                      >
+                        <svg
+                          class="ae-ic"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+                        </svg>
+                        Delete unused draft
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <div class="ae-trace-body" role="tabpanel">
+                  <div class="ae-rel-tabs" role="tablist" aria-label="Related and history">
+                    @for (tab of relatedTabs(); track tab.key) {
+                      <button
+                        type="button"
+                        class="ae-rel-tab"
+                        role="tab"
+                        [class.active]="activeRelatedTab() === tab.key"
+                        [attr.aria-selected]="activeRelatedTab() === tab.key"
+                        (click)="selectRelatedTab(tab.key)"
+                      >
+                        {{ tab.label }}
+                      </button>
+                    }
+                  </div>
+                  <ul class="ae-rel-list" role="list">
+                    @for (row of activeRelatedRows(); track row.primary) {
+                      <li class="ae-rel-row">
+                        <span class="ae-rel-primary">{{ row.primary }}</span>
+                        <span class="ae-rel-secondary">{{ row.secondary }}</span>
+                        <span class="ae-rel-meta">{{ row.meta }}</span>
+                      </li>
+                    } @empty {
+                      <li class="ae-rel-empty">No entries in scope.</li>
+                    }
+                  </ul>
+                </div>
+              }
+            </aside>
+          }
+        </div>
+
+        <!-- ============ PERSISTENT OUTCOME ============ -->
+        <section class="ae-outcome" aria-labelledby="ae-outcome-heading">
+          <div class="ae-panel-head">
+            <h2 id="ae-outcome-heading" class="ae-section-title">Persistent outcome</h2>
+            <span class="ae-panel-count">Live</span>
+          </div>
+          <div class="ae-outcome-grid">
+            <div class="ae-outcome-item">
+              <dt>Reference</dt>
+              <dd>{{ persistentOutcome().reference }}</dd>
+            </div>
+            <div class="ae-outcome-item">
+              <dt>State</dt>
+              <dd>{{ persistentOutcome().state }}</dd>
+            </div>
+            <div class="ae-outcome-item">
+              <dt>Effective time</dt>
+              <dd>{{ persistentOutcome().effectiveTime }}</dd>
+            </div>
+            <div class="ae-outcome-item">
+              <dt>Downstream status</dt>
+              <dd>{{ persistentOutcome().downstreamStatus }}</dd>
+            </div>
+            <div class="ae-outcome-item">
+              <dt>Accountable owner</dt>
+              <dd>{{ persistentOutcome().owner }}</dd>
+            </div>
+            <div class="ae-outcome-item">
+              <dt>Next action</dt>
+              <dd>{{ persistentOutcome().nextAction }}</dd>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ REQUEST CORRECTION DIALOG ============ -->
+      @if (correctionDialogOpen() && selected(); as r) {
+        <div class="ae-modal-backdrop" (click)="cancelCorrection()">
+          <div
+            class="ae-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ae-corr-title"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="ae-modal-head">
+              <h2 id="ae-corr-title" class="ae-modal-title">Request correction</h2>
+              <button
+                type="button"
+                class="ae-modal-x"
+                (click)="cancelCorrection()"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <p class="ae-modal-lead">
+              Raise a correction request against a read-only attribution record. The record is not
+              overwritten; a reviewer decides the outcome.
+            </p>
+
+            <dl class="ae-kv ae-kv-box">
+              <div>
+                <dt>Donation or payment reference</dt>
+                <dd>{{ r.reference }}</dd>
+              </div>
+              <div>
+                <dt>Campaign</dt>
+                <dd>{{ r.campaign }}</dd>
+              </div>
+              <div>
+                <dt>Attribution snapshot</dt>
+                <dd>{{ r.attributionSnapshot }}</dd>
+              </div>
+              <div>
+                <dt>Effective permission</dt>
+                <dd>{{ correctionEffectivePermission }}</dd>
+              </div>
+            </dl>
+
+            @if (correctionSubmitted() && !correctionReasonValid()) {
+              <div class="ae-error-summary" role="alert" aria-label="There is a problem">
+                <strong>There is a problem</strong>
+                <ul>
+                  <li><a href="javascript:void(0)">Enter Reason.</a></li>
+                </ul>
+              </div>
+            }
+
+            <div
+              class="ae-field"
+              [class.ae-field-invalid]="correctionSubmitted() && !correctionReasonValid()"
+            >
+              <label class="ae-field-label" for="ae-corr-reason"
+                >Reason <span class="ae-req">*</span></label
+              >
+              <textarea
+                id="ae-corr-reason"
+                class="ae-textarea"
+                rows="4"
+                [ngModel]="correctionReason()"
+                (ngModelChange)="correctionReason.set($event)"
+                placeholder="Describe the correction and the evidence for it"
+              ></textarea>
+              <div class="ae-field-foot">
+                @if (correctionSubmitted() && !correctionReasonValid()) {
+                  <span class="ae-field-error">Enter Reason.</span>
+                } @else {
+                  <span class="ae-field-hint">A named reason is recorded with the request.</span>
+                }
+                <span class="ae-count"
+                  >{{ correctionReasonCount() }} / {{ correctionReasonMax }}</span
+                >
+              </div>
+            </div>
+
+            <div class="ae-modal-actions">
+              <button type="button" class="ae-btn ae-btn-outline" (click)="cancelCorrection()">
+                Cancel
+              </button>
+              <button type="button" class="ae-btn ae-btn-primary" (click)="confirmCorrection()">
+                Submit correction request
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ DELETE UNUSED DRAFT DIALOG ============ -->
+      @if (deleteDialogOpen() && selected(); as r) {
+        <div class="ae-modal-backdrop" (click)="cancelDelete()">
+          <div
+            class="ae-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ae-del-title"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="ae-modal-head">
+              <h2 id="ae-del-title" class="ae-modal-title ae-modal-title-danger">
+                Confirm Delete unused draft
+              </h2>
+              <button type="button" class="ae-modal-x" (click)="cancelDelete()" aria-label="Close">
+                ✕
+              </button>
+            </div>
+            <p class="ae-modal-lead">
+              Review the affected record, consequence, reason and effective time. This removes an
+              unused draft with no downstream reference; linked history is preserved.
+            </p>
+
+            <dl class="ae-kv ae-kv-box">
+              <div>
+                <dt>Affected record</dt>
+                <dd>{{ r.reference }} · {{ r.campaign }}</dd>
+              </div>
+              <div>
+                <dt>Consequence</dt>
+                <dd>
+                  Draft is deleted; the audit chain {{ r.auditChain }} and linked history are
+                  preserved
+                </dd>
+              </div>
+              <div>
+                <dt>Effective time</dt>
+                <dd>{{ lastRefresh() }}</dd>
+              </div>
+            </dl>
+
+            @if (deleteSubmitted() && (!deleteReasonValid() || !deleteConfirmValid())) {
+              <div class="ae-error-summary" role="alert" aria-label="There is a problem">
+                <strong>There is a problem</strong>
+                <ul>
+                  @if (!deleteReasonValid()) {
+                    <li><a href="javascript:void(0)">Enter Reason.</a></li>
+                  }
+                  @if (!deleteConfirmValid()) {
+                    <li><a href="javascript:void(0)">Type DELETE to confirm.</a></li>
+                  }
+                </ul>
+              </div>
+            }
+
+            <div
+              class="ae-field"
+              [class.ae-field-invalid]="deleteSubmitted() && !deleteReasonValid()"
+            >
+              <label class="ae-field-label" for="ae-del-reason"
+                >Reason <span class="ae-req">*</span></label
+              >
+              <textarea
+                id="ae-del-reason"
+                class="ae-textarea"
+                rows="3"
+                [ngModel]="deleteReason()"
+                (ngModelChange)="deleteReason.set($event)"
+                placeholder="State why this unused draft is being deleted"
+              ></textarea>
+              <div class="ae-field-foot">
+                @if (deleteSubmitted() && !deleteReasonValid()) {
+                  <span class="ae-field-error">Enter Reason.</span>
+                } @else {
+                  <span class="ae-field-hint"
+                    >A named reason is required and preserved with the history.</span
+                  >
+                }
+                <span class="ae-count">{{ deleteReasonCount() }} / {{ deleteReasonMax }}</span>
+              </div>
+            </div>
+
+            <div
+              class="ae-field"
+              [class.ae-field-invalid]="deleteSubmitted() && !deleteConfirmValid()"
+            >
+              <label class="ae-field-label" for="ae-del-confirm"
+                >Type <strong>DELETE</strong> to confirm <span class="ae-req">*</span></label
+              >
+              <input
+                id="ae-del-confirm"
+                type="text"
+                class="ae-input"
+                [ngModel]="deleteConfirmText()"
+                (ngModelChange)="deleteConfirmText.set($event)"
+                placeholder="DELETE"
+                autocomplete="off"
+              />
+              @if (deleteSubmitted() && !deleteConfirmValid()) {
+                <span class="ae-field-error">Type DELETE to confirm.</span>
+              }
+            </div>
+
+            <div class="ae-modal-actions">
+              <button type="button" class="ae-btn ae-btn-outline" (click)="cancelDelete()">
+                Cancel
+              </button>
+              <button type="button" class="ae-btn ae-btn-danger" (click)="confirmDeleteDraft()">
+                Delete unused draft
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</main>

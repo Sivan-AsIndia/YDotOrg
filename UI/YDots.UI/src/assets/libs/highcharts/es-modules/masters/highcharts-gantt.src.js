@@ -1,0 +1,2 @@
+/*! For license information please see highcharts-gantt.src.js.LICENSE.txt */
+"use strict";import Highcharts from"./highcharts.src.js";import"./modules/gantt.src.js";Highcharts.product="Highcharts Gantt";export default Highcharts;

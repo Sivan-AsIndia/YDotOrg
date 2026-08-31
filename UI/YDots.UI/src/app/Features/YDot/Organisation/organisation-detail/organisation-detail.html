@@ -1,0 +1,599 @@
+﻿<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+
+  @if (loading()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-loader-4-line"></i></div>
+      <h3 class="org-empty-title">Loading…</h3>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-cloud-off-line"></i></div>
+      <h3 class="org-empty-title">This organisation could not be loaded</h3>
+      <p class="org-empty-body">{{ errorMessage() }}</p>
+      <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="load()">
+        <i class="ri-refresh-line"></i> Try again
+      </button>
+    </div>
+  } @else if (organisation(); as org) {
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title">
+          <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+          {{ org.name }}
+        </h1>
+        <p class="org-subtitle">
+          <span class="org-code">{{ org.code }}</span>
+          <span class="org-code">{{ org.hostName }}</span>
+          <span class="org-badge" [ngClass]="statusClass(org.status)">
+            {{ org.statusDisplay || org.status }}
+          </span>
+        </p>
+      </div>
+
+      @if (!isOwnOrganisation()) {
+        <div class="org-header-actions">
+          <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="goBack()">
+            <i class="ri-arrow-left-line"></i> All organisations
+          </button>
+          @if (can('Approve') || can('StartReview')) {
+            <a [routerLink]="['/app/administration/organisation/registration-verification', org.id]"
+               class="org-btn org-btn-primary org-btn-sm">
+              <i class="ri-shield-check-line"></i> Review
+            </a>
+          }
+        </div>
+      }
+    </div>
+
+    <!--
+      Shown to the organisation's own administrator while they are still onboarding. The list of
+      what is missing comes from the server, so it is exactly what submission will check.
+    -->
+    @if (isOwnOrganisation() && !isProfileComplete() && outstandingFields().length > 0) {
+      <div class="org-alert is-warn">
+        <i class="ri-information-line"></i>
+        <div>
+          <strong>Your profile is not finished yet.</strong>
+          <p class="org-section-note">
+            These are still needed before it can be sent for approval:
+          </p>
+          <ul class="org-outstanding">
+            @for (field of outstandingFields(); track field) {
+              <li>{{ field }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (org.status === 'rejected' && org.rejectionReason) {
+      <div class="org-alert is-error">
+        <i class="ri-close-circle-line"></i>
+        <div>
+          <strong>This submission was not approved.</strong>
+          <p class="org-section-note">{{ org.rejectionReason }}</p>
+        </div>
+      </div>
+    }
+
+    @if (org.status === 'suspended' && org.suspensionReason) {
+      <div class="org-alert is-error">
+        <i class="ri-forbid-2-line"></i>
+        <div>
+          <strong>This organisation is suspended.</strong>
+          <p class="org-section-note">{{ org.suspensionReason }}</p>
+        </div>
+      </div>
+    }
+
+    @if (errorMessage() && !loadFailed()) {
+      <div class="org-alert is-error">
+        <i class="ri-error-warning-line"></i>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <!-- ---------------------------------------------------------------- Tabs -->
+    <div class="org-tabs">
+      <button type="button" class="org-tab" [class.is-active]="tab() === 'profile'"
+              (click)="tab.set('profile')">
+        <i class="ri-file-text-line"></i> Profile
+      </button>
+      <button type="button" class="org-tab" [class.is-active]="tab() === 'documents'"
+              (click)="tab.set('documents')">
+        <i class="ri-attachment-2"></i> Documents
+        @if (documents().length) { <span class="org-tab-count">{{ documents().length }}</span> }
+      </button>
+      @if (isOwnOrganisation() && isApproved()) {
+        <button type="button" class="org-tab" [class.is-active]="tab() === 'settings'"
+                (click)="tab.set('settings')">
+          <i class="ri-shield-keyhole-line"></i> Security settings
+        </button>
+      }
+      <button type="button" class="org-tab" [class.is-active]="tab() === 'domains'"
+              (click)="tab.set('domains')">
+        <i class="ri-global-line"></i> Web addresses
+      </button>
+      <button type="button" class="org-tab" [class.is-active]="tab() === 'timeline'"
+              (click)="tab.set('timeline')">
+        <i class="ri-history-line"></i> History
+      </button>
+    </div>
+
+    <!-- ================================================================= Profile -->
+    @if (tab() === 'profile') {
+      <section class="org-doc-section">
+        <div class="org-section-header">
+          <h3 class="org-doc-heading org-doc-heading--blue">Organisation profile</h3>
+          @if (canEditProfile() && !editing()) {
+            <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="startEditing()">
+              <i class="ri-edit-line"></i> Edit
+            </button>
+          }
+        </div>
+
+        @if (editing()) {
+          <div class="org-grid org-grid-2">
+            <div class="org-field">
+              <label class="org-field-label" for="d-name">Name</label>
+              <input id="d-name" type="text" class="org-input" maxlength="200"
+                     [ngModel]="form().name" (ngModelChange)="update('name', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-legal">Registered legal name</label>
+              <input id="d-legal" type="text" class="org-input" maxlength="200"
+                     [ngModel]="form().legalName" (ngModelChange)="update('legalName', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-reg">Registration number</label>
+              <input id="d-reg" type="text" class="org-input" maxlength="100"
+                     [ngModel]="form().registrationNumber"
+                     (ngModelChange)="update('registrationNumber', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-tax">Tax identification number</label>
+              <input id="d-tax" type="text" class="org-input" maxlength="100"
+                     [ngModel]="form().taxIdentificationNumber"
+                     (ngModelChange)="update('taxIdentificationNumber', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-pan">PAN</label>
+              <input id="d-pan" type="text" class="org-input" maxlength="20"
+                     [ngModel]="form().panNumber" (ngModelChange)="update('panNumber', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-gst">GST</label>
+              <input id="d-gst" type="text" class="org-input" maxlength="20"
+                     [ngModel]="form().gstNumber" (ngModelChange)="update('gstNumber', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-type">Type</label>
+              <input id="d-type" type="text" class="org-input" maxlength="100"
+                     [ngModel]="form().organisationType"
+                     (ngModelChange)="update('organisationType', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-established">Established on</label>
+              <input id="d-established" type="date" class="org-input"
+                     [ngModel]="form().establishedOn"
+                     (ngModelChange)="update('establishedOn', $event)">
+            </div>
+          </div>
+
+          <div class="org-field">
+            <label class="org-field-label" for="d-description">About</label>
+            <textarea id="d-description" class="org-input" rows="3" maxlength="1000"
+                      [ngModel]="form().description"
+                      (ngModelChange)="update('description', $event)"></textarea>
+          </div>
+
+          <h4 class="org-doc-subheading">Contact</h4>
+          <div class="org-grid org-grid-2">
+            <div class="org-field">
+              <label class="org-field-label" for="d-contact-name">Contact person</label>
+              <input id="d-contact-name" type="text" class="org-input" maxlength="200"
+                     [ngModel]="form().contactPersonName"
+                     (ngModelChange)="update('contactPersonName', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-contact-email">Contact e-mail</label>
+              <input id="d-contact-email" type="email" class="org-input" maxlength="256"
+                     [ngModel]="form().contactEmail"
+                     (ngModelChange)="update('contactEmail', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-phone">Telephone</label>
+              <div class="org-input-group">
+                <select class="org-select org-select-narrow"
+                        [ngModel]="form().contactPhoneCountryCode"
+                        (ngModelChange)="update('contactPhoneCountryCode', $event)">
+                  @for (code of countryCodes(); track code) {
+                    <option [value]="code">{{ code }}</option>
+                  }
+                </select>
+                <input id="d-phone" type="tel" class="org-input"
+                       [ngModel]="form().contactPhone"
+                       (ngModelChange)="update('contactPhone', $event)">
+              </div>
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-website">Website</label>
+              <input id="d-website" type="url" class="org-input" maxlength="256"
+                     [ngModel]="form().websiteUrl" (ngModelChange)="update('websiteUrl', $event)">
+            </div>
+          </div>
+
+          <h4 class="org-doc-subheading">Address</h4>
+          <div class="org-grid org-grid-2">
+            <div class="org-field">
+              <label class="org-field-label" for="d-addr1">Address line 1</label>
+              <input id="d-addr1" type="text" class="org-input" maxlength="200"
+                     [ngModel]="form().addressLine1"
+                     (ngModelChange)="update('addressLine1', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-addr2">Address line 2</label>
+              <input id="d-addr2" type="text" class="org-input" maxlength="200"
+                     [ngModel]="form().addressLine2"
+                     (ngModelChange)="update('addressLine2', $event)">
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-country">Country</label>
+              <select id="d-country" class="org-select"
+                      [ngModel]="form().country" (ngModelChange)="onCountryChange($event)">
+                <option value="">Select a country</option>
+                @for (c of geo.countryNames(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-state">State or province</label>
+              <!-- A dropdown once the catalogue knows this country's subdivisions; a text box
+                   until a country is chosen, and for countries that genuinely have none. -->
+              @if (geo.hasStates()) {
+                <select id="d-state" class="org-select"
+                        [ngModel]="form().state" (ngModelChange)="onStateChange($event)">
+                  <option value="">Select a state or province</option>
+                  @for (st of geo.stateNames(); track st) {
+                    <option [value]="st">{{ st }}</option>
+                  }
+                </select>
+              } @else {
+                <input id="d-state" type="text" class="org-input" maxlength="100"
+                       [ngModel]="form().state" (ngModelChange)="onStateChange($event)">
+              }
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-city">City</label>
+              @if (geo.cityNames().length) {
+                <select id="d-city" class="org-select"
+                        [ngModel]="form().city" (ngModelChange)="update('city', $event)">
+                  <option value="">Select a city</option>
+                  @for (ct of geo.cityNames(); track ct) {
+                    <option [value]="ct">{{ ct }}</option>
+                  }
+                </select>
+              } @else {
+                <input id="d-city" type="text" class="org-input" maxlength="100"
+                       [ngModel]="form().city" (ngModelChange)="update('city', $event)">
+              }
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-postal">Postal code</label>
+              <input id="d-postal" type="text" class="org-input" maxlength="20"
+                     [ngModel]="form().postalCode" (ngModelChange)="update('postalCode', $event)">
+            </div>
+          </div>
+
+          <div class="org-step-actions">
+            <button type="button" class="org-btn org-btn-ghost" (click)="cancelEditing()">
+              Cancel
+            </button>
+            <button type="button" class="org-btn org-btn-primary"
+                    [disabled]="saving()" (click)="saveProfile()">
+              @if (saving()) { <i class="ri-loader-4-line"></i> Saving… }
+              @else { <i class="ri-save-line"></i> Save }
+            </button>
+          </div>
+        } @else {
+          <div class="org-review-grid">
+            <div><span class="detail-label">Registered legal name</span>
+                 <span class="detail-value">{{ org.legalName || '—' }}</span></div>
+            <div><span class="detail-label">Type</span>
+                 <span class="detail-value">{{ org.organisationType || '—' }}</span></div>
+            <div><span class="detail-label">Registration number</span>
+                 <span class="detail-value">{{ org.registrationNumber || '—' }}</span></div>
+            <div><span class="detail-label">Tax identification</span>
+                 <span class="detail-value">{{ org.taxIdentificationNumber || '—' }}</span></div>
+            <div><span class="detail-label">PAN</span>
+                 <span class="detail-value">{{ org.panNumber || '—' }}</span></div>
+            <div><span class="detail-label">GST</span>
+                 <span class="detail-value">{{ org.gstNumber || '—' }}</span></div>
+            <div><span class="detail-label">Established</span>
+                 <span class="detail-value">
+                   {{ org.establishedOn ? (org.establishedOn | date: 'mediumDate') : '—' }}
+                 </span></div>
+            <div><span class="detail-label">Website</span>
+                 <span class="detail-value">{{ org.websiteUrl || '—' }}</span></div>
+            <div><span class="detail-label">Contact person</span>
+                 <span class="detail-value">{{ org.contactPersonName || '—' }}</span></div>
+            <div><span class="detail-label">Contact e-mail</span>
+                 <span class="detail-value">{{ org.contactEmail || '—' }}</span></div>
+            <div><span class="detail-label">Telephone</span>
+                 <span class="detail-value">
+                   {{ org.contactPhone ? org.contactPhoneCountryCode + ' ' + org.contactPhone : '—' }}
+                 </span></div>
+            <div><span class="detail-label">Address</span>
+                 <span class="detail-value">
+                   {{ org.addressLine1 || '—' }}<br>
+                   @if (org.addressLine2) { {{ org.addressLine2 }}<br> }
+                   {{ org.city }} {{ org.state }} {{ org.postalCode }}<br>
+                   {{ org.country }}
+                 </span></div>
+            <div><span class="detail-label">People</span>
+                 <span class="detail-value">
+                   {{ org.userCount ?? 0 }}@if (org.maximumUsers) { of {{ org.maximumUsers }} }
+                 </span></div>
+            <div><span class="detail-label">Administrator</span>
+                 <span class="detail-value">
+                   {{ org.primaryAdmin?.displayName || '—' }}
+                   @if (org.primaryAdmin?.email) {
+                     <br><span class="org-code">{{ org.primaryAdmin?.email }}</span>
+                   }
+                 </span></div>
+          </div>
+
+          @if (description(org)) {
+            <p class="org-section-note">{{ org.description }}</p>
+          }
+        }
+      </section>
+
+      <!-- Submission, for the organisation's own administrator -->
+      @if (canSubmit() || (isOwnOrganisation() && can('Resubmit'))) {
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--good">Send for approval</h3>
+          <p class="org-section-note">
+            The platform team reviews the profile and the documents. Until it is approved, this
+            organisation cannot be used for live work.
+          </p>
+
+          <div class="org-field">
+            <label class="org-field-label" for="d-submit-notes">Anything to add</label>
+            <textarea id="d-submit-notes" class="org-input" rows="2" maxlength="500"
+                      [ngModel]="submitNotes()" (ngModelChange)="submitNotes.set($event)"
+                      placeholder="Optional. Anything the reviewer should know."></textarea>
+          </div>
+
+          <button type="button" class="org-btn org-btn-primary"
+                  [disabled]="!canSubmit() || submitting()" (click)="submitForApproval()">
+            @if (submitting()) { <i class="ri-loader-4-line"></i> Sending… }
+            @else { <i class="ri-send-plane-line"></i> Send for approval }
+          </button>
+
+          @if (!isProfileComplete()) {
+            <span class="org-field-hint">
+              Finish the outstanding profile fields listed above first.
+            </span>
+          }
+        </section>
+      }
+    }
+
+    <!-- ================================================================= Documents -->
+    @if (tab() === 'documents') {
+      <section class="org-doc-section">
+        <!--
+          GROUPED SUBMISSIONS. A certificate and its supporting scans go up together and are
+          reviewed as one thing, which is what the reviewer actually decides on. The component
+          carries its own drag-and-drop, progress and validation, and reads the size and type
+          limits from the API so the numbers on screen are the ones the server enforces.
+        -->
+        <app-document-submissions mode="tenant"
+                                  (changed)="reload()"></app-document-submissions>
+
+        @if (ungroupedDocuments().length) {
+          <!--
+            Uploaded before grouped submissions existed. Kept visible rather than dropped, and
+            filtered on having no submission so nothing is listed twice.
+          -->
+          <h3 class="org-doc-heading">Earlier uploads</h3>
+
+          <div class="org-table-scroll">
+            <table class="org-table">
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Reference</th>
+                  <th>Uploaded</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (doc of ungroupedDocuments(); track doc.id) {
+                  <tr>
+                    <td>{{ doc.documentTypeDisplay }}<br>
+                      <span class="org-code">{{ doc.fileName }}</span></td>
+                    <td>{{ doc.referenceNumber || '—' }}</td>
+                    <td>{{ doc.uploadedAtUtc | date: 'mediumDate' }}</td>
+                    <td>{{ doc.status }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ================================================================= Settings -->
+    @if (tab() === 'settings' && isOwnOrganisation()) {
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">Security settings</h3>
+        <!--
+          These may be tightened but never loosened below the platform floor: the server clamps
+          every value, so a looser number comes back raised rather than accepted.
+        -->
+        <p class="org-section-note">
+          You can make these stricter than the platform default, but not weaker. Anything below
+          the platform minimum is raised to it when saved.
+        </p>
+
+        <div class="org-field">
+          <label class="org-field-label">Two-step verification</label>
+          <label class="org-radio-row">
+            <input type="radio" name="d-mfa" value="optional"
+                   [checked]="settingsForm().defaultMfaRequirement === 'optional'"
+                   (change)="updateSetting('defaultMfaRequirement', 'optional')">
+            <span>
+              <span class="org-radio-label">Optional</span>
+              <small class="org-field-hint">People may add a second factor themselves.</small>
+            </span>
+          </label>
+          <label class="org-radio-row">
+            <input type="radio" name="d-mfa" value="required"
+                   [checked]="settingsForm().defaultMfaRequirement === 'required'"
+                   (change)="updateSetting('defaultMfaRequirement', 'required')">
+            <span>
+              <span class="org-radio-label">Required</span>
+              <small class="org-field-hint">
+                Everyone must enrol a second factor before they can work.
+              </small>
+            </span>
+          </label>
+        </div>
+
+        <div class="org-grid org-grid-3">
+          <div class="org-field">
+            <label class="org-field-label" for="s-attempts">Failed sign-ins before lockout</label>
+            <input id="s-attempts" type="number" class="org-input" min="3" max="10"
+                   [ngModel]="settingsForm().maximumFailedAccessAttempts"
+                   (ngModelChange)="updateSetting('maximumFailedAccessAttempts', +$event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label" for="s-lockout">Lockout minutes</label>
+            <input id="s-lockout" type="number" class="org-input" min="5" max="120"
+                   [ngModel]="settingsForm().lockoutDurationMinutes"
+                   (ngModelChange)="updateSetting('lockoutDurationMinutes', +$event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label" for="s-password">Minimum password length</label>
+            <input id="s-password" type="number" class="org-input" min="8" max="128"
+                   [ngModel]="settingsForm().passwordMinimumLength"
+                   (ngModelChange)="updateSetting('passwordMinimumLength', +$event)">
+          </div>
+          <div class="org-field">
+            <label class="org-field-label" for="s-expiry">Password expires after (days)</label>
+            <input id="s-expiry" type="number" class="org-input" min="0" max="365"
+                   [ngModel]="settingsForm().passwordExpiryDays"
+                   (ngModelChange)="updateSetting('passwordExpiryDays', +$event)">
+            <span class="org-field-hint">Zero means passwords never expire.</span>
+          </div>
+          <div class="org-field">
+            <label class="org-field-label" for="s-idle">Idle sign-out (minutes)</label>
+            <input id="s-idle" type="number" class="org-input" min="5" max="480"
+                   [ngModel]="settingsForm().sessionIdleTimeoutMinutes"
+                   (ngModelChange)="updateSetting('sessionIdleTimeoutMinutes', +$event)">
+          </div>
+        </div>
+
+        <button type="button" class="org-btn org-btn-primary"
+                [disabled]="saving()" (click)="saveSettings()">
+          @if (saving()) { <i class="ri-loader-4-line"></i> Saving… }
+          @else { <i class="ri-save-line"></i> Save settings }
+        </button>
+      </section>
+    }
+
+    <!-- ================================================================= Domains -->
+    @if (tab() === 'domains') {
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">Web addresses</h3>
+        <p class="org-section-note">
+          The subdomain is permanent. A custom address can be added alongside it once its
+          ownership has been verified.
+        </p>
+
+        @if (domains().length === 0) {
+          <p class="org-section-note">No addresses are recorded.</p>
+        } @else {
+          <div class="org-table-scroll">
+            <table class="org-table">
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>Kind</th>
+                  <th>Primary</th>
+                  <th>Verified</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (domain of domains(); track domain.id) {
+                  <tr>
+                    <td><span class="org-code">{{ domain.hostName }}</span></td>
+                    <td>{{ domain.domainType }}</td>
+                    <td>
+                      @if (domain.isPrimary) {
+                        <span class="org-badge is-good">Primary</span>
+                      } @else { — }
+                    </td>
+                    <td>
+                      @if (domain.isVerified) {
+                        <span class="org-badge is-good">
+                          Verified {{ domain.verifiedAtUtc | date: 'mediumDate' }}
+                        </span>
+                      } @else {
+                        <span class="org-badge is-warn">Not verified</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ================================================================= Timeline -->
+    @if (tab() === 'timeline') {
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">History</h3>
+
+        @if (timeline().length === 0) {
+          <p class="org-section-note">Nothing has been recorded yet.</p>
+        } @else {
+          <ol class="org-timeline">
+            @for (entry of timeline(); track entry.id) {
+              <li class="org-timeline-item">
+                <span class="org-timeline-dot" [ngClass]="statusClass(entry.toStatus)"></span>
+                <div>
+                  <span class="detail-value">
+                    {{ entry.toStatusDisplay || entry.toStatus }}
+                    @if (entry.fromStatus) {
+                      <small class="org-field-hint">from {{ entry.fromStatus }}</small>
+                    }
+                  </span>
+                  <span class="org-code">
+                    {{ entry.occurredAtUtc | date: 'medium' }}
+                    @if (entry.actorDisplayName) { · {{ entry.actorDisplayName }} }
+                  </span>
+                  @if (entry.reason) { <p class="org-section-note">{{ entry.reason }}</p> }
+                  @if (entry.notes) { <p class="org-section-note">{{ entry.notes }}</p> }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+    }
+
+  }
+
+</div>
+</div>
+</main>

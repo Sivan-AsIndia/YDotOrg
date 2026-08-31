@@ -1,0 +1,949 @@
+/* =========================================================
+   Payment verification page
+   Read-only Dark Meadow *task surface* (per 4.3): warm-paper data rows,
+   calm-blue information, antique-gold focus/progress. Aligned to the CAM/DON
+   screens' palette for cross-screen consistency. Not a dashboard.
+   ========================================================= */
+:host {
+  --pvp-paper: #ffffff;
+  --pvp-card: #ffffff;
+  --pvp-ink: #1e2a24;
+  --pvp-ink-2: #4a564e;
+  --pvp-muted: #7b8880;
+  --pvp-border: #e4e0d3;
+  --pvp-border-2: #d8d3c4;
+
+  --pvp-meadow: var(--pe-primary, #223c30);
+  --pvp-meadow-700: var(--pe-primary-text-emphasis, #26412e);
+  --pvp-meadow-soft: var(--pe-primary-bg-subtle, #e7efe7);
+
+  --pvp-gold: #b4842a;
+  --pvp-gold-soft: #f6ecd4;
+  --pvp-blue: #58717c;
+  --pvp-blue-soft: #e6eff3;
+  --pvp-plum: #6b4a72;
+  --pvp-good: #2f7d4f;
+  --pvp-good-soft: #e5efe7;
+  --pvp-error: #c0392b;
+  --pvp-error-soft: #f9e6e2;
+  --pvp-warn: #b5822f;
+  --pvp-warn-soft: #f7ecd6;
+
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--pvp-paper);
+  color: var(--pvp-ink);
+}
+* {
+  box-sizing: border-box;
+}
+.pvp-page {
+  padding: 24px 17px 48px;
+}
+
+/* Visible deep-olive / antique-gold focus ring; no trap (4.3.5 Keyboard). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--pvp-gold);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* ---------- Buttons ---------- */
+.pvp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pvp-btn-primary {
+  background: var(--pvp-meadow);
+  color: #fff;
+}
+.pvp-btn-primary:hover {
+  background: var(--pvp-meadow-700);
+}
+.pvp-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pvp-btn-outline {
+  background: #fff;
+  color: var(--pvp-meadow);
+  border-color: var(--pvp-meadow);
+}
+.pvp-btn-outline:hover {
+  background: var(--pvp-meadow-soft);
+}
+.pvp-btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #fff;
+}
+.pvp-ic {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.pvp-ic-sm {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.pvp-ic-xs {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+/* ---------- Task header (4.3.1) ---------- */
+.pvp-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+.pvp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pvp-title {
+  font-family: ui-serif, 'Cambria', 'Times New Roman', 'Times', serif;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  margin: 0;
+  color: #000;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: 'lnum' 1;
+}
+.pvp-subtitle {
+  font-size: 14px;
+  color: var(--pvp-ink-2);
+  margin: 8px 0 0;
+  max-width: 640px;
+}
+.pvp-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--pvp-muted);
+  margin-top: 8px;
+}
+.pvp-meta-item strong {
+  color: var(--pvp-ink-2);
+  font-weight: 700;
+}
+.pvp-meta-dot {
+  color: var(--pvp-border-2);
+}
+.pvp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ---------- Status badge (colour never carries meaning alone: text + icon) ---------- */
+.pvp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pvp-inline-badge {
+  padding: 2px 10px;
+}
+.pvp-badge-confirmed {
+  background: var(--pvp-good-soft);
+  color: var(--pvp-good);
+}
+.pvp-badge-pending {
+  background: var(--pvp-warn-soft);
+  color: var(--pvp-warn);
+}
+.pvp-badge-failed {
+  background: var(--pvp-error-soft);
+  color: var(--pvp-error);
+}
+.pvp-badge-muted {
+  background: #eef1ec;
+  color: var(--pvp-muted);
+}
+
+/* ---------- Context and filters (4.3.1) ---------- */
+.pvp-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--pvp-border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.pvp-context-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
+}
+.pvp-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--pvp-meadow-soft);
+  color: var(--pvp-meadow);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pvp-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.pvp-search .pvp-ic-sm {
+  position: absolute;
+  left: 11px;
+  color: var(--pvp-muted);
+  pointer-events: none;
+}
+.pvp-search-input {
+  min-width: 240px;
+  padding: 9px 14px 9px 34px;
+  border: 1px solid var(--pvp-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pvp-ink);
+  background: #fff;
+}
+.pvp-search-input:focus {
+  outline: none;
+  border-color: var(--pvp-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.pvp-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 280px;
+  background: #fff;
+  border: 1px solid var(--pvp-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+.pvp-search-result {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--pvp-ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pvp-search-result:hover {
+  background: var(--pvp-meadow-soft);
+}
+.pvp-search-result-state {
+  color: var(--pvp-muted);
+  font-size: 12px;
+}
+.pvp-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pvp-saved-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pvp-ink-2);
+}
+.pvp-select-wrap {
+  position: relative;
+}
+.pvp-select {
+  padding: 9px 32px 9px 14px;
+  border: 1px solid var(--pvp-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pvp-ink);
+  background: #fff;
+  appearance: none;
+  cursor: pointer;
+}
+.pvp-select:focus {
+  outline: none;
+  border-color: var(--pvp-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.pvp-chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--pvp-muted);
+  pointer-events: none;
+}
+.pvp-totals {
+  font-size: 13px;
+  color: var(--pvp-muted);
+}
+
+.pvp-active-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.pvp-active-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pvp-ink-2);
+}
+.pvp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--pvp-meadow-soft);
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pvp-meadow);
+  cursor: pointer;
+}
+.pvp-chip:hover {
+  background: #dbe8db;
+}
+.pvp-clear-all {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pvp-blue);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.pvp-clear-all:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Cards ---------- */
+.pvp-card {
+  background: var(--pvp-card);
+  border: 1px solid var(--pvp-border);
+  border-radius: 18px;
+  padding: 20px 22px;
+}
+.pvp-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pvp-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--pvp-ink-2);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ---------- Two-region layout (4.3.5 Desktop) ---------- */
+.pvp-layout {
+  display: grid;
+ 
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+.pvp-work {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.pvp-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.pvp-side .pvp-facts dt {
+  min-width: 120px;
+}
+
+/* ---------- Read-only facts ---------- */
+.pvp-facts {
+  margin: 0;
+}
+.pvp-facts .pvp-fact {
+  display: flex;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pvp-border);
+}
+.pvp-facts .pvp-fact:last-child {
+  border-bottom: none;
+}
+.pvp-facts dt {
+  font-weight: 600;
+  color: var(--pvp-ink-2);
+  min-width: 200px;
+  font-size: 13px;
+}
+.pvp-facts dd {
+  margin: 0;
+  color: var(--pvp-ink);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pvp-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pvp-qualifier {
+  font-size: 12px;
+  color: var(--pvp-muted);
+  margin: 0 0 12px;
+}
+.pvp-muted {
+  color: var(--pvp-muted);
+}
+.pvp-copy {
+  background: none;
+  border: 1px solid var(--pvp-border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pvp-blue);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.pvp-copy:hover {
+  background: var(--pvp-blue-soft);
+}
+
+/* ---------- Refresh status action control (4.3.2) ---------- */
+.pvp-refresh-control {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pvp-border);
+}
+.pvp-refresh-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pvp-ink-2);
+  margin-bottom: 10px;
+}
+.pvp-refresh-badge {
+  display: block;
+  width: fit-content;
+}
+.pvp-radio-group {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.pvp-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--pvp-ink);
+  cursor: pointer;
+}
+.pvp-refresh-select {
+  margin-top: 12px;
+  display: inline-block;
+}
+
+/* ---------- Fields (Email or mobile verification) ---------- */
+.pvp-field {
+  display: block;
+  margin-bottom: 14px;
+}
+.pvp-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pvp-ink-2);
+  margin-bottom: 6px;
+}
+.pvp-input {
+  width: 100%;
+  max-width: 360px;
+  padding: 10px 12px;
+  border: 1px solid var(--pvp-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pvp-ink);
+}
+.pvp-input:focus {
+  outline: none;
+  border-color: var(--pvp-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.pvp-field-error {
+  display: block;
+  color: var(--pvp-error);
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.pvp-verified-note {
+  font-size: 13px;
+  color: var(--pvp-good);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+/* ---------- Retrieve receipt row ---------- */
+.pvp-retrieve-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pvp-border);
+  flex-wrap: wrap;
+}
+.pvp-hint {
+  font-size: 12px;
+  color: var(--pvp-muted);
+}
+
+/* ---------- Decision / review ---------- */
+.pvp-warn-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pvp-warn);
+  background: var(--pvp-warn-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+}
+.pvp-warn-note .pvp-ic-sm {
+  margin-top: 1px;
+  flex: none;
+}
+.pvp-decision {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.pvp-decision-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.pvp-decision-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pvp-muted);
+}
+.pvp-decision-value {
+  font-size: 13px;
+  color: var(--pvp-ink);
+}
+.pvp-decision-arrow {
+  width: 22px;
+  height: 22px;
+  color: var(--pvp-muted);
+}
+.pvp-decision-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pvp-border);
+}
+.pvp-evidence {
+  font-size: 12px;
+  color: var(--pvp-muted);
+}
+
+/* ---------- Read-only lists ---------- */
+.pvp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pvp-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--pvp-border);
+}
+.pvp-list-row:last-child {
+  border-bottom: none;
+}
+.pvp-list-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.pvp-list-primary {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--pvp-ink);
+}
+.pvp-list-secondary {
+  font-size: 13px;
+  color: var(--pvp-ink-2);
+}
+.pvp-list-meta {
+  font-size: 12px;
+  color: var(--pvp-muted);
+  margin-left: auto;
+}
+.pvp-list-stack .pvp-list-meta {
+  margin-left: 0;
+}
+.pvp-confidential {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pvp-plum);
+  background: #f2ecf3;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
+
+/* ---------- Related & history (secondary panel) ---------- */
+.pvp-subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.pvp-subtab {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pvp-muted);
+  cursor: pointer;
+}
+.pvp-subtab:hover {
+  color: var(--pvp-ink);
+  background: #e5efe7;
+}
+.pvp-subtab-active {
+  color: var(--pvp-meadow);
+  background: var(--pvp-meadow-soft);
+}
+
+/* ---------- Persistent outcome ---------- */
+.pvp-outcome-card {
+  border-left: 3px solid var(--pvp-meadow);
+}
+
+/* ---------- UI states (4.3.4) ---------- */
+.pvp-state-panel {
+  background: #fff;
+  border: 1px solid var(--pvp-border);
+  border-radius: 16px;
+  padding: 40px 24px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.pvp-state-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.pvp-state-note {
+  font-size: 13px;
+  color: var(--pvp-ink-2);
+  margin: 0 0 16px;
+  max-width: 560px;
+  margin-inline: auto;
+}
+.pvp-state-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.pvp-state-warn {
+  border-color: #e6cf9c;
+  background: var(--pvp-warn-soft);
+}
+.pvp-state-danger {
+  border-color: #e7b8b2;
+  background: var(--pvp-error-soft);
+}
+.pvp-skeleton-head {
+  height: 28px;
+  width: 40%;
+  border-radius: 8px;
+  margin: 0 auto 16px;
+}
+.pvp-skeleton-body {
+  height: 120px;
+  border-radius: 12px;
+}
+.pvp-skeleton-head,
+.pvp-skeleton-body {
+  background: linear-gradient(90deg, #e5efe7 25%, #f7f6f0 37%, #e5efe7 63%);
+  background-size: 400% 100%;
+  animation: pvp-sk 1.4s ease infinite;
+}
+@keyframes pvp-sk {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Success — persistent confirmation (4.3.4 Success). */
+.pvp-success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--pvp-good-soft);
+  border: 1px solid #b6d6bf;
+  color: var(--pvp-good);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.pvp-success-text {
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.pvp-success-sub {
+  display: block;
+  color: var(--pvp-ink-2);
+  margin-top: 2px;
+}
+.pvp-banner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: auto;
+  color: inherit;
+  opacity: 0.7;
+  padding: 2px;
+}
+.pvp-banner-close:hover {
+  opacity: 1;
+}
+
+/* ---------- Modal (4.3.6 High-risk action) ---------- */
+.pvp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(24, 32, 26, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.pvp-modal {
+  background: #fff;
+  border-radius: 18px;
+  padding: 28px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  max-height: 90vh;
+  overflow: auto;
+}
+.pvp-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.pvp-modal-lead {
+  font-size: 13px;
+  color: var(--pvp-ink-2);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+.pvp-modal-facts {
+  margin-bottom: 18px;
+}
+.pvp-modal-field {
+  display: block;
+}
+.pvp-req {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pvp-error);
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+.pvp-textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--pvp-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pvp-ink);
+}
+.pvp-textarea:focus {
+  outline: none;
+  border-color: var(--pvp-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.pvp-field-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.pvp-count {
+  font-size: 12px;
+  color: var(--pvp-muted);
+}
+.pvp-count-bad {
+  color: var(--pvp-error);
+  font-weight: 700;
+}
+.pvp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* ---------- Responsive (4.3.5) ---------- */
+/* Tablet: secondary panel drops below; scope, record identity, state and primary action stay visible. */
+@media (max-width: 1080px) {
+  .pvp-layout {
+    grid-template-columns: 1fr;
+  }
+}
+/* Mobile: one-column cards; pin the primary action; preserve Donation reference, Requested amount,
+   Backend payment state, Last verified time; 44px targets. */
+@media (max-width: 680px) {
+  .pvp-page {
+    padding: 18px 14px 96px;
+  }
+  .pvp-task-header {
+    flex-direction: column;
+  }
+  .pvp-title {
+    font-size: 27px;
+  }
+  .pvp-context {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pvp-context-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pvp-search-input {
+    min-width: 0;
+    width: 100%;
+  }
+  .pvp-search-results {
+    width: 100%;
+  }
+  .pvp-saved {
+    justify-content: space-between;
+  }
+  .pvp-select {
+    width: 100%;
+  }
+  .pvp-facts .pvp-fact {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .pvp-facts dt {
+    min-width: 0;
+  }
+  .pvp-decision {
+    gap: 14px;
+  }
+  .pvp-input {
+    max-width: 100%;
+  }
+  /* Pin only the permitted primary action. */
+  .pvp-header-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--pvp-border);
+    backdrop-filter: blur(6px);
+  }
+  .pvp-header-actions .pvp-btn {
+    width: 100%;
+  }
+}

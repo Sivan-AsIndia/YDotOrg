@@ -1,0 +1,2 @@
+/*! For license information please see chaikin.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/Chaikin/ChaikinIndicator.js";export default Highcharts;

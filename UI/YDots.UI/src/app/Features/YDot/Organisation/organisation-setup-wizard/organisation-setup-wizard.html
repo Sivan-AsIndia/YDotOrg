@@ -1,0 +1,466 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+
+  <div class="org-header">
+    <div>
+      <h1 class="org-title">
+        <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+        Create an organisation
+      </h1>
+      <p class="org-subtitle">
+        This creates the organisation, reserves its web address, and invites its first
+        administrator.
+      </p>
+    </div>
+    <div class="org-header-actions">
+      <a routerLink="/app/administration/organisation/directory"
+         class="org-btn org-btn-ghost org-btn-sm">
+        <i class="ri-arrow-left-line"></i> Back to organisations
+      </a>
+    </div>
+  </div>
+
+  @if (step() !== 'done') {
+    <div class="org-stepper">
+      <div class="org-step" [class.is-active]="stepNumber() >= 1">
+        <span class="org-step-index">1</span> Organisation
+      </div>
+      <div class="org-step" [class.is-active]="stepNumber() >= 2">
+        <span class="org-step-index">2</span> Contact
+      </div>
+      <div class="org-step" [class.is-active]="stepNumber() >= 3">
+        <span class="org-step-index">3</span> Administrator
+      </div>
+      <div class="org-step" [class.is-active]="stepNumber() >= 4">
+        <span class="org-step-index">4</span> Review
+      </div>
+    </div>
+  }
+
+  @if (errorMessage()) {
+    <div class="org-alert is-error">
+      <i class="ri-error-warning-line"></i>
+      <span>{{ errorMessage() }}</span>
+    </div>
+  }
+
+  <!-- ===================================================================== Step 1 -->
+  @if (step() === 'organisation') {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--blue">About the organisation</h3>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="org-name">Name <span class="org-required">*</span></label>
+          <input id="org-name" type="text" class="org-input" maxlength="200"
+                 [ngModel]="form().name"
+                 (ngModelChange)="update('name', $event)"
+                 (blur)="suggestSubdomain()"
+                 placeholder="Hope Foundation">
+          @if (fieldErrors()['name']) {
+            <span class="org-field-error">{{ fieldErrors()['name'] }}</span>
+          }
+        </div>
+
+        <div class="org-field">
+          <label class="org-field-label" for="org-legal">Registered legal name</label>
+          <input id="org-legal" type="text" class="org-input" maxlength="200"
+                 [ngModel]="form().legalName"
+                 (ngModelChange)="update('legalName', $event)"
+                 placeholder="Hope Foundation Trust">
+        </div>
+      </div>
+
+      <div class="org-field">
+        <label class="org-field-label" for="org-subdomain">
+          Web address <span class="org-required">*</span>
+        </label>
+
+        <div class="org-input-group">
+          <input id="org-subdomain" type="text" class="org-input" maxlength="63"
+                 [ngModel]="form().subdomain"
+                 (ngModelChange)="onSubdomainInput($event)"
+                 placeholder="hope-foundation"
+                 autocapitalize="off" autocorrect="off" spellcheck="false">
+          <span class="org-input-suffix">
+            {{ subdomainCheck()?.hostName || (rootDomain() ? '.' + rootDomain() : '') }}
+          </span>
+        </div>
+
+        <!--
+          Permanent, and the way this organisation is identified on every future sign-in — so it
+          is checked live rather than at submit.
+        -->
+        @if (checkingSubdomain()) {
+          <span class="org-field-hint"><i class="ri-loader-4-line"></i> Checking…</span>
+        } @else if (subdomainCheck(); as check) {
+          <span class="org-field-hint" [class.is-good]="check.isAvailable"
+                [class.is-error]="!check.isAvailable">
+            <i [class]="check.isAvailable ? 'ri-checkbox-circle-line' : 'ri-close-circle-line'"></i>
+            {{ check.message }}
+          </span>
+
+          @if (!check.isAvailable && (check.suggestions?.length ?? 0) > 0) {
+            <div class="org-suggestions">
+              <span class="org-field-hint">Try:</span>
+              @for (suggestion of check.suggestions ?? []; track suggestion) {
+                <button type="button" class="org-chip" (click)="useSuggestion(suggestion)">
+                  {{ suggestion }}
+                </button>
+              }
+            </div>
+          }
+        } @else {
+          <span class="org-field-hint">
+            This becomes the organisation's own sign-in address and cannot be changed later.
+          </span>
+        }
+
+        @if (fieldErrors()['subdomain']) {
+          <span class="org-field-error">{{ fieldErrors()['subdomain'] }}</span>
+        }
+      </div>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="org-type">Type</label>
+          <select id="org-type" class="org-select"
+                  [ngModel]="form().organisationType"
+                  (ngModelChange)="update('organisationType', $event)">
+            <option value="">Not specified</option>
+            @for (type of organisationTypes; track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="org-field">
+          <label class="org-field-label" for="org-code">Reference code</label>
+          <input id="org-code" type="text" class="org-input" maxlength="20"
+                 [ngModel]="form().code"
+                 (ngModelChange)="update('code', $event)"
+                 placeholder="Generated if left blank">
+          <span class="org-field-hint">Leave blank and the platform will allocate one.</span>
+        </div>
+      </div>
+
+      <div class="org-step-actions">
+        <button type="button" class="org-btn org-btn-primary"
+                [disabled]="!organisationStepValid()" (click)="next()">
+          Continue <i class="ri-arrow-right-line"></i>
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- ===================================================================== Step 2 -->
+  @if (step() === 'address') {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--blue">Contact and defaults</h3>
+      <p class="org-section-note">
+        All optional. The administrator completes the full profile once they activate their
+        account, and the organisation cannot be approved until they have.
+      </p>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="org-phone">Contact telephone</label>
+          <div class="org-input-group">
+            <select class="org-select org-select-narrow"
+                    [ngModel]="form().contactPhoneCountryCode"
+                    (ngModelChange)="update('contactPhoneCountryCode', $event)">
+              @for (code of countryCodes(); track code) {
+                <option [value]="code">{{ code }}</option>
+              }
+            </select>
+            <input id="org-phone" type="tel" class="org-input"
+                   [ngModel]="form().contactPhone"
+                   (ngModelChange)="update('contactPhone', $event)">
+          </div>
+        </div>
+
+        <div class="org-field">
+          <label class="org-field-label" for="org-max-users">Maximum people</label>
+          <input id="org-max-users" type="number" class="org-input" min="1"
+                 [ngModel]="form().maximumUsers"
+                 (ngModelChange)="update('maximumUsers', $event ? +$event : null)"
+                 placeholder="No limit">
+        </div>
+      </div>
+
+      <div class="org-grid org-grid-3">
+        <div class="org-field">
+          <label class="org-field-label" for="org-tz">Time zone</label>
+          <!-- The full catalogue: this wizard asks for no country, so the zone list needs no
+               country link and loads on its own. -->
+          <select id="org-tz" class="org-select"
+                  [ngModel]="form().timeZone" (ngModelChange)="update('timeZone', $event)">
+            <option value="">Select a time zone</option>
+            @for (zone of geo.timeZones(); track zone.id) {
+              <option [value]="zone.ianaKey">{{ zone.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="org-field">
+          <label class="org-field-label" for="org-currency">Currency</label>
+          <select id="org-currency" class="org-select"
+                  [ngModel]="form().defaultCurrency"
+                  (ngModelChange)="update('defaultCurrency', $event)">
+            <option value="">Select a currency</option>
+            @for (currency of geo.currencies(); track currency.id) {
+              <option [value]="currency.code">{{ currency.code }} — {{ currency.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="org-field">
+          <label class="org-field-label" for="org-culture">Language</label>
+          <!-- The full catalogue, for the same reason the zone list above is unfiltered: this
+               wizard asks for no country. The option VALUE is the culture code, because that is
+               what tenants.default_culture stores and what the create endpoint takes. -->
+          <select id="org-culture" class="org-select"
+                  [ngModel]="form().defaultCulture"
+                  (ngModelChange)="update('defaultCulture', $event)">
+            <option value="">Select a language</option>
+            @for (language of geo.languages(); track language.id) {
+              <option [value]="language.cultureCode">{{ language.displayLabel }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="org-field">
+        <label class="org-field-label">Two-step verification</label>
+        @for (option of mfaOptions; track option.value) {
+          <label class="org-radio-row">
+            <input type="radio" name="mfa" [value]="option.value"
+                   [checked]="form().defaultMfaRequirement === option.value"
+                   (change)="update('defaultMfaRequirement', option.value)">
+            <span>
+              <span class="org-radio-label">{{ option.label }}</span>
+              <small class="org-field-hint">{{ option.hint }}</small>
+            </span>
+          </label>
+        }
+      </div>
+
+      <div class="org-step-actions">
+        <button type="button" class="org-btn org-btn-ghost" (click)="back()">
+          <i class="ri-arrow-left-line"></i> Back
+        </button>
+        <button type="button" class="org-btn org-btn-primary" (click)="next()">
+          Continue <i class="ri-arrow-right-line"></i>
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- ===================================================================== Step 3 -->
+  @if (step() === 'administrator') {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--blue">First administrator</h3>
+      <p class="org-section-note">
+        They receive an invitation link, choose their own password, and then complete the
+        organisation's profile. No password is ever created here or sent by e-mail.
+      </p>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="admin-first">
+            First name <span class="org-required">*</span>
+          </label>
+          <input id="admin-first" type="text" class="org-input" maxlength="100"
+                 [ngModel]="form().adminFirstName"
+                 (ngModelChange)="update('adminFirstName', $event)">
+        </div>
+
+        <div class="org-field">
+          <label class="org-field-label" for="admin-last">
+            Last name <span class="org-required">*</span>
+          </label>
+          <input id="admin-last" type="text" class="org-input" maxlength="100"
+                 [ngModel]="form().adminLastName"
+                 (ngModelChange)="update('adminLastName', $event)">
+        </div>
+      </div>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="admin-email">
+            E-mail address <span class="org-required">*</span>
+          </label>
+          <input id="admin-email" type="email" class="org-input" maxlength="256"
+                 [ngModel]="form().adminEmail"
+                 (ngModelChange)="update('adminEmail', $event)"
+                 autocapitalize="off" autocorrect="off" spellcheck="false">
+          <!--
+            The same address may administer several organisations. That is a normal arrangement,
+            not a clash: accounts belong to one organisation each, so this creates a new one.
+          -->
+          <span class="org-field-hint">
+            This address may already administer another organisation — that is allowed.
+          </span>
+          @if (fieldErrors()['adminEmail']) {
+            <span class="org-field-error">{{ fieldErrors()['adminEmail'] }}</span>
+          }
+        </div>
+
+        <div class="org-field">
+          <label class="org-field-label" for="admin-username">Username</label>
+          <input id="admin-username" type="text" class="org-input" maxlength="100"
+                 [ngModel]="form().adminUsername"
+                 (ngModelChange)="update('adminUsername', $event)"
+                 placeholder="Derived from the e-mail if left blank"
+                 autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="org-field">
+        <label class="org-field-label" for="admin-message">Message in the invitation</label>
+        <textarea id="admin-message" class="org-input" rows="3" maxlength="500"
+                  [ngModel]="form().invitationMessage"
+                  (ngModelChange)="update('invitationMessage', $event)"
+                  placeholder="Optional. Added to the invitation e-mail."></textarea>
+      </div>
+
+      <label class="org-check-row">
+        <input type="checkbox" [checked]="form().sendInvitation"
+               (change)="update('sendInvitation', !form().sendInvitation)">
+        <span>
+          <span class="org-radio-label">Send the invitation now</span>
+          <small class="org-field-hint">
+            Leave this off for a staged set-up: the organisation and the administrator are
+            created, and the invitation goes out later.
+          </small>
+        </span>
+      </label>
+
+      <div class="org-step-actions">
+        <button type="button" class="org-btn org-btn-ghost" (click)="back()">
+          <i class="ri-arrow-left-line"></i> Back
+        </button>
+        <button type="button" class="org-btn org-btn-primary"
+                [disabled]="!administratorStepValid()" (click)="next()">
+          Review <i class="ri-arrow-right-line"></i>
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- ===================================================================== Step 4 -->
+  @if (step() === 'review') {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--good">Check before creating</h3>
+
+      <div class="org-review-grid">
+        <div><span class="detail-label">Organisation</span>
+             <span class="detail-value">{{ form().name }}</span></div>
+        <div><span class="detail-label">Web address</span>
+             <span class="detail-value">{{ subdomainCheck()?.hostName || form().subdomain }}</span></div>
+        <div><span class="detail-label">Type</span>
+             <span class="detail-value">{{ form().organisationType || 'Not specified' }}</span></div>
+        <div><span class="detail-label">Administrator</span>
+             <span class="detail-value">
+               {{ form().adminFirstName }} {{ form().adminLastName }}
+             </span></div>
+        <div><span class="detail-label">E-mail</span>
+             <span class="detail-value">{{ form().adminEmail }}</span></div>
+        <div><span class="detail-label">Two-step verification</span>
+             <span class="detail-value">
+               {{ form().defaultMfaRequirement === 'required' ? 'Required' : 'Optional' }}
+             </span></div>
+        <div><span class="detail-label">Invitation</span>
+             <span class="detail-value">
+               {{ form().sendInvitation ? 'Sent immediately' : 'Held for later' }}
+             </span></div>
+      </div>
+
+      <div class="org-alert is-info">
+        <i class="ri-information-line"></i>
+        <span>
+          Creating this sets up the organisation, its web address, its roles and its navigation,
+          and creates the administrator account — all together.
+        </span>
+      </div>
+
+      <div class="org-step-actions">
+        <button type="button" class="org-btn org-btn-ghost" (click)="back()">
+          <i class="ri-arrow-left-line"></i> Back
+        </button>
+        <button type="button" class="org-btn org-btn-primary"
+                [disabled]="!canCreate()" (click)="create()">
+          @if (submitting()) {
+            <i class="ri-loader-4-line"></i> Creating…
+          } @else {
+            <i class="ri-check-line"></i> Create organisation
+          }
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- ===================================================================== Done -->
+  @if (step() === 'done' && created(); as result) {
+    <section class="org-doc-section">
+      <div class="org-success-panel">
+        <div class="org-success-icon"><i class="ri-checkbox-circle-fill"></i></div>
+        <h3 class="org-empty-title">{{ result.name }} is set up</h3>
+
+        <div class="org-review-grid">
+          <div><span class="detail-label">Reference</span>
+               <span class="detail-value">{{ result.code }}</span></div>
+          <div><span class="detail-label">Web address</span>
+               <span class="detail-value">{{ result.hostName }}</span></div>
+          <div><span class="detail-label">Administrator</span>
+               <span class="detail-value">{{ result.adminEmail }}</span></div>
+          <div><span class="detail-label">Status</span>
+               <span class="detail-value">{{ result.status }}</span></div>
+        </div>
+
+        @if (result.invitationSent) {
+          <div class="org-alert is-good">
+            <i class="ri-mail-check-line"></i>
+            <span>
+              An invitation has been e-mailed to {{ result.adminEmail }}. It expires on
+              {{ result.invitationExpiresAtUtc | date: 'medium' }}.
+            </span>
+          </div>
+        } @else {
+          <div class="org-alert is-warn">
+            <i class="ri-mail-close-line"></i>
+            <span>
+              The organisation was created, but no invitation was sent. Send one from the
+              organisation list when you are ready.
+            </span>
+          </div>
+        }
+
+        <!--
+          Shown only when the server supplies it, which it does when e-mail delivery is switched
+          off in this environment. It is the same single-use link the e-mail would have carried.
+        -->
+        @if (result.activationUrl) {
+          <div class="org-alert is-info">
+            <i class="ri-link"></i>
+            <span>
+              E-mail is disabled in this environment. Pass this link to the administrator:
+              <code class="org-code-block">{{ result.activationUrl }}</code>
+            </span>
+          </div>
+        }
+
+        <div class="org-step-actions">
+          <button type="button" class="org-btn org-btn-ghost" (click)="createAnother()">
+            <i class="ri-add-line"></i> Create another
+          </button>
+          <button type="button" class="org-btn org-btn-primary" (click)="viewCreated()">
+            <i class="ri-eye-line"></i> Open the organisation
+          </button>
+        </div>
+      </div>
+    </section>
+  }
+
+</div>
+</div>
+</main>

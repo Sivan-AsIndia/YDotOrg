@@ -1,0 +1,2 @@
+/*! For license information please see high-contrast-dark.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import HighContrastDarkTheme from"../../Extensions/Themes/HighContrastDark.js";H.theme=HighContrastDarkTheme.options,HighContrastDarkTheme.apply();export default H;

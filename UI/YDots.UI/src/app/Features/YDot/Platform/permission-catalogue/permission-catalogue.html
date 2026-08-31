@@ -1,0 +1,157 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid py-6">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-6">
+      <div>
+        <h4 class="mb-1"><i class="ri-key-2-line me-2"></i>Permission catalogue</h4>
+        <p class="text-muted mb-0">
+          Every permission the product defines, and what each one allows.
+        </p>
+      </div>
+
+      @if (!loading() && !loadFailed()) {
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="expandAll()">
+            <i class="ri-arrow-down-s-line me-1"></i> Expand all
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="collapseAll()">
+            <i class="ri-arrow-up-s-line me-1"></i> Collapse all
+          </button>
+        </div>
+      }
+    </div>
+
+    <!--
+      Read-only, and deliberately so. A permission code is the name of a check written into the
+      API; adding a row here would produce a permission nothing enforces, which is worse than not
+      having it — it would be granted in good faith and grant nothing.
+    -->
+    <div class="alert alert-light border d-flex align-items-start gap-2 mb-6">
+      <i class="ri-information-line mt-1"></i>
+      <span class="small">
+        This list is fixed by the product. Permissions appear here when the code that enforces
+        them ships. To decide who holds what, use the role catalogue — this screen is for
+        answering what a permission actually allows.
+      </span>
+    </div>
+
+    @if (loading()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-loader-4-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3 mb-0">Loading…</p>
+        </div>
+      </div>
+    } @else if (loadFailed()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-cloud-off-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      </div>
+    } @else {
+
+      <div class="card border-0 shadow-sm mb-6">
+        <div class="card-body">
+          <label class="form-label small" for="perm-search">Find a permission</label>
+          <input id="perm-search" type="search" class="form-control"
+                 placeholder="Code, name or description — for example iam.users.view"
+                 [ngModel]="search()" (ngModelChange)="search.set($event)">
+          <div class="form-text">
+            @if (search().trim()) {
+              {{ matchCount() }} of {{ totalPermissions() }} permissions match.
+            } @else {
+              {{ totalPermissions() }} permissions across {{ modules().length }} modules.
+            }
+          </div>
+        </div>
+      </div>
+
+      @if (filteredModules().length === 0) {
+        <div class="card border-0 shadow-sm">
+          <div class="card-body text-center py-8">
+            <i class="ri-search-line fs-2 text-muted"></i>
+            <h6 class="mt-3">Nothing matches that</h6>
+            <p class="text-muted mb-0">Try a shorter search, or part of a code.</p>
+          </div>
+        </div>
+      }
+
+      @for (module of filteredModules(); track module.moduleCode) {
+        <div class="card border-0 shadow-sm mb-4">
+          <button type="button"
+                  class="card-header d-flex justify-content-between align-items-center w-100 border-0 bg-transparent text-start"
+                  (click)="toggleModule(module.moduleCode)">
+            <span>
+              <span class="fw-semibold">{{ module.moduleName || module.moduleCode }}</span>
+              <small class="text-muted ms-2">
+                {{ module.totalCount ?? 0 }} permission{{ (module.totalCount ?? 0) === 1 ? '' : 's' }}
+              </small>
+            </span>
+            <i [class]="isExpanded(module.moduleCode)
+                          ? 'ri-arrow-up-s-line'
+                          : 'ri-arrow-down-s-line'"></i>
+          </button>
+
+          @if (isExpanded(module.moduleCode)) {
+            <div class="card-body pt-0">
+              @for (group of module.groups ?? []; track group.groupCode) {
+                <h6 class="text-muted small text-uppercase mt-4 mb-3">
+                  {{ group.groupName || group.groupCode }}
+                </h6>
+
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <tbody>
+                      @for (permission of group.permissions ?? []; track permission.id) {
+                        <tr>
+                          <td style="width: 34%;">
+                            <button type="button"
+                                    class="btn btn-link btn-sm p-0 text-start font-monospace"
+                                    title="Copy this code"
+                                    (click)="copyCode(permission.code)">
+                              {{ permission.code }}
+                            </button>
+                          </td>
+                          <td>
+                            <span class="d-block">{{ permission.name }}</span>
+                            @if (permission.description) {
+                              <small class="text-muted">{{ permission.description }}</small>
+                            }
+                          </td>
+                          <td style="width: 12%;">
+                            <span class="badge" [ngClass]="actionClass(permission.action)">
+                              {{ permission.action }}
+                            </span>
+                          </td>
+                          <td style="width: 14%;">
+                            @if (permission.isSensitive) {
+                              <!--
+                                Sensitive permissions are the ones worth pausing over: they read
+                                or change something a person would mind about. Marking them here
+                                is what lets somebody granting a role see it before they grant it.
+                              -->
+                              <span class="badge bg-warning-subtle text-warning">
+                                <i class="ri-alert-line me-1"></i>Sensitive
+                              </span>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+
+  </div>
+</div>
+</main>

@@ -1,0 +1,533 @@
+<!--
+  IAM-AUTH-02 — Accept invitation and activate account.
+
+  Four steps, one on screen at a time, with the progress rail always visible so nobody wonders
+  how much is left. Step 3 is genuinely optional unless the organisation says otherwise.
+-->
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-8 px-4 auth-bg">
+  <div class="activation-card bg-white rounded-4 shadow border w-100">
+
+    <!-- ===================================================================================
+         Header and progress rail
+         =================================================================================== -->
+    <div class="px-6 pt-8 pb-4 text-center">
+      <a routerLink="/auth/sign-in" class="d-inline-flex align-items-center gap-2 mb-6 text-decoration-none">
+        <img alt="YDot" src="assets/images/Outline ydot logo 2.svg" style="width: 44px;">
+        <span class="h5 mb-0 fw-semibold text-body">YDot</span>
+      </a>
+
+      @if (invitation()?.isValid) {
+        <div class="stepper d-flex align-items-center justify-content-center mb-2">
+          @for (label of ['Your details', 'Password', 'Two-step', 'Done']; track label; let i = $index) {
+            <div class="step-node" [class.active]="stepNumber() === i + 1" [class.done]="stepNumber() > i + 1">
+              <div class="step-dot">
+                @if (stepNumber() > i + 1) { <i class="ri-check-line"></i> } @else { {{ i + 1 }} }
+              </div>
+              <span class="step-label d-none d-sm-block">{{ label }}</span>
+            </div>
+
+            @if (i < 3) {
+              <div class="step-line" [class.done]="stepNumber() > i + 1"></div>
+            }
+          }
+        </div>
+      }
+    </div>
+
+    <div class="px-6 pb-8">
+
+      <!-- ===================================================================================
+           Loading
+           =================================================================================== -->
+      @if (loading()) {
+        <div class="text-center py-6">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-3 text-muted mb-0">Checking your invitation…</p>
+        </div>
+      }
+
+      <!-- ===================================================================================
+           Invalid or expired invitation
+           =================================================================================== -->
+      @else if (!invitation()?.isValid) {
+        <div class="text-center py-4">
+          <div class="mb-3"><i class="ri-mail-close-line text-warning" style="font-size: 3rem;"></i></div>
+          <h5 class="mb-2">This invitation cannot be used</h5>
+          <p class="text-muted mb-4">{{ errorMessage() || invitation()?.message }}</p>
+
+          @if (infoMessage()) {
+            <div class="alert alert-success d-flex align-items-start gap-2 text-start" role="alert">
+              <i class="ri-mail-check-line mt-1"></i><span>{{ infoMessage() }}</span>
+            </div>
+          }
+
+          <div class="d-flex flex-column gap-2">
+            @if (token() && !infoMessage()) {
+              <button type="button" class="btn btn-primary" [disabled]="submitting()" (click)="requestNewInvitation()">
+                {{ submitting() ? 'Sending…' : 'Send me a new invitation' }}
+              </button>
+            }
+            <button type="button" class="btn btn-link" (click)="goToSignIn()">Return to sign in</button>
+          </div>
+        </div>
+      }
+
+      <!-- ===================================================================================
+           STEP 1 — Your details (read-only) + Cancel and edit
+           =================================================================================== -->
+      @else if (step() === 'details') {
+        <div class="mb-5">
+          <h5 class="mb-2">Welcome, {{ invitation()?.displayName }}</h5>
+          <p class="text-muted mb-0">{{ invitation()?.message }}</p>
+        </div>
+
+        <!-- These fields are deliberately not editable. They are the access an administrator
+             approved; letting the invited person change their own role would defeat the approval. -->
+        <div class="detail-panel rounded-3 border p-4 mb-4">
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <div class="detail-label">Full name</div>
+              <div class="detail-value">{{ invitation()?.displayName }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">Username</div>
+              <div class="detail-value">{{ invitation()?.username }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">E-mail address</div>
+              <!-- Masked: anyone holding this link reaches this page. -->
+              <div class="detail-value">{{ invitation()?.email }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">Account type</div>
+              <div class="detail-value">{{ invitation()?.accountCategory }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">Organisation unit</div>
+              <div class="detail-value">{{ invitation()?.organisationUnit }}</div>
+            </div>
+            @if (invitation()?.department) {
+              <div class="col-sm-6">
+                <div class="detail-label">Department</div>
+                <div class="detail-value">{{ invitation()?.department }}</div>
+              </div>
+            }
+            @if (invitation()?.designation) {
+              <div class="col-sm-6">
+                <div class="detail-label">Designation</div>
+                <div class="detail-value">{{ invitation()?.designation }}</div>
+              </div>
+            }
+            <div class="col-12">
+              <div class="detail-label">Role</div>
+              <div class="detail-value">{{ invitation()?.invitedRoleSummary }}</div>
+            </div>
+            <div class="col-12">
+              <div class="detail-label">Organisation</div>
+              <div class="detail-value">{{ invitation()?.tenantName || invitation()?.businessUnitName }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">Access starts</div>
+              <div class="detail-value">{{ invitation()?.accessStartsAtUtc | date: 'medium' }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="detail-label">Access ends</div>
+              <div class="detail-value">{{ invitation()?.accessEndsAtUtc ? (invitation()?.accessEndsAtUtc | date: 'medium') : 'No end date' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-light border small d-flex align-items-start gap-2 mb-4">
+          <i class="ri-time-line mt-1"></i>
+          <span>This invitation expires on <strong>{{ invitation()?.expiresAtUtc | date: 'medium' }}</strong>.</span>
+        </div>
+
+        <button type="button" class="btn btn-primary w-100 mb-2" (click)="goToPassword()">
+          These details are correct — continue
+        </button>
+
+        <!-- The route back when something on the record is wrong. -->
+        <button type="button" class="btn btn-outline-secondary w-100" (click)="openCancelDialog()">
+          <i class="ri-edit-line me-1"></i> Cancel and edit — something is wrong here
+        </button>
+      }
+
+      <!-- ===================================================================================
+           STEP 2 — Password
+           =================================================================================== -->
+      @else if (step() === 'password') {
+        <div class="mb-5">
+          <h5 class="mb-2">Create your password</h5>
+          <p class="text-muted mb-0">This is what you will use to sign in from now on.</p>
+        </div>
+
+        @if (errorMessage()) {
+          <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+          </div>
+        }
+
+        <div class="mb-3">
+          <label class="form-label" for="newPassword">Password</label>
+          <div class="position-relative">
+            <input
+              id="newPassword"
+              [type]="showPassword() ? 'text' : 'password'"
+              class="form-control pe-10"
+              autocomplete="new-password"
+              [value]="password"
+              (input)="onPasswordInput($any($event.target).value)">
+            <button type="button" class="btn btn-link position-absolute end-0 top-0 text-muted" (click)="togglePassword()">
+              <i [class]="showPassword() ? 'ri-eye-line' : 'ri-eye-off-line'"></i>
+            </button>
+          </div>
+        </div>
+
+        @if (passwordValue()) {
+          <div class="mb-3">
+            <div class="d-flex justify-content-between small mb-1">
+              <span class="text-muted">Strength</span>
+              <span class="fw-semibold">{{ strengthLabel() }}</span>
+            </div>
+            <div class="progress" style="height: 6px;">
+              <div class="progress-bar" [class]="strengthClass()" [style.width.%]="strengthPercent()"></div>
+            </div>
+          </div>
+        }
+
+        <ul class="rule-list list-unstyled small mb-4">
+          <li [class.met]="hasLength()"><i [class]="hasLength() ? 'ri-check-line' : 'ri-close-line'"></i> At least {{ minimumLength() }} characters</li>
+          <li [class.met]="hasUpper()"><i [class]="hasUpper() ? 'ri-check-line' : 'ri-close-line'"></i> An upper-case letter</li>
+          <li [class.met]="hasLower()"><i [class]="hasLower() ? 'ri-check-line' : 'ri-close-line'"></i> A lower-case letter</li>
+          <li [class.met]="hasNumber()"><i [class]="hasNumber() ? 'ri-check-line' : 'ri-close-line'"></i> A digit</li>
+          <li [class.met]="hasSymbol()"><i [class]="hasSymbol() ? 'ri-check-line' : 'ri-close-line'"></i> A symbol, such as ! &#64; # or ?</li>
+        </ul>
+
+        <div class="mb-4">
+          <label class="form-label" for="confirmPassword">Confirm password</label>
+          <div class="position-relative">
+            <input
+              id="confirmPassword"
+              [type]="showConfirm() ? 'text' : 'password'"
+              class="form-control pe-10"
+              autocomplete="new-password"
+              [value]="confirmPassword"
+              (input)="onConfirmInput($any($event.target).value)">
+            <button type="button" class="btn btn-link position-absolute end-0 top-0 text-muted" (click)="toggleConfirm()">
+              <i [class]="showConfirm() ? 'ri-eye-line' : 'ri-eye-off-line'"></i>
+            </button>
+          </div>
+
+          @if (confirmValue() && !passwordsMatch()) {
+            <div class="text-danger small mt-1"><i class="ri-error-warning-line"></i> The two passwords do not match.</div>
+          }
+        </div>
+
+        <div class="form-check mb-4">
+          <input class="form-check-input" type="checkbox" id="terms" [checked]="termsAccepted()"
+                 (change)="toggleTerms($any($event.target).checked)">
+          <label class="form-check-label small" for="terms">
+            I accept the terms of use and the privacy notice.
+          </label>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary flex-shrink-0" (click)="backToDetails()">
+            <i class="ri-arrow-left-line"></i>
+          </button>
+          <button type="button" class="btn btn-primary flex-grow-1" [disabled]="!canLeavePasswordStep()" (click)="goToSecurity()">
+            Continue
+          </button>
+        </div>
+      }
+
+      <!-- ===================================================================================
+           STEP 3 — Two-step verification (optional)
+           =================================================================================== -->
+      @else if (step() === 'security') {
+        <div class="mb-4">
+          <h5 class="mb-2">Two-step verification</h5>
+          <p class="text-muted mb-0">
+            A second factor means a stolen password on its own is not enough to reach your account.
+            @if (!mfaMandatory()) { You can skip this and add one later from <strong>My Security</strong>. }
+          </p>
+        </div>
+
+        @if (errorMessage()) {
+          <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+          </div>
+        }
+
+        <!-- The optional/mandatory switch. Locked on when the organisation requires it. -->
+        <div class="mfa-toggle rounded-3 border p-3 mb-4 d-flex align-items-center justify-content-between gap-3">
+          <div>
+            <div class="fw-semibold">Add a second factor</div>
+            <small class="text-muted">
+              {{ mfaMandatory() ? 'Required for this account.' : 'Recommended, but optional.' }}
+            </small>
+          </div>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="enrolMfa"
+                   [checked]="enrolMfa()" [disabled]="mfaMandatory()"
+                   (change)="toggleEnrolMfa($any($event.target).checked)">
+          </div>
+        </div>
+
+        @if (enrolMfa()) {
+
+          <!-- Method picker -->
+          <div class="mb-4">
+            <label class="form-label">How would you like to receive your codes?</label>
+
+            @for (method of allowedMethods(); track method) {
+              <button type="button"
+                      class="method-option w-100 text-start rounded-3 border p-3 mb-2 d-flex align-items-start gap-3"
+                      [class.selected]="selectedMethod() === method"
+                      (click)="chooseMethod(method)">
+                <span class="method-icon flex-shrink-0">
+                  <i [class]="method === 'authenticatorApp' ? 'ri-smartphone-line'
+                            : method === 'email' ? 'ri-mail-line' : 'ri-message-3-line'"></i>
+                </span>
+                <span class="flex-grow-1">
+                  <span class="d-block fw-semibold">{{ methodLabel(method) }}</span>
+                  <small class="text-muted">{{ methodHint(method) }}</small>
+                </span>
+                @if (selectedMethod() === method) {
+                  <i class="ri-checkbox-circle-fill text-primary flex-shrink-0"></i>
+                }
+              </button>
+            }
+          </div>
+
+          <!-- Mobile number, when SMS is chosen -->
+          @if (needsMobileNumber() && !setup()) {
+            <div class="mb-4">
+              <label class="form-label" for="mobileNumber">Mobile number</label>
+              <div class="input-group">
+                <select class="form-select flex-grow-0" style="width: 6.5rem;" [(ngModel)]="mobileCountryCode" name="mobileCountryCode">
+                  @for (code of countryCodes(); track code) { <option [value]="code">{{ code }}</option> }
+                </select>
+                <input id="mobileNumber" type="tel" class="form-control" placeholder="98765 43210"
+                       [(ngModel)]="mobileNumber" name="mobileNumber">
+              </div>
+            </div>
+          }
+
+          <!-- Start setup -->
+          @if (!setup()) {
+            <button type="button" class="btn btn-primary w-100 mb-3" [disabled]="settingUp()" (click)="startSetup()">
+              {{ settingUp() ? 'Setting up…' : 'Set this up' }}
+            </button>
+          }
+
+          <!-- ===== Authenticator app setup panel ===== -->
+          @if (setup(); as s) {
+            @if (s.methodType === 'authenticatorApp') {
+              <div class="setup-panel rounded-3 border p-4 mb-3">
+                <div class="fw-semibold mb-1">1. Scan this with your authenticator app</div>
+                <p class="small text-muted mb-3">
+                  Google Authenticator, Microsoft Authenticator, Authy — any of them will do.
+                  Scanning copies a secret key into your phone; nothing is sent over the network
+                  after that, which is why the codes keep working even with no signal.
+                </p>
+
+                <div class="qr-holder mx-auto mb-3">
+                  @if (qrDataUrl()) {
+                    <img [src]="qrDataUrl()" alt="Authenticator setup QR code" class="img-fluid rounded">
+                  } @else if (qrFailed()) {
+                    <div class="text-center text-muted small py-4">
+                      <i class="ri-qr-code-line d-block mb-2" style="font-size: 2rem;"></i>
+                      The QR code could not be drawn. Use the key below instead.
+                    </div>
+                  } @else {
+                    <div class="text-center py-4">
+                      <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    </div>
+                  }
+                </div>
+
+                <!-- The manual key: the same secret, for a phone that cannot scan. -->
+                <div class="text-center mb-3">
+                  <button type="button" class="btn btn-link btn-sm p-0" (click)="toggleSecret()">
+                    {{ secretVisible() ? 'Hide the setup key' : "Can't scan? Enter the key by hand" }}
+                  </button>
+
+                  @if (secretVisible()) {
+                    <div class="secret-box rounded-3 border mt-2 p-3">
+                      <code class="d-block mb-2">{{ s.sharedSecret }}</code>
+                      <div class="small text-muted mb-2">{{ s.maskedDestination }}</div>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="copySecret()">
+                        <i class="ri-file-copy-line me-1"></i>{{ secretCopied() ? 'Copied' : 'Copy key' }}
+                      </button>
+                    </div>
+                  }
+                </div>
+
+                <div class="fw-semibold mb-1">2. Enter the code your app is showing</div>
+                <p class="small text-muted mb-2">
+                  It changes every 30 seconds. Type whichever one is on screen now.
+                </p>
+              </div>
+            } @else {
+              <!-- E-mail or SMS: a code was sent, so just say so. -->
+              <div class="setup-panel rounded-3 border p-4 mb-3">
+                <div class="d-flex align-items-start gap-2">
+                  <i class="ri-mail-send-line mt-1 text-primary"></i>
+                  <div>
+                    <div class="fw-semibold mb-1">Check for your code</div>
+                    <p class="small text-muted mb-0">{{ s.message }}</p>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Verification, shared by both kinds of method -->
+            @if (!methodVerified()) {
+              <div class="mb-3">
+                <label class="form-label" for="verificationCode">Verification code</label>
+                <input
+                  id="verificationCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="8"
+                  class="form-control form-control-lg text-center code-input"
+                  placeholder="000000"
+                  [value]="verificationCode()"
+                  (input)="verificationCode.set($any($event.target).value)">
+              </div>
+
+              <div class="d-flex gap-2 mb-3">
+                <button type="button" class="btn btn-outline-secondary" (click)="startSetup()" [disabled]="settingUp()">
+                  <i class="ri-refresh-line"></i>
+                </button>
+                <button type="button" class="btn btn-primary flex-grow-1" [disabled]="!canVerifyMethod()" (click)="verifyMethod()">
+                  {{ submitting() ? 'Checking…' : 'Verify this code' }}
+                </button>
+              </div>
+            } @else {
+              <div class="alert alert-success d-flex align-items-center gap-2 mb-3">
+                <i class="ri-checkbox-circle-fill"></i>
+                <span>Your second factor is confirmed and ready.</span>
+              </div>
+            }
+          }
+        } @else {
+          <div class="alert alert-light border small d-flex align-items-start gap-2 mb-4">
+            <i class="ri-information-line mt-1"></i>
+            <span>
+              You are activating without a second factor. Your account will show
+              <strong>Not enrolled</strong> in the user directory until you add one.
+            </span>
+          </div>
+        }
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary flex-shrink-0" (click)="backToPassword()">
+            <i class="ri-arrow-left-line"></i>
+          </button>
+          <button type="button" class="btn btn-primary flex-grow-1" [disabled]="!canActivate()" (click)="activateAccount()">
+            {{ submitting() ? 'Activating…' : 'Activate account' }}
+          </button>
+        </div>
+
+        @if (enrolMfa() && !methodVerified()) {
+          <p class="small text-muted text-center mt-2 mb-0">
+            Confirm your second factor above before activating.
+          </p>
+        }
+      }
+
+      <!-- ===================================================================================
+           STEP 4 — Done, and the one and only sight of the recovery codes
+           =================================================================================== -->
+      @else {
+        <div class="text-center mb-4">
+          <div class="mb-3"><i class="ri-checkbox-circle-line text-success" style="font-size: 3.25rem;"></i></div>
+          <h5 class="mb-2">Your account is active</h5>
+          <p class="text-muted mb-0">
+            Reference <strong>{{ userCode() }}</strong> &middot;
+            Two-step verification is <strong>{{ mfaEnrolledResult() ? 'enrolled' : 'not enrolled' }}</strong>.
+          </p>
+        </div>
+
+        @if (recoveryCodes().length > 0) {
+          <!-- These exist in readable form only in this response. The server keeps hashes, so
+               nobody — not even an administrator — can show them again. -->
+          <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+            <i class="ri-alarm-warning-line mt-1"></i>
+            <span>{{ recoveryNotice() }}</span>
+          </div>
+
+          <div class="recovery-grid rounded-3 border p-3 mb-3">
+            @for (code of recoveryCodes(); track code) {
+              <code class="recovery-code">{{ code }}</code>
+            }
+          </div>
+
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="copyRecoveryCodes()">
+              <i class="ri-file-copy-line me-1"></i> Copy
+            </button>
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="downloadRecoveryCodes()">
+              <i class="ri-download-2-line me-1"></i> Download
+            </button>
+          </div>
+
+          <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" id="ackCodes"
+                   [checked]="recoveryAcknowledged()"
+                   (change)="acknowledgeRecoveryCodes($any($event.target).checked)">
+            <label class="form-check-label small" for="ackCodes">
+              I have saved these codes somewhere safe. I understand they will not be shown again.
+            </label>
+          </div>
+
+          <button type="button" class="btn btn-primary w-100" [disabled]="!recoveryAcknowledged()" (click)="goToDashboard()">
+            Go to my dashboard
+          </button>
+        } @else {
+          <div class="alert alert-light border small mb-4">
+            <i class="ri-information-line me-1"></i>{{ recoveryNotice() }}
+          </div>
+
+          <button type="button" class="btn btn-primary w-100" (click)="goToDashboard()">
+            Go to my dashboard
+          </button>
+        }
+      }
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================================
+     "Cancel and edit" dialog
+     ===================================================================================== -->
+@if (showCancelDialog()) {
+  <div class="modal-backdrop-custom d-flex align-items-center justify-content-center px-4">
+    <div class="bg-white rounded-4 shadow p-5 cancel-dialog w-100">
+      <h6 class="mb-2">What needs to change?</h6>
+      <p class="text-muted small mb-3">
+        Tell your administrator what is wrong. Your invitation link stays valid, so you can come
+        back to this page and finish once the record has been corrected.
+      </p>
+
+      <textarea
+        class="form-control mb-3"
+        rows="4"
+        placeholder="For example: my role should be Finance Officer, not Volunteer."
+        [(ngModel)]="cancelReason"
+        name="cancelReason"></textarea>
+
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeCancelDialog()">
+          Keep going
+        </button>
+        <button type="button" class="btn btn-primary flex-grow-1" [disabled]="!canCancelActivation() || submitting()" (click)="confirmCancel()">
+          {{ submitting() ? 'Sending…' : 'Send and exit' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

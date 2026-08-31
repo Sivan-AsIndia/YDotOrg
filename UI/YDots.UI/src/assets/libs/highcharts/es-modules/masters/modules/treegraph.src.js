@@ -1,0 +1,2 @@
+/*! For license information please see treegraph.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Treegraph/TreegraphSeries.js";export default Highcharts;

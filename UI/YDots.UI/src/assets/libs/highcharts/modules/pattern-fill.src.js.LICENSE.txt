@@ -1,0 +1,12 @@
+/**
+ * @license Highcharts JS v12.3.0 (2025-06-21)
+ * @module highcharts/modules/pattern-fill
+ * @requires highcharts
+ *
+ * Module for adding patterns and images as point fills.
+ *
+ * (c) 2010-2025 Highsoft AS
+ * Author: Torstein Hønsi, Øystein Moseng
+ *
+ * License: www.highcharts.com/license
+ */

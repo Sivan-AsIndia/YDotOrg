@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";const{getArgumentValue:getArgumentValue}=FormulaProcessor;function ISNA(r,e){const o=getArgumentValue(r[0],e);return"number"!=typeof o||isNaN(o)}FormulaProcessor.registerProcessorFunction("ISNA",ISNA);export default ISNA;

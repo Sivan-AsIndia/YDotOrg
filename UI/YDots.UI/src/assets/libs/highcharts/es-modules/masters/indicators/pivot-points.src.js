@@ -1,0 +1,2 @@
+/*! For license information please see pivot-points.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/PivotPoints/PivotPointsIndicator.js";export default Highcharts;

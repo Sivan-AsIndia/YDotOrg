@@ -1,0 +1,1 @@
+import ColumnSeries from"../Column/ColumnSeries.js";import U from"../../Core/Utilities.js";const{isNumber:isNumber}=U;class WindbarbPoint extends ColumnSeries.prototype.pointClass{isValid(){return isNumber(this.value)&&this.value>=0}}export default WindbarbPoint;

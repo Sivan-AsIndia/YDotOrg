@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";const{getArgumentValue:getArgumentValue}=FormulaProcessor;function AND(r,e){for(let o,t=0,u=r.length;t<u;++t)if(o=getArgumentValue(r[t],e),!o||"object"==typeof o&&!AND(o,e))return!1;return!0}FormulaProcessor.registerProcessorFunction("AND",AND);export default AND;

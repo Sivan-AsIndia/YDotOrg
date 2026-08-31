@@ -1,0 +1,1 @@
+"use strict";import U from"../../Core/Utilities.js";const{defined:defined}=U;function setFixedRange(e){const i=this.xAxis[0];defined(i.dataMax)&&defined(i.dataMin)&&e?this.fixedRange=Math.min(e,i.dataMax-i.dataMin):this.fixedRange=e}const StockUtilities={setFixedRange:setFixedRange};export default StockUtilities;

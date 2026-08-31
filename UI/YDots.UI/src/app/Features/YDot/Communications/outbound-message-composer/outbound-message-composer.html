@@ -1,0 +1,647 @@
+<main class="app-wrapper">
+<div class="omc" role="main">
+
+  <!-- Live region for status announcements (screen reader) -->
+  <div class="sr-only" role="status" aria-live="polite">{{ liveAnnouncement }}</div>
+
+  <!-- ============================= Breadcrumb ============================= -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <span>Communications</span>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-current">Outbound message composer</span>
+  </nav>
+
+  <!-- ============================= Loading state ============================= -->
+  <ng-container *ngIf="viewState === 'loading'">
+    <div class="task-header skeleton-block" aria-hidden="true">
+      <div class="skeleton-line w-40 h-24"></div>
+      <div class="skeleton-line w-24 h-36"></div>
+    </div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <p class="sr-only" role="status">Loading Outbound message composer.</p>
+  </ng-container>
+
+  <ng-container *ngIf="viewState === 'idle'">
+
+    <!-- ============================= Scope banner ============================= -->
+    <section class="scope-banner" aria-label="Access simulator">
+      <div class="scope-row">
+        <div class="scope-item">
+          <span class="scope-label">Effective role</span>
+          <span class="scope-value-pill">{{ effectiveRole }}</span>
+        </div>
+        <div class="scope-item scope-item--grow">
+          <span class="scope-label">Effective data scope (assigned units only)</span>
+          <div class="chip-row">
+            <span
+              *ngFor="let s of effectiveScopes; trackBy: trackByIndex"
+              class="chip"
+              [class.chip--active]="s.inScope"
+              [class.chip--muted]="!s.inScope"
+            >{{ s.label }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= Task header ============================= -->
+    <header class="task-header">
+      <div class="task-header-main">
+        <div class="task-title-row">
+          <h1 class="task-title">Outbound message composer</h1>
+          <span class="badge" [ngClass]="'badge--' + lifecycleState.toLowerCase().replace(' ', '-')">{{ lifecycleState }}</span>
+        </div>
+        <p class="task-meta">
+          <span>Ref&nbsp;<strong>{{ stableReference }}</strong></span>
+          <span class="dot">·</span>
+          <span>Owner&nbsp;<strong>{{ selectedOwner?.name || ownerOfRecord }}</strong></span>
+          <span class="dot">·</span>
+          <span>{{ lastSavedLabel }}</span>
+        </p>
+      </div>
+
+      <div class="task-header-actions">
+        <button type="button" class="btn btn--ghost" (click)="saveDraft()">Save draft</button>
+
+        <div class="btn-with-confirm" *ngIf="!discardConfirming">
+          <button type="button" class="btn btn--ghost" (click)="requestDiscard()">Discard draft</button>
+        </div>
+        <div class="inline-confirm" *ngIf="discardConfirming" role="group" aria-label="Confirm discard draft">
+          <span>Discard this draft?</span>
+          <button type="button" class="btn btn--tiny btn--danger" (click)="confirmDiscard()">Yes, discard</button>
+          <button type="button" class="btn btn--tiny btn--ghost" (click)="cancelDiscard()">Keep editing</button>
+        </div>
+
+        <button type="button" class="btn btn--primary" [disabled]="!primaryActionEligible" (click)="onPreview()">
+          Preview
+        </button>
+      </div>
+    </header>
+
+    <!-- ============================= Error summary ============================= -->
+    <div class="error-summary" *ngIf="errorSummary.length" role="alert" aria-label="Form errors">
+      <p class="error-summary-title">{{ errorSummary.length }} field{{ errorSummary.length > 1 ? 's' : '' }} need attention</p>
+      <ul>
+        <li *ngFor="let e of errorSummary">
+          <a href="javascript:void(0)" (click)="focusFieldFromSummary(e.field)">{{ e.message }}</a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- ============================= Main two-region layout ============================= -->
+    <div class="layout-grid">
+
+      <!-- ------------------------- Main work area ------------------------- -->
+      <div class="work-area">
+
+        <!-- Recipient & destination -->
+        <section class="card" aria-labelledby="grp-recipient">
+          <h2 id="grp-recipient" class="card-title">Recipient &amp; destination</h2>
+
+          <div class="field-row field-row--two">
+            <div class="field">
+              <label class="field-label">Recipient reference</label>
+              <div class="readonly-panel">
+                <div class="readonly-panel-main">
+                  <span class="readonly-value">{{ recipient.name }}</span>
+                  <span class="readonly-sub">{{ recipient.reference }} · {{ recipient.type }}</span>
+                </div>
+                <div class="readonly-panel-actions">
+                  <button type="button" class="icon-btn" title="Copy reference" (click)="copyValue(recipient.reference, 'Recipient reference')">⧉</button>
+                  <button type="button" class="icon-btn" title="Open donor record">↗</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="maskedDestination">Masked destination</label>
+              <input
+                #fieldAnchor
+                data-field="maskedDestination"
+                id="maskedDestination"
+                type="text"
+                class="text-input"
+                [class.input--error]="errors.maskedDestination"
+                [(ngModel)]="maskedDestination"
+                (blur)="markTouched('maskedDestination')"
+                aria-describedby="maskedDestination-help maskedDestination-error"
+                readonly
+              />
+              <p id="maskedDestination-help" class="field-help">Masked automatically for the selected channel. This value cannot be revealed here.</p>
+              <p id="maskedDestination-error" class="field-error" *ngIf="errors.maskedDestination">{{ errors.maskedDestination }}</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Message details -->
+        <section class="card" aria-labelledby="grp-message">
+          <h2 id="grp-message" class="card-title">Message details</h2>
+
+          <div class="field-row field-row--two">
+            <!-- Channel -->
+            <div class="field combobox" [class.combobox--open]="channelMenuOpen">
+              <label class="field-label" for="channelSearch">Channel</label>
+              <div class="combobox-control" [class.input--error]="errors.channel">
+                <input
+                  #fieldAnchor
+                  data-field="channel"
+                  id="channelSearch"
+                  type="text"
+                  class="combobox-input"
+                  role="combobox"
+                  [attr.aria-expanded]="channelMenuOpen"
+                  [placeholder]="selectedChannel ? selectedChannel.label : 'Search channels…'"
+                  [(ngModel)]="channelQuery"
+                  (focus)="toggleChannelMenu(true)"
+                  (blur)="markTouched('channel')"
+                />
+                <span class="combobox-caret">⌄</span>
+              </div>
+              <ul class="combobox-menu" *ngIf="channelMenuOpen" role="listbox">
+                <li
+                  *ngFor="let c of filteredChannels"
+                  role="option"
+                  class="combobox-option"
+                  [class.combobox-option--selected]="c.id === channelId"
+                  (mousedown)="chooseChannel(c)"
+                >
+                  <span class="option-icon">{{ c.icon }}</span>
+                  <span>{{ c.label }}</span>
+                </li>
+                <li class="combobox-empty" *ngIf="!filteredChannels.length">No matching channel</li>
+              </ul>
+              <p class="field-error" *ngIf="errors.channel">{{ errors.channel }}</p>
+            </div>
+
+            <!-- Language -->
+            <div class="field combobox" [class.combobox--open]="languageMenuOpen">
+              <label class="field-label" for="languageSearch">Language</label>
+              <div class="combobox-control" [class.input--error]="errors.language">
+                <input
+                  #fieldAnchor
+                  data-field="language"
+                  id="languageSearch"
+                  type="text"
+                  class="combobox-input"
+                  role="combobox"
+                  [placeholder]="selectedLanguage ? selectedLanguage.label : 'Search languages…'"
+                  [(ngModel)]="languageQuery"
+                  (focus)="toggleLanguageMenu(true)"
+                  (blur)="markTouched('language')"
+                />
+                <span class="combobox-caret">⌄</span>
+              </div>
+              <ul class="combobox-menu" *ngIf="languageMenuOpen" role="listbox">
+                <li
+                  *ngFor="let l of filteredLanguages"
+                  role="option"
+                  class="combobox-option"
+                  [class.combobox-option--selected]="l.id === languageId"
+                  (mousedown)="chooseLanguage(l)"
+                >{{ l.label }}</li>
+                <li class="combobox-empty" *ngIf="!filteredLanguages.length">No matching language</li>
+              </ul>
+              <p class="field-error" *ngIf="errors.language">{{ errors.language }}</p>
+            </div>
+          </div>
+
+          <div class="field-row field-row--two">
+            <!-- Approved template -->
+            <div class="field combobox" [class.combobox--open]="templateMenuOpen">
+              <label class="field-label" for="templateSearch">Approved template</label>
+              <div class="combobox-control" [class.input--error]="errors.template">
+                <input
+                  #fieldAnchor
+                  data-field="template"
+                  id="templateSearch"
+                  type="text"
+                  class="combobox-input"
+                  role="combobox"
+                  [placeholder]="selectedTemplate ? selectedTemplate.name : 'Search approved templates…'"
+                  [(ngModel)]="templateQuery"
+                  (focus)="toggleTemplateMenu(true)"
+                  (blur)="markTouched('template')"
+                />
+                <span class="combobox-caret">⌄</span>
+              </div>
+              <ul class="combobox-menu" *ngIf="templateMenuOpen" role="listbox">
+                <li
+                  *ngFor="let t of filteredTemplates"
+                  role="option"
+                  class="combobox-option combobox-option--stacked"
+                  [class.combobox-option--selected]="t.id === templateId"
+                  (mousedown)="chooseTemplate(t)"
+                >
+                  <span class="option-title">{{ t.name }}</span>
+                  <span class="option-sub">{{ t.version }} · Approved {{ t.approvedOn }}</span>
+                </li>
+                <li class="combobox-empty" *ngIf="!filteredTemplates.length">No approved template for this channel</li>
+              </ul>
+              <p class="field-error" *ngIf="errors.template">{{ errors.template }}</p>
+            </div>
+
+            <!-- Template version (read-only) -->
+            <div class="field">
+              <label class="field-label">Template version</label>
+              <div class="readonly-panel" *ngIf="selectedTemplate; else noTemplate">
+                <div class="readonly-panel-main">
+                  <span class="readonly-value">{{ selectedTemplate.version }}</span>
+                  <span class="readonly-sub">Approved {{ selectedTemplate.approvedOn }}</span>
+                </div>
+                <div class="readonly-panel-actions">
+                  <button type="button" class="icon-btn" title="View template">↗</button>
+                </div>
+              </div>
+              <ng-template #noTemplate>
+                <div class="readonly-panel readonly-panel--empty">
+                  <span class="readonly-sub">Select an approved template to see its version.</span>
+                </div>
+              </ng-template>
+            </div>
+          </div>
+
+          <!-- Purpose -->
+          <div class="field">
+            <label class="field-label" for="purpose">Purpose</label>
+            <textarea
+              #fieldAnchor
+              data-field="purpose"
+              id="purpose"
+              class="textarea"
+              rows="3"
+              [class.input--error]="errors.purpose"
+              [(ngModel)]="purpose"
+              (blur)="markTouched('purpose')"
+              maxlength="2000"
+              aria-describedby="purpose-help purpose-error"
+              placeholder="Describe why this message is being sent…"
+            ></textarea>
+            <div class="field-footer">
+              <p id="purpose-help" class="field-help">10–2,000 characters. Used for controlled-decision review.</p>
+              <span class="char-counter" [class.char-counter--warn]="purposeLength > 0 && purposeLength < 10">{{ purposeLimitLabel }}</span>
+            </div>
+            <p id="purpose-error" class="field-error" *ngIf="errors.purpose">{{ errors.purpose }}</p>
+          </div>
+
+          <!-- Resolved placeholders -->
+          <div class="field" *ngIf="placeholders.length">
+            <label class="field-label" #fieldAnchor data-field="placeholders" tabindex="-1">Resolved placeholders</label>
+            <div class="placeholder-grid">
+              <div class="placeholder-item" *ngFor="let p of placeholders">
+                <label class="placeholder-label" [for]="'ph-' + p.key">{{ p.label }}</label>
+                <input
+                  [id]="'ph-' + p.key"
+                  type="text"
+                  class="text-input text-input--compact"
+                  [(ngModel)]="p.value"
+                  maxlength="2000"
+                />
+              </div>
+            </div>
+            <p class="field-error" *ngIf="errors.placeholders">{{ errors.placeholders }}</p>
+          </div>
+        </section>
+
+        <!-- Consent -->
+        <section class="card" aria-labelledby="grp-consent">
+          <div class="card-title-row">
+            <h2 id="grp-consent" class="card-title">Consent</h2>
+            <button type="button" class="btn btn--secondary btn--small" (click)="onValidateConsent()">Validate consent</button>
+          </div>
+
+          <fieldset class="consent-fieldset" [attr.aria-describedby]="errors.consentState ? 'consent-error' : null">
+            <legend class="sr-only">Consent state</legend>
+            <label
+              class="consent-option"
+              *ngFor="let c of consentOptions"
+              [class.consent-option--disabled]="c.disabled"
+              [class.consent-option--selected]="c.id === consentStateId"
+            >
+              <input
+                #fieldAnchor
+                data-field="consentState"
+                type="radio"
+                name="consentState"
+                [value]="c.id"
+                [checked]="c.id === consentStateId"
+                [disabled]="c.disabled"
+                (change)="chooseConsent(c.id)"
+              />
+              <span class="consent-option-body">
+                <span class="consent-option-label">{{ c.label }}</span>
+                <span class="consent-option-reason" *ngIf="c.reason" [ngClass]="'tone--' + c.tone">{{ c.reason }}</span>
+              </span>
+            </label>
+          </fieldset>
+          <p id="consent-error" class="field-error" *ngIf="errors.consentState">{{ errors.consentState }}</p>
+        </section>
+
+        <!-- Attachments -->
+        <section class="card" aria-labelledby="grp-attachments">
+          <h2 id="grp-attachments" class="card-title">Attachments</h2>
+          <p class="card-subtitle">Approved file types and sizes only. Visible within record scope and purpose.</p>
+
+          <div
+            class="dropzone"
+            [class.dropzone--active]="isDraggingFile"
+            (dragover)="$event.preventDefault(); isDraggingFile = true"
+            (dragleave)="isDraggingFile = false"
+            (drop)="onDropFiles($event)"
+          >
+            <p>Drag files here, or</p>
+            <label class="btn btn--secondary btn--small file-btn">
+              Choose files
+              <input type="file" multiple class="sr-only" (change)="onFileInput($event)" />
+            </label>
+          </div>
+
+          <ul class="attachment-list" *ngIf="attachments.length">
+            <li class="attachment-item" *ngFor="let a of attachments">
+              <div class="attachment-main">
+                <span class="attachment-name">{{ a.name }}</span>
+                <span class="attachment-size">{{ a.sizeLabel }}</span>
+              </div>
+              <div class="attachment-status">
+                <span class="status-pill" [ngClass]="'status-pill--' + a.status">
+                  <ng-container [ngSwitch]="a.status">
+                    <span *ngSwitchCase="'uploading'">Uploading…</span>
+                    <span *ngSwitchCase="'scanning'">Scanning…</span>
+                    <span *ngSwitchCase="'classified'">{{ a.classification }}</span>
+                    <span *ngSwitchCase="'blocked'">Blocked</span>
+                  </ng-container>
+                </span>
+                <button type="button" class="icon-btn" title="Remove attachment" (click)="removeAttachment(a.id)">✕</button>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Scheduling & owner -->
+        <section class="card" aria-labelledby="grp-schedule">
+          <h2 id="grp-schedule" class="card-title">Send time &amp; owner</h2>
+
+          <div class="field">
+            <span class="field-label" id="sendTimeLabel">Send time</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="sendTimeLabel">
+              <button type="button" class="segmented-option" [class.segmented-option--active]="sendMode === 'now'" (click)="setSendMode('now')">Send now</button>
+              <button type="button" class="segmented-option" [class.segmented-option--active]="sendMode === 'schedule'" (click)="setSendMode('schedule')">Schedule</button>
+            </div>
+
+            <div class="schedule-row" *ngIf="sendMode === 'schedule'">
+              <input
+                #fieldAnchor
+                data-field="sendTime"
+                type="date"
+                class="text-input"
+                [class.input--error]="errors.sendTime"
+                [(ngModel)]="scheduleDate"
+                aria-label="Schedule date"
+              />
+              <input
+                type="time"
+                class="text-input"
+                [class.input--error]="errors.sendTime"
+                [(ngModel)]="scheduleTime"
+                aria-label="Schedule time"
+              />
+              <span class="tz-label">{{ operatingTimeZone }}</span>
+            </div>
+            <p class="field-help" *ngIf="sendMode === 'schedule' && scheduledLabel">Will send {{ scheduledLabel }} ({{ operatingTimeZone }}).</p>
+            <p class="field-error" *ngIf="errors.sendTime">{{ errors.sendTime }}</p>
+          </div>
+
+          <div class="field combobox" [class.combobox--open]="ownerMenuOpen">
+            <label class="field-label" for="ownerSearch">Owner</label>
+            <div class="combobox-control" [class.input--error]="errors.owner">
+              <input
+                #fieldAnchor
+                data-field="owner"
+                id="ownerSearch"
+                type="text"
+                class="combobox-input"
+                role="combobox"
+                [placeholder]="selectedOwner ? selectedOwner.name : 'Search eligible owners…'"
+                [(ngModel)]="ownerQuery"
+                (focus)="toggleOwnerMenu(true)"
+                (blur)="markTouched('owner')"
+              />
+              <span class="combobox-caret">⌄</span>
+            </div>
+            <ul class="combobox-menu" *ngIf="ownerMenuOpen" role="listbox">
+              <li
+                *ngFor="let o of filteredOwners"
+                role="option"
+                class="combobox-option combobox-option--stacked"
+                [class.combobox-option--selected]="o.id === ownerId"
+                [class.combobox-option--disabled]="!o.inScope"
+                (mousedown)="chooseOwner(o)"
+              >
+                <span class="avatar-chip">{{ o.initials }}</span>
+                <span class="option-stack">
+                  <span class="option-title">{{ o.name }}</span>
+                  <span class="option-sub">{{ o.role }} · {{ o.scope }}{{ !o.inScope ? ' · Outside effective scope' : '' }}</span>
+                </span>
+              </li>
+            </ul>
+            <p class="field-error" *ngIf="errors.owner">{{ errors.owner }}</p>
+          </div>
+        </section>
+      </div>
+
+      <!-- ------------------------- Persistent context / side panel ------------------------- -->
+      <aside class="side-panel">
+
+        <!-- Related & history -->
+        <section class="card card--compact" aria-label="Related and history">
+          <div class="tabbar" role="tablist">
+            <button type="button" class="tab" role="tab" [class.tab--active]="activeHistoryTab === 'activity'" (click)="setHistoryTab('activity')">Activity</button>
+            <button type="button" class="tab" role="tab" [class.tab--active]="activeHistoryTab === 'linked'" (click)="setHistoryTab('linked')">Linked</button>
+            <button type="button" class="tab" role="tab" [class.tab--active]="activeHistoryTab === 'documents'" (click)="setHistoryTab('documents')">Documents</button>
+            <button type="button" class="tab" role="tab" [class.tab--active]="activeHistoryTab === 'integration'" (click)="setHistoryTab('integration')">Integration</button>
+          </div>
+
+          <div class="tab-panel" *ngIf="activeHistoryTab === 'activity'">
+            <table class="mini-table">
+              <caption class="sr-only">Activity chronology</caption>
+              <thead>
+                <tr><th scope="col">When</th><th scope="col">Actor</th><th scope="col">Result</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let h of historyLog">
+                  <td>{{ h.time }}</td>
+                  <td>{{ h.actor }}</td>
+                  <td>{{ h.result }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tab-panel" *ngIf="activeHistoryTab === 'linked'">
+            <ul class="mini-list">
+              <li *ngFor="let r of linkedRecords">
+                <span class="mini-list-main">{{ r.reference }}</span>
+                <span class="mini-list-sub">{{ r.type }} · {{ r.status }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tab-panel" *ngIf="activeHistoryTab === 'documents'">
+            <ul class="mini-list">
+              <li *ngFor="let d of documents">
+                <span class="mini-list-main">{{ d.reference }}</span>
+                <span class="mini-list-sub">{{ d.type }} · {{ d.status }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tab-panel" *ngIf="activeHistoryTab === 'integration'">
+            <ul class="mini-list">
+              <li *ngFor="let i of integrationStatus">
+                <span class="mini-list-main">{{ i.name }}</span>
+                <span class="status-pill status-pill--classified">{{ i.status }}</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Persistent outcome (visible once a result exists) -->
+        <section class="card card--outcome" aria-label="Persistent outcome" *ngIf="result">
+          <h2 class="card-title">Outcome</h2>
+          <dl class="outcome-list">
+            <div><dt>Reference</dt><dd>{{ result.reference }}</dd></div>
+            <div><dt>State</dt><dd><span class="badge" [ngClass]="'badge--' + result.state.toLowerCase().replace(' ', '-')">{{ result.state }}</span></dd></div>
+            <div><dt>Effective time</dt><dd>{{ result.effectiveTime }}</dd></div>
+            <div><dt>Downstream status</dt><dd>{{ result.downstream }}</dd></div>
+            <div><dt>Owner</dt><dd>{{ selectedOwner?.name }}</dd></div>
+          </dl>
+          <button type="button" class="btn btn--secondary btn--small btn--full">{{ result.nextAction }}</button>
+        </section>
+      </aside>
+    </div>
+  </ng-container>
+
+  <!-- ============================= Review / decision panel (Preview) ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'reviewing'" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+    <div class="review-panel">
+      <h2 id="reviewTitle" class="review-title">Review before sending</h2>
+
+      <div class="review-warnings" *ngIf="selectedConsent?.tone === 'warning' || hasAttachmentsScanning">
+        <p *ngIf="selectedConsent?.tone === 'warning'">⚠ Consent is pending verification for this recipient.</p>
+        <p *ngIf="hasAttachmentsScanning">⚠ One or more attachments are still being scanned.</p>
+      </div>
+
+      <div class="review-grid">
+        <div class="review-col">
+          <h3>Before</h3>
+          <p class="review-line"><span>State</span><strong>{{ lifecycleState }}</strong></p>
+          <p class="review-line"><span>Channel</span><strong>Not yet sent</strong></p>
+        </div>
+        <div class="review-col">
+          <h3>After</h3>
+          <p class="review-line"><span>State</span><strong>{{ sendMode === 'now' ? 'Sent' : 'Scheduled' }}</strong></p>
+          <p class="review-line"><span>Channel</span><strong>{{ selectedChannel?.label }} · {{ selectedLanguage?.label }}</strong></p>
+        </div>
+      </div>
+
+      <div class="review-facts">
+        <p class="review-line"><span>Recipient</span><strong>{{ recipient.name }} ({{ recipient.reference }})</strong></p>
+        <p class="review-line"><span>Destination</span><strong>{{ maskedDestination }}</strong></p>
+        <p class="review-line"><span>Template</span><strong>{{ selectedTemplate?.name }} · {{ selectedTemplate?.version }}</strong></p>
+        <p class="review-line"><span>Consent</span><strong>{{ selectedConsent?.label }}</strong></p>
+        <p class="review-line"><span>Send time</span><strong>{{ sendMode === 'now' ? 'Immediately on confirmation' : (scheduledLabel || '—') }} ({{ operatingTimeZone }})</strong></p>
+        <p class="review-line"><span>Effective permission</span><strong>Send now within {{ effectiveScopes[0].label }}, {{ effectiveScopes[1].label }}</strong></p>
+      </div>
+
+      <div class="review-evidence">
+        <h3>Evidence</h3>
+        <ul class="mini-list">
+          <li *ngFor="let e of evidence">
+            <span class="mini-list-main">{{ e.label }}</span>
+            <span class="mini-list-sub">{{ e.reference }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="reason">Reason (optional)</label>
+        <textarea id="reason" class="textarea" rows="2" [(ngModel)]="reasonForSend" placeholder="Add context for the review trail…"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="typedConfirm">Confirm Send now. Type SEND to continue.</label>
+        <input id="typedConfirm" type="text" class="text-input" [(ngModel)]="typedConfirmation" autocomplete="off" />
+      </div>
+
+      <div class="review-actions">
+        <button type="button" class="btn btn--ghost" (click)="closeReview()">Cancel</button>
+        <button type="button" class="btn btn--primary" [disabled]="!canConfirmSend" (click)="confirmSend()">
+          {{ sendMode === 'now' ? 'Confirm send now' : 'Confirm schedule' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= Sending (loading) ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'sending'" role="alertdialog" aria-live="assertive" aria-label="Sending message">
+    <div class="review-panel review-panel--narrow center">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Sending your message…</p>
+    </div>
+  </div>
+
+  <!-- ============================= Blocked (no access / restricted consent) ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'blocked'" role="alertdialog" aria-labelledby="blockedTitle">
+    <div class="review-panel review-panel--narrow">
+      <h2 id="blockedTitle" class="review-title">This value cannot be displayed with your current access</h2>
+      <p>Sending is not permitted because the recipient's consent state is restricted for this channel.</p>
+      <div class="review-actions">
+        <button type="button" class="btn btn--primary" (click)="backToComposer()">Return to composer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= Dependency failure ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'dependency-failure'" role="alertdialog" aria-labelledby="depTitle">
+    <div class="review-panel review-panel--narrow">
+      <h2 id="depTitle" class="review-title">We could not complete the dependent service step</h2>
+      <p>{{ dependencyFailureNote }} Your confirmed local result is unchanged.</p>
+      <p class="review-line"><span>Correlation reference</span><strong>{{ stableReference }}</strong></p>
+      <div class="review-actions">
+        <button type="button" class="btn btn--ghost" (click)="backToComposer()">Back to composer</button>
+        <button type="button" class="btn btn--primary" (click)="retryDependency()">Retry dependency</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= Conflict ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'conflict'" role="alertdialog" aria-labelledby="conflictTitle">
+    <div class="review-panel review-panel--narrow">
+      <h2 id="conflictTitle" class="review-title">This record changed after you opened it</h2>
+      <p>Review the latest version before continuing.</p>
+      <div class="review-actions">
+        <button type="button" class="btn btn--ghost" (click)="dismissConflict(false)">Cancel</button>
+        <button type="button" class="btn btn--secondary">Compare</button>
+        <button type="button" class="btn btn--primary" (click)="dismissConflict(true)">Reapply eligible changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= Success (persistent, not a toast) ============================= -->
+  <div class="overlay" *ngIf="submitPhase === 'success'" role="dialog" aria-labelledby="successTitle">
+    <div class="review-panel review-panel--narrow">
+      <div class="success-icon" aria-hidden="true">✓</div>
+      <h2 id="successTitle" class="review-title">Saved successfully</h2>
+      <p class="review-line"><span>Reference</span><strong>{{ result?.reference }}</strong></p>
+      <p class="review-line"><span>State</span><strong>{{ result?.state }}</strong></p>
+      <p class="review-line"><span>Effective</span><strong>{{ result?.effectiveTime }}</strong></p>
+      <p class="review-line"><span>Downstream</span><strong>{{ result?.downstream }}</strong></p>
+      <div class="review-actions">
+        <button type="button" class="btn btn--ghost" (click)="startNewMessage()">Compose another</button>
+        <button type="button" class="btn btn--primary" (click)="backToComposer()">{{ result?.nextAction }}</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>

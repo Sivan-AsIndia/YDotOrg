@@ -1,0 +1,779 @@
+<main class="app-wrapper">
+  
+  <div class="page-wrapper">
+    
+    <div class="container-fluid px-4 py-3">
+      <!-- Toasts (shared across list + form views) -->
+      <div class="toast-stack">
+        @for (t of toasts; track t.id) {
+          <div class="toast-item" [class]="'toast-' + t.type">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path [attr.d]="toastIconPath(t.type)"/>
+            </svg>
+            <div class="toast-body">
+              <div class="toast-title">{{ t.title }}</div>
+              <div class="toast-message">{{ t.message }}</div>
+            </div>
+            <button type="button" class="toast-close" (click)="dismissToast(t.id)" aria-label="Dismiss notification">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+            </button>
+          </div>
+        }
+      </div>
+
+  <!-- ======================= LIST VIEW ======================= -->
+  @if (view === 'list') {
+    <section>
+      <header class="page-header-card">
+        <div class="header-visual" aria-hidden="true">
+          <span class="header-orbit orbit-one"></span>
+          <span class="header-orbit orbit-two"></span>
+          <span class="header-pin pin-one"></span>
+          <span class="header-pin pin-two"></span>
+          <span class="header-pin pin-three"></span>
+        </div>
+
+        <div class="header-left">
+          <div class="eyebrow">
+            <span class="eyebrow-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9s-1.2 6.5-3.5 9c-2.3-2.5-3.5-5.5-3.5-9S9.7 5.5 12 3Z"/>
+              </svg>
+            </span>
+            Currency Master
+          </div>
+          <h1 class="page-title">Currency List</h1>
+          <p class="page-subtitle">Manage currency definitions, formatting and availability.</p>
+        </div>
+
+        <div class="header-actions">
+          <button type="button" class="btn-icon-round" title="Refresh" (click)="onRefresh()" [disabled]="isLoading" aria-label="Refresh currencies">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2"/><path d="M4 5v4h4"/>
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2"/><path d="M20 19v-4h-4"/>
+            </svg>
+          </button>
+          <button type="button" class="btn-create" (click)="openCreate()">
+            <span class="plus">+</span>
+            Create Currency
+          </button>
+        </div>
+      </header>
+
+      <div class="summary-cards" aria-label="Currency summary">
+        <article class="summary-card">
+          <span class="summary-icon summary-icon-primary" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-1.5 3-1.5s3 .5 3 1.5-1 1.5-3 1.5-3 .5-3 1.5 1 1.5 3 1.5 3-.5 3-1.5"/>
+            </svg>
+          </span>
+          <div class="summary-copy">
+            <strong class="summary-value">{{ totalCount }}</strong>
+            <span class="summary-label">Total currencies</span>
+          </div>
+        </article>
+        <article class="summary-card">
+          <span class="summary-icon summary-icon-success" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/>
+            </svg>
+          </span>
+          <div class="summary-copy">
+            <strong class="summary-value">{{ activeCount }}</strong>
+            <span class="summary-label">Active</span>
+          </div>
+        </article>
+        <article class="summary-card">
+          <span class="summary-icon summary-icon-muted" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>
+            </svg>
+          </span>
+          <div class="summary-copy">
+            <strong class="summary-value">{{ inactiveCount }}</strong>
+            <span class="summary-label">Inactive</span>
+          </div>
+        </article>
+      </div>
+
+      <div class="filters-card">
+        <div class="search-wrapper">
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search by code, name or symbol..."
+            [(ngModel)]="searchText"
+            (ngModelChange)="onSearch()"
+            aria-label="Search currencies"
+          />
+        </div>
+        <div class="filter-selects">
+          <label class="filter-field">
+            <span class="filter-label">Type</span>
+            <select class="filter-select" [(ngModel)]="selectedType" (ngModelChange)="onTypeChange()" aria-label="Filter by currency type">
+              <option value="">All types</option>
+              @for (type of uniqueTypes; track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">Status</span>
+            <select class="filter-select" [(ngModel)]="selectedStatus" (ngModelChange)="onStatusChange()" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="data-workspace" [class.has-details]="selectedCurrency">
+        @if (isLoading) {
+          <div class="loading-overlay">
+            <div class="spinner" aria-label="Loading"></div>
+          </div>
+        }
+
+        <section class="table-pane" aria-label="Currency table">
+          <div class="table-pane-header">
+            <div>
+              <span class="table-kicker">Master data</span>
+              <h2>All currencies</h2>
+            </div>
+            <span class="result-count">{{ filteredCurrencies.length }} result{{ filteredCurrencies.length === 1 ? '' : 's' }}</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table1">
+              <thead>
+                <tr>
+                  <th class="hide-md-up col-expand"></th>
+                  <th class="col-code">Code</th>
+                  <th class="col-name">Name</th>
+                  <th class="hide-sm text-center col-symbol">Symbol</th>
+                  <th class="hide-md text-center col-type">Type</th>
+                  <th class="hide-lg text-center col-decimals">Decimals</th>
+                  <th class="text-center col-status">Status</th>
+                  <th class="text-end col-action">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @if (pagedCurrencies.length === 0) {
+                  <tr>
+                    <td colspan="8" class="empty-state">
+                      <div class="empty-content">
+                        <span class="empty-icon" aria-hidden="true">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                          </svg>
+                        </span>
+                        <p>No currencies found</p>
+                        <span>Try changing your search or filters.</span>
+                      </div>
+                    </td>
+                  </tr>
+                } @else {
+                  @for (c of pagedCurrencies; track trackById($index, c)) {
+                    <tr [class.is-selected]="selectedCurrency?.id === c.id">
+                      <td class="hide-md-up text-center">
+                        <button type="button" class="expand-btn" title="Details" (click)="openView(c)" [attr.aria-label]="'View ' + c.currencyName">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14"/><path d="M5 12h14"/>
+                          </svg>
+                        </button>
+                      </td>
+                      <td>
+                        <button type="button" class="code-cell" (click)="openView(c)" [attr.aria-label]="'View ' + c.currencyName + ' details'">
+                          {{ c.currencyCode }}
+                        </button>
+                      </td>
+                      <td>
+                        <div class="name-cell">
+                          <span class="name-primary">{{ c.currencyName }}</span>
+                          <span class="name-secondary">{{ c.currencyType }}</span>
+                        </div>
+                      </td>
+                      <td class="hide-sm text-center">
+                        <span class="symbol-cell">{{ c.symbol || '—' }}</span>
+                      </td>
+                      <td class="hide-md text-center">
+                        <span class="type-badge" [class]="c.currencyType === 'Crypto' ? 'type-crypto' : 'type-fiat'">
+                          {{ c.currencyType }}
+                        </span>
+                      </td>
+                      <td class="hide-lg text-center">
+                        {{ c.decimalPlaces ?? '—' }}
+                      </td>
+                      <td class="text-center">
+                        <span class="status-pill" [class.active]="c.isActive" [class.inactive]="!c.isActive">
+                          <span class="status-dot"></span>
+                          {{ c.isActive ? 'Active' : 'Inactive' }}
+                        </span>
+                      </td>
+                      <td>
+                        <div class="action-buttons">
+                          <button type="button" class="action-btn" title="View" (click)="openView(c)" aria-label="View">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/>
+                            </svg>
+                          </button>
+                          <button type="button" class="action-btn" title="Edit" (click)="openEdit(c)" aria-label="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                            </svg>
+                          </button>
+                          @if (c.isActive) {
+                            <button type="button" class="action-btn" title="Deactivate" (click)="openDeactivate(c)" aria-label="Deactivate">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="6.5" width="18" height="11" rx="5.5"/><circle cx="16.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+                              </svg>
+                            </button>
+                          } @else {
+                            <button type="button" class="action-btn" title="Activate" (click)="openActivate(c)" aria-label="Activate">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="6.5" width="18" height="11" rx="5.5"/><circle cx="7.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+                              </svg>
+                            </button>
+                          }
+                          <button type="button" class="action-btn danger" title="Delete" (click)="openDelete(c)" aria-label="Delete">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-bar">
+            <div class="page-size-control">
+              <span class="entries-label">Rows per page</span>
+              <select class="page-size-select" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()" aria-label="Rows per page">
+                <option [ngValue]="5">5</option>
+                <option [ngValue]="10">10</option>
+                <option [ngValue]="25">25</option>
+                <option [ngValue]="50">50</option>
+              </select>
+              <span class="entries-label">of {{ filteredCurrencies.length }}</span>
+            </div>
+            <nav class="pagination-nav" aria-label="Currency pagination">
+              <button type="button" class="page-btn" [disabled]="currentPage === 1" (click)="previousPage()" aria-label="Previous page">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              @for (p of pageNumbers; track p) {
+                <button type="button" class="page-btn" [class.active]="currentPage === p" (click)="goToPage(p)">{{ p }}</button>
+              }
+              <button type="button" class="page-btn" [disabled]="currentPage === totalPages" (click)="nextPage()" aria-label="Next page">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </nav>
+          </div>
+        </section>
+
+        @if (selectedCurrency) {
+          <aside class="details-pane" aria-label="Currency details">
+            <div class="details-header">
+              <div class="details-title-row">
+                <span class="details-icon" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9s-1.2 6.5-3.5 9c-2.3-2.5-3.5-5.5-3.5-9S9.7 5.5 12 3Z"/>
+                  </svg>
+                </span>
+                <div>
+                  <span class="details-kicker">Currency details</span>
+                  <h2>{{ selectedCurrency.currencyName }}</h2>
+                </div>
+              </div>
+              <button type="button" class="details-close" (click)="closeView()" title="Close details" aria-label="Close details">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+              </button>
+            </div>
+
+            <div class="details-hero">
+              <div>
+                <span class="details-code">{{ selectedCurrency.currencyCode }}</span>
+                <span class="details-type">{{ selectedCurrency.currencyType }}</span>
+              </div>
+              <span class="status-pill" [class.active]="selectedCurrency.isActive" [class.inactive]="!selectedCurrency.isActive">
+                <span class="status-dot"></span>
+                {{ selectedCurrency.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+
+            <div class="details-scroll">
+              <section class="detail-section">
+                <h3 class="section-title">Currency Identity</h3>
+                <div class="detail-grid">
+                  <div class="detail-item"><span class="detail-label">Currency Code</span><span class="detail-value">{{ selectedCurrency.currencyCode }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Currency Name</span><span class="detail-value">{{ selectedCurrency.currencyName }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Numeric Code</span><span class="detail-value">{{ selectedCurrency.numericCode ?? '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Type</span><span class="detail-value">{{ selectedCurrency.currencyType }}</span></div>
+                </div>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="section-title">Symbol &amp; Formatting</h3>
+                <div class="detail-grid">
+                  <div class="detail-item"><span class="detail-label">Symbol</span><span class="detail-value symbol-large">{{ selectedCurrency.symbol || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Symbol Position</span><span class="detail-value">{{ selectedCurrency.symbolPosition }}</span></div>
+                  <div class="detail-item detail-span-2"><span class="detail-label">Display Format</span><span class="detail-value mono">{{ selectedCurrency.displayFormat || '—' }}</span></div>
+                </div>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="section-title">Decimal / Rounding</h3>
+                <div class="detail-grid">
+                  <div class="detail-item"><span class="detail-label">Decimal Places</span><span class="detail-value">{{ selectedCurrency.decimalPlaces ?? '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Minor Unit Name</span><span class="detail-value">{{ selectedCurrency.minorUnitName || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Rounding Mode</span><span class="detail-value">{{ selectedCurrency.roundingMode }}</span></div>
+                  <div class="detail-item"><span class="detail-label">Rounding Step</span><span class="detail-value">{{ selectedCurrency.roundingStep != null ? selectedCurrency.roundingStep.toFixed(2) : '—' }}</span></div>
+                </div>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="section-title">Status &amp; Notes</h3>
+                <div class="detail-grid">
+                  <div class="detail-item"><span class="detail-label">Status</span><span class="detail-value"><span class="status-pill" [class.active]="selectedCurrency.isActive" [class.inactive]="!selectedCurrency.isActive"><span class="status-dot"></span>{{ selectedCurrency.isActive ? 'Active' : 'Inactive' }}</span></span></div>
+                  <div class="detail-item detail-span-2"><span class="detail-label">Notes</span><span class="detail-value">{{ selectedCurrency.notes || '—' }}</span></div>
+                </div>
+              </section>
+            </div>
+
+            <footer class="details-footer">
+              <button type="button" class="btn-outline" (click)="closeView()">Close</button>
+              <button type="button" class="btn-success" (click)="openEdit(selectedCurrency)">Edit Currency</button>
+            </footer>
+          </aside>
+        }
+      </div>
+    </section>
+
+  <!-- ACTIVATE MODAL -->
+  @if (showActivateModal && selectedCurrency) {
+    <div class="modal-backdrop" (click)="closeActivate()">
+      <div class="modal-panel modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-body text-center confirm-body">
+          <div class="confirm-icon success">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="6.5" width="18" height="11" rx="5.5"/>
+              <circle cx="7.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>
+          <h3 class="confirm-title">Activate Currency</h3>
+          <p class="confirm-text">Are you sure you want to activate <strong>{{ selectedCurrency.currencyName }}</strong>?</p>
+          <div class="confirm-actions">
+            <button type="button" class="btn-outline" (click)="closeActivate()">Cancel</button>
+            <button type="button" class="btn-success" (click)="confirmActivate()">Yes, Activate</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- DEACTIVATE MODAL -->
+  @if (showDeactivateModal && selectedCurrency) {
+    <div class="modal-backdrop" (click)="closeDeactivate()">
+      <div class="modal-panel modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-body text-center confirm-body">
+          @if (canDeactivate) {
+            <div class="confirm-icon warning">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6.5" width="18" height="11" rx="5.5"/>
+                <circle cx="16.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+              </svg>
+            </div>
+            <h3 class="confirm-title">Deactivate Currency</h3>
+            <p class="confirm-text">Are you sure you want to deactivate <strong>{{ selectedCurrency.currencyName }}</strong>?</p>
+            <div class="info-box">
+              This currency will not be available for new transactions.
+            </div>
+            <div class="confirm-actions">
+              <button type="button" class="btn-outline" (click)="closeDeactivate()">Cancel</button>
+              <button type="button" class="btn-warning" (click)="confirmDeactivate()">Yes, Deactivate</button>
+            </div>
+          } @else {
+            <div class="confirm-icon danger">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v4"/>
+                <path d="M12 16h.01"/>
+              </svg>
+            </div>
+            <h3 class="confirm-title">Cannot Deactivate</h3>
+            <p class="confirm-text">Cannot deactivate <strong>{{ selectedCurrency.currencyName }}</strong></p>
+            <div class="info-box danger">
+              This currency is in use by companies or exchange rates.
+            </div>
+            <div class="confirm-actions">
+              <button type="button" class="btn-outline" (click)="closeDeactivate()">Close</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- DELETE MODAL -->
+  @if (showDeleteModal && selectedCurrency) {
+    <div class="modal-backdrop" (click)="closeDelete()">
+      <div class="modal-panel modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-body text-center confirm-body">
+          @if (canDelete) {
+            <div class="confirm-icon danger">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4h8v2"/>
+                <path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v5"/>
+                <path d="M14 11v5"/>
+              </svg>
+            </div>
+            <h3 class="confirm-title">Delete Currency</h3>
+            <p class="confirm-text">Are you sure you want to delete <strong>{{ selectedCurrency.currencyName }}</strong>?</p>
+            <div class="info-box danger">
+              This action cannot be undone.
+            </div>
+            <div class="confirm-actions">
+              <button type="button" class="btn-outline" (click)="closeDelete()">Cancel</button>
+              <button type="button" class="btn-danger" (click)="confirmDelete()">Yes, Delete</button>
+            </div>
+          } @else {
+            <div class="confirm-icon danger">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v4"/>
+                <path d="M12 16h.01"/>
+              </svg>
+            </div>
+            <h3 class="confirm-title">Cannot Delete</h3>
+            <p class="confirm-text">Cannot delete <strong>{{ selectedCurrency.currencyName }}</strong></p>
+            <div class="info-box danger">
+              This currency is referenced by other records.
+            </div>
+            <div class="confirm-actions">
+              <button type="button" class="btn-outline" (click)="closeDelete()">Close</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+}
+
+
+<!-- ======================= CREATE / EDIT FORM VIEW ======================= -->
+@if (view === 'form') {
+  <div >
+    <div class="page-header-card">
+      <div class="header-visual" aria-hidden="true">
+        <span class="header-orbit orbit-one"></span>
+        <span class="header-orbit orbit-two"></span>
+        <span class="header-pin pin-one"></span>
+        <span class="header-pin pin-two"></span>
+        <span class="header-pin pin-three"></span>
+      </div>
+      <div class="header-left">
+        <div class="eyebrow">
+          <span class="eyebrow-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9s-1.2 6.5-3.5 9c-2.3-2.5-3.5-5.5-3.5-9S9.7 5.5 12 3Z"/>
+            </svg>
+          </span>
+          Currency Master
+        </div>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <p class="page-subtitle">{{ pageSubTitle }}</p>
+      </div>
+      <button type="button" class="btn-outline" (click)="backToList()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 19-7-7 7-7"/>
+          <path d="M19 12H5"/>
+        </svg>
+        Back
+      </button>
+    </div>
+
+    <form #currencyForm="ngForm" (ngSubmit)="save(currencyForm)" novalidate>
+      <div >
+        <!-- ================= CURRENCY IDENTITY ================= -->
+        <h6 class="section-heading">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9 9h.5a1.5 1.5 0 0 1 0 3H9m0 0h1.5a1.5 1.5 0 0 1 0 3H9m0-6v6"/>
+          </svg>
+          Currency Identity
+        </h6>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Currency Code (ISO) <span class="required">*</span></label>
+            <input
+              type="text"
+              name="currencyCode"
+              class="form-control uppercase"
+              [class.is-invalid]="submitted && (codeField.invalid || duplicateCodeError)"
+              [(ngModel)]="formCurrency.currencyCode"
+              (input)="onCurrencyCodeInput()"
+              #codeField="ngModel"
+              required
+              minlength="3"
+              maxlength="3"
+              pattern="[A-Za-z]{3}"
+              [disabled]="isEdit"
+              placeholder="e.g., INR, USD"
+            />
+            @if (submitted && codeField.invalid) {
+              <span class="validation-message">Enter a valid 3-letter currency code.</span>
+            }
+            @if (duplicateCodeError) {
+              <span class="validation-message">Currency code already exists.</span>
+            }
+            <small class="field-hint">Exactly 3 letters (ISO 4217)</small>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Currency Name <span class="required">*</span></label>
+            <input
+              type="text"
+              name="currencyName"
+              class="form-control"
+              [class.is-invalid]="submitted && nameField.invalid"
+              [(ngModel)]="formCurrency.currencyName"
+              (input)="onCurrencyNameInput()"
+              #nameField="ngModel"
+              required
+              maxlength="100"
+              placeholder="e.g., Indian Rupee, US Dollar"
+            />
+            @if (submitted && nameField.invalid) {
+              <span class="validation-message">Currency name is required.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">ISO Numeric Code</label>
+            <input
+              type="number"
+              name="numericCode"
+              class="form-control"
+              [(ngModel)]="formCurrency.numericCode"
+              min="0"
+              max="999"
+              placeholder="e.g., 356"
+            />
+            <small class="field-hint">0-999</small>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Currency Type <span class="required">*</span></label>
+            <select
+              name="currencyType"
+              class="form-control"
+              [class.is-invalid]="submitted && typeField.invalid"
+              [(ngModel)]="formCurrency.currencyType"
+              #typeField="ngModel"
+              required
+            >
+              <option value="">--Select Currency Type--</option>
+              @for (type of currencyTypes; track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+            @if (submitted && typeField.invalid) {
+              <span class="validation-message">Currency type is required.</span>
+            }
+          </div>
+        </div>
+
+        <!-- ================= SYMBOL & FORMATTING ================= -->
+        <h6 class="section-heading">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+          </svg>
+          Symbol &amp; Formatting
+        </h6>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Currency Symbol</label>
+            <input
+              type="text"
+              name="symbol"
+              class="form-control"
+              [(ngModel)]="formCurrency.symbol"
+              maxlength="10"
+              placeholder="e.g., ₹, $, €"
+            />
+            <small class="field-hint">Used in displays and reports</small>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Symbol Position <span class="required">*</span></label>
+            <select
+              name="symbolPosition"
+              class="form-control"
+              [class.is-invalid]="submitted && posField.invalid"
+              [(ngModel)]="formCurrency.symbolPosition"
+              #posField="ngModel"
+              required
+            >
+              <option value="">--Select Symbol Position--</option>
+              @for (pos of symbolPositions; track pos) {
+                <option [value]="pos">{{ pos }}</option>
+              }
+            </select>
+            @if (submitted && posField.invalid) {
+              <span class="validation-message">Symbol position is required.</span>
+            }
+            <small class="field-hint">Prefix: ₹100 / Suffix: 100₹</small>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Display Format</label>
+            <input
+              type="text"
+              name="displayFormat"
+              class="form-control"
+              [(ngModel)]="formCurrency.displayFormat"
+              maxlength="50"
+              placeholder="e.g., ₹ {amount}"
+            />
+            <small class="field-hint">Custom format for UI/reports</small>
+          </div>
+        </div>
+
+        <!-- ================= DECIMAL / ROUNDING ================= -->
+        <h6 class="section-heading">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/>
+          </svg>
+          Decimal / Rounding Behavior
+        </h6>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Decimal Places <span class="required">*</span></label>
+            <select
+              name="decimalPlaces"
+              class="form-control"
+              [class.is-invalid]="submitted && decField.invalid"
+              [(ngModel)]="formCurrency.decimalPlaces"
+              #decField="ngModel"
+              required
+            >
+              <option [ngValue]="null">--Select Decimal Places--</option>
+              @for (opt of decimalPlacesOptions; track opt.value) {
+                <option [ngValue]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+            @if (submitted && decField.invalid) {
+              <span class="validation-message">Decimal places is required.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Minor Unit Name</label>
+            <input
+              type="text"
+              name="minorUnitName"
+              class="form-control"
+              [(ngModel)]="formCurrency.minorUnitName"
+              maxlength="50"
+              placeholder="e.g., Paise, Cent"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Rounding Mode <span class="required">*</span></label>
+            <select
+              name="roundingMode"
+              class="form-control"
+              [class.is-invalid]="submitted && roundField.invalid"
+              [(ngModel)]="formCurrency.roundingMode"
+              #roundField="ngModel"
+              required
+            >
+              <option value="">--Select Rounding Mode--</option>
+              @for (mode of roundingModes; track mode) {
+                <option [value]="mode">{{ mode }}</option>
+              }
+            </select>
+            @if (submitted && roundField.invalid) {
+              <span class="validation-message">Rounding mode is required.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Rounding Step</label>
+            <select
+              name="roundingStep"
+              class="form-control"
+              [ngModel]="roundingStepString"
+              (ngModelChange)="roundingStepString = $event"
+            >
+              <option value="">--Select Rounding Step--</option>
+              @for (step of roundingSteps; track step) {
+                <option [value]="step">{{ step }}</option>
+              }
+            </select>
+            <small class="field-hint">For cash rounding</small>
+          </div>
+        </div>
+
+        <!-- ================= STATUS & NOTES ================= -->
+        <h6 class="section-heading">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          Status &amp; Notes
+        </h6>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Status</label>
+            <label class="switch">
+              <input type="checkbox" name="isActive" [(ngModel)]="formCurrency.isActive" />
+              <span class="switch-slider"></span>
+              <span class="switch-label">{{ formCurrency.isActive ? 'Active' : 'Inactive' }}</span>
+            </label>
+          </div>
+
+          <div class="form-field form-field-wide">
+            <label class="form-label">Internal Notes</label>
+            <textarea
+              name="notes"
+              class="form-control notes-area"
+              [(ngModel)]="formCurrency.notes"
+              rows="3"
+              placeholder="Additional notes..."
+            ></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn-outline" (click)="backToList()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
+          </svg>
+          Cancel
+        </button>
+        <button type="submit" class="btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+          </svg>
+          {{ isEdit ? 'Update' : 'Save' }}
+        </button>
+      </div>
+    </form>
+  </div>
+}
+  </div>
+  </div>
+</main>

@@ -1,0 +1,411 @@
+<main class="app-wrapper">
+<div class="cd-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER ============ -->
+  <header class="cd-task-header" aria-labelledby="cd-title">
+    <div class="cd-header-text">
+      <p class="cd-eyebrow">Campaign detail</p>
+      <div class="cd-title-row">
+        <h1 class="cd-title" id="cd-title">{{ campaignName() }}</h1>
+        <!-- Status: badge with text + icon; colour never carries meaning alone -->
+        <span class="cd-badge" [class]="statusClass(status())">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          {{ status() }}
+        </span>
+      </div>
+      <!-- Stable reference, Created/Updated freshness, and donations-in-scope total -->
+      <div class="cd-task-meta">
+        <span class="cd-meta-item">Reference: <strong>{{ reference }}</strong></span>
+        <span class="cd-meta-dot" aria-hidden="true">•</span>
+        <span class="cd-meta-item">{{ createdOrUpdatedLabel() }} {{ createdOrUpdatedAt() }}</span>
+        <span class="cd-meta-dot" aria-hidden="true">•</span>
+        <span class="cd-meta-item cd-meta-totals" [class.cd-totals-fetching]="donationsScopeFetching()">{{ scopedTotals() }}</span>
+        <button type="button" class="cd-refresh-btn" (click)="refreshDonationsScope()" [disabled]="donationsScopeFetching()"
+                aria-label="Refresh donations in scope">
+          <svg class="cd-ic-sm" [class.cd-spin]="donationsScopeFetching()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- One primary action, plus Export — appears when role, permission, scope, state and dependencies allow -->
+    <div class="cd-header-actions">
+      @if (exportAllowed()) {
+        <button type="button" class="cd-btn cd-btn-outline" (click)="exportThisCampaign()" aria-label="Export this campaign">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>
+          Export
+        </button>
+      }
+      @if (operateAllowed()) {
+        <button type="button" class="cd-btn cd-btn-primary" (click)="runPrimaryLifecycle()"
+                [attr.aria-label]="primaryActionLabel() + ' — operate according to lifecycle'">
+          <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+          {{ primaryActionLabel() }}
+        </button>
+      }
+      <!-- Edit — opens the Campaign Wizard pre-filled with this record; Draft campaigns only -->
+      @if (canEdit()) {
+        <button type="button" class="cd-btn cd-btn-outline" (click)="openEdit()"
+                aria-label="Edit draft campaign in the wizard">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Edit
+        </button>
+      }
+      <!-- Delete draft — permanent removal of an unused draft; offered next to Submit for Draft campaigns only -->
+      @if (canDeleteDraft()) {
+        <button type="button" class="cd-btn cd-btn-danger" (click)="openDeleteDraft()"
+                aria-label="Delete draft campaign">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M5 7l1 13h12l1-13"/><path d="M9 7V4h6v3"/></svg>
+          Delete draft
+        </button>
+      }
+    </div>
+  </header>
+
+  <!-- ============ NON-READY UI STATES ============ -->
+  @switch (uiState()) {
+    @case ('loading') {
+      <section class="cd-state-panel" aria-live="polite">
+        <div class="cd-skeleton-head"></div>
+        <div class="cd-skeleton-body"></div>
+        <p class="cd-state-note">Loading Campaign detail in scope {{ scope() }}…</p>
+      </section>
+    }
+    @case ('empty') {
+      <section class="cd-state-panel">
+        <h2 class="cd-state-title">Nothing to show in this view</h2>
+        <p class="cd-state-note">No related items match the current scope and filters — this is not a global zero.</p>
+        <button type="button" class="cd-btn cd-btn-outline" (click)="clearFilters()">Reset filters</button>
+      </section>
+    }
+    @case ('validation') {
+      <section class="cd-state-panel cd-state-warn">
+        <h2 class="cd-state-title">Check the highlighted fields</h2>
+        <p class="cd-state-note">Provide the required reason before you operate according to lifecycle.</p>
+        <button type="button" class="cd-btn cd-btn-primary" (click)="openOperate()">Review action</button>
+      </section>
+    }
+    @case ('duplicate') {
+      <section class="cd-state-panel cd-state-warn">
+        <h2 class="cd-state-title">A similar campaign already exists</h2>
+        <p class="cd-state-note">Compare before continuing — no protected details of another record are shown.</p>
+        <div class="cd-state-actions">
+          <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Compare</button>
+          <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Cancel</button>
+        </div>
+      </section>
+    }
+    @case ('no-access') {
+      <section class="cd-state-panel cd-state-danger">
+        <h2 class="cd-state-title">This record is not available with your current access</h2>
+        <p class="cd-state-note">Restricted menu, record, fields, counts and actions are hidden. Return to a permitted page.</p>
+        <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Back to campaigns</button>
+      </section>
+    }
+    @case ('conflict') {
+      <section class="cd-state-panel cd-state-warn">
+        <h2 class="cd-state-title">This record changed after you opened it</h2>
+        <p class="cd-state-note">Review the latest version before continuing. Your proposed values are retained.</p>
+        <div class="cd-state-actions">
+          <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Review latest</button>
+          <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Reapply changes</button>
+          <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Cancel</button>
+        </div>
+      </section>
+    }
+    @case ('dependency-failure') {
+      <section class="cd-state-panel cd-state-warn">
+        <h2 class="cd-state-title">The dependent service step could not complete</h2>
+        <p class="cd-state-note">Your confirmed local result is unchanged. Correlation reference INT-88421.</p>
+        <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Retry dependency</button>
+      </section>
+    }
+  }
+
+  <!-- ============ SUCCESS — persistent confirmation, not a toast alone ============ -->
+  @if (uiState() === 'success') {
+    <section class="cd-success-banner" role="status">
+      <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+      <div class="cd-success-text">
+        <strong>Saved successfully.</strong>
+        Reference {{ reference }}; state {{ status() }}; effective {{ effectiveTime }}.
+        <span class="cd-success-sub">Pending dependency: receipt email queued. Next: notify assigned people.</span>
+      </div>
+      <button type="button" class="cd-banner-close" (click)="dismissBanner()" aria-label="Dismiss confirmation">
+        <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </section>
+  }
+
+  @if (uiState() !== 'loading' && uiState() !== 'no-access') {
+
+  <!-- ============ TWO-REGION TASK LAYOUT ============ -->
+  <div class="cd-layout">
+
+    <!-- ---------- WORK AREA ---------- -->
+    <div class="cd-work">
+
+      <!-- Read-only summary — reference/name/status already shown in the task header above,
+           so this card surfaces every other field captured in the Wizard: Purpose, Owner(s),
+           Fund/programme, Date range, Target & Budget, Currency, Channel, Location, Lifecycle
+           activation, Public description, Terms & notice. -->
+      <section class="cd-card">
+        <div class="cd-card-head"><h2 class="cd-card-title">Campaign summary</h2></div>
+        <p class="cd-purpose">{{ fundProgramme() }}</p>
+        <dl class="cd-facts">
+          <div class="cd-fact"><dt>Owner</dt><dd>{{ ownersLabel() }} · <span class="mono">{{ ownerRef() }}</span> · {{ ownerRole() }}</dd></div>
+          <div class="cd-fact"><dt>Purpose</dt><dd>{{ purpose() }}</dd></div>
+          <div class="cd-fact"><dt>Date range</dt><dd>{{ formatDate(launchDate()) }} — {{ formatDate(endDate()) }}</dd></div>
+          <div class="cd-fact"><dt>Target &amp; Budget</dt><dd class="cd-amount">{{ targetBudgetLabel() }}</dd></div>
+          <div class="cd-fact"><dt>Currency</dt><dd>{{ currencyLabel() }}</dd></div>
+          <div class="cd-fact"><dt>Channel</dt><dd>{{ channelsLabel() }}</dd></div>
+          <div class="cd-fact"><dt>Location</dt><dd>{{ locationLabel() }}</dd></div>
+          <div class="cd-fact"><dt>Lifecycle activation</dt><dd>{{ activationLabel() }}</dd></div>
+          <div class="cd-fact">
+            <dt>Public description</dt>
+            <dd>
+              {{ hasPublicDescription() ? publicDescriptionPreview() : '—' }}
+              @if (hasPublicDescription()) {
+                <button type="button" class="cd-read-more" (click)="openReadMore('description')">Read more</button>
+              }
+            </dd>
+          </div>
+          <div class="cd-fact">
+            <dt>Terms and notice</dt>
+            <dd>
+              {{ hasTermsNotice() ? termsNoticePreview() : '—' }}
+              @if (hasTermsNotice()) {
+                <button type="button" class="cd-read-more" (click)="openReadMore('terms')">Read more</button>
+              }
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- Main work: task-oriented tab groups; no raw database table -->
+      <section class="cd-card cd-work-card">
+        <nav class="cd-tabs" role="tablist" aria-label="Campaign detail sections">
+          @for (t of tabs; track t.key) {
+            <button type="button" class="cd-tab" role="tab"
+                    [class.cd-tab-active]="activeTab() === t.key"
+                    [attr.aria-selected]="activeTab() === t.key"
+                    (click)="selectTab(t.key)">
+              {{ t.label }}
+            </button>
+          }
+        </nav>
+
+        <div class="cd-tabpanel">
+          <!-- Targets: Targets + Target and reconciled progress, as a table -->
+          @if (activeTab() === 'targets') {
+            <div role="tabpanel" aria-label="Targets">
+              <div class="cd-table-scroll">
+                <table class="cd-table">
+                  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                  <tbody>
+                    <tr><td>Target</td><td class="cd-amount">{{ formatAmount(targetsAmount()) }}</td></tr>
+                    <tr><td>Reconciled progress</td><td class="cd-amount">{{ formatAmount(reconciledAmount()) }}</td></tr>
+                    <tr><td>Progress to target</td><td>{{ progressPercent() }}%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="cd-meter" role="img" [attr.aria-label]="progressPercent() + ' percent of target reconciled'">
+                <div class="cd-meter-fill" [style.width.%]="progressPercent()"></div>
+              </div>
+            </div>
+          }
+
+          <!-- Budget: this campaign's approved budget plans, as a table — shows how the total
+               budget is split into allocation types, each portion's share and how it is used -->
+          @if (activeTab() === 'budget') {
+            <div role="tabpanel" aria-label="Budget">
+              @if (budgetPlans().length) {
+                <div class="cd-table-scroll">
+                  <table class="cd-table">
+                    <thead><tr><th>Allocation type</th><th>Budget</th><th>Share</th><th>How it's used</th><th>Target</th><th>Variance</th></tr></thead>
+                    <tbody>
+                      @for (p of budgetPlans(); track p.budgetCategory) {
+                        <tr>
+                          <td>{{ p.budgetCategory }}</td>
+                          <td class="cd-amount">{{ formatAmount(p.budgetAmount) }}</td>
+                          <td>
+                            <span class="cd-share-bar" role="img" [attr.aria-label]="budgetShare(p.budgetAmount) + ' percent of total budget'">
+                              <span class="cd-share-fill" [style.width.%]="budgetShare(p.budgetAmount)"></span>
+                            </span>
+                            <span class="cd-share-pct">{{ budgetShare(p.budgetAmount) }}%</span>
+                          </td>
+                          <td class="cd-usage">{{ p.assumptions || '—' }}</td>
+                          <td class="cd-amount">{{ formatAmount(p.targetAmount) }}</td>
+                          <td>{{ p.variance || '—' }}</td>
+                        </tr>
+                      }
+                      <tr class="cd-table-total"><td>Total</td><td class="cd-amount">{{ formatAmount(budgetAmount()) }}</td><td>100%</td><td colspan="3"></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
+                <p class="cd-state-note">No approved budget plan for this campaign in scope — this is not a global zero.</p>
+              }
+            </div>
+          }
+
+          <!-- Tracking: this campaign's tracking assets, as a table -->
+          @if (activeTab() === 'tracking') {
+            <div role="tabpanel" aria-label="Tracking">
+              <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: trackingAssets(), cols: ['Reference', 'Type · Channel', 'Status'] }"></ng-container>
+            </div>
+          }
+
+          <!-- Payments: this campaign's donations, as a table -->
+          @if (activeTab() === 'payments') {
+            <div role="tabpanel" aria-label="Payments">
+              <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: donations, cols: ['Donation', 'Channel · Method', 'Date'] }"></ng-container>
+            </div>
+          }
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ---------- SECONDARY PANEL: Related and history ----------
+         Only Activity is shown for now; Linked records / Documents / Integration status /
+         Support correlation / Audit chronology are hidden (kept in the.ts for later). -->
+    <aside class="cd-side" aria-label="Related and history">
+      <section class="cd-card cd-side-card">
+        <div class="cd-card-head"><h2 class="cd-card-title">Related &amp; history</h2></div>
+        <div class="cd-side-body">
+          <ul class="cd-activity">
+            @for (a of recentActivity(); track a.title + a.time) {
+              <li class="cd-activity-row">
+                <span class="cd-activity-dot" [class]="'cd-tone-' + a.tone" aria-hidden="true"></span>
+                <span class="cd-activity-body">
+                  <span class="cd-activity-title">{{ a.title }}</span>
+                  <span class="cd-activity-detail">{{ a.detail }}</span>
+                  <span class="cd-activity-time">{{ a.time }}</span>
+                </span>
+              </li>
+            }
+          </ul>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  }
+
+  <!-- Shared read-only 3-column table for HistoryRow[] (primary / secondary / meta) -->
+  <ng-template #rowTable let-rows let-cols="cols">
+    @if (rows.length) {
+      <div class="cd-table-scroll">
+        <table class="cd-table">
+          <thead><tr><th>{{ cols[0] }}</th><th>{{ cols[1] }}</th><th>{{ cols[2] }}</th></tr></thead>
+          <tbody>
+            @for (r of rows; track r.primary) {
+              <tr><td>{{ r.primary }}</td><td>{{ r.secondary }}</td><td>{{ r.meta }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="cd-state-note">Nothing recorded for this campaign in scope — this is not a global zero.</p>
+    }
+  </ng-template>
+
+  <!-- ============ HIGH-RISK CONFIRM: Operate according to lifecycle ============ -->
+  @if (operateDialogOpen()) {
+    <div class="cd-modal-backdrop" (click)="cancelOperate()">
+      <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-op-title" (click)="$event.stopPropagation()">
+        <h2 class="cd-modal-title" id="cd-op-title">Confirm {{ proposedTransition()?.label }}</h2>
+        <p class="cd-modal-lead">Review the affected record, consequence, reason and effective time. This decision requires explicit confirmation.</p>
+
+        @if (dialogOptions().length > 1) {
+          <fieldset class="cd-modal-field">
+            <legend class="cd-field-label">Lifecycle action</legend>
+            @for (opt of dialogOptions(); track opt.key) {
+              <label class="cd-radio-row">
+                <input type="radio" name="cd-transition" [value]="opt.key"
+                       [checked]="selectedTransitionKey() === opt.key"
+                       (change)="selectTransition(opt.key)" />
+                {{ opt.label }} <span class="cd-decision-value">({{ opt.target }})</span>
+              </label>
+            }
+          </fieldset>
+        }
+
+        <dl class="cd-facts cd-modal-facts">
+          <div class="cd-fact"><dt>Affected record</dt><dd>{{ reference }} · {{ campaignName() }}</dd></div>
+          <div class="cd-fact"><dt>Consequence</dt><dd>State {{ status() }} → {{ proposedState() }}</dd></div>
+          <div class="cd-fact"><dt>Effective permission</dt><dd>Granted — operate campaign lifecycle</dd></div>
+          <div class="cd-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
+        </dl>
+
+        <label class="cd-modal-field">
+          <span class="cd-field-label">Reason <span class="cd-req">required</span></span>
+          <textarea class="cd-textarea" rows="3" [ngModel]="operateReason()" (ngModelChange)="operateReason.set($event)"
+                    (blur)="operateReasonTouched.set(true)"
+                    placeholder="State why this lifecycle change is being made…"
+                    [attr.aria-invalid]="operateReasonTouched() && !operateReasonValid()"></textarea>
+          <span class="cd-field-foot">
+            <span class="cd-count" [class.cd-count-bad]="operateReasonCount() > operateReasonMax">{{ operateReasonCount() }} / {{ operateReasonMax }}</span>
+          </span>
+          @if (operateReasonTouched() && !operateReasonValid()) {
+            <span class="cd-field-error" role="alert">Enter Reason. Provide between {{ operateReasonMin }} and {{ operateReasonMax }} characters.</span>
+          }
+        </label>
+
+        <div class="cd-modal-actions">
+          <button type="button" class="cd-btn cd-btn-outline" (click)="cancelOperate()">Cancel</button>
+          <button type="button" class="cd-btn cd-btn-primary" (click)="confirmOperate()" [disabled]="!operateReasonValid()">Confirm</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ CONFIRM: Delete draft (permanent) ============ -->
+  @if (deleteDraftDialogOpen()) {
+    <div class="cd-modal-backdrop" (click)="cancelDeleteDraft()">
+      <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-del-title" (click)="$event.stopPropagation()">
+        <h2 class="cd-modal-title" id="cd-del-title">Delete this draft?</h2>
+        <p class="cd-modal-lead">This permanently removes the draft campaign. This cannot be undone.</p>
+        <dl class="cd-facts cd-modal-facts">
+          <div class="cd-fact"><dt>Affected record</dt><dd>{{ reference }} · {{ campaignName() }}</dd></div>
+          <div class="cd-fact"><dt>Consequence</dt><dd>Draft permanently deleted</dd></div>
+        </dl>
+        <div class="cd-modal-actions">
+          <button type="button" class="cd-btn cd-btn-outline" (click)="cancelDeleteDraft()">Cancel</button>
+          <button type="button" class="cd-btn cd-btn-danger" (click)="confirmDeleteDraft()">Delete draft</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ READ MORE — Public description / Terms and notice popup ============ -->
+  @if (readMoreField()) {
+    <div class="cd-modal-backdrop" (click)="closeReadMore()">
+      <div class="cd-modal cd-modal-lg" role="dialog" aria-modal="true" aria-labelledby="cd-readmore-title" (click)="$event.stopPropagation()">
+        <h2 class="cd-modal-title" id="cd-readmore-title">{{ readMoreTitle() }}</h2>
+        <div class="cd-readmore-body" [innerHTML]="readMoreHtml()"></div>
+        <div class="cd-modal-actions">
+          <button type="button" class="cd-btn cd-btn-outline" (click)="closeReadMore()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ PAUSE / RESUME / CLOSE — popup launched from "Manage lifecycle".
+       No separate page: the full lifecycle-actions component renders inline in this modal. ============ -->
+  @if (lifecyclePopupOpen()) {
+    <div class="cd-modal-backdrop" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()" (click)="closeLifecyclePopup()">
+      <div class="cd-modal cd-modal-lg cd-modal-lifecycle" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()" role="dialog" aria-modal="true" aria-label="Pause, resume and close campaign" (click)="$event.stopPropagation()">
+        <button type="button" class="cd-banner-close cd-modal-close" (click)="closeLifecyclePopup()" aria-label="Close">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+        <app-pause-resume-close-campaign
+          [campaignRef]="lifecyclePopupRef()"
+          (panelOpenChange)="lifecyclePanelOpen.set($event)"
+        ></app-pause-resume-close-campaign>
+      </div>
+    </div>
+  }
+
+</div>
+</main>

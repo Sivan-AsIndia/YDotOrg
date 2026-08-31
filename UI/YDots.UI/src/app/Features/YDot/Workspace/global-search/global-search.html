@@ -1,0 +1,524 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+<div class="gs-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============ APPLICATION SHELL (4.3.1): breadcrumbs, active scope ============ -->
+  <nav class="gs-breadcrumbs" aria-label="Breadcrumb">
+    <a href="javascript:void(0)">Workspace</a>
+    <span aria-hidden="true">›</span>
+    <span aria-current="page">Global Search</span>
+  </nav>
+
+  <!-- ============ TASK HEADER (4.3.1) ============ -->
+  <header class="gs-header">
+    <div class="gs-header-lead">
+      <h1 class="gs-title">{{ pageTitle }}</h1>
+      <p class="gs-subtitle">{{ pageSubtitle }}</p>
+    </div>
+
+    <!-- Context and filters (4.3.1): Search text field (4.3.2) + primary Search -->
+    <div class="gs-searchbar-wrap">
+      <div class="gs-searchbar">
+        <span class="gs-search-ico" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <input type="text" class="gs-search-input" aria-label="Search text"
+               placeholder="Search people, records, documents, tasks…"
+               [ngModel]="searchText()" (ngModelChange)="updateSearchText($event)"
+               (keyup.enter)="search()" />
+        @if (searchText()) {
+          <button type="button" class="gs-search-clear" aria-label="Clear search" (click)="clearSearchText()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        }
+        <kbd class="gs-kbd">⌘ K</kbd>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="!searchAllowed()" (click)="search()">Search</button>
+    </div>
+  </header>
+
+  <!-- Task-header meta (4.3.1): stable reference, lifecycle state, owner, freshness, scope -->
+  <div class="gs-taskmeta">
+    <span class="gs-meta"><span class="gs-badge gs-badge-state">{{ lifecycleState() }}</span></span>
+    <span class="gs-meta"><span class="gs-meta-k">Owner</span> {{ owner() }}</span>
+    <span class="gs-meta"><span class="gs-meta-k">Scope</span> {{ activeScope() }}</span>
+    <span class="gs-meta"><span class="gs-meta-k">Updated</span> {{ lastRefresh() }} · {{ operatingTimeZone }}</span>
+  </div>
+
+  <!-- ============ RECORD TYPE TABS (4.3.2) + Advanced search (Filter, 4.3.3) ============ -->
+  <div class="gs-tabsbar">
+    <nav class="gs-tabs" aria-label="Result type">
+      @for (tab of recordTypeTabs; track tab.key) {
+        <button type="button" class="gs-tab" [class.is-active]="activeTab() === tab.key"
+                [attr.aria-pressed]="activeTab() === tab.key" (click)="selectTab(tab.key)">
+          <span>{{ tab.label }}</span>
+          @if (tab.count !== null) { <span class="gs-tab-count">{{ tab.count }}</span> }
+          @if (tab.isMenu) { <span class="gs-tab-caret" aria-hidden="true">⌄</span> }
+        </button>
+      }
+    </nav>
+  </div>
+
+  <!-- ============ NO ACCESS (4.3.4) ============ -->
+  @if (uiState() === 'no-access') {
+    <section class="gs-state-panel gs-state-noaccess" aria-live="polite">
+      <h2>This content is not available with your current access</h2>
+      <p>Restricted menus, records, fields, counts, actions and search suggestions are hidden.</p>
+      <button type="button" class="gs-btn gs-btn-primary" (click)="setUiState('ready')">Return to permitted landing page</button>
+    </section>
+  }
+
+  <!-- ============ LOADING (4.3.4) ============ -->
+  @else if (uiState() === 'loading') {
+    <section class="gs-state-panel" aria-busy="true" aria-live="polite">
+      <div class="gs-skeleton-head">Loading Global search — {{ activeScope() }} · {{ lastRefresh() }}</div>
+      <div class="gs-skel gs-skel-lg"></div>
+      <div class="gs-skel"></div>
+      <div class="gs-skel"></div>
+      <div class="gs-skel gs-skel-sm"></div>
+    </section>
+  }
+
+  <!-- ============ MAIN WORK + REFINE + HELP/HISTORY ============ -->
+  @else {
+    <!-- Inline recovery banners (4.3.4 / 4.3.6) shared across the work area -->
+
+    <!-- Validation (4.3.4 / 4.3.6) -->
+    @if (uiState() === 'validation' && validationErrors().length) {
+      <div class="gs-banner gs-banner-error" role="alert">
+        <strong>Check the highlighted fields</strong>
+        <ul>
+          @for (e of validationErrors(); track e.field) {
+            <li><a href="javascript:void(0)">{{ e.message }}</a></li>
+          }
+        </ul>
+      </div>
+    }
+
+    <!-- Duplicate (4.3.4) -->
+    @if (uiState() === 'duplicate') {
+      <div class="gs-banner gs-banner-warn" role="alert">
+        <strong>A similar record may already exist.</strong>
+        <span>Compare the safe candidate category before continuing; another person's protected details are not shown.</span>
+        <div class="gs-banner-actions">
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Compare candidates</button>
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Conflict (4.3.4 / 4.3.6) -->
+    @if (uiState() === 'conflict') {
+      <div class="gs-banner gs-banner-warn" role="alert">
+        <strong>This record changed after you opened it.</strong>
+        <span>Review the latest version before continuing. Your proposed values are retained.</span>
+        <div class="gs-banner-actions">
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Review latest version</button>
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Dependency failure (4.3.4 / 4.3.6 Support) -->
+    @if (uiState() === 'dependency-failure') {
+      <div class="gs-banner gs-banner-warn" role="alert">
+        <strong>We could not complete the dependent service step.</strong>
+        <span>Your confirmed local result is unchanged. Correlation reference: DEP-77420.</span>
+        <div class="gs-banner-actions">
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Retry dependency</button>
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="setUiState('ready')">Contact support</button>
+        </div>
+      </div>
+    }
+
+    <!-- Success / persistent outcome (4.3.4 / 4.3.1 Persistent outcome) -->
+    @if (uiState() === 'success' && persistentOutcome()) {
+      <div class="gs-banner gs-banner-success" role="status">
+        <strong>Search completed successfully.</strong>
+        <span>Reference {{ persistentOutcome()!.reference }}; state {{ persistentOutcome()!.state }}; effective {{ persistentOutcome()!.effectiveTime }}.</span>
+        <div class="gs-outcome-grid">
+          <div><span class="gs-meta-k">Downstream</span> {{ persistentOutcome()!.downstreamStatus }}</div>
+          <div><span class="gs-meta-k">Accountable owner</span> {{ persistentOutcome()!.accountableOwner }}</div>
+          <div><span class="gs-meta-k">Next action</span> {{ persistentOutcome()!.nextAction }}</div>
+        </div>
+      </div>
+    }
+
+    <div class="gs-layout">
+
+      <!-- ---------- REFINE RESULTS (Context and filters, 4.3.1) ---------- -->
+      <aside class="gs-refine" aria-label="Refine results">
+        <div class="gs-refine-head">
+          <h2 class="gs-refine-title">Refine results</h2>
+          <button type="button" class="gs-icon-btn" aria-label="Save this filter" (click)="saveCurrentFilter()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 0-6 6c0 4-2 5-2 5h16s-2-1-2-5a6 6 0 0 0-6-6Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+
+        <!-- Saved filter (4.3.1 Context and filters) -->
+        <div class="gs-refine-block">
+          <label class="gs-refine-label" for="gs-saved">Saved filter</label>
+          <div class="gs-select-wrap">
+            <select id="gs-saved" class="gs-select" [ngModel]="savedFilter()" (ngModelChange)="savedFilter.set($event)">
+              @for (sf of savedFilters(); track sf) { <option [value]="sf">{{ sf }}</option> }
+            </select>
+            <span class="gs-caret" aria-hidden="true">⌄</span>
+          </div>
+        </div>
+
+        <!-- Module facet (4.3.2 Module) -->
+        <div class="gs-refine-block">
+          <button type="button" class="gs-refine-sectionhead" [attr.aria-expanded]="moduleOpen()" (click)="toggleModuleSection()">
+            <span>Module</span><span class="gs-chevron" [class.is-open]="moduleOpen()" aria-hidden="true">⌃</span>
+          </button>
+          @if (moduleOpen()) {
+            <label class="gs-check gs-check-lead">
+              <input type="checkbox" [checked]="allModulesSelected()" (change)="toggleAllModules()" />
+              <span class="gs-check-box" aria-hidden="true"></span>
+              <span class="gs-check-text">All Modules</span>
+              <span class="gs-facet-count">{{ totalResults() }}</span>
+            </label>
+            @for (m of visibleModuleFacets(); track m.value) {
+              <label class="gs-check">
+                <input type="checkbox" [checked]="selectedModules().has(m.value)" (change)="toggleModule(m.value)" />
+                <span class="gs-check-box" aria-hidden="true"></span>
+                <span class="gs-check-text">{{ m.label }}</span>
+                <span class="gs-facet-count">{{ m.count }}</span>
+              </label>
+            }
+            @if (moduleFacets.length > visibleModuleFacets().length || modulesExpanded()) {
+              <button type="button" class="gs-showmore" (click)="toggleModulesExpanded()">{{ modulesExpanded() ? 'Show less' : 'Show more' }}</button>
+            }
+          }
+        </div>
+
+        <!-- Date range facet -->
+        <div class="gs-refine-block">
+          <button type="button" class="gs-refine-sectionhead" [attr.aria-expanded]="dateOpen()" (click)="toggleDateSection()">
+            <span>Date Range</span><span class="gs-chevron" [class.is-open]="dateOpen()" aria-hidden="true">⌃</span>
+          </button>
+          @if (dateOpen()) {
+            <div class="gs-select-wrap">
+              <select class="gs-select" [ngModel]="dateRange()" (ngModelChange)="dateRange.set($event)" aria-label="Date range">
+                @for (d of dateRanges; track d) { <option [value]="d">{{ d }}</option> }
+              </select>
+              <span class="gs-caret" aria-hidden="true">⌄</span>
+            </div>
+          }
+        </div>
+
+        <!-- Created by facet -->
+        <div class="gs-refine-block">
+          <button type="button" class="gs-refine-sectionhead" [attr.aria-expanded]="createdByOpen()" (click)="toggleCreatedBySection()">
+            <span>Created By</span><span class="gs-chevron" [class.is-open]="createdByOpen()" aria-hidden="true">⌃</span>
+          </button>
+          @if (createdByOpen()) {
+            <div class="gs-inline-search">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <input type="text" placeholder="Search people" aria-label="Search people"
+                     [ngModel]="createdByQuery()" (ngModelChange)="createdByQuery.set($event)" />
+            </div>
+            <label class="gs-check gs-check-lead">
+              <input type="checkbox" [checked]="allUsersSelected()" (change)="toggleAllUsers()" />
+              <span class="gs-check-box" aria-hidden="true"></span>
+              <span class="gs-check-text">All Users</span>
+            </label>
+            @for (u of visibleCreatedBy(); track u.value) {
+              <label class="gs-check">
+                <input type="checkbox" [checked]="selectedUsers().has(u.value)" (change)="toggleUser(u.value)" />
+                <span class="gs-check-box" aria-hidden="true"></span>
+                <span class="gs-check-text">{{ u.value }}</span>
+                <span class="gs-facet-count">{{ u.count }}</span>
+              </label>
+            }
+            @if (filteredCreatedBy().length > visibleCreatedBy().length || usersExpanded()) {
+              <button type="button" class="gs-showmore" (click)="toggleUsersExpanded()">{{ usersExpanded() ? 'Show less' : 'Show more' }}</button>
+            }
+          }
+        </div>
+
+        <!-- Status facet (4.3.2 Status) -->
+        <div class="gs-refine-block">
+          <button type="button" class="gs-refine-sectionhead" [attr.aria-expanded]="statusOpen()" (click)="toggleStatusSection()">
+            <span>Status</span><span class="gs-chevron" [class.is-open]="statusOpen()" aria-hidden="true">⌄</span>
+          </button>
+          @if (statusOpen()) {
+            <div class="gs-refine-body">
+              @for (st of statusOptions; track st) {
+                <label class="gs-radio">
+                  <input type="radio" name="gs-status" [value]="st" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)" />
+                  <span class="gs-radio-dot" aria-hidden="true"></span>
+                  <span class="gs-check-text">{{ st }}</span>
+                </label>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="gs-refine-foot">
+          <button type="button" class="gs-clearall" (click)="clearAllFilters()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Clear all
+          </button>
+        </div>
+      </aside>
+
+      <!-- ---------- MAIN WORK: results (4.3.1) ---------- -->
+      <section class="gs-results" [class.gs-results-grid]="viewMode() === 'grid'" aria-label="Search results">
+
+        <!-- Totals qualified by scope + last refresh (4.3.1) & sort/view -->
+        <div class="gs-results-bar">
+          <p class="gs-results-total">About {{ totalResults() }} results for “{{ searchText() }}”</p>
+          <div class="gs-results-controls">
+            <label class="gs-sort">Sort by:
+              <div class="gs-select-wrap gs-sort-select">
+                <select class="gs-select gs-select-sm" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" aria-label="Sort by">
+                  @for (s of sortOptions; track s) { <option [value]="s">{{ s }}</option> }
+                </select>
+                <span class="gs-caret" aria-hidden="true">⌄</span>
+              </div>
+            </label>
+            <div class="gs-viewtoggle" role="group" aria-label="View mode">
+              <button type="button" class="gs-view-btn" [class.is-active]="viewMode() === 'list'" aria-label="List view" (click)="setViewMode('list')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </button>
+              <button type="button" class="gs-view-btn" [class.is-active]="viewMode() === 'grid'" aria-label="Grid view" (click)="setViewMode('grid')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active-filter summary (4.3.1 Context and filters) -->
+        @if (activeFilters().length) {
+          <div class="gs-activefilters" aria-label="Active filters">
+            @for (chip of activeFilters(); track chip.key) {
+              <span class="gs-filter-chip">{{ chip.label }}
+                <button type="button" class="gs-chip-x" (click)="removeActiveFilter(chip.key)" aria-label="Remove {{ chip.label }}">×</button>
+              </span>
+            }
+            <button type="button" class="gs-clear-inline" (click)="clearAllFilters()">Clear all</button>
+          </div>
+        }
+
+        <!-- Empty (4.3.4) -->
+        @if (uiState() === 'empty') {
+          <div class="gs-empty">
+            <div class="gs-empty-ico" aria-hidden="true">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <h3>No results to show</h3>
+            <p>No records matched within your scope. This can be because of your active scope, the applied filters, missing setup, or genuinely no records exist.</p>
+            <button type="button" class="gs-btn gs-btn-ghost" (click)="clearAllFilters()">Clear filters</button>
+          </div>
+        }
+
+        <!-- Results groups (Main work) -->
+        @else {
+          <!-- Records group -->
+          @if (activeTab() === 'all' || activeTab() === 'records') {
+            <div class="gs-group">
+              <div class="gs-group-head">
+                <span class="gs-group-ico gs-ico-records" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3h6l4 4v14H6V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 3v5h5" stroke="currentColor" stroke-width="1.6"/></svg>
+                </span>
+                <h3 class="gs-group-title">Records <span class="gs-group-count">(128)</span></h3>
+                <button type="button" class="gs-viewall" (click)="selectTab('records')">View all →</button>
+              </div>
+              @for (r of recordResults; track r.reference) {
+                <button type="button" class="gs-row gs-row-record" (click)="openRecord(r)">
+                  <span class="gs-row-ico" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="m8.5 12 2.5 2.5L16 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <span class="gs-row-body">
+                    <span class="gs-row-ref">{{ r.reference }}</span>
+                    <span class="gs-row-primary">{{ r.primaryLabel }}</span>
+                    <span class="gs-row-owner">{{ r.ownerScope }}
+                      @if (r.maskedSecondary) {
+                        <span class="gs-masked" title="This value cannot be displayed with your current access">🔒 {{ r.maskedSecondary }}</span>
+                      }
+                    </span>
+                  </span>
+                  <span class="gs-row-amount">{{ r.amount }}</span>
+                  <span class="gs-badge" [class.gs-badge-success]="r.tone === 'success'"
+                        [class.gs-badge-info]="r.tone === 'info'" [class.gs-badge-accent]="r.tone === 'accent'">{{ r.resultType }}</span>
+                  <span class="gs-row-more" aria-hidden="true">⋯</span>
+                </button>
+              }
+            </div>
+          }
+
+          <!-- Tasks group -->
+          @if (activeTab() === 'all' || activeTab() === 'tasks') {
+            <div class="gs-group">
+              <div class="gs-group-head">
+                <span class="gs-group-ico gs-ico-tasks" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="m8.5 12 2.5 2.5L16 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <h3 class="gs-group-title">Tasks <span class="gs-group-count">(36)</span></h3>
+                <button type="button" class="gs-viewall" (click)="selectTab('tasks')">View all →</button>
+              </div>
+              @for (t of taskResults; track t.primaryLabel) {
+                <div class="gs-row gs-row-task">
+                  <span class="gs-row-check" aria-hidden="true"></span>
+                  <span class="gs-row-body">
+                    <span class="gs-row-primary">{{ t.primaryLabel }}</span>
+                    <span class="gs-row-owner">{{ t.ownerScope }}</span>
+                  </span>
+                  <span class="gs-priority" [class.gs-pri-high]="t.tone === 'high'"
+                        [class.gs-pri-medium]="t.tone === 'medium'" [class.gs-pri-low]="t.tone === 'low'">{{ t.resultType }}</span>
+                  <span class="gs-row-more" aria-hidden="true">⋯</span>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Documents group -->
+          @if (activeTab() === 'all' || activeTab() === 'documents') {
+            <div class="gs-group">
+              <div class="gs-group-head">
+                <span class="gs-group-ico gs-ico-docs" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3h6l4 4v14H6V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 3v5h5" stroke="currentColor" stroke-width="1.6"/></svg>
+                </span>
+                <h3 class="gs-group-title">Documents <span class="gs-group-count">(56)</span></h3>
+                <button type="button" class="gs-viewall" (click)="selectTab('documents')">View all →</button>
+              </div>
+              @for (d of documentResults; track d.primaryLabel) {
+                <div class="gs-row gs-row-doc">
+                  <span class="gs-doc-ico" [class.gs-doc-psd]="d.kind === 'psd'" aria-hidden="true">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M8 3h6l4 4v14H6V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 3v5h5" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </span>
+                  <span class="gs-row-body">
+                    <span class="gs-row-primary">{{ d.primaryLabel }}</span>
+                    <span class="gs-row-owner">{{ d.ownerScope }}</span>
+                  </span>
+                  <span class="gs-row-more" aria-hidden="true">⋯</span>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- People group -->
+          @if (activeTab() === 'all' || activeTab() === 'people') {
+            <div class="gs-group">
+              <div class="gs-group-head">
+                <span class="gs-group-ico gs-ico-people" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </span>
+                <h3 class="gs-group-title">People <span class="gs-group-count">(24)</span></h3>
+                <button type="button" class="gs-viewall" (click)="selectTab('people')">View all →</button>
+              </div>
+              <div class="gs-people">
+                @for (p of peopleResults; track p.name) {
+                  <div class="gs-person">
+                    <span class="gs-avatar" aria-hidden="true">{{ p.initials }}</span>
+                    <span class="gs-person-name">{{ p.name }}</span>
+                    <span class="gs-person-role">{{ p.role }}</span>
+                    <span class="gs-person-scope">{{ p.scope }}</span>
+                    <span class="gs-masked gs-person-masked" title="This value cannot be displayed with your current access">🔒 {{ p.maskedContact }}</span>
+                  </div>
+                }
+                <div class="gs-person gs-person-all">
+                  <span class="gs-avatar gs-avatar-all" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18a5.5 5.5 0 0 1 11 0" stroke="currentColor" stroke-width="1.6"/><path d="M16 7a3 3 0 0 1 0 6M18 18a5 5 0 0 0-3-4.6" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </span>
+                  <span class="gs-person-name">View all people</span>
+                  <span class="gs-person-role">See all 24 results</span>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Decision / review (4.3.1) — shown when a result is opened (4.3.3) -->
+          @if (openedResult()) {
+            <section class="gs-decision" aria-label="Decision and review">
+              <div class="gs-decision-head">
+                <h3>Decision &amp; review — {{ openedResult()!.reference }}</h3>
+                <button type="button" class="gs-icon-btn" aria-label="Close review" (click)="closeOpenedResult()">×</button>
+              </div>
+              <p class="gs-decision-label">{{ openedResult()!.label }}</p>
+              <div class="gs-decision-grid">
+                <div><span class="gs-meta-k">Effective permission</span> {{ openedResult()!.effectivePermission }}</div>
+                <div><span class="gs-meta-k">Before</span> {{ openedResult()!.beforeValue }}</div>
+                <div><span class="gs-meta-k">After</span> {{ openedResult()!.afterValue }}</div>
+                <div><span class="gs-meta-k">Resulting state</span> {{ openedResult()!.resultingState }}</div>
+                <div><span class="gs-meta-k">Evidence</span> {{ openedResult()!.evidence }}</div>
+                <div><span class="gs-meta-k">Reason</span> {{ openedResult()!.reason }}</div>
+              </div>
+              <p class="gs-decision-warn">⚠ {{ openedResult()!.warning }}</p>
+            </section>
+          }
+        }
+      </section>
+
+      <!-- ---------- SEARCH HELP + RECENT (Application shell help / Related & history) ---------- -->
+      <aside class="gs-side" aria-label="Search help and recent searches">
+        <!-- Search help (4.3.1 Application shell: help) -->
+        <div class="gs-card gs-help">
+          <h2 class="gs-side-title">Search Help</h2>
+          @for (tip of helpTips; track tip.title) {
+            <div class="gs-tip">
+              <span class="gs-tip-ico" aria-hidden="true">
+                @switch (tip.icon) {
+                  @case ('quote') { <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 7H6a2 2 0 0 0-2 2v3h3v3H4m13-8h-3a2 2 0 0 0-2 2v3h3v3h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> }
+                  @case ('star') { <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m12 3 2.5 5.5L20 9.3l-4 3.9 1 5.8-5-2.7-5 2.7 1-5.8-4-3.9 5.5-.8L12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg> }
+                  @case ('filter') { <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> }
+                  @case ('enter') { <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6v6a2 2 0 0 1-2 2H5m0 0 4-4m-4 4 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> }
+                }
+              </span>
+              <span class="gs-tip-text">
+                <span class="gs-tip-title">{{ tip.title }}</span>
+                <span class="gs-tip-detail">{{ tip.detail }}</span>
+              </span>
+            </div>
+          }
+        </div>
+
+        <!-- Recent searches (4.3.1 Related and history) -->
+        <div class="gs-card gs-recent">
+          <div class="gs-side-head">
+            <h2 class="gs-side-title">Recent Searches</h2>
+            @if (recentSearches().length) {
+              <button type="button" class="gs-link" (click)="clearRecentSearches()">Clear all</button>
+            }
+          </div>
+          @for (rs of recentSearches(); track rs.term) {
+            <button type="button" class="gs-recent-row" (click)="applyRecentSearch(rs.term)">
+              <span class="gs-recent-term">{{ rs.term }}</span>
+              <span class="gs-recent-when">{{ rs.when }}</span>
+            </button>
+          }
+          @if (recentSearches().length) {
+            <button type="button" class="gs-viewall gs-viewall-history">View all history →</button>
+          }
+        </div>
+      </aside>
+
+    </div>
+  }
+
+  <!-- ============ HIGH-RISK CONFIRM: Confirm Search (4.3.6) ============ -->
+  @if (confirmSearchOpen()) {
+    <div class="gs-modal-backdrop" (click)="cancelSearch()">
+      <div class="gs-modal" role="dialog" aria-modal="true" aria-labelledby="gs-confirm-title" (click)="$event.stopPropagation()">
+        <h2 id="gs-confirm-title" class="gs-modal-title">Confirm Search</h2>
+        <p class="gs-modal-body">Review the affected record, consequence, reason and effective time before continuing.</p>
+        <dl class="gs-modal-dl">
+          <div><dt>Affected record</dt><dd>Results within {{ activeScope() }}</dd></div>
+          <div><dt>Consequence</dt><dd>Runs a scoped search for “{{ searchText() }}”</dd></div>
+          <div><dt>Reason</dt><dd>Locate permitted people and business records across modules</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="gs-modal-actions">
+          <button type="button" class="gs-btn gs-btn-ghost" (click)="cancelSearch()">Cancel</button>
+          <button type="button" class="gs-btn gs-btn-primary" (click)="confirmSearch()">Confirm Search</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

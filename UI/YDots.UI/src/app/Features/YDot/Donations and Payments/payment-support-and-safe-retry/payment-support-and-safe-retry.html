@@ -1,0 +1,318 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div >
+
+
+  <!-- ============ TASK HEADER (§4.7.1 Task header) — one primary action: Verify status ============ -->
+  <header class="psr-task-header" aria-labelledby="psr-title">
+    <div class="psr-header-text">
+      <h1 class="psr-title" id="psr-title">
+        {{ pageTitle }}
+      
+      </h1>
+      <p class="psr-subtitle">{{ pageSubtitle }}</p>
+    
+    </div>
+
+    <div class="psr-header-actions">
+      <!-- Filters toggle (§4.7.1 Context and filters) -->
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFiltersVisible()"
+              [attr.aria-expanded]="filtersVisible()">
+        <svg class="psr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
+        @if (activeFilterSummary().length) { <span class="psr-count">{{ activeFilterSummary().length }}</span> }
+      </button>
+
+      <!-- Secondary / overflow actions (§4.7.3): Resend active link, Replace expired link, Open support case, Cancel intent -->
+      <!-- @if (selectedRecord(); as r) {
+        @if (anyOverflowAllowed(r)) {
+          <div class="psr-menu-wrap">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleOverflow()"
+                    [attr.aria-expanded]="overflowOpen()" aria-haspopup="menu">
+              More actions
+              <svg class="psr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            @if (overflowOpen()) {
+              <div class="psr-menu" role="menu" aria-label="More actions">
+                @if (resendAllowed(r)) { <button type="button" class="psr-menu-item" role="menuitem" (click)="requestResend(r)">Resend active link</button> }
+                @if (replaceAllowed(r)) { <button type="button" class="psr-menu-item" role="menuitem" (click)="replaceExpiredLink(r)">Replace expired link</button> }
+                @if (openSupportAllowed(r)) { <button type="button" class="psr-menu-item" role="menuitem" (click)="openSupportCase(r)">Open support case</button> }
+                @if (cancelAllowed(r)) { <button type="button" class="psr-menu-item psr-menu-danger" role="menuitem" (click)="requestCancel(r)">Cancel intent</button> }
+              </div>
+            }
+          </div>
+        }
+
+        @if (verifyAllowed(r)) {
+          <button type="button" class="btn btn-primary btn-sm" (click)="verifyStatus(r)">
+            <svg class="psr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            Verify status
+          </button>
+        }
+      } -->
+    </div>
+  </header>
+
+
+  <!-- ============ CONTEXT AND FILTERS (§4.7.1) — shown only when the Filters button is used ============ -->
+  @if (filtersVisible()) {
+  <section class="psr-filters-card" aria-label="Search and filters">
+    <!-- <div class="psr-filters-toolbar">
+      <span class="psr-filters-heading">Filters</span>
+      <button type="button" class="psr-link" (click)="toggleFiltersVisible()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        Hide filters
+      </button>
+    </div> -->
+    <div class="psr-filter-grid">
+      <!-- Scope-aware search (§4.7.1) -->
+      <label class="psr-field psr-field-search">
+        <span class="psr-field-label">Search</span>
+        <span class="psr-input-wrap">
+          <input type="search" class="psr-input" placeholder="Search by intent reference, donor context or support reference…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)"
+                 aria-label="Search payment support records" />
+          <svg class="psr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+
+      <!-- Verified payment state (§4.7.2) -->
+      <label class="psr-field">
+        <span class="psr-field-label">Verified payment state</span>
+        <span class="psr-select-wrap">
+          <select class="psr-select" [ngModel]="verifiedStateFilter()" (ngModelChange)="verifiedStateFilter.set($event)" aria-label="Verified payment state">
+            <option value="">All states</option>
+            @for (s of verifiedStateOptions; track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <svg class="psr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <!-- Preferred delivery channel (§4.7.2) -->
+      <label class="psr-field">
+        <span class="psr-field-label">Preferred delivery channel</span>
+        <span class="psr-select-wrap">
+          <select class="psr-select" [ngModel]="channelFilter()" (ngModelChange)="channelFilter.set($event)" aria-label="Preferred delivery channel">
+            <option value="">All channels</option>
+            @for (c of channelOptions; track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+          <svg class="psr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+   
+
+    </div>
+
+  
+
+    <!-- Active-filter summary + saved filter (§4.7.1) -->
+    <div class="psr-active-row">
+      <span class="psr-active-label">Active filters:</span>
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="psr-chip">
+          {{ chip.label }}
+          <button type="button" class="psr-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      } @empty {
+        <span class="psr-active-none">None applied</span>
+      }
+      @if (activeFilterSummary().length) {
+        <button type="button" class="psr-link" (click)="clearFilters()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+          Clear all
+        </button>
+      }
+
+      <span class="psr-active-spacer"></span>
+
+    
+    </div>
+  </section>
+  }
+
+
+
+  <!-- ============ WORK AREA: two-region layout (§4.7.5 Desktop) ============ -->
+  <div class="psr-work">
+
+    <!-- ---------- MAIN WORK: task-oriented recovery cards (§4.7.1 Main work — not a database table) ---------- -->
+    <section class="psr-main" aria-labelledby="psr-list-heading">
+      <div class="psr-main-head">
+        <h2 id="psr-list-heading" class="psr-main-title">Incomplete payments to recover</h2>
+        <!-- <span class="psr-showing">{{ recordCount() }} in scope · refreshed {{ lastRefresh() }}</span> -->
+      </div>
+
+      @if (recordCount() === 0) {
+        <!-- EMPTY (§4.7.4) -->
+        <div class="psr-state-block">
+          <p class="psr-state-title">No records match this scope and filter.</p>
+          <p class="psr-state-body">Zero results come from the current filters, not a global zero. Adjust the search,
+            verified payment state, delivery channel, last-attempt date range or scope, or reset filters to continue.</p>
+          <div class="psr-state-actions">
+            <button type="button" class="psr-btn psr-btn-outline psr-btn-sm" (click)="clearFilters()">Reset filters</button>
+          </div>
+        </div>
+      } @else {
+        <ul class="psr-card-list" role="list">
+          @for (r of visibleRecords(); track r.donationIntentReference) {
+            <li>
+              <button type="button" class="psr-card" [class.psr-card-selected]="isSelected(r.donationIntentReference)"
+                      (click)="select(r.donationIntentReference)" [attr.aria-pressed]="isSelected(r.donationIntentReference)">
+                <span class="psr-card-top">
+                  <span class="psr-card-ref">{{ r.donationIntentReference }}</span>
+                  <span class="psr-badge psr-badge-sm" [class]="verifiedStateClass(r.verifiedPaymentState)">{{ r.verifiedPaymentState }}</span>
+                </span>
+                <span class="psr-card-donor">
+                  <span class="psr-card-donor-name">{{ r.donorContactPreview }}</span>
+                  <span class="psr-card-donor-contact">{{ r.maskedDonorContact }}</span>
+                </span>
+                <span class="psr-card-grid">
+                  <span class="psr-card-cell"><span class="psr-card-k">Requested</span><span class="psr-card-v">{{ formatMoney(r.requestedAmountMinor, r.currency) }}</span></span>
+                  <span class="psr-card-cell"><span class="psr-card-k">Last attempt</span><span class="psr-card-v">{{ r.lastAttemptLabel }}</span></span>
+                  <span class="psr-card-cell"><span class="psr-card-k">Channel</span><span class="psr-card-v">{{ r.preferredDeliveryChannel }}</span></span>
+                  <!-- <span class="psr-card-cell"><span class="psr-card-k">Lifecycle</span><span class="psr-card-v"><span class="psr-badge psr-badge-sm" [class]="lifecycleClass(r.lifecycleState)">{{ r.lifecycleState }}</span></span></span> -->
+                </span>
+                <!-- <span class="psr-card-elig">{{ r.retryEligibility }}</span> -->
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: recovery detail (§4.7.1 Decision/review + Related and history + Persistent outcome) ---------- -->
+    <aside class="psr-detail" aria-label="Recovery detail">
+      @if (selectedRecord(); as r) {
+        <div class="psr-detail-head">
+          <div class="psr-detail-id">
+            <span class="psr-detail-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
+            </span>
+            <div>
+              <h2 class="psr-detail-title">Recovery detail</h2>
+              <p class="psr-detail-sub">{{ r.donationIntentReference }}</p>
+            </div>
+          </div>
+          <!-- <span class="psr-badge" [class]="lifecycleClass(r.lifecycleState)">{{ r.lifecycleState }}</span> -->
+        </div>
+
+        <div class="psr-detail-body">
+          <!-- Payment (§4.7.2: Donation intent reference, Masked donor contact, Requested amount, Verified payment state) -->
+          <h3 class="psr-group-title">Payment</h3>
+          <dl class="psr-kv">
+            <div><dt>Donation intent reference</dt><dd>{{ r.donationIntentReference }}
+              <button type="button" class="psr-copy" (click)="copyValue('intent', r.donationIntentReference)" aria-label="Copy donation intent reference">{{ copiedField() === 'intent' ? 'Copied' : 'Copy' }}</button>
+            </dd></div>
+            <div><dt>Masked donor contact </dt><dd class="psr-masked">{{ r.maskedDonorContact }}</dd></div>
+            <div><dt>Requested amount</dt><dd class="psr-strong">{{ formatMoney(r.requestedAmountMinor, r.currency) }}</dd></div>
+            <!-- <div><dt>Verified payment state</dt><dd><span class="psr-badge psr-badge-sm" [class]="verifiedStateClass(r.verifiedPaymentState)">{{ r.verifiedPaymentState }}</span></dd></div> -->
+            <div><dt>Last attempt time</dt><dd>{{ r.lastAttemptLabel }}</dd></div>
+          </dl>
+
+          <!-- Retry & link (§4.7.2: Retry eligibility, Existing active link, Link expiry, Preferred delivery channel) -->
+          <!-- <h3 class="psr-group-title">Retry & link</h3> -->
+          <dl class="psr-kv">
+            <!-- <div class="psr-kv-stack"><dt>Retry eligibility</dt><dd class="psr-break">{{ r.retryEligibility }}</dd></div> -->
+            <div><dt>Existing active link</dt><dd>
+              <span class="psr-mono">{{ r.existingActiveLink }}</span>
+              @if (r.linkCondition === 'Active') { <span class="psr-badge psr-badge-sm psr-badge-good">Active</span> }
+              @else if (r.linkCondition === 'Expired') { <span class="psr-badge psr-badge-sm psr-badge-danger">Expired</span> }
+            </dd></div>
+            <div><dt>Link expiry</dt><dd>{{ r.linkExpiryLabel }}</dd></div>
+            <div><dt>Preferred delivery channel</dt><dd>{{ r.preferredDeliveryChannel }}</dd></div>
+          </dl>
+
+          <!-- Support (§4.7.2: Support correlation reference) -->
+          <!-- <h3 class="psr-group-title">Support</h3>
+          <dl class="psr-kv">
+            <div><dt>Support correlation reference</dt><dd>
+              @if (r.supportCorrelationReference !== '—') {
+                <span class="psr-mono">{{ r.supportCorrelationReference }}</span>
+                <button type="button" class="psr-copy" (click)="copyValue('support', r.supportCorrelationReference)" aria-label="Copy support correlation reference">{{ copiedField() === 'support' ? 'Copied' : 'Copy' }}</button>
+              } @else { — }
+            </dd></div>
+          </dl> -->
+
+  
+
+          <!-- Available actions on this record (§4.7.3) -->
+          <div class="psr-detail-actions">
+            <!-- @if (verifyAllowed(r)) { <button type="button" class="btn btn-primary btn-sm" (click)="verifyStatus(r)">Verify status</button> } -->
+            @if (resendAllowed(r)) { <button type="button" class="btn btn-secondary btn-sm" (click)="requestResend(r)">Resend active link</button> }
+            @if (replaceAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="replaceExpiredLink(r)">Resend expired link</button> }
+            @if (openSupportAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openSupportCase(r)">Open support case</button> }
+            @if (cancelAllowed(r)) { <button type="button" class="btn btn-danger btn-sm" (click)="requestCancel(r)">Cancel intent</button> }
+            @if (!verifyAllowed(r) && !anyOverflowAllowed(r)) { <span class="psr-actions-note">No further action available in this state.</span> }
+          </div>
+
+        </div>
+      } @else {
+        <div class="psr-detail-empty">
+          <p class="psr-state-title">Select a record</p>
+          <p class="psr-state-body">Choose an incomplete payment to review its status, retry eligibility, link and support correlation, then verify status or guide a safe retry.</p>
+        </div>
+      }
+    </aside>
+  </div>
+
+  <!-- ============ RESEND ACTIVE LINK — high-risk confirm (§4.7.6 High-risk action) ============ -->
+  @if (resendDialogOpen() && resendTarget()) {
+    <div class="psr-modal-backdrop" (click)="cancelResend()">
+      <div class="psr-modal" role="dialog" aria-modal="true" aria-labelledby="psr-resend-title" (click)="$event.stopPropagation()">
+        <h2 id="psr-resend-title" class="psr-modal-title">Confirm Resend active link</h2>
+        <p class="psr-modal-lead">Review the affected record, consequence, reason and effective time. The same active link is resent — no new intent is created and no duplicate charge is possible.</p>
+        <dl class="psr-kv">
+          <div><dt>Affected record</dt><dd>{{ resendTarget()!.donationIntentReference }}</dd></div>
+          <div><dt>Before</dt><dd>{{ resendTarget()!.lifecycleState }} · link {{ resendTarget()!.existingActiveLink }}</dd></div>
+          <div><dt>After</dt><dd>Awaiting donor · same link resent via {{ resendTarget()!.preferredDeliveryChannel }}</dd></div>
+          <div><dt>Consequence</dt><dd>Idempotent resend; the donor receives the existing link again</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="psr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelResend()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmResend()">Confirm resend</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ CANCEL INTENT — danger / confirmation (§4.7.3 Cancel intent) ============ -->
+  @if (cancelDialogOpen() && cancelTarget()) {
+    <div class="psr-modal-backdrop" (click)="closeCancelDialog()">
+      <div class="psr-modal" role="dialog" aria-modal="true" aria-labelledby="psr-cancel-title" (click)="$event.stopPropagation()">
+        <h2 id="psr-cancel-title" class="psr-modal-title">Cancel intent</h2>
+        <p class="psr-modal-lead">Cancelling this intent preserves linked history and confirms the resulting lifecycle state persistently. Provide a named reason to continue.</p>
+        <dl class="psr-kv">
+          <div><dt>Affected record</dt><dd>{{ cancelTarget()!.donationIntentReference }}</dd></div>
+          <div><dt>Before</dt><dd>{{ cancelTarget()!.lifecycleState }} · {{ cancelTarget()!.verifiedPaymentState }}</dd></div>
+          <div><dt>After</dt><dd>Cancelled · linked history preserved</dd></div>
+          <div><dt>Consequence</dt><dd>No further retry; any active link is closed. Not reversible from this view.</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="psr-field" [class.psr-field-invalid]="cancelSubmitted() && !cancelReasonValid()">
+          <label class="psr-field-label" for="psr-cancel-reason">Reason <span class="psr-req">required</span></label>
+          <textarea id="psr-cancel-reason" class="psr-input psr-textarea" rows="3"
+                    [ngModel]="cancelReason()" (ngModelChange)="cancelReason.set($event)" [attr.maxlength]="reasonMax"
+                    placeholder="Record why this intent is being cancelled…"></textarea>
+          <p class="psr-field-hint" [class.psr-field-error]="cancelSubmitted() && !cancelReasonValid()" role="status">
+            @if (cancelSubmitted() && !cancelReasonValid()) { Enter Reason. }
+            {{ cancelReasonCount() }} / {{ reasonMax }} characters (minimum {{ reasonMin }})
+          </p>
+        </div>
+        <div class="psr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeCancelDialog()">Keep intent</button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmCancel()">Cancel intent</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

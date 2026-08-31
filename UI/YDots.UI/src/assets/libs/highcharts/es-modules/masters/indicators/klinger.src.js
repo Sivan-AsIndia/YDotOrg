@@ -1,0 +1,2 @@
+/*! For license information please see klinger.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/Klinger/KlingerIndicator.js";export default Highcharts;

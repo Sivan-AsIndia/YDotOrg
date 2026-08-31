@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    Common build settings for the four YDot.IAM.* projects. Everything that
+    would otherwise be repeated in each .csproj lives here, so a new project
+    inside Services/IAM picks up the same rules automatically.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+
+    <!-- The four below hide real defects, so they fail the build. -->
+    <WarningsAsErrors>CS4014;CS1998;CS0162;CS0164</WarningsAsErrors>
+
+    <!-- Same suppression set as Services/DON/Directory.Build.props, plus the
+         IAM-only entries at the end:
+         CA5394  Random is used for display-only jitter, never for a secret. Every
+                 token, code and salt comes from RandomNumberGenerator instead.
+         CA1725  Overrides keep the base parameter names on purpose.
+         CA1711  "Permission" and "RolePermission" are the names the section 3
+                 property contract uses. Renaming them here would make the code stop
+                 matching the document it implements. -->
+    <NoWarn>$(NoWarn);CA1848;CA2007;CA1062;CA1861;CA1304;CA1311;CA1862;CA1305;CA1873;CA1000;CA1716;CA1859;CA1822;CA5394;CA1725;CA1711</NoWarn>
+
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Company>Ascending Software</Company>
+    <Product>YDot Peoples Planet</Product>
+    <Authors>YDot Platform Team</Authors>
+  </PropertyGroup>
+</Project>

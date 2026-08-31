@@ -1,0 +1,2 @@
+/*! For license information please see roc.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/ROC/ROCIndicator.js";export default Highcharts;

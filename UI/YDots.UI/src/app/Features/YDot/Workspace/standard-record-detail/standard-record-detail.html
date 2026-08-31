@@ -1,0 +1,570 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div  [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.5.1) ============ -->
+  <header class="task-header" aria-labelledby="record-title">
+  
+
+    <div class="task-header-main">
+      <div class="task-identity">
+        <div class="record-icon" aria-hidden="true">▤</div>
+        <div class="identity-text">
+          <div class="title-row">
+            <!-- Record reference (read-only, 4.5.2) -->
+            <h1 class="page-title" id="record-title">{{ recordReference }}</h1>
+            <!-- Status — badge with text and icon; colour never carries meaning alone (4.5.2 Status) -->
+            <span class="state-pill" role="status">
+              <span class="dot" aria-hidden="true"></span>{{ lifecycleState }}
+            </span>
+          </div>
+          <!-- Title (read-only, 4.5.2) -->
+          <p class="page-subtitle">{{ title }}</p>
+          <!-- Owner + freshness (4.5.1 Task header) -->
+          <p class="header-meta">
+            Created on {{ createdOn }}
+            <span class="sep" aria-hidden="true">•</span>
+            Created by {{ owner }}
+            <span class="sep" aria-hidden="true">•</span>
+            <span class="ver" title="Concurrency version">{{ concurrencyVersion }}</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- One primary action grouping — offered only when role, permission, scope, state and
+           dependencies allow each choice (4.5.1 Task header; 4.5.3 Actions) -->
+      <div class="task-actions">
+        <div class="split-action">
+          <button type="button" class="btn btn-primary split-main" (click)="toggleActionsMenu()"
+                  [attr.aria-expanded]="actionsMenuOpen()" aria-haspopup="menu">
+            <span aria-hidden="true">＋</span> Actions
+            <span class="chev" aria-hidden="true">▾</span>
+          </button>
+          @if (actionsMenuOpen()) {
+            <div class="menu" role="menu" aria-label="Record actions">
+              <button type="button" class="menu-item" role="menuitem"
+                      (click)="requestEdit()" [disabled]="!editAllowed()">Edit</button>
+              <button type="button" class="menu-item" role="menuitem"
+                      (click)="requestSubmit()" [disabled]="!submitAllowed()">Submit</button>
+              <button type="button" class="menu-item menu-item-primary" role="menuitem"
+                      (click)="requestApprove()" [disabled]="!approveAllowed()">Approve according to state</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ CONTEXT AND FILTERS (4.5.1) ============ -->
+  <section class="context-bar" aria-label="Record context and filters">
+    <div class="context-left">
+      <span class="scope-chip" title="Active scope"><span aria-hidden="true">⊚</span> {{ activeScope }}</span>
+      <label class="context-search">
+        <span class="visually-hidden">Search within this record</span>
+        <input type="search" class="control control-sm" placeholder="Search this record…"
+               [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" />
+      </label>
+      <label class="context-view">
+        <span class="visually-hidden">Saved view</span>
+        <select class="control control-sm" [ngModel]="savedView()" (ngModelChange)="savedView.set($event)"
+                aria-label="Saved view">
+          @for (v of savedViews; track v) { <option [value]="v">{{ v }}</option> }
+        </select>
+      </label>
+    </div>
+    <div class="context-right">
+      <span class="freshness">Data updated {{ lastUpdated() }}</span>
+    </div>
+  </section>
+
+  <!-- ============ RELATED TABS — task-oriented groups (4.5.1 Main work) ============ -->
+  <nav class="record-tabs" role="tablist" aria-label="Record sections">
+    @for (tab of visibleTabs(); track tab.key) {
+      <button type="button" class="record-tab" role="tab" [id]="'tab-' + tab.key"
+              [class.active]="activeTab() === tab.key" [attr.aria-selected]="activeTab() === tab.key"
+              (click)="selectTab(tab.key)">
+        {{ tab.label }}
+        @if (tab.count !== null) { <span class="tab-count">{{ tab.count }}</span> }
+      </button>
+    }
+  </nav>
+
+  <!-- ============ REQUIRED UI STATES (4.5.4) ============ -->
+
+  <!-- LOADING — retain task title, scope and safe skeleton; announce loading (4.5.4) -->
+  @if (uiState() === 'loading') {
+    <section class="state-block" role="status" aria-live="polite">
+      <p class="state-title">Loading Standard record detail…</p>
+      <div class="skeleton-grid" aria-hidden="true">
+        @for (n of [1,2,3,4,5,6]; track n) { <div class="skeleton-row"></div> }
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="setUiState('ready')">Cancel</button>
+    </section>
+  }
+
+  <!-- EMPTY — explain the reason; never imply a global zero (4.5.4) -->
+  @else if (uiState() === 'empty') {
+    <section class="state-block">
+      <p class="state-title">Nothing to show for this section in your scope.</p>
+      <p class="state-body">Zero results come from the current scope or filters, not a global zero. Adjust the
+        scope or reset the saved view to continue. No permitted creation is offered for a read-only record.</p>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="setUiState('ready')">Reset view</button>
+    </section>
+  }
+
+  <!-- NO ACCESS — hide restricted record, fields, counts and actions (4.5.4 / 4.5.6 restricted) -->
+  @else if (uiState() === 'no-access') {
+    <section class="state-block">
+      <p class="state-title">This record cannot be displayed with your current access.</p>
+      <p class="state-body">Restricted record, fields, counts, actions and search suggestions are hidden.
+        Return to your permitted landing page to continue.</p>
+      <a class="btn btn-ghost btn-sm" href="javascript:void(0)" (click)="uiState.set('ready')">Return to My Workspace</a>
+    </section>
+  }
+
+  <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the record visible -->
+  @else {
+
+    <!-- Situational banners (4.5.6) -->
+    @if (uiState() === 'validation') {
+      <div class="banner banner-error" role="alert">
+        <strong>Review the highlighted field.</strong>
+        A value does not meet the stated format or range. Correct it to continue; entered values are kept.
+      </div>
+    }
+    @if (uiState() === 'duplicate') {
+      <div class="banner banner-warn" role="alert">
+        A safe candidate match exists for this record. Link, merge, change the value, request review or cancel —
+        nothing is overwritten silently, and no other person's protected details are exposed.
+      </div>
+    }
+    @if (uiState() === 'conflict') {
+      <div class="banner banner-warn" role="alert">
+        This record changed after you opened it. Review the latest version before continuing; your proposed values
+        are retained.
+        <span class="banner-actions">
+          <a href="javascript:void(0)" (click)="uiState.set('ready')">Compare</a>
+          <a href="javascript:void(0)" (click)="uiState.set('ready')">Reapply eligible changes</a>
+          <a href="javascript:void(0)" (click)="uiState.set('ready')">Cancel</a>
+        </span>
+      </div>
+    }
+    @if (uiState() === 'dependency-failure') {
+      <div class="banner banner-warn" role="alert">
+        We could not complete the dependent service step. Your confirmed local result is unchanged.
+        <span class="banner-actions">
+          <span class="corr">Correlation INT-77821</span>
+          <a href="javascript:void(0)" (click)="uiState.set('ready')">Retry dependency</a>
+        </span>
+      </div>
+    }
+    @if (uiState() === 'success') {
+      <div class="banner banner-success" role="status">
+        Saved successfully. Reference {{ successRef() }}; state {{ persistentOutcome().state }};
+        effective {{ persistentOutcome().effectiveTime }}. {{ persistentOutcome().downstreamStatus }}.
+      </div>
+    }
+
+    <!-- ============ TAB PANELS ============ -->
+
+    <!-- ---------- OVERVIEW ---------- -->
+    @if (activeTab() === 'overview') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-overview">
+
+        <!-- Record summary strip (4.5.1 Main work — Display status, summary) -->
+        <section class="summary-strip card" aria-label="Record summary">
+          <div class="strip-item">
+            <span class="strip-icon" aria-hidden="true">▤</span>
+            <div><span class="strip-label">Donor / Organisation</span><span class="strip-value">{{ donorOrganisation }}</span></div>
+          </div>
+          <div class="strip-item">
+            <span class="strip-icon" aria-hidden="true">₹</span>
+            <div><span class="strip-label">Donation Amount</span><span class="strip-value">₹{{ formatAmount(donationAmount) }}</span><span class="strip-sub">Indian Rupees</span></div>
+          </div>
+          <div class="strip-item">
+            <span class="strip-icon" aria-hidden="true">◱</span>
+            <div><span class="strip-label">Donation Type</span><span class="strip-value">{{ title }}</span></div>
+          </div>
+          <div class="strip-item">
+            <span class="strip-icon" aria-hidden="true">◇</span>
+            <div><span class="strip-label">Campaign</span><span class="strip-value">{{ campaign }}</span></div>
+          </div>
+        </section>
+
+        <!-- Two-region task layout (4.5.5 desktop): work area + secondary panel -->
+        <div class="work-surface">
+
+          <!-- MAIN WORK -->
+          <div class="main-col">
+
+            <!-- Summary — contract fields (4.5.2) -->
+            <section class="card" aria-labelledby="summary-heading">
+              <h2 id="summary-heading" class="panel-title">Summary</h2>
+              <dl class="detail-list">
+                <div><dt>Donation ID</dt><dd class="mono">{{ recordReference }}</dd></div>
+                <div><dt>Reference Number</dt><dd class="mono">{{ referenceNumber }}</dd></div>
+                <div><dt>Donation Type</dt><dd>{{ title }}</dd></div>
+                <div><dt>Purpose</dt><dd>{{ purpose }}</dd></div>
+                <div><dt>Status</dt><dd><span class="badge badge-good">{{ lifecycleState }}</span></dd></div>
+                <div><dt>Priority</dt><dd><span class="badge badge-warn">{{ priority }}</span></dd></div>
+                <div><dt>Scope</dt><dd>{{ scope }}</dd></div>
+                <div><dt>Owner</dt><dd>{{ owner }}<span class="dd-sub">{{ ownerRole }}</span></dd></div>
+                <div><dt>Created On</dt><dd>{{ createdOn }}</dd></div>
+                <div><dt>Last Updated</dt><dd>{{ lastUpdatedBy }}<span class="dd-sub">{{ lastUpdated() }}</span></dd></div>
+                <div><dt>Concurrency version</dt><dd class="mono">{{ concurrencyVersion }}</dd></div>
+              </dl>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="selectTab('details')">View Full Details</button>
+            </section>
+
+            <!-- Financial summary (4.5.2 Summary — read-only display content) -->
+            <section class="card" aria-labelledby="financial-heading">
+              <h2 id="financial-heading" class="panel-title">Financial Overview</h2>
+              <div class="fin-grid">
+                <div class="fin-item"><span class="fin-label">Donation Amount</span><span class="fin-value">₹{{ formatAmount(donationAmount) }}</span></div>
+                <div class="fin-item"><span class="fin-label">Received Amount</span><span class="fin-value">₹{{ formatAmount(receivedAmount) }} <em class="pct pct-good">({{ receivedPct() }})</em></span></div>
+                <div class="fin-item"><span class="fin-label">Utilised Amount</span><span class="fin-value">₹{{ formatAmount(utilisedAmount) }} <em class="pct pct-warn">({{ utilisedPct() }})</em></span></div>
+                <div class="fin-item"><span class="fin-label">Pending Allocation</span><span class="fin-value">₹{{ formatAmount(pendingAllocation) }} <em class="pct pct-info">({{ pendingPct() }})</em></span></div>
+                <div class="fin-item"><span class="fin-label">Transaction Date</span><span class="fin-value">{{ transactionDate }}</span></div>
+              </div>
+            </section>
+
+            <!-- Notes — additional summary content (4.5.2 Summary) -->
+            <section class="card" aria-labelledby="notes-heading">
+              <h2 id="notes-heading" class="panel-title">Notes</h2>
+              <p class="note-body">{{ note.body }}</p>
+              <p class="note-meta">Added by {{ note.author }} <span class="sep" aria-hidden="true">•</span> {{ note.time }}</p>
+            </section>
+          </div>
+
+          <!-- SECONDARY: timeline (activity) + available actions + related + access (4.5.1 Related and history) -->
+          <div class="side-col">
+
+            <!-- Activity / timeline (4.5.2 Activity) -->
+            <section class="card" aria-labelledby="timeline-heading">
+              <h2 id="timeline-heading" class="panel-title">Timeline / Progress</h2>
+              <ol class="timeline" role="list">
+                @for (step of activity; track step.title) {
+                  <li class="timeline-step" [class]="stepClass(step.state)">
+                    <span class="tl-marker" aria-hidden="true"></span>
+                    <div class="tl-body">
+                      <span class="tl-title">{{ step.title }}</span>
+                      <span class="tl-time">{{ step.time }}</span>
+                    </div>
+                    <div class="tl-side">
+                      <span class="tl-actor">{{ step.actor }}</span>
+                      <span class="badge" [class]="badgeClass(step.state)">{{ step.state }}</span>
+                    </div>
+                  </li>
+                }
+              </ol>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="selectTab('activity')">View Full Timeline</button>
+            </section>
+
+            <!-- Available actions (4.5.2 Available actions; 4.5.3) -->
+            <section class="card" aria-labelledby="actions-heading">
+              <h2 id="actions-heading" class="panel-title">Available Actions</h2>
+              <ul class="action-list" role="list">
+                <li>
+                  <button type="button" class="action-row" (click)="requestEdit()" [disabled]="!editAllowed()">
+                    <span class="ar-icon" aria-hidden="true">✎</span> Edit
+                    @if (!editAllowed()) { <span class="ar-note">Not permitted in current state</span> }
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="action-row" (click)="requestSubmit()" [disabled]="!submitAllowed()">
+                    <span class="ar-icon" aria-hidden="true">➤</span> Submit
+                    @if (!submitAllowed()) { <span class="ar-note">Not permitted in current state</span> }
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="action-row action-row-primary" (click)="requestApprove()" [disabled]="!approveAllowed()">
+                    <span class="ar-icon" aria-hidden="true">✔</span> Approve according to state
+                    @if (!approveAllowed()) { <span class="ar-note">No open review item</span> }
+                  </button>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Related records (4.5.2 Related records) -->
+            <section class="card" aria-labelledby="related-heading">
+              <div class="panel-head">
+                <h2 id="related-heading" class="panel-title">Related Records <span class="th-count">{{ relatedTotal }}</span></h2>
+                <button type="button" class="link-btn" (click)="selectTab('related')">View all</button>
+              </div>
+              <ul class="related-list" role="list">
+                @for (r of related; track r.primary) {
+                  <li class="related-row">
+                    <span class="rr-icon" aria-hidden="true">▦</span>
+                    <span class="rr-text">
+                      <span class="rr-primary">{{ r.primary }}</span>
+                      <span class="rr-secondary">{{ r.secondary }}</span>
+                    </span>
+                    <span class="rr-chev" aria-hidden="true">›</span>
+                  </li>
+                }
+              </ul>
+            </section>
+
+            <!-- Persistent outcome (4.5.1) -->
+            <section class="card" aria-labelledby="outcome-heading">
+              <h2 id="outcome-heading" class="panel-title">Persistent outcome</h2>
+              <dl class="kv-list">
+                <div><dt>State</dt><dd>{{ persistentOutcome().state }}</dd></div>
+                <div><dt>Effective time</dt><dd>{{ persistentOutcome().effectiveTime }}</dd></div>
+                <div><dt>Downstream status</dt><dd>{{ persistentOutcome().downstreamStatus }}</dd></div>
+                <div><dt>Accountable owner</dt><dd>{{ persistentOutcome().owner }}</dd></div>
+                <div><dt>Next action</dt><dd>{{ persistentOutcome().nextAction }}</dd></div>
+              </dl>
+            </section>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ---------- DETAILS ---------- -->
+    @else if (activeTab() === 'details') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-details">
+        <section class="card">
+          <h2 class="panel-title">Details</h2>
+          <dl class="detail-list two-col">
+            <div><dt>Donation ID</dt><dd class="mono">{{ recordReference }}</dd></div>
+            <div><dt>Reference Number</dt><dd class="mono">{{ referenceNumber }}</dd></div>
+            <div><dt>Title</dt><dd>{{ title }}</dd></div>
+            <div><dt>Status</dt><dd><span class="badge badge-good">{{ lifecycleState }}</span></dd></div>
+            <div><dt>Priority</dt><dd><span class="badge badge-warn">{{ priority }}</span></dd></div>
+            <div><dt>Campaign</dt><dd>{{ campaign }}</dd></div>
+            <div><dt>Scope</dt><dd>{{ scope }}</dd></div>
+            <div><dt>Owner</dt><dd>{{ owner }} · {{ ownerRole }}</dd></div>
+            <div><dt>Created On</dt><dd>{{ createdOn }}</dd></div>
+            <div><dt>Last Updated</dt><dd>{{ lastUpdated() }} · {{ lastUpdatedBy }}</dd></div>
+            <div><dt>Concurrency version</dt><dd class="mono">{{ concurrencyVersion }}</dd></div>
+            <div><dt>Purpose</dt><dd>{{ purpose }}</dd></div>
+          </dl>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- DONOR & ORGANISATION ---------- -->
+    @else if (activeTab() === 'donor') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-donor">
+        <section class="card">
+          <h2 class="panel-title">Donor & Organisation</h2>
+          <dl class="detail-list two-col">
+            <div><dt>Organisation</dt><dd>{{ donorOrganisation }}</dd></div>
+            <div><dt>Donation Type</dt><dd>{{ title }}</dd></div>
+            <div><dt>Campaign</dt><dd>{{ campaign }}</dd></div>
+            <div><dt>Scope</dt><dd>{{ scope }}</dd></div>
+            <div><dt>Accountable owner</dt><dd>{{ owner }} · {{ ownerRole }}</dd></div>
+          </dl>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- FINANCIALS ---------- -->
+    @else if (activeTab() === 'financials') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-financials">
+        <section class="card">
+          <h2 class="panel-title">Financials</h2>
+          <div class="fin-grid">
+            <div class="fin-item"><span class="fin-label">Donation Amount</span><span class="fin-value">₹{{ formatAmount(donationAmount) }}</span></div>
+            <div class="fin-item"><span class="fin-label">Received Amount</span><span class="fin-value">₹{{ formatAmount(receivedAmount) }} <em class="pct pct-good">({{ receivedPct() }})</em></span></div>
+            <div class="fin-item"><span class="fin-label">Utilised Amount</span><span class="fin-value">₹{{ formatAmount(utilisedAmount) }} <em class="pct pct-warn">({{ utilisedPct() }})</em></span></div>
+            <div class="fin-item"><span class="fin-label">Pending Allocation</span><span class="fin-value">₹{{ formatAmount(pendingAllocation) }} <em class="pct pct-info">({{ pendingPct() }})</em></span></div>
+            <div class="fin-item"><span class="fin-label">Transaction Date</span><span class="fin-value">{{ transactionDate }}</span></div>
+          </div>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- DOCUMENTS (Confidential — within record scope, 4.5.2) ---------- -->
+    @else if (activeTab() === 'documents') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-documents">
+        <section class="card">
+          <div class="panel-head">
+            <h2 class="panel-title">Documents <span class="th-count">{{ documents.length }}</span>
+              <span class="confidential-tag">Confidential</span>
+            </h2>
+          </div>
+          <ul class="doc-list" role="list">
+            @for (d of documents; track d.name) {
+              <li class="doc-row">
+                <span class="doc-icon" aria-hidden="true">▤</span>
+                <span class="doc-text">
+                  <span class="doc-name">{{ d.name }}</span>
+                  <span class="doc-meta">{{ d.meta }} · {{ d.added }}</span>
+                </span>
+              </li>
+            }
+          </ul>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- ACTIVITY ---------- -->
+    @else if (activeTab() === 'activity') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-activity">
+        <section class="card">
+          <h2 class="panel-title">Activity</h2>
+          <ol class="timeline" role="list">
+            @for (step of activity; track step.title) {
+              <li class="timeline-step" [class]="stepClass(step.state)">
+                <span class="tl-marker" aria-hidden="true"></span>
+                <div class="tl-body">
+                  <span class="tl-title">{{ step.title }}</span>
+                  <span class="tl-time">{{ step.time }}</span>
+                </div>
+                <div class="tl-side">
+                  <span class="tl-actor">{{ step.actor }}</span>
+                  <span class="badge" [class]="badgeClass(step.state)">{{ step.state }}</span>
+                </div>
+              </li>
+            }
+          </ol>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- APPROVALS — Decision / review (4.5.1 + 4.5.3) ---------- -->
+    @else if (activeTab() === 'approvals') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-approvals">
+        <section class="card">
+          <h2 class="panel-title">Approvals <span class="th-count">{{ approvals.length }}</span></h2>
+          <ul class="approval-list" role="list">
+            @for (a of approvals; track a.stage) {
+              <li class="approval-row">
+                <span class="ap-stage">{{ a.stage }}</span>
+                <span class="ap-decision">{{ a.decision }}</span>
+                <span class="ap-authority">{{ a.authority }}</span>
+                <span class="ap-time">{{ a.time }}</span>
+                <span class="badge" [class]="badgeClass(a.state)">{{ a.state }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <!-- Decision / review: before-and-after, effective permission, evidence, reason, resulting state (4.5.1) -->
+        <section class="card">
+          <h2 class="panel-title">Decision / review</h2>
+          <p class="dr-lead">Risky decisions require review and explicit confirmation before they take effect.</p>
+          <dl class="kv-list">
+            <div><dt>Before → after</dt><dd>{{ decisionReview().before }} → {{ decisionReview().after }}</dd></div>
+            <div><dt>Evidence</dt><dd>{{ decisionReview().evidence }}</dd></div>
+            <div><dt>Reason</dt><dd>{{ decisionReview().reason }}</dd></div>
+            <div><dt>Resulting state</dt><dd>{{ decisionReview().resultingState }}</dd></div>
+          </dl>
+          <button type="button" class="btn btn-primary btn-sm" (click)="requestApprove()" [disabled]="!approveAllowed()">
+            Approve according to state
+          </button>
+        </section>
+      </div>
+    }
+
+    <!-- ---------- RELATED RECORDS ---------- -->
+    @else if (activeTab() === 'related') {
+      <div class="tab-panel" role="tabpanel" aria-labelledby="tab-related">
+        <section class="card">
+          <h2 class="panel-title">Related Records <span class="th-count">{{ relatedTotal }}</span></h2>
+          <ul class="related-list wide" role="list">
+            @for (r of related; track r.primary) {
+              <li class="related-row">
+                <span class="rr-icon" aria-hidden="true">▦</span>
+                <span class="rr-text">
+                  <span class="rr-primary">{{ r.primary }}</span>
+                  <span class="rr-secondary">{{ r.secondary }}</span>
+                </span>
+                <span class="rr-chev" aria-hidden="true">›</span>
+              </li>
+            }
+          </ul>
+          <p class="rel-note">Showing 5 of {{ relatedTotal }} linked records in your effective scope.</p>
+        </section>
+      </div>
+    }
+  }
+
+  <!-- ============ EDIT DIALOG (4.5.3 Edit) ============ -->
+  @if (editDialogOpen()) {
+    <div class="srd-modal-backdrop" (click)="cancelEdit()">
+      <div class="srd-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="edit-title" class="srd-modal-title">Edit record</h2>
+        <p class="srd-modal-lead">Change only the authorised record in effective scope. The confirmed result is
+          shown here and does not rely on a toast alone.</p>
+        <dl class="kv-list">
+          <div><dt>Record</dt><dd class="mono">{{ recordReference }}</dd></div>
+          <div><dt>Concurrency version</dt><dd class="mono">{{ concurrencyVersion }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastUpdated() }}</dd></div>
+        </dl>
+        <div class="srd-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmEdit()">Confirm edit</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ SUBMIT DIALOG (4.5.3 Submit — idempotent) ============ -->
+  @if (submitDialogOpen()) {
+    <div class="srd-modal-backdrop" (click)="cancelSubmit()">
+      <div class="srd-modal" role="dialog" aria-modal="true" aria-labelledby="submit-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="submit-title" class="srd-modal-title">Submit record</h2>
+        <p class="srd-modal-lead">Submit executes idempotently and shows the stable reference, committed result,
+          any pending dependency and the safe next action.</p>
+        <dl class="kv-list">
+          <div><dt>Record</dt><dd class="mono">{{ recordReference }}</dd></div>
+          <div><dt>Permission</dt><dd class="mono">ux.standard-record-detail.submit</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastUpdated() }}</dd></div>
+        </dl>
+        <div class="srd-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelSubmit()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmSubmit()">Confirm submit</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ APPROVE DIALOG — high-risk decision (4.5.3 + 4.5.6 high-risk) ============ -->
+  @if (approveDialogOpen()) {
+    <div class="srd-modal-backdrop" (click)="cancelApprove()">
+      <div class="srd-modal" role="dialog" aria-modal="true" aria-labelledby="approve-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="approve-title" class="srd-modal-title">Confirm Approve according to state</h2>
+        <p class="srd-modal-lead">Review the affected record, consequence, reason and effective time. The decision,
+          independent authority, effective version, time and resulting state are recorded.</p>
+        <dl class="kv-list">
+          <div><dt>Before → after</dt><dd>{{ decisionReview().before }} → {{ decisionReview().after }}</dd></div>
+          <div><dt>Independent authority</dt><dd>{{ lastUpdatedBy }}</dd></div>
+          <div><dt>Effective version</dt><dd class="mono">{{ concurrencyVersion }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastUpdated() }}</dd></div>
+          <div><dt>Resulting state</dt><dd>{{ decisionReview().resultingState }}</dd></div>
+          <div><dt>Next accountable owner</dt><dd>{{ owner }} · {{ ownerRole }}</dd></div>
+        </dl>
+
+        <!-- Reason — required before an irreversible decision (4.5.6 high-risk) -->
+        <div class="field">
+          <label class="field-label" for="approve-reason">Decision reason</label>
+          <textarea id="approve-reason" class="control textarea" rows="3"
+                    [ngModel]="approveReason()" (ngModelChange)="approveReason.set($event)"
+                    [attr.maxlength]="approveReasonMax"
+                    placeholder="Record the reason for this decision…"></textarea>
+          <p class="field-hint" [class.field-error]="approveReasonCount() > 0 && !approveReasonValid()" role="status">
+            @if (approveReasonCount() === 0) { Enter Decision reason. }
+            @else { {{ approveReasonCount() }} / {{ approveReasonMax }} characters (minimum {{ approveReasonMin }}) }
+          </p>
+        </div>
+
+        <div class="srd-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelApprove()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmApprove()"
+                  [disabled]="!approveReasonValid()">Confirm decision</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

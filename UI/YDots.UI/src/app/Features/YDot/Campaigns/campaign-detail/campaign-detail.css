@@ -1,0 +1,1091 @@
+/* =========================================================
+   Campaign detail
+   Read-only view, aligned to the register palette for cross-screen consistency.
+   ========================================================= */
+:host {
+  --cd-paper: #ffffff;
+  --cd-card: #ffffff;
+  --cd-ink: #1e2a24;
+  --cd-ink-2: #4a564e;
+  --cd-muted: #7b8880;
+  --cd-border: #e4e0d3;
+  --cd-border-2: #d8d3c4;
+
+  --cd-meadow: var(--pe-primary, #223c30);
+  --cd-meadow-700: var(--pe-primary-text-emphasis, #26412e);
+  --cd-meadow-soft: var(--pe-primary-bg-subtle, #e7efe7);
+
+  --cd-gold: #b4842a;
+  --cd-gold-soft: #f6ecd4;
+  --cd-blue: #58717c;
+  --cd-blue-soft: #e6eff3;
+  --cd-plum: #6b4a72;
+  --cd-good: #2f7d4f;
+  --cd-good-soft: #e5efe7;
+  --cd-error: #c0392b;
+  --cd-error-soft: #f9e6e2;
+  --cd-warn: #b5822f;
+  --cd-warn-soft: #f7ecd6;
+
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--cd-paper);
+  color: var(--cd-ink);
+}
+* {
+  box-sizing: border-box;
+}
+.cd-page {
+  padding: 24px 17px 48px;
+}
+
+/* Visible deep-olive / antique-gold focus ring; no trap. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #E4EFE6;
+  outline-offset: 0;
+  border-radius: 10px;
+}
+
+/* ---------- Buttons ---------- */
+.cd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.cd-btn-primary {
+  background: var(--cd-meadow);
+  color: #fff;
+}
+/* Header action buttons (Export, Manage lifecycle, Edit, Delete) all match the
+   New Campaign button height so the row is uniform. */
+.cd-header-actions .cd-btn {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.cd-btn-primary:hover {
+  background: var(--cd-meadow-700);
+}
+.cd-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cd-btn-outline {
+  background: #fff;
+  color: var(--cd-meadow);
+  border-color: var(--cd-meadow);
+}
+.cd-btn-outline:hover {
+  background: var(--cd-meadow-soft);
+}
+.cd-btn-danger {
+  background: #fff;
+  color: #c0392b;
+  border-color: #e0b4ae;
+}
+.cd-btn-danger:hover {
+  background: #fbecea;
+  border-color: #c0392b;
+}
+.cd-modal-actions .cd-btn-danger {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+.cd-modal-actions .cd-btn-danger:hover {
+  background: #a93226;
+  border-color: #a93226;
+}
+.cd-btn-sm {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.cd-ic {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.cd-ic-sm {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.cd-ic-xs {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+/* ---------- Task header ---------- */
+.cd-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+.cd-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--cd-meadow);
+  margin: 0 0 4px;
+}
+.cd-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cd-title {
+  /* Georgia renders old-style figures (digits like "2025" sit unevenly against
+     the capitals) and ignores the lining-figure feature. Use serifs whose default
+     numerals are lining/uniform-height so the year reads cleanly. */
+  font-family: ui-serif, 'Cambria', 'Times New Roman', 'Times', serif;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  margin: 0;
+  color: #000;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: 'lnum' 1;
+}
+.cd-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--cd-muted);
+  margin-top: 8px;
+}
+.cd-meta-item strong {
+  color: var(--cd-ink-2);
+  font-weight: 700;
+}
+.cd-meta-dot {
+  color: var(--cd-border-2);
+}
+.cd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ---------- Status badge (colour never carries meaning alone: text + icon) ---------- */
+.cd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cd-inline-badge {
+  padding: 2px 10px;
+}
+.cd-badge-draft {
+  background: #eef1ec;
+  color: var(--cd-muted);
+}
+.cd-badge-submitted {
+  background: var(--cd-blue-soft);
+  color: var(--cd-blue);
+}
+.cd-badge-approved {
+  background: var(--cd-good-soft);
+  color: var(--cd-good);
+}
+.cd-badge-scheduled {
+  background: #efe6f1;
+  color: var(--cd-plum);
+}
+.cd-badge-active {
+  background: var(--cd-good-soft);
+  color: var(--cd-good);
+}
+.cd-badge-paused {
+  background: var(--cd-warn-soft);
+  color: var(--cd-warn);
+}
+.cd-badge-closing {
+  background: var(--cd-blue-soft);
+  color: var(--cd-blue);
+}
+.cd-badge-closed {
+  background: var(--cd-error-soft);
+  color: var(--cd-error);
+}
+.cd-badge-cancelled {
+  background: var(--cd-error-soft);
+  color: var(--cd-error);
+}
+
+/* ---------- Context and filters ---------- */
+.cd-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--cd-border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.cd-context-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cd-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--cd-meadow-soft);
+  color: var(--cd-meadow);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cd-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.cd-search .cd-ic-sm {
+  position: absolute;
+  left: 11px;
+  color: var(--cd-muted);
+  pointer-events: none;
+}
+.cd-search-input {
+  min-width: 220px;
+  padding: 9px 14px 9px 34px;
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--cd-ink);
+  background: #fff;
+}
+.cd-search-input:focus {
+  outline: none;
+  border-color: var(--cd-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.cd-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cd-saved-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cd-ink-2);
+}
+.cd-select-wrap {
+  position: relative;
+}
+.cd-select {
+  padding: 9px 32px 9px 14px;
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--cd-ink);
+  background: #fff;
+  appearance: none;
+  cursor: pointer;
+}
+.cd-select:focus {
+  outline: none;
+  border-color: var(--cd-meadow);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+}
+.cd-chev {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--cd-muted);
+  pointer-events: none;
+}
+.cd-totals {
+  font-size: 13px;
+  color: var(--cd-muted);
+}
+.cd-totals-fetching {
+  opacity: 0.6;
+}
+/* Donations-in-scope total relocated into the task-header meta row. */
+.cd-meta-totals {
+  font-variant-numeric: tabular-nums;
+}
+.cd-task-meta .cd-refresh-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+.cd-context-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cd-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--cd-border);
+  background: #fff;
+  color: var(--cd-ink-2);
+  cursor: pointer;
+}
+.cd-refresh-btn:hover:not(:disabled) {
+  background: var(--cd-meadow-soft);
+  color: var(--cd-meadow);
+}
+.cd-refresh-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.cd-spin {
+  animation: cd-spin 0.8s linear infinite;
+}
+@keyframes cd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Owner name/id/role line ---------- */
+.cd-owner-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--cd-ink-2);
+}
+.cd-owner-name {
+  font-weight: 700;
+  color: var(--cd-ink);
+}
+.cd-owner-id {
+  color: var(--cd-muted);
+}
+.cd-owner-role {
+  color: var(--cd-meadow);
+  font-weight: 600;
+}
+
+/* ---------- Read more (Public description / Terms and notice) ---------- */
+.cd-read-more {
+  display: inline-block;
+  margin-left: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cd-meadow);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.cd-modal.cd-modal-lg {
+  max-width: 1040px;
+  width: 92vw;
+}
+/* Pause / Resume / Close — a half-canvas drawer anchored to the right edge, full height,
+   with its own scrolling body. Roomier and less congested than a centred modal. */
+.cd-modal.cd-modal-lifecycle {
+  width: 100%;
+  max-width: 640px;
+  height: 100vh;
+  max-height: 100vh;
+  margin: -20px -20px -20px auto;
+  border-radius: 18px 0 0 18px;
+  padding: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  animation: cd-drawer-in 0.28s ease;
+}
+@keyframes cd-drawer-in {
+  from { transform: translateX(48px); opacity: 0.3; }
+  to { transform: none; opacity: 1; }
+}
+.cd-modal-lifecycle .cd-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 2;
+  background: #fff;
+  border: 1px solid var(--cd-border);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+}
+.cd-modal-lifecycle app-pause-resume-close-campaign {
+  display: block;
+  padding: 22px 24px 30px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+/* While the embedded action off-canvas is open, hide this lifecycle popup's own chrome
+   (surface, shadow, close button, backdrop dim) so only the action off-canvas is visible.
+   The child keeps its fixed overlays mounted, so they stay on screen. */
+.cd-modal-backdrop.cd-lifecycle-chrome-hidden {
+  background: transparent;
+}
+.cd-modal.cd-modal-lifecycle.cd-lifecycle-chrome-hidden {
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+.cd-modal-lifecycle.cd-lifecycle-chrome-hidden .cd-modal-close {
+  display: none;
+}
+@media (max-width: 680px) {
+  .cd-modal.cd-modal-lifecycle {
+    max-width: 100%;
+    border-radius: 0;
+  }
+}
+.cd-readmore-body {
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  background: var(--cd-row-alt, #faf8f3);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.cd-readmore-body :is(ul, ol) {
+  padding-left: 22px;
+}
+
+.cd-active-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cd-active-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cd-ink-2);
+}
+.cd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--cd-meadow-soft);
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cd-meadow);
+  cursor: pointer;
+}
+.cd-chip:hover {
+  background: #dbe8db;
+}
+.cd-clear-all {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cd-blue);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.cd-clear-all:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Cards ---------- */
+.cd-card {
+  background: var(--cd-card);
+  border: 1px solid var(--cd-border);
+  border-radius: 18px;
+  padding: 20px 22px;
+}
+.cd-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.cd-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--cd-ink-2);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ---------- Two-region layout ---------- */
+.cd-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+.cd-work {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.cd-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+/* Narrower label column so the persistent-outcome facts read well in the sidebar. */
+.cd-side .cd-facts dt {
+  min-width: 120px;
+}
+.cd-side-card {
+  /* Related & history no longer sticky so the Persistent outcome card can sit
+     directly beneath it in the sidebar flow. */
+}
+
+/* ---------- Read-only facts ---------- */
+.cd-purpose {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--cd-ink-2);
+  margin: 0 0 16px;
+}
+.cd-facts {
+  margin: 0;
+}
+.cd-facts .cd-fact {
+  display: flex;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cd-border);
+}
+.cd-facts .cd-fact:last-child {
+  border-bottom: none;
+}
+.cd-facts dt {
+  font-weight: 600;
+  color: var(--cd-ink-2);
+  min-width: 168px;
+  font-size: 13px;
+}
+.cd-facts dd {
+  margin: 0;
+  color: var(--cd-ink);
+  font-size: 13px;
+}
+.cd-facts-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0 28px;
+}
+.cd-facts-3 .cd-fact {
+  flex-direction: column;
+  gap: 4px;
+}
+.cd-facts-3 dt {
+  min-width: 0;
+}
+.cd-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Budget allocation share — how each category's amount compares to the campaign total. */
+.cd-share-bar {
+  display: inline-block;
+  width: 64px;
+  height: 7px;
+  border-radius: 999px;
+  background: #eae5da;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.cd-share-fill {
+  display: block;
+  height: 100%;
+  background: var(--cd-gold, #c39433);
+  border-radius: 999px;
+}
+.cd-share-pct {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cd-ink-2);
+  vertical-align: middle;
+}
+.cd-usage {
+  max-width: 320px;
+  color: var(--cd-ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Progress meter — antique-gold-tracked representation of "Target and reconciled progress". */
+.cd-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: #eae5da;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.cd-meter-fill {
+  height: 100%;
+  background: var(--cd-meadow);
+  border-radius: 999px;
+}
+
+/* ---------- Main-work tabs (task-oriented groups; no raw DB table) ---------- */
+.cd-work-card {
+  padding-top: 8px;
+}
+.cd-tabs {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--cd-border);
+  margin-bottom: 18px;
+}
+.cd-tab {
+  background: none;
+  border: none;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cd-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.cd-tab:hover {
+  color: var(--cd-ink);
+}
+.cd-tab-active {
+  color: var(--cd-meadow);
+  border-bottom-color: var(--cd-meadow);
+}
+.cd-tabpanel {
+  min-height: 96px;
+}
+
+/* ---------- Read-only lists ---------- */
+/* ---------- Read-only tables (Targets / Budget / Sources / Tracking / Payments / History) ---------- */
+.cd-table-scroll {
+  overflow-x: auto;
+}
+.cd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cd-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cd-muted);
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--cd-border);
+  white-space: nowrap;
+}
+.cd-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cd-border);
+  color: var(--cd-ink);
+  vertical-align: top;
+}
+.cd-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.cd-table-total td {
+  font-weight: 700;
+  border-top: 1px solid var(--cd-border);
+}
+
+/* ---------- Activity chronology ---------- */
+.cd-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cd-activity-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cd-border);
+}
+.cd-activity-row:last-child {
+  border-bottom: none;
+}
+.cd-activity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+  background: var(--cd-muted);
+}
+.cd-tone-good {
+  background: var(--cd-good);
+}
+.cd-tone-meadow {
+  background: var(--cd-meadow);
+}
+.cd-tone-blue {
+  background: var(--cd-blue);
+}
+.cd-tone-gold {
+  background: var(--cd-gold);
+}
+.cd-tone-plum {
+  background: var(--cd-plum);
+}
+.cd-activity-body {
+  display: flex;
+  flex-direction: column;
+}
+.cd-activity-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.cd-activity-detail {
+  font-size: 13px;
+  color: var(--cd-ink-2);
+}
+.cd-activity-time {
+  font-size: 12px;
+  color: var(--cd-muted);
+}
+
+/*.cd-decision-value is still used inline by the Operate lifecycle dialog's radio options. */
+.cd-decision-value {
+  font-size: 13px;
+  color: var(--cd-ink);
+}
+
+/* ---------- UI states ---------- */
+.cd-state-panel {
+  background: #fff;
+  border: 1px solid var(--cd-border);
+  border-radius: 16px;
+  padding: 40px 24px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.cd-state-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.cd-state-note {
+  font-size: 13px;
+  color: var(--cd-ink-2);
+  margin: 0 0 16px;
+  max-width: 560px;
+  margin-inline: auto;
+}
+.cd-state-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.cd-state-warn {
+  border-color: #e6cf9c;
+  background: var(--cd-warn-soft);
+}
+.cd-state-danger {
+  border-color: #e7b8b2;
+  background: var(--cd-error-soft);
+}
+.cd-skeleton-head {
+  height: 28px;
+  width: 40%;
+  border-radius: 8px;
+  margin: 0 auto 16px;
+}
+.cd-skeleton-body {
+  height: 120px;
+  border-radius: 12px;
+}
+.cd-skeleton-head,
+.cd-skeleton-body {
+  background: linear-gradient(90deg, #E5EFE7 25%, #f7f6f0 37%, #E5EFE7 63%);
+  background-size: 400% 100%;
+  animation: cd-sk 1.4s ease infinite;
+}
+@keyframes cd-sk {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Success — persistent confirmation. */
+.cd-success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--cd-good-soft);
+  border: 1px solid #b6d6bf;
+  color: var(--cd-good);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.cd-success-text {
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.cd-success-sub {
+  display: block;
+  color: var(--cd-ink-2);
+  margin-top: 2px;
+}
+.cd-banner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: auto;
+  color: inherit;
+  opacity: 0.7;
+  padding: 2px;
+}
+.cd-banner-close:hover {
+  opacity: 1;
+}
+
+/* ---------- Modal ---------- */
+.cd-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(24, 32, 26, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.cd-modal {
+  background: #fff;
+  border-radius: 18px;
+  padding: 28px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  max-height: 90vh;
+  overflow: auto;
+}
+.cd-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.cd-modal-lead {
+  font-size: 13px;
+  color: var(--cd-ink-2);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+.cd-modal-facts {
+  margin-bottom: 18px;
+}
+.cd-modal-field {
+  display: block;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+.cd-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--cd-ink);
+  padding: 6px 0;
+  cursor: pointer;
+}
+.cd-radio-row input[type='radio'] {
+  accent-color: var(--cd-meadow);
+}
+.cd-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cd-ink-2);
+  margin-bottom: 6px;
+}
+.cd-req {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cd-error);
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+.cd-textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--cd-ink);
+}
+.cd-textarea:focus {
+  outline: none;
+  border-color: #8fbfa0;
+  box-shadow: 0 0 0 2px #E4EFE6;
+}
+.cd-field-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.cd-count {
+  font-size: 12px;
+  color: var(--cd-muted);
+}
+.cd-count-bad {
+  color: var(--cd-error);
+  font-weight: 700;
+}
+.cd-field-error {
+  display: block;
+  color: var(--cd-error);
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.cd-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* ---------- Responsive ---------- */
+/* Tablet: secondary panel drops below; scope, record identity, state and primary action stay visible. */
+@media (max-width: 1080px) {
+  .cd-layout {
+    grid-template-columns: 1fr;
+  }
+  .cd-side-card {
+    position: static;
+  }
+  .cd-facts-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* Mobile: one-column cards; pin the primary action; preserve reference, name, status, purpose; 44px targets. */
+@media (max-width: 680px) {
+  .cd-page {
+    padding: 18px 14px 96px;
+  }
+  .cd-task-header {
+    flex-direction: column;
+  }
+  .cd-title {
+    font-size: 27px;
+  }
+  .cd-context {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cd-context-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cd-search-input {
+    min-width: 0;
+    width: 100%;
+  }
+  .cd-saved {
+    justify-content: space-between;
+  }
+  .cd-select {
+    width: 100%;
+  }
+  .cd-facts .cd-fact {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cd-facts dt {
+    min-width: 0;
+  }
+  .cd-facts-3 {
+    grid-template-columns: 1fr;
+  }
+  /* Pin only the permitted primary action. */
+  .cd-header-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--cd-border);
+    backdrop-filter: blur(6px);
+  }
+  .cd-header-actions .cd-btn {
+    width: 100%;
+  }
+}

@@ -1,0 +1,2 @@
+/*! For license information please see draggable-points.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import DraggablePoints from"../../Extensions/DraggablePoints/DraggablePoints.js";const G=Highcharts;DraggablePoints.compose(G.Chart,G.Series);export default Highcharts;

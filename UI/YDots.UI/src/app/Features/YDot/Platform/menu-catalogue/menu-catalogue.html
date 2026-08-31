@@ -1,0 +1,126 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid py-6">
+
+    <div class="mb-6">
+      <h4 class="mb-1"><i class="ri-layout-line me-2"></i>Navigation catalogue</h4>
+      <p class="text-muted mb-0">
+        Every screen the product has, where it lives, and what it requires.
+      </p>
+    </div>
+
+    <!--
+      Worth being explicit: this is the product's own menu, not one organisation's. Turning
+      something on for a single customer happens on the administration screen; a change here
+      would affect every customer at once, which is why entries arrive with the code they
+      describe rather than from a form.
+    -->
+    <div class="alert alert-light border d-flex align-items-start gap-2 mb-6">
+      <i class="ri-information-line mt-1"></i>
+      <span class="small">
+        This is what the product contains. To decide what a single organisation uses, go to
+        <strong>Administration → Menu and navigation</strong>. What somebody finally sees is the
+        overlap of this catalogue, their organisation's choices, their role's mapping and their
+        own permissions.
+      </span>
+    </div>
+
+    @if (loading()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-loader-4-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3 mb-0">Loading…</p>
+        </div>
+      </div>
+    } @else if (loadFailed()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-cloud-off-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      </div>
+    } @else {
+
+      <div class="card border-0 shadow-sm mb-6">
+        <div class="card-body">
+          <label class="form-label small" for="cat-search">Find a screen</label>
+          <input id="cat-search" type="search" class="form-control"
+                 placeholder="Name, route, module or permission code"
+                 [ngModel]="search()" (ngModelChange)="search.set($event)">
+          <div class="form-text">
+            {{ totalNodes() }} entries across {{ moduleCount() }} modules.
+            @if (search().trim()) { {{ filtered().length }} match. }
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Screen</th>
+                <th>Level</th>
+                <th>Module</th>
+                <th>Route</th>
+                <th>Permission needed</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (node of filtered(); track node.id) {
+                <tr>
+                  <td [style.padding-left]="search().trim()
+                        ? '0.75rem'
+                        : 'calc(0.75rem + ' + indent(node.depth) + ')'">
+                    <span class="d-inline-flex align-items-center gap-2">
+                      <i [class]="iconClass(node.icon)"></i>
+                      <span>{{ node.name }}</span>
+                    </span>
+                    <small class="text-muted d-block">{{ node.code }}</small>
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="levelClass(node.level)">
+                      {{ levelLabel(node.level) }}
+                    </span>
+                  </td>
+                  <td>{{ node.moduleCode || '—' }}</td>
+                  <td>
+                    @if (node.route) {
+                      <code>{{ node.route }}</code>
+                    } @else {
+                      <!--
+                        A group heading has no route: it opens its children rather than a page.
+                        Giving it one would navigate somewhere that does not exist.
+                      -->
+                      <span class="text-muted small">Group heading</span>
+                    }
+                  </td>
+                  <td>
+                    @if (node.requiredPermissionCode) {
+                      <code>{{ node.requiredPermissionCode }}</code>
+                    } @else {
+                      <span class="text-muted small">Everyone</span>
+                    }
+                  </td>
+                </tr>
+              }
+
+              @if (filtered().length === 0) {
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-6">
+                    Nothing matches that search.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+  </div>
+</div>
+</main>

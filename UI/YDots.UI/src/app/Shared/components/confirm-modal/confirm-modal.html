@@ -1,0 +1,121 @@
+@if (config) {
+  <div class="dl-modal-backdrop" (click)="cancelAction()">
+    <div class="dl-modal" role="dialog" aria-modal="true" [attr.aria-labelledby]="'dl-modal-title'" (click)="$event.stopPropagation()">
+
+      <!-- Top accent bar -->
+      <div class="dl-accent-bar" [class.dl-accent-bar-danger]="config.tone === 'danger'"></div>
+
+      <!-- Header -->
+      <div class="dl-modal-header">
+        <div class="dl-modal-icon" [class.dl-modal-icon-danger]="config.tone === 'danger'">
+          @if (config.tone === 'danger') {
+            <svg class="dl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          } @else {
+            <svg class="dl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          }
+        </div>
+        <div class="dl-modal-head-text">
+          <h2 class="dl-modal-title" id="dl-modal-title">{{ config.title }}</h2>
+          <p class="dl-modal-lead">{{ config.message }}</p>
+        </div>
+        <button type="button" class="dl-modal-close" (click)="cancelAction()" aria-label="Close">
+          <svg class="dl-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="dl-modal-body">
+
+        <!-- Affected record / effective time -->
+        @if (config.affectedRecord || config.effectiveTime) {
+          <div class="dl-info-grid">
+            @if (config.affectedRecord) {
+              <div class="dl-info-item">
+                <span class="dl-info-label">Affected record</span>
+                <span class="dl-info-value">{{ config.affectedRecord }}</span>
+              </div>
+            }
+            @if (config.effectiveTime) {
+              <div class="dl-info-item">
+                <span class="dl-info-label">Effective time</span>
+                <span class="dl-info-value">{{ config.effectiveTime }}</span>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Change summary -->
+        @if (config.beforeAfter?.length) {
+          <div class="dl-change-section">
+            <div class="dl-change-head">
+              <svg class="dl-ic-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8m8 4H8m2-8H8"/></svg>
+              <span>Change summary</span>
+            </div>
+            <div class="dl-change-list">
+              @for (row of config.beforeAfter; track row.label) {
+                <div class="dl-change-row">
+                  <span class="dl-change-label">{{ row.label }}</span>
+                  <div class="dl-change-values">
+                    <span class="dl-change-before">{{ row.before }}</span>
+                    <span class="dl-change-arrow" aria-hidden="true">
+                      <svg class="dl-ic-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
+                    </span>
+                    <span class="dl-change-after">{{ row.after }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Reason field -->
+        @if (config.requireReason) {
+          <div class="dl-field">
+            <label class="dl-field-label" for="dl-reason">
+              {{ config.reasonLabel ?? 'Reason' }}
+              <span class="dl-req">required</span>
+            </label>
+            <textarea id="dl-reason" class="dl-textarea" rows="3"
+                      [ngModel]="reason()" (ngModelChange)="onReasonInput($event)"
+                      (blur)="onBlurReason()"
+                      placeholder="State why this action is being taken…"
+                      [attr.aria-invalid]="touched() && !reasonValid"></textarea>
+            <div class="dl-field-foot">
+              <span class="dl-count" [class.dl-count-bad]="reasonCount > reasonMax">{{ reasonCount }} / {{ reasonMax }}</span>
+            </div>
+            @if (touched() && !reasonValid) {
+              <span class="dl-field-error" role="alert">Enter {{ config.reasonLabel ?? 'Reason' }}. Provide between {{ reasonMin }} and {{ reasonMax }} characters.</span>
+            }
+          </div>
+        }
+
+        <!-- Typed confirmation -->
+        @if (config.typedConfirm) {
+          <div class="dl-field">
+            <label class="dl-field-label" for="dl-typed">
+              Type <strong>{{ config.confirmLabel }}</strong> to confirm
+            </label>
+            <input id="dl-typed" class="dl-input" type="text" autocomplete="off"
+                   [ngModel]="typedValue()" (ngModelChange)="onTypedInput($event)"
+                   [attr.aria-invalid]="touched() && !typedValid" />
+            @if (touched() && !typedValid) {
+              <span class="dl-field-error" role="alert">Type {{ config.confirmLabel }} exactly to enable confirmation.</span>
+            }
+          </div>
+        }
+
+      </div>
+
+      <!-- Footer actions -->
+      <div class="dl-modal-actions">
+        <button type="button" class="dl-btn dl-btn-ghost" (click)="cancelAction()">{{ config.cancelLabel }}</button>
+        <button type="button" class="dl-btn" [class.dl-btn-primary]="config.tone === 'primary'" [class.dl-btn-danger]="config.tone === 'danger'"
+                (click)="confirmAction()" [disabled]="!canConfirm">
+          <svg class="dl-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          {{ config.confirmLabel }}
+        </button>
+      </div>
+
+    </div>
+  </div>
+}

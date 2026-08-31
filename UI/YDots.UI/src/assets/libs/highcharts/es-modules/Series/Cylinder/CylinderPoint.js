@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{column:{prototype:{pointClass:ColumnPoint}}}=SeriesRegistry.seriesTypes;import U from"../../Core/Utilities.js";const{extend:extend}=U;class CylinderPoint extends ColumnPoint{}extend(CylinderPoint.prototype,{shapeType:"cylinder"});export default CylinderPoint;

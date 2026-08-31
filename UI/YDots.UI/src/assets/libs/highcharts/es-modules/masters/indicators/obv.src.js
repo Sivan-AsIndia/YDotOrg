@@ -1,0 +1,2 @@
+/*! For license information please see obv.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/OBV/OBVIndicator.js";export default Highcharts;

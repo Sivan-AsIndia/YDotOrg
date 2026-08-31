@@ -1,0 +1,202 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div [attr.data-ui-state]="uiState()">
+
+  @if (uiState() === 'no-access') {
+    <!-- ============ NO ACCESS (4.1.4) ============ -->
+    <section class="no-access card" role="alert">
+      <i class="ri-lock-2-line" aria-hidden="true"></i>
+      <h2>This workspace is not available with your current access.</h2>
+      <p>Return to your permitted landing page, or request access if a route is configured.</p>
+      <a class="btn btn-primary" href="javascript:void(0)">Back to home</a>
+    </section>
+  } @else {
+
+    <!-- ============ TASK HEADER (4.1.1) ============ -->
+    <header class="task-header" aria-labelledby="ws-title">
+      <div class="task-identity">
+        <div>
+          <h1 class="page-title" id="ws-title">{{ pageTitle }}</h1>
+          <!-- Task-header required elements (4.1.1): owner + freshness -->
+          <p class="task-meta">
+            <span class="meta-owner"><i class="ri-user-line" aria-hidden="true"></i> {{ owner }}</span>
+            <span class="meta-sep" aria-hidden="true">·</span>
+            <span class="meta-fresh">Updated {{ lastRefresh() }}</span>
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ TWO-REGION WORK AREA (4.1.5 desktop) ============ -->
+    <div class="workspace-grid">
+
+      <!-- ---------- Primary column: Main work (4.1.1) ---------- -->
+      <div class="col-main">
+
+        <!-- YOUR PRIORITIES: prioritised tasks / approvals / follow-ups / exceptions -->
+        <section class="card priorities" aria-labelledby="priorities-heading">
+          <div class="card-head">
+            <h2 class="eyebrow with-icon" id="priorities-heading">
+              <i class="ri-star-line" aria-hidden="true"></i> YOUR PRIORITIES
+            </h2>
+            <a class="link" href="javascript:void(0)">View all <i class="ri-arrow-right-s-line" aria-hidden="true"></i></a>
+          </div>
+
+          <!-- Context and filters (4.1.1): scope-qualified totals, server-side filtering -->
+          <div class="tabs" role="tablist" aria-label="Priority filters">
+            @for (tab of tabs; track tab.key) {
+              <button
+                type="button"
+                class="tab"
+                role="tab"
+                [class.active]="activeTab() === tab.key"
+                [attr.aria-selected]="activeTab() === tab.key"
+                (click)="selectTab(tab.key)"
+              >
+                {{ tab.label }}
+                @if (tab.key !== 'all') {
+                  <span class="count">{{ tab.count }}</span>
+                }
+              </button>
+            }
+          </div>
+
+          @if (uiState() === 'loading') {
+            <!-- Loading (4.1.4): safe skeleton, task title retained above -->
+            <div class="skeleton" aria-hidden="true">
+              @for (row of [1,2,3,4,5]; track row) { <div class="sk-row"></div> }
+            </div>
+            <p class="visually-hidden" role="status">Loading your priorities…</p>
+          } @else {
+            <!-- Column headers (desktop table; reflows to cards on mobile) -->
+            <div class="q-head" role="row" aria-hidden="true">
+              <span class="c-item">ITEM</span>
+              <span class="c-type">TYPE</span>
+              <span class="c-due">DUE DATE</span>
+              <span class="c-priority">PRIORITY</span>
+              <span class="c-status">STATUS</span>
+              <span class="c-more"></span>
+            </div>
+
+            <div class="q-body" role="list">
+              @for (item of filteredItems(); track item.id) {
+                <div
+                  class="q-row"
+                  role="listitem"
+                  tabindex="0"
+                  (click)="openWork(item)"
+                  (keydown.enter)="openWork(item)"
+                  [attr.aria-label]="item.title + ' — ' + item.reference + ', ' + item.typeLabel + ', due ' + item.dueLabel + ', ' + item.priority + ' priority, owner ' + item.owner + ', SLA ' + item.slaLabel"
+                >
+                  <div class="c-item">
+                    <span class="q-ic" [attr.data-tone]="item.iconTone"><i [class]="item.icon" aria-hidden="true"></i></span>
+                    <span class="q-item-text">
+                      <span class="q-ref">{{ item.reference }}</span>
+                      <span class="q-title">{{ item.title }}</span>
+                    </span>
+                  </div>
+
+                  <div class="c-type">
+                    <span class="type-chip" [attr.data-cat]="item.category">{{ item.typeLabel }}</span>
+                  </div>
+
+                  <div class="c-due">
+                    <span class="due" [class.urgent]="item.dueState === 'due-today' || item.dueState === 'overdue'">
+                      <span class="mobile-key">Due:&nbsp;</span>{{ item.dueLabel }}
+                    </span>
+                  </div>
+
+                  <div class="c-priority">
+                    <span class="pri" [attr.data-pri]="item.priority">
+                      <span class="dot" aria-hidden="true"></span>
+                      <span class="pri-label">{{ item.priority | titlecase }}</span>
+                    </span>
+                  </div>
+
+                  <div class="c-status">
+                    <span class="status-pill" [attr.data-status]="item.status">
+                      {{ item.status === 'pending' ? 'Pending' : item.status === 'in-progress' ? 'In Progress' : 'Completed' }}
+                    </span>
+                  </div>
+
+                  <div class="c-more">
+                    @if (canDelegate()) {
+                      <button
+                        type="button"
+                        class="more-btn"
+                        [attr.aria-label]="'More actions for ' + item.title"
+                        (click)="onOverflowClick(item); $event.stopPropagation()"
+                      >
+                        <i class="ri-more-2-fill" aria-hidden="true"></i>
+                      </button>
+                    }
+                  </div>
+
+                  <!-- Owner preserved for mobile & assistive tech (4.1.5 mobile) -->
+                  <p class="q-owner-mobile">Owner: {{ item.owner }}</p>
+                </div>
+              } @empty {
+                <!-- Empty (4.1.4): explain the source of zero and offer a reset -->
+                <div class="empty-state">
+                  <i class="ri-inbox-line" aria-hidden="true"></i>
+                  <p>No items match this filter in your current scope.</p>
+                  <button type="button" class="btn btn-ghost" (click)="selectTab('all')">Reset filter</button>
+                </div>
+              }
+            </div>
+          }
+
+          <a class="link link-center" href="javascript:void(0)">View all my work <i class="ri-arrow-right-line" aria-hidden="true"></i></a>
+        </section>
+
+        <!-- RECENT RECORDS -->
+        <section class="card recent" aria-labelledby="recent-heading">
+          <div class="card-head">
+            <h2 class="eyebrow with-icon" id="recent-heading">
+              <i class="ri-file-copy-2-line" aria-hidden="true"></i> RECENT RECORDS
+            </h2>
+            <a class="link" href="javascript:void(0)">View all <i class="ri-arrow-right-s-line" aria-hidden="true"></i></a>
+          </div>
+
+          <div class="records-row" role="list">
+            @for (record of recentRecords; track record.id) {
+              <article class="record-card" role="listitem" tabindex="0"
+                       [attr.aria-label]="record.title + ', ' + record.subtitle + ', ' + record.timestamp">
+                <span class="rec-ic" [attr.data-tone]="record.tone"><i [class]="record.icon" aria-hidden="true"></i></span>
+                <span class="rec-title">{{ record.title }}</span>
+                <span class="rec-sub">{{ record.subtitle }}</span>
+                <span class="rec-time">{{ record.timestamp }}</span>
+              </article>
+            }
+          </div>
+        </section>
+      </div>
+
+      <!-- ---------- Secondary column: totals + related/history ---------- -->
+      <aside class="col-aside">
+
+        <!-- AT A GLANCE: scope-qualified totals -->
+        <section class="card glance" aria-labelledby="glance-heading">
+          <h2 class="eyebrow with-icon" id="glance-heading">
+            <i class="ri-focus-2-line" aria-hidden="true"></i> AT A GLANCE
+          </h2>
+          <ul class="glance-list">
+            @for (metric of glanceMetrics; track metric.key) {
+              <li class="glance-item">
+                <span class="g-ic" [attr.data-tone]="metric.tone"><i [class]="metric.icon" aria-hidden="true"></i></span>
+                <span class="g-label">{{ metric.label }}</span>
+                <span class="g-value">{{ metric.value }}</span>
+              </li>
+            }
+          </ul>
+          <a class="link link-center" href="javascript:void(0)">View summary <i class="ri-arrow-right-line" aria-hidden="true"></i></a>
+        </section>
+      </aside>
+    </div>
+
+  }
+</div>
+</div>
+</div>
+</main>

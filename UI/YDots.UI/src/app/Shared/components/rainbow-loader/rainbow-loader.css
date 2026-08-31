@@ -1,0 +1,39 @@
+:host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;              /* 👈 4px → 2px, konjam kamiya */
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+:host(.active) {
+  opacity: 1;
+  visibility: visible;
+}
+
+.rainbow-top-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #7f5af0 0%,     /* violet */
+    #2cb1bc 35%,    /* teal-blue */
+    #2dd4bf 65%,    /* teal */
+    #4ade80 100%    /* green */
+  );
+  background-size: 100vw 100%;
+  background-repeat: no-repeat;
+  border-radius: 0;
+  animation: fill-progress 2.5s ease-in-out forwards;
+}
+
+@keyframes fill-progress {
+  0% { width: 0%; }
+  30% { width: 30%; }
+  60% { width: 60%; }
+  100% { width: 100%; }
+}

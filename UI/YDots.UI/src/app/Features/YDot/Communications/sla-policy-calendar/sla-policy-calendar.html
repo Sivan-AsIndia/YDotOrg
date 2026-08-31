@@ -1,0 +1,701 @@
+<main class="app-wrapper">
+<div class="page">
+
+  <!-- ============ Demo scenario harness (review aid, not production UI) ============ -->
+  <div class="scenario-bar">
+    <span class="scenario-bar__label">Preview state</span>
+    <select
+      class="scenario-bar__select"
+      [value]="scenario()"
+      (change)="setScenario($any($event.target).value)"
+      aria-label="Preview UI state for this page">
+      @for (opt of scenarioOptions; track opt.value) {
+        <option [value]="opt.value">{{ opt.label }}</option>
+      }
+    </select>
+    <span class="scenario-bar__hint">Demonstrates every required state from §4.6.4 — for review only.</span>
+  </div>
+
+  <!-- ============ Breadcrumb ============ -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <span>Engagement</span>
+    <span class="breadcrumb__sep">/</span>
+    <span aria-current="page">SLA policy calendar</span>
+  </nav>
+
+  <!-- ============ NO-ACCESS full-page state ============ -->
+  @if (scenario() === 'noAccess') {
+    <section class="card no-access" role="alert">
+      <div class="no-access__icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2 2 7v6c0 5 4.2 8.6 10 9 5.8-.4 10-4 10-9V7l-10-5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 12.5 11 14l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0"/><path d="m9 9 6 6M15 9l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <h1 class="no-access__title">You don't have access to this SLA policy</h1>
+      <p class="no-access__body">
+        The record, its fields and its actions are hidden because your current role and effective
+        data scope don't permit them. If you believe you should have access, request it through
+        your organisation's approved process.
+      </p>
+      <div class="no-access__actions">
+        <button class="btn btn-secondary" type="button">Request access</button>
+        <button class="btn btn-primary" type="button" (click)="setScenario('normal')">Return to permitted page</button>
+      </div>
+    </section>
+  } @else {
+
+    <!-- ============ Task header ============ -->
+    <header class="card task-header">
+      @if (scenario() === 'loading') {
+        <div class="skeleton skeleton--title"></div>
+        <div class="skeleton skeleton--line" style="width:40%"></div>
+      } @else {
+        <div class="task-header__top">
+          <div class="task-header__title-group">
+            <h1 class="task-header__title">SLA policy calendar</h1>
+            <span class="badge" [class]="'badge--' + statusTone()">{{ status() }}</span>
+          </div>
+
+          <div class="task-header__primary">
+            <!-- Header's single primary action per contract: Version -->
+            <button
+              class="btn btn-primary"
+              type="button"
+              [disabled]="!canOpenVersion()"
+              (click)="openVersionPanel()"
+              title="com.sla-policy-calendar.version">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v6l4 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
+              Version
+            </button>
+          </div>
+        </div>
+
+        <div class="task-header__meta">
+          <div class="meta-item">
+            <span class="meta-item__label">Reference</span>
+            <span class="meta-item__value meta-item__value--mono">
+              {{ policyReference() }}
+              <button class="icon-btn" type="button" title="Copy reference" (click)="copyReference()" aria-label="Copy policy reference">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="4" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-item__label">Owner</span>
+            <span class="meta-item__value">{{ owner() }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-item__label">Version</span>
+            <span class="meta-item__value">{{ version() }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-item__label">Last refreshed</span>
+            <span class="meta-item__value">{{ lastRefreshed() }}</span>
+          </div>
+        </div>
+      }
+    </header>
+
+    <!-- ============ Persistent outcome (never relies on a toast alone) ============ -->
+    @if (outcome(); as o) {
+      <section class="card outcome" [class.outcome--warn]="scenario() === 'dependencyFailure'" role="status">
+        @if (scenario() === 'dependencyFailure') {
+          <div class="outcome__icon outcome__icon--warn" aria-hidden="true">!</div>
+          <div class="outcome__body">
+            <p class="outcome__title">We could not complete the dependent service step</p>
+            <p class="outcome__text">Your confirmed local result is unchanged. Correlation reference <strong>COR-{{ policyReference() }}</strong>.</p>
+            <dl class="outcome__grid">
+              <div><dt>Reference</dt><dd>{{ o.reference }}</dd></div>
+              <div><dt>State</dt><dd>{{ o.state }}</dd></div>
+              <div><dt>Dependency</dt><dd>{{ o.downstreamStatus }}</dd></div>
+              <div><dt>Owner</dt><dd>{{ o.owner }}</dd></div>
+            </dl>
+            <div class="outcome__actions">
+              <button class="btn btn-secondary btn-sm" type="button" (click)="retryDependency()">Retry dependency</button>
+              <button class="btn btn-tertiary btn-sm" type="button">Contact support</button>
+              <button class="icon-btn outcome__dismiss" type="button" (click)="dismissOutcome()" aria-label="Dismiss">✕</button>
+            </div>
+          </div>
+        } @else {
+          <div class="outcome__icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4 10-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="outcome__body">
+            <p class="outcome__title">Saved successfully</p>
+            <dl class="outcome__grid">
+              <div><dt>Reference</dt><dd>{{ o.reference }}</dd></div>
+              <div><dt>State</dt><dd>{{ o.state }}</dd></div>
+              <div><dt>Effective</dt><dd>{{ o.effectiveTime }}</dd></div>
+              <div><dt>Downstream</dt><dd>{{ o.downstreamStatus }}</dd></div>
+            </dl>
+            <div class="outcome__actions">
+              <button class="btn btn-secondary btn-sm" type="button">{{ o.nextAction }}</button>
+              <button class="icon-btn outcome__dismiss" type="button" (click)="dismissOutcome()" aria-label="Dismiss">✕</button>
+            </div>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ============ Conflict banner ============ -->
+    @if (scenario() === 'conflict') {
+      <section class="card conflict-banner" role="alert">
+        <div class="conflict-banner__icon" aria-hidden="true">⚠</div>
+        <div class="conflict-banner__body">
+          <p class="conflict-banner__title">This record changed after you opened it</p>
+          <p class="conflict-banner__text">Review the latest version before continuing. Your unsaved changes on this screen are kept below.</p>
+        </div>
+        <div class="conflict-banner__actions">
+          <button class="btn btn-tertiary btn-sm" type="button">Compare</button>
+          <button class="btn btn-secondary btn-sm" type="button" (click)="reviewLatestVersion()">Review latest</button>
+          <button class="btn btn-primary btn-sm" type="button" (click)="reapplyChanges()">Reapply eligible changes</button>
+        </div>
+      </section>
+    }
+
+    @if (scenario() === 'loading') {
+      <!-- ============ Loading skeleton for body ============ -->
+      <div class="skeleton-grid" aria-live="polite" aria-busy="true">
+        <div class="card skeleton-card">
+          <div class="skeleton skeleton--line" style="width:60%"></div>
+          <div class="skeleton skeleton--line" style="width:90%"></div>
+          <div class="skeleton skeleton--line" style="width:80%"></div>
+        </div>
+        <div class="card skeleton-card">
+          <div class="skeleton skeleton--line" style="width:50%"></div>
+          <div class="skeleton skeleton--line" style="width:95%"></div>
+          <div class="skeleton skeleton--line" style="width:70%"></div>
+        </div>
+      </div>
+      <span class="sr-only" role="status">Loading SLA policy calendar…</span>
+    } @else {
+
+      <div class="layout">
+
+        <!-- ============ Left rail: persistent context ============ -->
+        <aside class="rail">
+          <section class="card">
+            <h2 class="card__title">Context and scope</h2>
+            <div class="field">
+              <label class="field__label" for="catalogue-search">Search policy catalogue</label>
+              <input
+                id="catalogue-search"
+                class="field__input"
+                type="text"
+                placeholder="Search within your effective scope…"
+                [value]="catalogueSearch()"
+                (input)="catalogueSearch.set($any($event.target).value)" />
+            </div>
+            <div class="field">
+              <span class="field__label">Effective data scope</span>
+              <div class="chip-row">
+                @for (s of effectiveScope; track s.label) {
+                  <span class="chip" [class.chip--disabled]="!s.granted">{{ s.label }}</span>
+                }
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="saved-filter">Saved filter</label>
+              <select id="saved-filter" class="field__input" [value]="savedFilter()" (change)="savedFilter.set($any($event.target).value)">
+                <option>My scope only</option>
+                <option>All active policies</option>
+                <option>Pending review</option>
+              </select>
+            </div>
+            <p class="field__hint">Filtering is server-side and honours the scope above. Clearing a filter returns focus to the search field.</p>
+          </section>
+
+          <section class="card">
+            <h2 class="card__title">Record summary</h2>
+            <dl class="summary-list">
+              <div><dt>Status</dt><dd><span class="badge badge--sm" [class]="'badge--' + statusTone()">{{ status() }}</span></dd></div>
+              <div><dt>Version</dt><dd>{{ version() }}</dd></div>
+              <div><dt>Simulation result</dt><dd><span class="badge badge--sm" [class.badge--active]="simulationResult()==='Passed'" [class.badge--retired]="simulationResult()==='Failed'" [class.badge--draft]="simulationResult()==='Not tested' || simulationResult()==='Testing'">{{ simulationResult() }}</span></dd></div>
+              <div><dt>Owner</dt><dd>{{ owner() }}</dd></div>
+              <div><dt>Last refreshed</dt><dd>{{ lastRefreshed() }}</dd></div>
+            </dl>
+          </section>
+
+          <section class="card">
+            <h2 class="card__title">Workflow actions</h2>
+            <div class="stack">
+              <button class="btn btn-secondary btn-block" type="button" [disabled]="!canTest()" (click)="runTest()" title="com.sla-policy-calendar.test">
+                Test SLA policy
+              </button>
+              <button class="btn btn-primary btn-block" type="button" [disabled]="!canPublish()" (click)="openPublishDialog()" title="com.sla-policy-calendar.publish">
+                Publish
+              </button>
+              <button class="btn btn-danger-outline btn-block" type="button" [disabled]="!canRetire()" (click)="openRetireDialog()" title="com.sla-policy-calendar.retire">
+                Retire policy
+              </button>
+              @if (!canPublish() && status() === 'Active') {
+                <p class="field__hint">Publish is unavailable — this policy is already active.</p>
+              }
+              @if (!canRetire() && status() !== 'Active') {
+                <p class="field__hint">Retire is only available for an active policy.</p>
+              }
+            </div>
+          </section>
+        </aside>
+
+        <!-- ============ Main work area ============ -->
+        <main class="work">
+
+          <!-- Validation error summary -->
+          @if (objectKeys(formErrors()).length > 0) {
+            <section class="card error-summary" role="alert" aria-labelledby="error-summary-title">
+              <h2 id="error-summary-title" class="error-summary__title">Fix the following before continuing</h2>
+              <ul class="error-summary__list">
+                @for (key of objectKeys(formErrors()); track key) {
+                  <li><button type="button" class="link-btn" (click)="focusField(key)">{{ formErrors()[key] }}</button></li>
+                }
+              </ul>
+            </section>
+          }
+
+          <!-- Duplicate detection -->
+          @if (duplicateCandidate(); as dup) {
+            <section class="card duplicate-banner" role="alert">
+              <div class="duplicate-banner__body">
+                <p class="duplicate-banner__title">A similar policy already exists</p>
+                <p class="duplicate-banner__text">{{ dup.name }} — <span class="mono">{{ dup.reference }}</span></p>
+              </div>
+              <div class="duplicate-banner__actions">
+                <button class="btn btn-tertiary btn-sm" type="button">Link</button>
+                <button class="btn btn-tertiary btn-sm" type="button">Merge</button>
+                <button class="btn btn-secondary btn-sm" type="button">Change value</button>
+                <button class="btn btn-tertiary btn-sm" type="button">Request review</button>
+              </div>
+            </section>
+          }
+
+          <!-- Policy identity -->
+          <section class="card accordion">
+            <button class="accordion__header" type="button" (click)="toggleSection('identity')" [attr.aria-expanded]="isExpanded('identity')" aria-controls="section-identity">
+              <span>Policy identity</span>
+              <svg class="accordion__chevron" [class.accordion__chevron--open]="isExpanded('identity')" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            @if (isExpanded('identity')) {
+              <div class="accordion__body" id="section-identity">
+                <div class="field">
+                  <label class="field__label" for="field-policyReference">Policy reference</label>
+                  <div class="readonly-panel">
+                    <span class="mono">{{ policyReference() }}</span>
+                    <button class="icon-btn" type="button" (click)="copyReference()" aria-label="Copy">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="4" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/></svg>
+                    </button>
+                  </div>
+                  <p class="field__hint">Server-derived and immutable in this view.</p>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="field-policyName">Policy name <span class="req">*</span></label>
+                  <input
+                    id="field-policyName"
+                    class="field__input"
+                    [class.field__input--error]="formErrors()['policyName']"
+                    list="policy-name-options"
+                    type="text"
+                    [value]="policyName()"
+                    (input)="policyName.set($any($event.target).value)" />
+                  <datalist id="policy-name-options">
+                    @for (opt of policyNameOptions; track opt) { <option [value]="opt"></option> }
+                  </datalist>
+                  @if (formErrors()['policyName']) {
+                    <p class="field__error">{{ formErrors()['policyName'] }}</p>
+                  } @else {
+                    <p class="field__hint">Choose from the effective approved catalogue.</p>
+                  }
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="field-queueOrPriority">Applicable queue or priority <span class="req">*</span></label>
+                  <select
+                    id="field-queueOrPriority"
+                    class="field__input"
+                    [class.field__input--error]="formErrors()['queueOrPriority']"
+                    [value]="queueOrPriority()"
+                    (change)="queueOrPriority.set($any($event.target).value)">
+                    @for (q of queueOptions; track q.label) {
+                      <option [value]="q.label" [disabled]="!!q.disabledReason">
+                        {{ q.label }}{{ q.disabledReason ? ' — ' + q.disabledReason : '' }}
+                      </option>
+                    }
+                  </select>
+                  @if (formErrors()['queueOrPriority']) {
+                    <p class="field__error">{{ formErrors()['queueOrPriority'] }}</p>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+
+          <!-- Business hours & working days -->
+          <section class="card accordion">
+            <button class="accordion__header" type="button" (click)="toggleSection('hours')" [attr.aria-expanded]="isExpanded('hours')" aria-controls="section-hours">
+              <span>Business hours &amp; working days</span>
+              <svg class="accordion__chevron" [class.accordion__chevron--open]="isExpanded('hours')" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            @if (isExpanded('hours')) {
+              <div class="accordion__body" id="section-hours">
+                <div class="field">
+                  <label class="field__label" for="field-timeZone">Time zone</label>
+                  <!-- The full zone catalogue. This page asks for no country, so the list is
+                       the unfiltered one and loads without a country link. The option VALUE is
+                       the IANA key; the offset in the label comes from the catalogue, so it
+                       cannot drift the way the four hand-typed offsets here used to. -->
+                  <select id="field-timeZone" class="field__input" [value]="timeZone()" (change)="timeZone.set($any($event.target).value)">
+                    @for (zone of geo.timeZones(); track zone.id) {
+                      <option [value]="zone.ianaKey">{{ zone.name }}</option>
+                    }
+                  </select>
+                  <p class="field__hint">All times below are interpreted in the operating time zone shown.</p>
+                </div>
+
+                <div class="field field--row">
+                  <div>
+                    <label class="field__label" for="field-businessHours">Business hours — from <span class="req">*</span></label>
+                    <input
+                      id="field-businessHours"
+                      class="field__input"
+                      type="time"
+                      [class.field__input--error]="formErrors()['businessHours']"
+                      [value]="businessHoursOpen()"
+                      (input)="businessHoursOpen.set($any($event.target).value)" />
+                  </div>
+                  <div>
+                    <label class="field__label" for="field-businessHoursClose">to</label>
+                    <input
+                      id="field-businessHoursClose"
+                      class="field__input"
+                      type="time"
+                      [value]="businessHoursClose()"
+                      (input)="businessHoursClose.set($any($event.target).value)" />
+                  </div>
+                </div>
+                @if (formErrors()['businessHours']) {
+                  <p class="field__error">{{ formErrors()['businessHours'] }}</p>
+                }
+
+                <div class="field">
+                  <label class="field__label" for="field-workingDays">Working days <span class="req">*</span></label>
+                  <input
+                    id="field-workingDays"
+                    class="field__input"
+                    [class.field__input--error]="formErrors()['workingDays']"
+                    type="text"
+                    placeholder="e.g. Monday – Friday"
+                    [value]="workingDays()"
+                    (input)="workingDays.set($any($event.target).value)" />
+                  @if (formErrors()['workingDays']) {
+                    <p class="field__error">{{ formErrors()['workingDays'] }}</p>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+
+          <!-- Holiday calendar -->
+          <section class="card accordion">
+            <button class="accordion__header" type="button" (click)="toggleSection('holidays')" [attr.aria-expanded]="isExpanded('holidays')" aria-controls="section-holidays">
+              <span>Holiday calendar <span class="tag-optional">Conditional</span></span>
+              <svg class="accordion__chevron" [class.accordion__chevron--open]="isExpanded('holidays')" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            @if (isExpanded('holidays')) {
+              <div class="accordion__body" id="section-holidays">
+                @if (holidays().length === 0) {
+                  <div class="empty-state">
+                    <p class="empty-state__title">No holidays have been added for this policy yet</p>
+                    <p class="empty-state__text">Add the dates business hours don't apply. This affects breach timers automatically.</p>
+                  </div>
+                } @else {
+                  <ul class="holiday-list">
+                    @for (h of holidays(); track h.id) {
+                      <li class="holiday-list__item">
+                        <span class="holiday-list__date">{{ h.date }}</span>
+                        <span class="holiday-list__label">{{ h.label }}</span>
+                        <button class="icon-btn" type="button" (click)="removeHoliday(h.id)" [attr.aria-label]="'Remove ' + h.label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+
+                <div class="field field--row add-holiday">
+                  <div>
+                    <label class="field__label" for="new-holiday-date">Date</label>
+                    <input id="new-holiday-date" class="field__input" type="date" [value]="newHolidayDate()" (input)="newHolidayDate.set($any($event.target).value)" />
+                  </div>
+                  <div>
+                    <label class="field__label" for="new-holiday-label">Label</label>
+                    <input id="new-holiday-label" class="field__input" type="text" placeholder="e.g. Republic Day" [value]="newHolidayLabel()" (input)="newHolidayLabel.set($any($event.target).value)" />
+                  </div>
+                  <button class="btn btn-secondary" type="button" (click)="addHoliday()">+ Add holiday</button>
+                </div>
+              </div>
+            }
+          </section>
+
+          <!-- Thresholds & escalation -->
+          <section class="card accordion">
+            <button class="accordion__header" type="button" (click)="toggleSection('thresholds')" [attr.aria-expanded]="isExpanded('thresholds')" aria-controls="section-thresholds">
+              <span>Thresholds &amp; escalation route</span>
+              <svg class="accordion__chevron" [class.accordion__chevron--open]="isExpanded('thresholds')" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            @if (isExpanded('thresholds')) {
+              <div class="accordion__body" id="section-thresholds">
+                <div class="field field--row">
+                  <div>
+                    <label class="field__label" for="field-warningThreshold">Warning threshold (hours before breach) <span class="req">*</span></label>
+                    <input
+                      id="field-warningThreshold"
+                      class="field__input"
+                      [class.field__input--error]="formErrors()['warningThreshold']"
+                      type="text"
+                      inputmode="numeric"
+                      [value]="warningThreshold()"
+                      (input)="warningThreshold.set($any($event.target).value)" />
+                    @if (formErrors()['warningThreshold']) {
+                      <p class="field__error">{{ formErrors()['warningThreshold'] }}</p>
+                    }
+                  </div>
+                  <div>
+                    <label class="field__label" for="field-breachThreshold">Breach threshold (hours from creation) <span class="req">*</span></label>
+                    <input
+                      id="field-breachThreshold"
+                      class="field__input"
+                      [class.field__input--error]="formErrors()['breachThreshold']"
+                      type="text"
+                      inputmode="numeric"
+                      [value]="breachThreshold()"
+                      (input)="breachThreshold.set($any($event.target).value)" />
+                    @if (formErrors()['breachThreshold']) {
+                      <p class="field__error">{{ formErrors()['breachThreshold'] }}</p>
+                    }
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="field-escalationRoute">Escalation route <span class="req">*</span></label>
+                  @if (scenario() === 'noAccess') {
+                    <p class="restricted-value">This value cannot be displayed with your current access.</p>
+                  } @else {
+                    <input
+                      id="field-escalationRoute"
+                      class="field__input"
+                      [class.field__input--error]="formErrors()['escalationRoute']"
+                      type="text"
+                      [value]="escalationRoute()"
+                      (input)="escalationRoute.set($any($event.target).value)" />
+                    @if (formErrors()['escalationRoute']) {
+                      <p class="field__error">{{ formErrors()['escalationRoute'] }}</p>
+                    } @else {
+                      <p class="field__hint">e.g. Tier 1 Agent → Tier 2 Supervisor → Duty Manager</p>
+                    }
+                  }
+                </div>
+              </div>
+            }
+          </section>
+
+          <!-- Related & history -->
+          <section class="card">
+            <div class="tabs" role="tablist">
+              <button class="tab" role="tab" type="button" [class.tab--active]="activeTab()==='linked'" [attr.aria-selected]="activeTab()==='linked'" (click)="setTab('linked')">Linked queues</button>
+              <button class="tab" role="tab" type="button" [class.tab--active]="activeTab()==='documents'" [attr.aria-selected]="activeTab()==='documents'" (click)="setTab('documents')">Documents</button>
+              <button class="tab" role="tab" type="button" [class.tab--active]="activeTab()==='activity'" [attr.aria-selected]="activeTab()==='activity'" (click)="setTab('activity')">Activity &amp; audit log</button>
+            </div>
+
+            <div class="tab-panel" role="tabpanel">
+              @switch (activeTab()) {
+                @case ('linked') {
+                  <ul class="simple-list">
+                    @for (q of linkedQueues; track q.name) {
+                      <li class="simple-list__item">
+                        <span>{{ q.name }}</span>
+                        <span class="badge badge--sm" [class.badge--active]="q.status==='Synced'" [class.badge--draft]="q.status!=='Synced'">{{ q.status }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+                @case ('documents') {
+                  <ul class="simple-list">
+                    @for (d of documents; track d.name) {
+                      <li class="simple-list__item">
+                        <span>{{ d.name }}</span>
+                        <span class="muted">{{ d.updated }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+                @case ('activity') {
+                  <ul class="timeline">
+                    @for (e of auditLog; track e.time) {
+                      <li class="timeline__item">
+                        <span class="timeline__dot" aria-hidden="true"></span>
+                        <div>
+                          <p class="timeline__action">{{ e.action }} <span class="muted">— {{ e.detail }}</span></p>
+                          <p class="timeline__meta">{{ e.time }} · {{ e.actor }}</p>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+            </div>
+          </section>
+
+        </main>
+      </div>
+    }
+  }
+
+  <!-- ============ Version panel (drawer) ============ -->
+  @if (showVersionPanel()) {
+    <div class="overlay" (click)="closeVersionPanel()">
+      <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="version-panel-title" (click)="$event.stopPropagation()">
+        <div class="drawer__header">
+          <h2 id="version-panel-title">Version history</h2>
+          <button class="icon-btn" type="button" (click)="closeVersionPanel()" aria-label="Close">✕</button>
+        </div>
+        <div class="drawer__body">
+          <p class="field__hint">Refresh to the current version, or change to a prior version. Only the authorised record in your effective scope is affected.</p>
+          <ul class="version-list">
+            @for (v of versionHistory; track v.version) {
+              <li class="version-list__item" [class.version-list__item--current]="v.version === version()">
+                <div>
+                  <p class="version-list__version">{{ v.version }} <span class="badge badge--sm" [class]="'badge--' + (v.state==='Active' ? 'active' : v.state==='Retired' ? 'retired' : 'draft')">{{ v.state }}</span></p>
+                  <p class="version-list__meta">{{ v.date }} · {{ v.actor }}</p>
+                </div>
+                @if (v.version !== version()) {
+                  <button class="btn btn-tertiary btn-sm" type="button" (click)="applyVersion(v.version)">Switch to this</button>
+                } @else {
+                  <span class="muted">Current</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </aside>
+    </div>
+  }
+
+  <!-- ============ Test panel (drawer) ============ -->
+  @if (showTestPanel()) {
+    <div class="overlay" (click)="closeTestPanel()">
+      <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="test-panel-title" (click)="$event.stopPropagation()">
+        <div class="drawer__header">
+          <h2 id="test-panel-title">SLA simulation</h2>
+          <button class="icon-btn" type="button" (click)="closeTestPanel()" aria-label="Close">✕</button>
+        </div>
+        <div class="drawer__body">
+          @if (simulationResult() === 'Testing' || isBusy()) {
+            <div class="test-loading">
+              <span class="spinner" aria-hidden="true"></span>
+              <p>Running simulation against current business hours, holidays and escalation route…</p>
+            </div>
+          } @else if (simulationResult() === 'Failed') {
+            <div class="test-result test-result--failed">
+              <p class="test-result__title">Simulation could not complete</p>
+              <p class="field__hint">The routing simulation dependency was unavailable. No configuration was changed.</p>
+              <button class="btn btn-secondary btn-sm" type="button" (click)="retryDependency()">Retry</button>
+            </div>
+          } @else {
+            <div class="test-result test-result--passed">
+              <p class="test-result__title">Simulation passed</p>
+              <dl class="outcome__grid">
+                <div><dt>Business hours</dt><dd>{{ businessHoursOpen() }}–{{ businessHoursClose() }} {{ timeZoneLabel() }}</dd></div>
+                <div><dt>Working days</dt><dd>{{ workingDays() }}</dd></div>
+                <div><dt>Warning triggers</dt><dd>{{ warningThreshold() }}h before breach</dd></div>
+                <div><dt>Breach triggers</dt><dd>{{ breachThreshold() }}h from creation</dd></div>
+                <div><dt>Escalation</dt><dd>{{ escalationRoute() }}</dd></div>
+                <div><dt>Holidays honoured</dt><dd>{{ holidays().length }} configured</dd></div>
+              </dl>
+            </div>
+          }
+        </div>
+      </aside>
+    </div>
+  }
+
+  <!-- ============ Publish confirmation (high-risk action) ============ -->
+  @if (showPublishDialog()) {
+    <div class="overlay" (click)="closePublishDialog()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="publish-title" (click)="$event.stopPropagation()">
+        <h2 id="publish-title">Confirm publish</h2>
+        <p class="field__hint">Review the affected record, consequence, reason and effective time before you continue.</p>
+
+        <div class="review-block">
+          <div class="review-block__row"><span>Record</span><strong>{{ policyName() }} ({{ policyReference() }})</strong></div>
+          <div class="review-block__row"><span>Current state</span><strong>{{ status() }} → Active</strong></div>
+          <div class="review-block__row"><span>Effective time</span><strong>Immediately upon confirmation, {{ timeZoneLabel() }}</strong></div>
+          <div class="review-block__row"><span>Effective permission</span><strong class="mono">com.sla-policy-calendar.publish</strong></div>
+        </div>
+
+        <div class="warning-box">
+          <strong>Consequence:</strong> Publishing routes all matching Donor Care tickets through this SLA immediately and supersedes the previous published version for linked queues.
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="publish-reason">Reason (optional)</label>
+          <textarea id="publish-reason" class="field__input" rows="2" [value]="publishReason()" (input)="publishReason.set($any($event.target).value)"></textarea>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="publish-confirm-text">Type <strong>PUBLISH</strong> to confirm this irreversible action</label>
+          <input id="publish-confirm-text" class="field__input" type="text" [value]="publishConfirmText()" (input)="publishConfirmText.set($any($event.target).value)" autocomplete="off" />
+        </div>
+
+        <div class="modal__actions">
+          <button class="btn btn-tertiary" type="button" (click)="closePublishDialog()">Cancel</button>
+          <button class="btn btn-primary" type="button" [disabled]="publishConfirmText().trim().toUpperCase() !== 'PUBLISH' || isBusy()" (click)="confirmPublish()">
+            @if (isBusy()) { Publishing… } @else { Confirm publish }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ Retire confirmation (danger) ============ -->
+  @if (showRetireDialog()) {
+    <div class="overlay" (click)="closeRetireDialog()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="retire-title" (click)="$event.stopPropagation()">
+        <h2 id="retire-title">Confirm retire</h2>
+        <p class="field__hint">Retiring preserves linked history. This cannot be undone from this screen.</p>
+
+        <div class="review-block">
+          <div class="review-block__row"><span>Record</span><strong>{{ policyName() }} ({{ policyReference() }})</strong></div>
+          <div class="review-block__row"><span>Current state</span><strong>Active → Retired</strong></div>
+          <div class="review-block__row"><span>Effective permission</span><strong class="mono">com.sla-policy-calendar.retire</strong></div>
+        </div>
+
+        <div class="warning-box warning-box--danger">
+          <strong>Consequence:</strong> Linked queues will fall back to their default SLA. Historical tickets already tracked under this policy are unaffected.
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="retire-reason">Named reason <span class="req">*</span></label>
+          <select id="retire-reason" class="field__input" [value]="retireReasonCode()" (change)="retireReasonCode.set($any($event.target).value)">
+            <option value="" disabled>Select a reason…</option>
+            @for (r of retireReasonOptions; track r) { <option [value]="r">{{ r }}</option> }
+          </select>
+        </div>
+
+        @if (retireReasonCode() === 'Other (add detail below)') {
+          <div class="field">
+            <label class="field__label" for="retire-reason-note">Add detail</label>
+            <textarea id="retire-reason-note" class="field__input" rows="2" [value]="retireReasonNote()" (input)="retireReasonNote.set($any($event.target).value)"></textarea>
+          </div>
+        }
+
+        <div class="modal__actions">
+          <button class="btn btn-tertiary" type="button" (click)="closeRetireDialog()">Cancel</button>
+          <button class="btn btn-danger" type="button" [disabled]="!retireReasonCode() || isBusy()" (click)="confirmRetire()">
+            @if (isBusy()) { Retiring… } @else { Confirm retire }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</main>

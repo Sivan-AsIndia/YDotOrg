@@ -1,0 +1,181 @@
+<!--
+  IAM-AUTH-05 — second factor at sign-in.
+
+  The layout is deliberately narrow and single-purpose: one job on screen, nothing to read past.
+  Everything that changes between an authenticator app and an e-mailed code is driven by
+  isAuthenticatorApp(), so the two look like the same screen, worded correctly for each.
+-->
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-10 px-4 auth-bg">
+  <div class="mfa-card bg-white rounded-4 shadow border w-100">
+
+    <!-- ===== Header ===== -->
+    <div class="text-center px-6 pt-8 pb-4">
+      <a routerLink="/auth/sign-in" class="d-inline-flex align-items-center gap-2 mb-6 text-decoration-none">
+        <img alt="YDot" src="assets/images/Outline ydot logo 2.svg" style="width: 44px;">
+        <span class="h5 mb-0 fw-semibold text-body">YDot</span>
+      </a>
+
+      <div class="mfa-icon mx-auto mb-4" [class.mfa-icon-app]="isAuthenticatorApp()">
+        <i [class]="isAuthenticatorApp() ? 'ri-smartphone-line' : 'ri-mail-lock-line'"></i>
+      </div>
+
+      <h5 class="mb-2">Two-step verification</h5>
+
+      @if (mode() === 'code') {
+        <p class="text-muted mb-0 px-lg-4">{{ infoMessage() }}</p>
+
+        @if (!isAuthenticatorApp() && challenge()?.maskedDestination) {
+          <p class="fw-semibold mt-2 mb-0">{{ challenge()?.maskedDestination }}</p>
+        }
+      } @else {
+        <p class="text-muted mb-0 px-lg-4">
+          Enter one of the recovery codes you saved when you set up your account.
+          Each code can be used once.
+        </p>
+      }
+    </div>
+
+    <div class="px-6 pb-8">
+
+      <!-- ===== Messages ===== -->
+      @if (errorMessage()) {
+        <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert" aria-live="assertive">
+          <i class="ri-error-warning-line mt-1"></i>
+          <div>
+            <div>{{ errorMessage() }}</div>
+            @if (attemptsLeft() > 0) {
+              <small class="d-block mt-1">{{ attemptsLeft() }} attempt(s) remaining.</small>
+            }
+          </div>
+        </div>
+      }
+
+      @if (expired()) {
+        <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="alert">
+          <i class="ri-time-line mt-1"></i>
+          <span>This sign-in has expired. Return to the sign-in screen and start again.</span>
+        </div>
+      }
+
+      <!-- ===================================================================================
+           Code entry
+           =================================================================================== -->
+      @if (mode() === 'code') {
+        <form (ngSubmit)="verifyCode()">
+
+          <label class="form-label text-center d-block mb-3">Verification code</label>
+
+          <!-- Six boxes rather than one field: it shows the expected length at a glance and makes
+               backspace and paste behave the way people expect from an OTP. -->
+          <div class="otp-row d-flex justify-content-center gap-2 mb-4" (paste)="onPaste($event)">
+            @for (digit of digits(); track $index) {
+              <input
+                [id]="'mfa-digit-' + $index"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="1"
+                class="form-control otp-box text-center"
+                [value]="digit"
+                [attr.aria-label]="'Digit ' + ($index + 1) + ' of 6'"
+                [disabled]="submitting() || expired()"
+                (input)="onDigitInput($index, $any($event.target).value)"
+                (keydown)="onDigitKeydown($index, $event)">
+            }
+          </div>
+
+          <!-- The countdown means different things for the two methods, so it says so. -->
+          <p class="text-center small text-muted mb-4">
+            @if (isAuthenticatorApp()) {
+              This sign-in expires in <span class="fw-semibold">{{ countdownLabel() }}</span>.
+              Your app shows a new code every 30 seconds.
+            } @else {
+              The code expires in <span class="fw-semibold">{{ countdownLabel() }}</span>.
+            }
+          </p>
+
+          <div class="form-check d-flex justify-content-center gap-2 mb-4">
+            <input type="checkbox" class="form-check-input" id="rememberDevice" [(ngModel)]="rememberDevice" name="rememberDevice">
+            <label class="form-check-label" for="rememberDevice">
+              Trust this device for 30 days
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 mb-3" [disabled]="!canSubmitCode() || expired()">
+            {{ submitting() ? 'Verifying…' : 'Verify and sign in' }}
+          </button>
+
+          <!-- Resend only exists when something was actually sent. -->
+          @if (!isAuthenticatorApp()) {
+            <button type="button" class="btn btn-link w-100 mb-2" [disabled]="resending()" (click)="resendCode()">
+              {{ resending() ? 'Sending…' : 'Send the code again' }}
+            </button>
+          }
+        </form>
+      }
+
+      <!-- ===================================================================================
+           Recovery code entry
+           =================================================================================== -->
+      @if (mode() === 'recovery') {
+        <form (ngSubmit)="useRecoveryCode()">
+          <label class="form-label" for="recoveryCode">Recovery code</label>
+          <input
+            id="recoveryCode"
+            type="text"
+            class="form-control form-control-lg text-center recovery-input mb-2"
+            placeholder="XXXXX-XXXXX"
+            autocomplete="off"
+            spellcheck="false"
+            [value]="recoveryCode()"
+            (input)="recoveryCode.set($any($event.target).value)"
+            [disabled]="submitting()">
+
+          <p class="small text-muted mb-4">
+            Using a code consumes it permanently. Generate a fresh set from
+            <strong>My Security</strong> once you are signed in.
+          </p>
+
+          <button type="submit" class="btn btn-primary w-100 mb-3" [disabled]="!canSubmitRecovery()">
+            {{ submitting() ? 'Checking…' : 'Use recovery code' }}
+          </button>
+        </form>
+      }
+
+      <!-- ===================================================================================
+           Other ways in
+           =================================================================================== -->
+      <div class="border-top pt-4 mt-2">
+        <p class="small text-muted mb-2">Having trouble?</p>
+
+        <div class="d-flex flex-column gap-2">
+          @if (mode() === 'code' && recoveryAvailable()) {
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="setMode('recovery')">
+              <i class="ri-key-2-line me-1"></i> Use a recovery code instead
+            </button>
+          }
+
+          @if (mode() === 'recovery') {
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="setMode('code')">
+              <i class="ri-arrow-left-line me-1"></i> Back to the verification code
+            </button>
+          }
+
+          <!-- Only rendered when the account really has another enrolled method. -->
+          @for (method of alternatives(); track method.id) {
+            <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="submitting()" (click)="switchMethod(method.id!)">
+              <i class="ri-swap-line me-1"></i>
+              Use {{ method.label || methodLabel(method.methodType) }}
+              @if (method.maskedDestination) { <span class="text-muted">({{ method.maskedDestination }})</span> }
+            </button>
+          }
+
+          <button type="button" class="btn btn-link btn-sm text-danger" (click)="cancel()">
+            Cancel and return to sign in
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

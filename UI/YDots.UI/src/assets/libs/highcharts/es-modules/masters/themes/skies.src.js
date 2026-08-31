@@ -1,0 +1,2 @@
+/*! For license information please see skies.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import SkiesTheme from"../../Extensions/Themes/Skies.js";H.theme=SkiesTheme.options,SkiesTheme.apply();export default H;

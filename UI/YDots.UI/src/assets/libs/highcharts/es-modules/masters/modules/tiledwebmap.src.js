@@ -1,0 +1,2 @@
+/*! For license information please see tiledwebmap.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import TilesProviderRegistry from"../../Maps/TilesProviders/TilesProviderRegistry.js";import TiledWebMapSeries from"../../Series/TiledWebMap/TiledWebMapSeries.js";const G=Highcharts;G.TilesProviderRegistry=G.TilesProviderRegistry||TilesProviderRegistry,TiledWebMapSeries.compose(G.MapView);export default Highcharts;

@@ -1,0 +1,2 @@
+/*! For license information please see avocado.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import AvocadoTheme from"../../Extensions/Themes/Avocado.js";H.theme=AvocadoTheme.options,AvocadoTheme.apply();export default H;

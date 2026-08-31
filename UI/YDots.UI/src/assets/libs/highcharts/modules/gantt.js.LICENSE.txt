@@ -1,0 +1,23 @@
+/**
+ * @license Highcharts Gantt JS v12.3.0 (2025-06-21)
+ * @module highcharts/modules/gantt
+ * @requires highcharts
+ *
+ * Gantt series
+ *
+ * (c) 2016-2025 Lars A. V. Cabrera
+ *
+ * License: www.highcharts.com/license
+ */
+
+/**
+ * @license Highcharts JS v12.3.0 (2025-06-21)
+ * @module highcharts/modules/xrange
+ * @requires highcharts
+ *
+ * X-range series
+ *
+ * (c) 2010-2025 Torstein Honsi, Lars A. V. Cabrera
+ *
+ * License: www.highcharts.com/license
+ */

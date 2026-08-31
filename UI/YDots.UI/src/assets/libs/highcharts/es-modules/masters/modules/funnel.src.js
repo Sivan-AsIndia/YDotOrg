@@ -1,0 +1,2 @@
+/*! For license information please see funnel.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import FunnelSeries from"../../Series/Funnel/FunnelSeries.js";import"../../Series/Pyramid/PyramidSeries.js";const G=Highcharts;FunnelSeries.compose(G.Chart);export default Highcharts;

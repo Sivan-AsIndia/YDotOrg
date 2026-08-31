@@ -1,0 +1,743 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+
+      <!-- ============================================================ -->
+      <!-- SUCCESS TOAST -->
+      <!-- ============================================================ -->
+      @if (successPanel(); as success) {
+        <div class="notice notice-success" role="status">
+          <div class="notice-icon" aria-hidden="true">✓</div>
+          <div class="notice-body">
+            <p class="notice-title">{{ success.title }}</p>
+            <p class="notice-meta">
+              <span class="mono">{{ success.reference }}</span>
+              <span class="sep">·</span>{{ success.state }}
+              <span class="sep">·</span>{{ success.effectiveTime }}
+            </p>
+          </div>
+          <a class="notice-action" href="javascript:void(0)" (click)="dismissSuccess()">{{ success.nextAction }}</a>
+          <button type="button" class="notice-close" aria-label="Dismiss notification" (click)="dismissSuccess()">✕</button>
+        </div>
+      }
+
+      @if (dependencyNotice()) {
+        <div class="notice notice-warning" role="alert">
+          <div class="notice-icon" aria-hidden="true">!</div>
+          <div class="notice-body">
+            <p class="notice-title">Some related data could not be saved.</p>
+            <p class="notice-meta">A downstream dependency did not respond. Your changes were not applied — try again.</p>
+          </div>
+          <button type="button" class="notice-close" aria-label="Dismiss notification" (click)="dismissSuccess()">✕</button>
+        </div>
+      }
+
+      <!-- ============================================================ -->
+      <!-- HEADER -->
+      <!-- ============================================================ -->
+      <header class="page-header">
+        <div class="header-main">
+          <div class="header-title-row">
+            <h1 class="page-title">
+              {{ hasPermission('don.contact.view') ? donor().fullName : maskedFullName() }}
+            </h1>
+            <span class="badge-pill badge-{{ badgeClass(donor().lifecycleState) }}">
+              <span class="badge-dot" aria-hidden="true"></span>{{ donor().lifecycleState }}
+            </span>
+          </div>
+          <p class="page-subtitle">
+            {{ hasPermission('don.contact.view') ? (donor().email + ' · ' + donor().phone) : (maskedEmail() + ' · ' + maskedPhone()) }}
+          </p>
+          <div class="meta-row">
+            <span class="mono meta-ref">{{ donor().reference }}</span>
+            <span class="sep">·</span>
+            <span>{{ donor().owner }}</span>
+            <span class="sep">·</span>
+            <span>{{ donor().freshness }}</span>
+            <button type="button" class="link-btn" (click)="refreshData()">Refresh</button>
+          </div>
+        </div>
+        <div class="header-kpi">
+          <div class="kpi-amount mono">{{ formatINR(lifetimeGiving()) }}</div>
+          <div class="kpi-sub">received of {{ formatINR(pledgedAmount()) }} ({{ progressPercent() }}%)</div>
+          <div class="progress-track" role="progressbar" [attr.aria-valuenow]="progressPercent()" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" [style.width.%]="progressPercent()"></div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ============================================================ -->
+      <!-- PREVIEW / ACCESS SIMULATOR BAR -->
+      <!-- ============================================================ -->
+      <div class="preview-bar">
+        <span class="chip-dark">PREVIEW</span>
+        <span class="preview-label">ROLE</span>
+        <select
+          class="role-select"
+          aria-label="Preview as role"
+          [ngModel]="selectedRole()"
+          (ngModelChange)="setRole($any($event))">
+          @for (role of roles; track role) {
+            <option [value]="role">{{ role }}</option>
+          }
+        </select>
+
+        <span class="preview-label preview-label-scope">SCOPE</span>
+        <div class="scope-pills">
+          @for (unit of scopeUnits; track unit) {
+            <span class="scope-pill" [class.scope-pill-active]="isInScope(unit)">{{ unit }}</span>
+          }
+        </div>
+
+        <button type="button" class="states-toggle" (click)="toggleStates()" [attr.aria-expanded]="statesOpen()">
+          <span class="chevron" [class.chevron-open]="statesOpen()">▸</span> STATES
+        </button>
+      </div>
+
+      @if (statesOpen()) {
+        <div class="states-panel">
+          @for (item of scenarios; track item.id) {
+            <button
+              type="button"
+              class="state-chip"
+              [class.state-chip-active]="scenario() === item.id"
+              (click)="setScenario(item.id)">
+              {{ item.label }}
+            </button>
+          }
+        </div>
+      }
+
+      <!-- ============================================================ -->
+      <!-- STATE-DRIVEN BODY -->
+      <!-- ============================================================ -->
+      @switch (effectiveState()) {
+
+        @case ('no-access') {
+          <section class="state-panel state-panel-error">
+            <div class="state-panel-icon" aria-hidden="true">🔒</div>
+            <h2>You do not have permission to view this donor.</h2>
+            <p>Ask a data steward or your manager to grant <span class="mono">don.donor-360.view</span> for your role.</p>
+          </section>
+        }
+
+        @case ('loading') {
+          <section class="skeleton-block" aria-busy="true" aria-live="polite">
+            <div class="skeleton-line skeleton-w-40"></div>
+            <div class="skeleton-line skeleton-w-25"></div>
+            <div class="skeleton-grid">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+            <div class="skeleton-card skeleton-card-wide"></div>
+          </section>
+        }
+
+        @case ('empty') {
+          <section class="state-panel">
+            <div class="state-panel-icon" aria-hidden="true">＋</div>
+            <h2>Nothing in scope yet.</h2>
+            <p>No donations available. No communication history available. No event participation recorded.</p>
+          </section>
+        }
+
+        @default {
+          <!-- loaded · draft · duplicate · conflict · dependency-failure -->
+
+          @if (effectiveState() === 'conflict') {
+            <div class="notice notice-conflict" role="alert">
+              <div class="notice-icon" aria-hidden="true">⟲</div>
+              <div class="notice-body">
+                <p class="notice-title">This record has changed since you opened it.</p>
+                <p class="notice-meta">Review the latest version before making further changes.</p>
+              </div>
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="reviewConflict()">Review latest version</button>
+            </div>
+          }
+
+          @if (effectiveState() === 'dependency-failure') {
+            <div class="notice notice-warning" role="alert">
+              <div class="notice-icon" aria-hidden="true">!</div>
+              <div class="notice-body">
+                <p class="notice-title">A dependent service is unavailable.</p>
+                <p class="notice-meta">Donation and consent totals may be out of date until it recovers.</p>
+              </div>
+            </div>
+          }
+
+          @if (effectiveState() === 'duplicate' && duplicateLinks().length) {
+            <div class="notice notice-warning" role="alert">
+              <div class="notice-icon" aria-hidden="true">⚠</div>
+              <div class="notice-body">
+                <p class="notice-title">Possible duplicate found.</p>
+                <p class="notice-meta">
+                  Matches <span class="mono">{{ duplicateLinks()[0].reference }}</span> — {{ duplicateLinks()[0].matchReason }}.
+                </p>
+              </div>
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="activeTab.set('documents')">Review match</button>
+            </div>
+          }
+
+          @if (effectiveState() === 'draft') {
+            <div class="notice notice-info" role="status">
+              <div class="notice-icon" aria-hidden="true">i</div>
+              <div class="notice-body">
+                <p class="notice-title">This donor record is a draft.</p>
+                <p class="notice-meta">Complete the required information to create the intent, or discard the draft.</p>
+              </div>
+            </div>
+          }
+
+          <!-- ============================================================ -->
+          <!-- WORKFLOW ACTIONS -->
+          <!-- ============================================================ -->
+          <div class="two-col">
+            <section class="actions-col">
+              <h2 class="section-title">Workflow actions</h2>
+              <div class="action-grid">
+
+                <article class="action-card">
+                  <div class="action-icon icon-neutral" aria-hidden="true">✎</div>
+                  <h3>Correct profile</h3>
+                  <p>Update donor identity, ownership or contact details when information changes.</p>
+                  @if (!canCorrect()) {
+                    <p class="unavailable">Not available from {{ effectiveState() }} state.</p>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-block"
+                    [disabled]="!canCorrect()"
+                    (click)="openAction('correct')">
+                    Correct profile
+                  </button>
+                </article>
+
+                <article class="action-card">
+                  <div class="action-icon icon-neutral" aria-hidden="true">◔</div>
+                  <h3>Schedule follow-up</h3>
+                  <p>Log the next outreach touchpoint and keep the stewardship cadence on track.</p>
+                  @if (!canFollowUp()) {
+                    <p class="unavailable">Not available from {{ effectiveState() }} state.</p>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-block"
+                    [disabled]="!canFollowUp()"
+                    (click)="openFollowUpPlanner()">
+                    Schedule follow-up
+                  </button>
+                </article>
+
+                <article class="action-card">
+                  <div class="action-icon icon-danger" aria-hidden="true">＋</div>
+                  <h3>Create intent</h3>
+                  <p>Save a formal donation intent once the draft has the required identity and source fields.</p>
+                  @if (!canCreateIntent()) {
+                    <p class="unavailable">Not available from {{ effectiveState() }} state.</p>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-danger-outline-inverse btn-block"
+                    [disabled]="!canCreateIntent()"
+                    (click)="openAction('create-intent')">
+                    Create intent
+                  </button>
+                </article>
+
+                <article class="action-card">
+                  <div class="action-icon icon-danger" aria-hidden="true">🗑</div>
+                  <h3>Delete draft</h3>
+                  <p>Permanently remove a draft record that has not been converted. This cannot be undone.</p>
+                  @if (!canDeleteDraft()) {
+                    <p class="unavailable">Not available from {{ effectiveState() }} state.</p>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-danger btn-block"
+                    [disabled]="!canDeleteDraft()"
+                    (click)="openAction('delete-draft')">
+                    Delete draft
+                  </button>
+                </article>
+
+              </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- SNAPSHOT PANEL -->
+            <!-- ============================================================ -->
+            <aside class="snapshot-col">
+              <h2 class="section-title">Snapshot</h2>
+              <div class="snapshot-card">
+                <div class="snapshot-row">
+                  <span>Open follow-ups</span>
+                  <span class="snapshot-value">{{ followUps.length }}</span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Overdue follow-ups</span>
+                  <span class="snapshot-value" [class.snapshot-value-alert]="overdueFollowUpsCount() > 0">{{ overdueFollowUpsCount() }}</span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Promises pending</span>
+                  <span class="snapshot-value">{{ pendingPromisesCount() }}</span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Documents on file</span>
+                  <span class="snapshot-value">{{ documents().length }}</span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Duplicate links</span>
+                  @if (duplicateLinks().length) {
+                    <a class="snapshot-link" href="javascript:void(0)" (click)="activeTab.set('documents')">Review</a>
+                  } @else {
+                    <span class="snapshot-value">0</span>
+                  }
+                </div>
+              </div>
+
+              <h2 class="section-title section-title-spaced">Consent &amp; preferences</h2>
+              <div class="snapshot-card">
+                <div class="snapshot-row">
+                  <span>Consent status</span>
+                  <span class="badge-pill badge-{{ badgeClass(donor().consentStatus) }} badge-sm">
+                    {{ consentIcon() }} {{ donor().consentStatus }}
+                  </span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Channels</span>
+                  <span class="snapshot-value snapshot-value-plain">{{ donor().consentChannels }}</span>
+                </div>
+                <div class="snapshot-row">
+                  <span>Do not contact</span>
+                  <span class="snapshot-value snapshot-value-plain">{{ donor().doNotContact ? 'Yes' : 'No' }}</span>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm btn-block-top" (click)="openConsentPreferences()">
+                  Open consent &amp; preference centre
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm btn-block-top" (click)="openIdentityVerification()">
+                  Open identity verification
+                </button>
+              </div>
+            </aside>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- KPI CARDS -->
+          <!-- ============================================================ -->
+          <section class="kpi-cards">
+            <div class="kpi-card">
+              <p class="kpi-card-label">Lifetime giving</p>
+              <p class="kpi-card-value mono">{{ formatINR(lifetimeGiving()) }}</p>
+            </div>
+            <div class="kpi-card">
+              <p class="kpi-card-label">Campaigns supported</p>
+              <p class="kpi-card-value mono">{{ totalDonationsCount() }}</p>
+            </div>
+            <div class="kpi-card">
+              <p class="kpi-card-label">Promises fulfilled</p>
+              <p class="kpi-card-value mono">{{ fulfilledPromisesCount() }}<span class="kpi-card-value-of">/{{ promises().length }}</span></p>
+            </div>
+            <div class="kpi-card">
+              <p class="kpi-card-label">Follow-ups overdue</p>
+              <p class="kpi-card-value mono" [class.kpi-card-value-alert]="overdueFollowUpsCount() > 0">{{ overdueFollowUpsCount() }}</p>
+            </div>
+          </section>
+
+          <!-- ============================================================ -->
+          <!-- RELATED AND HISTORY -->
+          <!-- ============================================================ -->
+          <section class="related-section">
+            <div class="related-header">
+              <h2 class="section-title">Related and history</h2>
+              <div class="tab-strip" role="tablist">
+                @for (tab of tabs; track tab.id) {
+                  <button
+                    type="button"
+                    role="tab"
+                    class="tab-pill"
+                    [class.tab-pill-active]="activeTab() === tab.id"
+                    [attr.aria-selected]="activeTab() === tab.id"
+                    (click)="activeTab.set(tab.id)">
+                    {{ tab.label }}
+                  </button>
+                }
+              </div>
+              <div class="search-box">
+                <input
+                  type="search"
+                  placeholder="Search…"
+                  aria-label="Search related records"
+                  [ngModel]="searchTerm()"
+                  (ngModelChange)="setSearchTerm($any($event))" />
+              </div>
+            </div>
+
+            <!-- OVERVIEW -->
+            @if (activeTab() === 'overview') {
+              <div class="tab-panel">
+                <div class="profile-grid">
+                  <div class="profile-field"><span class="profile-label">Donor reference</span><span class="mono">{{ donor().reference }}</span></div>
+                  <div class="profile-field"><span class="profile-label">Full name</span><span>{{ hasPermission('don.contact.view') ? donor().fullName : maskedFullName() }}</span></div>
+                  <div class="profile-field"><span class="profile-label">Mobile</span><span>{{ hasPermission('don.contact.view') ? donor().phone : maskedPhone() }}</span></div>
+                  <div class="profile-field"><span class="profile-label">Email</span><span>{{ hasPermission('don.contact.view') ? donor().email : maskedEmail() }}</span></div>
+                  <div class="profile-field"><span class="profile-label">Relationship owner</span><span>{{ donor().owner }}</span></div>
+                  <div class="profile-field"><span class="profile-label">Communication preference</span><span>{{ donor().commsChannel }} · {{ donor().commsFrequency }}</span></div>
+                </div>
+
+                <h3 class="subsection-title">Donation totals by stage</h3>
+                <div class="stage-pills">
+                  @for (stage of donationTotals(); track stage.stage) {
+                    <div class="stage-pill">
+                      <span class="badge-pill badge-{{ badgeClass(stage.stage) }} badge-sm">{{ stage.stage }}</span>
+                      <span class="mono stage-amount">{{ formatINR(stage.amount) }}</span>
+                      <span class="stage-asof">as of {{ stage.asOf }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- DONATIONS -->
+            @if (activeTab() === 'donations') {
+              <div class="tab-panel">
+                @if (campaignHistory().length) {
+                  <div class="table-scroll">
+                    <table class="data-table">
+                      <thead>
+                        <tr><th>ID</th><th>Campaign</th><th>Role</th><th>Amount</th><th>Date</th><th class="text-end">Status</th></tr>
+                      </thead>
+                      <tbody>
+                        @for (item of campaignHistory(); track item.id) {
+                          @if (matchesSearch(item.id, item.name, item.status)) {
+                            <tr>
+                              <td class="mono cell-id">{{ item.id }}</td>
+                              <td>{{ item.name }}</td>
+                              <td class="cell-muted">{{ item.role }}</td>
+                              <td class="mono">{{ formatINR(item.amount) }}</td>
+                              <td class="cell-muted">{{ item.date }}</td>
+                              <td class="text-end"><span class="badge-pill badge-{{ badgeClass(item.status) }} badge-sm">{{ item.status }}</span></td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="empty-row">No donations available.</p>
+                }
+
+                <h3 class="subsection-title">Promises</h3>
+                @if (promises().length) {
+                  <ul class="simple-list">
+                    @for (p of promises(); track p.id) {
+                      <li>
+                        <span class="mono cell-id">{{ p.id }}</span>
+                        <span class="mono">{{ formatINR(p.amount) }}</span>
+                        <span class="cell-muted">Due {{ p.dueDate }}</span>
+                        <span class="badge-pill badge-{{ badgeClass(p.status) }} badge-sm">{{ p.status }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="empty-row">No promises recorded.</p>
+                }
+              </div>
+            }
+
+            <!-- COMMUNICATIONS -->
+            @if (activeTab() === 'communications') {
+              <div class="tab-panel">
+                <div class="tab-panel-actions">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openCommunicationHistory()">View full communication history</button>
+                </div>
+
+                @if (conversations.length) {
+                  <div class="table-scroll">
+                    <table class="data-table">
+                      <thead><tr><th>ID</th><th>Channel</th><th>Summary</th><th>Date</th><th class="text-end">Owner</th></tr></thead>
+                      <tbody>
+                        @for (c of conversations; track c.id) {
+                          @if (matchesSearch(c.id, c.channel, c.summary, c.owner)) {
+                            <tr>
+                              <td class="mono cell-id">{{ c.id }}</td>
+                              <td>{{ c.channel }}</td>
+                              <td class="cell-muted">{{ c.summary }}</td>
+                              <td class="cell-muted">{{ c.date }}</td>
+                              <td class="text-end">{{ c.owner }}</td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="empty-row">No communication history available.</p>
+                }
+              </div>
+            }
+
+            <!-- FOLLOW-UPS -->
+            @if (activeTab() === 'follow-ups') {
+              <div class="tab-panel">
+                <div class="tab-panel-actions">
+                  <button type="button" class="btn btn-primary btn-sm" [disabled]="!canFollowUp()" (click)="openFollowUpPlanner()">Create Follow-Up</button>
+                </div>
+
+                @if (followUps.length) {
+                  <ul class="simple-list">
+                    @for (f of followUps; track f.id) {
+                      @if (matchesSearch(f.id, f.title, f.owner, f.status)) {
+                        <li>
+                          <span class="mono cell-id">{{ f.id }}</span>
+                          <span>{{ f.title }}</span>
+                          <span class="cell-muted">Due {{ f.due }}</span>
+                          <span class="badge-pill badge-{{ badgeClass(f.status) }} badge-sm">{{ f.status }}</span>
+                          @if (f.status !== 'Completed' && f.status !== 'Cancelled') {
+                            <button type="button" class="btn btn-outline-primary btn-sm" (click)="executeFollowUp(f.id)">Execute Follow-Up</button>
+                          }
+                        </li>
+                      }
+                    }
+                  </ul>
+                } @else {
+                  <p class="empty-row">No follow-ups scheduled.</p>
+                }
+              </div>
+            }
+
+            <!-- DOCUMENTS & DUPLICATES -->
+            @if (activeTab() === 'documents') {
+              <div class="tab-panel">
+                @if (documents().length) {
+                  <div class="table-scroll">
+                    <table class="data-table">
+                      <thead><tr><th>ID</th><th>File</th><th>Type</th><th>Uploaded</th><th class="text-end">Classification</th></tr></thead>
+                      <tbody>
+                        @for (d of documents(); track d.id) {
+                          @if (matchesSearch(d.id, d.name, d.type)) {
+                            <tr>
+                              <td class="mono cell-id">{{ d.id }}</td>
+                              <td>{{ d.name }}</td>
+                              <td class="cell-muted">{{ d.type }}</td>
+                              <td class="cell-muted">{{ d.uploadedOn }}</td>
+                              <td class="text-end"><span class="badge-pill badge-gray badge-sm">{{ d.classification }}</span></td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="empty-row">No documents uploaded.</p>
+                }
+
+                <h3 class="subsection-title">Duplicate links</h3>
+                @if (duplicateLinks().length) {
+                  <ul class="simple-list">
+                    @for (dup of duplicateLinks(); track dup.id) {
+                      <li>
+                        <span class="mono cell-id">{{ dup.reference }}</span>
+                        <span class="cell-muted">{{ dup.matchReason }}</span>
+                        <span class="badge-pill badge-{{ badgeClass(dup.similarity) }} badge-sm">{{ dup.similarity }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="empty-row">No duplicate matches found.</p>
+                }
+              </div>
+            }
+
+            <!-- CONSENT -->
+            @if (activeTab() === 'consent') {
+              <div class="tab-panel">
+                <div class="snapshot-card">
+                  <div class="snapshot-row">
+                    <span>Consent status</span>
+                    <span class="badge-pill badge-{{ badgeClass(donor().consentStatus) }} badge-sm">{{ donor().consentStatus }}</span>
+                  </div>
+                  <div class="snapshot-row">
+                    <span>Permitted channels</span>
+                    <span class="snapshot-value snapshot-value-plain">{{ donor().consentChannels }}</span>
+                  </div>
+                  <div class="snapshot-row">
+                    <span>Do not contact</span>
+                    <span class="snapshot-value snapshot-value-plain">{{ donor().doNotContact ? 'Yes' : 'No' }}</span>
+                  </div>
+                  <button type="button" class="btn btn-outline-primary btn-sm btn-block-top" (click)="openConsentPreferences()">
+                    Manage consent &amp; preferences
+                  </button>
+                </div>
+              </div>
+            }
+
+            <!-- IDENTITY VERIFICATION -->
+            @if (activeTab() === 'identity-verification') {
+              <div class="tab-panel">
+                <div class="snapshot-card">
+                  <div class="snapshot-row">
+                    <span>Donor</span>
+                    <span class="snapshot-value snapshot-value-plain">{{ donor().fullName }}</span>
+                  </div>
+                  <div class="snapshot-row">
+                    <span>Donor ID</span>
+                    <span class="snapshot-value snapshot-value-plain mono">{{ donor().reference }}</span>
+                  </div>
+                  <button type="button" class="btn btn-outline-primary btn-sm btn-block-top" (click)="openIdentityVerification()">
+                    Open identity verification
+                  </button>
+                </div>
+              </div>
+            }
+
+            <!-- ACTIVITY HISTORY -->
+            @if (activeTab() === 'activity') {
+              <div class="tab-panel">
+                @if (activity().length) {
+                  <ol class="timeline">
+                    @for (a of activity(); track a.id) {
+                      @if (matchesSearch(a.actor, a.action)) {
+                        <li class="timeline-item">
+                          <span class="timeline-dot" aria-hidden="true"></span>
+                          <div class="timeline-body">
+                            <p class="timeline-action">{{ a.action }}</p>
+                            <p class="timeline-meta">{{ a.actor }} <span class="sep">·</span> {{ a.timestamp }}</p>
+                          </div>
+                        </li>
+                      }
+                    }
+                  </ol>
+                } @else {
+                  <p class="empty-row">No activity recorded.</p>
+                }
+              </div>
+            }
+          </section>
+        }
+      }
+
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ -->
+<!-- ACTION DIALOG -->
+<!-- ============================================================ -->
+<dialog #actionDialog class="action-dialog" [attr.aria-labelledby]="dialogTitleId()" (cancel)="closeAction()">
+  @switch (activeAction()) {
+
+    @case ('correct') {
+      <form class="dialog-form" (ngSubmit)="submitCorrect()">
+        <header class="dialog-header">
+          <h2 id="correct-title">Correct profile</h2>
+          <button type="button" class="notice-close" aria-label="Close dialog" (click)="closeAction()">✕</button>
+        </header>
+        <div class="dialog-body">
+          <label class="field">
+            <span class="field-label">Reason for correction</span>
+            <textarea rows="3" [ngModel]="correctReason()" (ngModelChange)="correctReason.set($any($event))" name="correctReason"></textarea>
+            @if (correctErrors()['reason']) { <span class="field-error">{{ correctErrors()['reason'] }}</span> }
+          </label>
+          <label class="field">
+            <span class="field-label">Relationship owner</span>
+            <select
+              [ngModel]="correctOwnerRef()"
+              (ngModelChange)="correctOwnerRef.set($any($event))"
+              name="correctOwner"
+            >
+              <option value="">Choose an owner…</option>
+              @for (person of ownerOptions(); track person.reference) {
+                <option [value]="person.reference">
+                  {{ person.name }}@if (person.context) { &mdash; {{ person.context }} }
+                </option>
+              }
+            </select>
+            @if (correctErrors()['owner']) { <span class="field-error">{{ correctErrors()['owner'] }}</span> }
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeAction()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save correction</button>
+        </footer>
+      </form>
+    }
+
+    @case ('follow-up') {
+      <form class="dialog-form" (ngSubmit)="submitFollowUp()">
+        <header class="dialog-header">
+          <h2 id="followup-title">Schedule follow-up</h2>
+          <button type="button" class="notice-close" aria-label="Close dialog" (click)="closeAction()">✕</button>
+        </header>
+        <div class="dialog-body">
+          <label class="field">
+            <span class="field-label">Follow-up note</span>
+            <textarea rows="3" [ngModel]="followUpNote()" (ngModelChange)="followUpNote.set($any($event))" name="followUpNote"></textarea>
+            @if (followUpErrors()['note']) { <span class="field-error">{{ followUpErrors()['note'] }}</span> }
+          </label>
+          <label class="field">
+            <span class="field-label">Due date</span>
+            <input type="date" [ngModel]="followUpDue()" (ngModelChange)="followUpDue.set($any($event))" name="followUpDue" />
+            @if (followUpErrors()['due']) { <span class="field-error">{{ followUpErrors()['due'] }}</span> }
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeAction()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Schedule</button>
+        </footer>
+      </form>
+    }
+
+    @case ('create-intent') {
+      <form class="dialog-form" (ngSubmit)="submitCreateIntent()">
+        <header class="dialog-header">
+          <h2 id="intent-title">Create intent</h2>
+          <button type="button" class="notice-close" aria-label="Close dialog" (click)="closeAction()">✕</button>
+        </header>
+        <div class="dialog-body">
+          <label class="field">
+            <span class="field-label">Full name</span>
+            <input type="text" [ngModel]="intentName()" (ngModelChange)="intentName.set($any($event))" name="intentName" />
+            @if (intentErrors()['name']) { <span class="field-error">{{ intentErrors()['name'] }}</span> }
+          </label>
+          <label class="field">
+            <span class="field-label">Source</span>
+            <input type="text" [ngModel]="intentSource()" (ngModelChange)="intentSource.set($any($event))" name="intentSource" />
+            @if (intentErrors()['source']) { <span class="field-error">{{ intentErrors()['source'] }}</span> }
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeAction()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save draft</button>
+        </footer>
+      </form>
+    }
+
+    @case ('delete-draft') {
+      <form class="dialog-form" (ngSubmit)="submitDeleteDraft()">
+        <header class="dialog-header">
+          <h2 id="delete-title">Delete draft</h2>
+          <button type="button" class="notice-close" aria-label="Close dialog" (click)="closeAction()">✕</button>
+        </header>
+        <div class="dialog-body">
+          <p class="dialog-warning">This permanently removes the draft. This cannot be undone.</p>
+          <label class="field">
+            <span class="field-label">Reason for deletion</span>
+            <textarea rows="3" [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($any($event))" name="deleteReason"></textarea>
+            @if (deleteErrors()['reason']) { <span class="field-error">{{ deleteErrors()['reason'] }}</span> }
+          </label>
+          <label class="field">
+            <span class="field-label">Type DELETE to confirm</span>
+            <input type="text" [ngModel]="deleteConfirmText()" (ngModelChange)="deleteConfirmText.set($any($event))" name="deleteConfirmText" />
+            @if (deleteErrors()['confirm']) { <span class="field-error">{{ deleteErrors()['confirm'] }}</span> }
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeAction()">Cancel</button>
+          <button type="submit" class="btn btn-danger btn-sm">Delete draft</button>
+        </footer>
+      </form>
+    }
+  }
+</dialog>

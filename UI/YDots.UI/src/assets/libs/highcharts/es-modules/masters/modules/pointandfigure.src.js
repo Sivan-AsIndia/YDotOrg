@@ -1,0 +1,2 @@
+/*! For license information please see pointandfigure.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import PointAndFigureSeries from"../../Series/PointAndFigure/PointAndFigureSeries.js";const G=Highcharts;PointAndFigureSeries.compose(G.Renderer);export default Highcharts;

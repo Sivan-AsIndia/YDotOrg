@@ -1,0 +1,41 @@
+.logo-dark {
+  fill: var(--pe-primary);
+}
+
+/* ── Sidebar with background image: gradient overlay + white text ── */
+.pe-app-sidebar.theme-bg-active {
+  background-image: linear-gradient(
+      rgba(17, 24, 39, 0.75),
+      rgba(17, 24, 39, 0.85)
+    ),
+    var(--pe-sidebar-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* White text/icons when background image active */
+.pe-app-sidebar.theme-bg-active .pe-nav-link,
+.pe-app-sidebar.theme-bg-active .pe-nav-content,
+.pe-app-sidebar.theme-bg-active .pe-menu-title,
+.pe-app-sidebar.theme-bg-active .pe-nav-icon,
+.pe-app-sidebar.theme-bg-active .pe-nav-arrow {
+  color: #ffffff !important;
+}
+.pe-app-sidebar .logo-dark{
+    /* filter: grayscale(1) brightness(0) invert(1); */
+}
+
+.pe-app-sidebar.theme-bg-active .pe-nav-link:hover,
+.pe-app-sidebar.theme-bg-active .pe-nav-link.active {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+
+.pe-app-sidebar.theme-bg-active .pe-app-sidebar-logo h3 {
+  color: #ffffff !important;
+}
+
+.pe-app-sidebar.theme-bg-active .pe-slide-menu .pe-nav-link::before {
+  background-color: rgba(255, 255, 255, 0.35) !important;
+}

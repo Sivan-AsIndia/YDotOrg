@@ -1,0 +1,120 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  @if (notFound()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-error-warning-line"></i></div>
+      <h3 class="org-empty-title">Organisation not found</h3>
+      <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-primary org-btn-sm">Back to Directory</a>
+    </div>
+  } @else if (organisation(); as org) {
+    <div class="org-breadcrumb">
+      <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+      <span class="sep">/</span>
+      <span class="current">Owner Access</span>
+    </div>
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title"><span class="org-title-icon"><i class="ri-key-2-line"></i></span>Owner Login Entry</h1>
+        <p class="org-subtitle">Confirm the Organisation Owner's access before opening the record.</p>
+      </div>
+    </div>
+
+    <div class="org-doc-columns">
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--blue">Owner Login / Access Information</h3>
+
+        <div class="org-banner org-banner-info">
+          <i class="ri-information-line"></i>
+          <span>Organisation Owner login access is managed through the existing YDot Login/User Management process. No new login is created here.</span>
+        </div>
+
+        <dl class="org-dl" style="margin-top:14px;">
+          <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
+          <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id }}</dd></div>
+          <div class="org-dl-row"><dt>Owner Name</dt><dd>{{ org.ownerName }}</dd></div>
+          <div class="org-dl-row"><dt>Owner Email / Login ID</dt><dd>{{ org.ownerEmail }}</dd></div>
+          <div class="org-dl-row"><dt>Account Status</dt><dd><span class="org-badge org-badge-warn">{{ org.ownerAccountStatus }}</span></dd></div>
+        </dl>
+
+        <div class="d-flex justify-content-between" style="margin-top:24px;">
+          <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="back()">Back</button>
+          <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="continue()">Continue</button>
+        </div>
+      </section>
+
+      <section class="org-doc-section">
+        <h3 class="org-doc-heading org-doc-heading--good">What happens next</h3>
+        <p class="org-doc-note">Continuing opens the Organisation Master Record. The Owner will use their existing YDot login to reach their own Organisation Details, Documents and Review &amp; Submit screens.</p>
+        <div class="d-flex flex-column gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-checkbox-circle-line" style="color:var(--org-good);"></i>
+            <span style="font-size:13px;">Organisation Master Record created</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-time-line" style="color:var(--org-blue);"></i>
+            <span style="font-size:13px;">Owner completes Information &amp; Documents</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-time-line" style="color:var(--org-muted);"></i>
+            <span style="font-size:13px;">Owner submits for verification</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-time-line" style="color:var(--org-muted);"></i>
+            <span style="font-size:13px;">Super Admin reviews and approves</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  } @else {
+    <div class="org-breadcrumb">
+      <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+      <span class="sep">/</span>
+      <span class="current">Owner Access</span>
+    </div>
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title"><span class="org-title-icon"><i class="ri-key-2-line"></i></span>Owner Access</h1>
+        <p class="org-subtitle">Select an organisation to confirm the Owner's login/access information.</p>
+      </div>
+    </div>
+
+    @if (selectableOrganisations().length) {
+      <div class="org-card org-card--blue">
+        <div class="org-card-header"><span class="org-card-icon is-blue"><i class="ri-user-3-line"></i></span><h2 class="org-card-title">Organisations</h2></div>
+        <div class="org-table-scroll">
+          <table class="org-table">
+            <thead><tr><th>Organisation</th><th>ID</th><th>Owner</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              @for (item of selectableOrganisations(); track item.id) {
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.id }}</td>
+                  <td>{{ item.ownerName }}</td>
+                  <td><span class="org-badge" [ngClass]="item.statusClass">{{ item.status }}</span></td>
+                  <td class="text-end">
+                    <a [routerLink]="['/app/administration/organisation/owner-access', item.id]" class="org-btn org-btn-primary org-btn-sm">Open</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="org-card org-empty">
+        <div class="org-empty-icon"><i class="ri-inbox-line"></i></div>
+        <h3 class="org-empty-title">No organisations yet</h3>
+        <p class="org-empty-body">Register an organisation first &mdash; its Owner access will appear here.</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a routerLink="/app/administration/organisation/setup-wizard" class="org-btn org-btn-primary org-btn-sm">Register Organisation</a>
+          <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-ghost org-btn-sm">Back to Directory</a>
+        </div>
+      </div>
+    }
+  }
+</div>
+</div>
+</main>

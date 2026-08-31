@@ -1,0 +1,624 @@
+<main class="app-wrapper">
+<div class="page" [class.page--dim]="confirmOpen()">
+
+  <!-- ============================================================ -->
+  <!-- Preview / scenario switcher (dev affordance, collapsible)     -->
+  <!-- ============================================================ -->
+  <section class="sim" [class.sim--open]="previewOpen()">
+    <button type="button" class="sim__toggle" (click)="togglePreview()" [attr.aria-expanded]="previewOpen()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Preview controls
+      <span class="sim__pill">{{ role() === 'donor-care' ? 'Donor Care' : role() === 'supervisor' ? 'Supervisor' : 'Unauthorised' }}</span>
+    </button>
+
+    @if (previewOpen()) {
+      <div class="sim__body">
+        <div class="sim__group">
+          <span class="sim__label">Effective role</span>
+          <div class="sim__chips">
+            @for (r of roleOptions; track r.value) {
+              <button type="button" class="chip" [class.chip--active]="role() === r.value" (click)="setRole(r.value)">{{ r.label }}</button>
+            }
+          </div>
+        </div>
+        <div class="sim__group">
+          <span class="sim__label">Scenario</span>
+          <select class="sim__select" [ngModel]="scenario()" (ngModelChange)="setScenario($event)">
+            @for (s of scenarioOptions; track s.value) {
+              <option [value]="s.value">{{ s.label }}</option>
+            }
+          </select>
+        </div>
+        <label class="sim__check">
+          <input type="checkbox" [ngModel]="restrictConfidential()" (ngModelChange)="restrictConfidential.set($event)" />
+          Restrict confidential fields
+        </label>
+      </div>
+    }
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- LOADING STATE                                                 -->
+  <!-- ============================================================ -->
+  @if (scenario() === 'loading') {
+    <div class="skeleton-page" role="status" aria-live="polite" aria-label="Loading complaint case">
+      <div class="skeleton skeleton--title"></div>
+      <div class="skeleton-header">
+        <div class="skeleton skeleton--pill"></div>
+        <div class="skeleton skeleton--pill"></div>
+        <div class="skeleton skeleton--pill"></div>
+      </div>
+      <div class="skeleton-grid">
+        <div class="skeleton-card">
+          <div class="skeleton skeleton--line" style="width:40%"></div>
+          <div class="skeleton skeleton--line"></div>
+          <div class="skeleton skeleton--line" style="width:80%"></div>
+          <div class="skeleton skeleton--line" style="width:60%"></div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton skeleton--line" style="width:50%"></div>
+          <div class="skeleton skeleton--line" style="width:70%"></div>
+        </div>
+      </div>
+      <span class="sr-only">Loading complaint case, please wait.</span>
+    </div>
+
+  <!-- ============================================================ -->
+  <!-- NO ACCESS STATE                                               -->
+  <!-- ============================================================ -->
+  } @else if (!hasViewPermission()) {
+    <div class="empty-state" role="alert">
+      <div class="empty-state__icon empty-state__icon--warn">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-2.96L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <h2>You don't have access to this case</h2>
+      <p>Your current role and data scope don't include this complaint record. Nothing about its existence, contents or history is shown here.</p>
+      <div class="empty-state__actions">
+        <a href="#" class="btn btn--primary">Return to Engagement home</a>
+        <a href="#" class="btn btn--ghost">Request access</a>
+      </div>
+    </div>
+
+  <!-- ============================================================ -->
+  <!-- EMPTY STATE (no case matches scope / search)                 -->
+  <!-- ============================================================ -->
+  } @else if (scenario() === 'empty') {
+    <div class="empty-state">
+      <div class="empty-state__icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M9 12h6m-7 8h8a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <h2>No complaint case matches your current scope</h2>
+      <p>There's nothing in <strong>Donation Operations, Community Outreach</strong> matching your search. This isn't a global zero — try clearing the search or check a broader scope.</p>
+      <div class="empty-state__actions">
+        <button type="button" class="btn btn--primary">Log a new complaint</button>
+        <button type="button" class="btn btn--ghost" (click)="setScenario('ready')">Clear search</button>
+      </div>
+    </div>
+
+  <!-- ============================================================ -->
+  <!-- READY STATE — the full working page                          -->
+  <!-- ============================================================ -->
+  } @else {
+
+    <!-- Breadcrumb -->
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="#">Engagement</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Complaint case</span>
+    </nav>
+
+    <!-- Persistent outcome (success confirmation) -->
+    @if (outcomePanel(); as outcome) {
+      <div class="outcome" role="status">
+        <div class="outcome__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="outcome__body">
+          <p class="outcome__title">Saved successfully. Reference {{ outcome.reference }}; state {{ outcome.state }}; effective {{ outcome.effectiveTime }}.</p>
+          <div class="outcome__meta">
+            <span><strong>Downstream:</strong> {{ outcome.downstream }}</span>
+            <span><strong>Next permitted action:</strong> {{ outcome.nextAction }}</span>
+          </div>
+        </div>
+        <button type="button" class="outcome__dismiss" (click)="dismissOutcome()" aria-label="Dismiss confirmation">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    }
+
+    <!-- Dependency failure -->
+    @if (dependencyFailurePanel(); as dep) {
+      <div class="banner banner--warn" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-2.96L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div class="banner__body">
+          <p><strong>We could not complete the dependent service step.</strong> Your confirmed local result on {{ dep.reference }} is unchanged.</p>
+          <p class="banner__meta">Provider: {{ dep.provider }} · Correlation reference: {{ dep.correlation }}</p>
+        </div>
+        <button type="button" class="btn btn--sm btn--ghost" (click)="retryDependency()">Retry</button>
+      </div>
+    }
+
+    <!-- Conflict banner -->
+    @if (showConflictBanner()) {
+      <div class="banner banner--info" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5m0 3h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div class="banner__body">
+          <p><strong>This record changed after you opened it.</strong> Review the latest version before continuing.</p>
+        </div>
+        <div class="banner__actions">
+          <button type="button" class="btn btn--sm btn--ghost" (click)="resolveConflict('compare')">Compare</button>
+          <button type="button" class="btn btn--sm btn--primary" (click)="resolveConflict('reapply')">Reapply my changes</button>
+          <button type="button" class="btn btn--sm btn--text" (click)="resolveConflict('cancel')">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Duplicate banner -->
+    @if (showDuplicateBanner()) {
+      <div class="banner banner--duplicate" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 16v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2" stroke="currentColor" stroke-width="1.6"/></svg>
+        <div class="banner__body">
+          <p><strong>Possible duplicate found.</strong> A similar complaint (same household, same campaign) was logged 2 days ago. For privacy, only a safe candidate category is shown.</p>
+          <p class="banner__meta">Category: Distribution shortfall · Household #4021 · Status: Investigating</p>
+        </div>
+        <div class="banner__actions">
+          <button type="button" class="btn btn--sm btn--ghost" (click)="dismissDuplicate('review')">Request review</button>
+          <button type="button" class="btn btn--sm btn--primary" (click)="dismissDuplicate('link')">Link cases</button>
+          <button type="button" class="btn btn--sm btn--text" (click)="dismissDuplicate('cancel')">Not a duplicate</button>
+        </div>
+      </div>
+    }
+
+    <!-- ============================================================ -->
+    <!-- TASK HEADER                                                   -->
+    <!-- ============================================================ -->
+    <header class="task-header">
+      <div class="task-header__top">
+        <div class="task-header__id">
+          <span class="eyebrow">Complaint case</span>
+          <div class="ref-row">
+            <h1>{{ caseData().reference }}</h1>
+            <button type="button" class="icon-btn" (click)="copyValue('reference', caseData().reference)" aria-label="Copy complaint reference">
+              @if (copiedField() === 'reference') {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              } @else {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V6a2 2 0 0 1 2-2h9" stroke="currentColor" stroke-width="1.6"/></svg>
+              }
+            </button>
+            <span class="badge" [class]="'badge--' + caseData().state">
+              <span class="badge__dot"></span>{{ stateLabel() }}
+            </span>
+          </div>
+        </div>
+
+        @if (primaryAction(); as pa) {
+          <div class="task-header__actions">
+            @for (a of secondaryActions(); track a.key) {
+              <button type="button" class="btn btn--outline" (click)="openConfirm(a.key)">{{ a.label }}</button>
+            }
+            <button type="button" class="btn btn--primary" (click)="openConfirm(pa.key)">{{ pa.label }}</button>
+            @if (can().delete) {
+              <div class="overflow">
+                <button type="button" class="icon-btn icon-btn--bordered" aria-label="More actions" title="More actions">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="task-header__actions">
+            <span class="no-action-hint">No workflow action is available for your role at this stage.</span>
+          </div>
+        }
+      </div>
+
+      <div class="task-header__meta">
+        <div class="meta-item">
+          <span class="meta-item__label">Owner</span>
+          <span class="meta-item__value">
+            <span class="avatar">{{ caseData().ownerInitials }}</span>
+            {{ caseData().owner }}
+          </span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-item__label">SLA due</span>
+          <span class="meta-item__value" [class.meta-item__value--warn]="caseData().slaBreached">
+            {{ caseData().slaDueAt }}
+          </span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-item__label">Last updated</span>
+          <span class="meta-item__value">{{ caseData().updatedAt }}</span>
+        </div>
+      </div>
+
+      <!-- Lifecycle stepper -->
+      <ol class="stepper" aria-label="Case lifecycle progress">
+        @for (step of lifecycleSteps(); track step.key) {
+          <li class="stepper__step" [class.stepper__step--done]="step.done" [class.stepper__step--active]="step.active">
+            <span class="stepper__dot" aria-hidden="true"></span>
+            <span class="stepper__label">{{ step.label }}</span>
+          </li>
+        }
+        @if (caseData().state === 'reopened') {
+          <li class="stepper__step stepper__step--reopened">
+            <span class="stepper__dot" aria-hidden="true"></span>
+            <span class="stepper__label">Reopened</span>
+          </li>
+        }
+      </ol>
+    </header>
+
+    <!-- ============================================================ -->
+    <!-- CONTEXT / SCOPE BAR                                           -->
+    <!-- ============================================================ -->
+    <section class="context-bar" aria-label="Scope and case search">
+      <div class="context-bar__scope">
+        <span class="context-bar__label">Effective scope</span>
+        <span class="scope-chip">Donation Operations</span>
+        <span class="scope-chip">Community Outreach</span>
+      </div>
+      <div class="context-bar__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="search" placeholder="Find another case by reference or complainant…" [ngModel]="caseSearch()" (ngModelChange)="caseSearch.set($event)" aria-label="Search complaint cases in scope" />
+      </div>
+      <span class="context-bar__refresh">Last refreshed 31 Jul 2026, 01:54 pm · <a href="#" (click)="$event.preventDefault()">Refresh</a></span>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- VALIDATION ERROR SUMMARY                                      -->
+    <!-- ============================================================ -->
+    @if (errorSummaryFields().length > 0) {
+      <div class="error-summary" role="alert" tabindex="-1">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-2.96L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div>
+          <p class="error-summary__title">We couldn't save your changes. Fix the following:</p>
+          <ul>
+            @for (e of errorSummaryFields(); track e.id) {
+              <li><a href="#" (click)="$event.preventDefault()">{{ e.label }}</a></li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- ============================================================ -->
+    <!-- MAIN LAYOUT: work area + related panel                        -->
+    <!-- ============================================================ -->
+    <div class="layout">
+
+      <!-- ---------------- MAIN WORK AREA ---------------- -->
+      <div class="work">
+
+        <!-- Classification -->
+        <section class="card">
+          <div class="card__head">
+            <h2>Classification</h2>
+            @if (saveConfirmed()) {
+              <span class="save-flag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Saved
+              </span>
+            }
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="field-complaintType">Complaint type <span class="req">*</span></label>
+              @if (isConfidentialVisible()) {
+                <div class="select-search">
+                  <input
+                    id="field-complaintType"
+                    type="text"
+                    placeholder="Search complaint type…"
+                    [ngModel]="typeSearch()"
+                    (ngModelChange)="typeSearch.set($event)"
+                    [attr.aria-invalid]="!!fieldErrors()['complaintType']"
+                    [attr.aria-describedby]="fieldErrors()['complaintType'] ? 'err-complaintType' : null"
+                  />
+                  <div class="select-search__list" role="listbox">
+                    @for (t of filteredTypes(); track t.code) {
+                      <button type="button" role="option" class="select-search__option" [class.select-search__option--active]="form().complaintTypeCode === t.code" (click)="updateForm('complaintTypeCode', t.code)">
+                        {{ t.label }} <span class="muted">{{ t.code }}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="restricted">This value cannot be displayed with your current access.</p>
+              }
+              @if (fieldErrors()['complaintType']) {
+                <p class="field-error" id="err-complaintType">{{ fieldErrors()['complaintType'] }}</p>
+              }
+            </div>
+
+            <div class="field">
+              <span id="severity-label">Severity <span class="req">*</span></span>
+              <div class="radio-group" role="radiogroup" aria-labelledby="severity-label">
+                @for (s of severities; track s.value) {
+                  <label class="radio-pill" [class]="'radio-pill--' + s.value" [class.radio-pill--active]="form().severity === s.value">
+                    <input type="radio" name="severity" [value]="s.value" [ngModel]="form().severity" (ngModelChange)="updateForm('severity', $event)" />
+                    {{ s.label }}
+                  </label>
+                }
+              </div>
+              @if (fieldErrors()['severity']) {
+                <p class="field-error">{{ fieldErrors()['severity'] }}</p>
+              }
+            </div>
+
+            <div class="field">
+              <label for="field-receivedChannel">Received channel <span class="req">*</span></label>
+              <select id="field-receivedChannel" [ngModel]="form().receivedChannel" (ngModelChange)="updateForm('receivedChannel', $event)">
+                @for (c of channels; track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+              @if (fieldErrors()['receivedChannel']) {
+                <p class="field-error">{{ fieldErrors()['receivedChannel'] }}</p>
+              }
+            </div>
+
+            <div class="field">
+              <label for="field-receivedAt">Received time <span class="req">*</span></label>
+              <input id="field-receivedAt" type="text" [ngModel]="form().receivedAt" (ngModelChange)="updateForm('receivedAt', $event)" />
+              <p class="hint">Operating time zone: Asia/Kolkata</p>
+            </div>
+
+            <div class="field field--wide">
+              <label for="field-complainant">Complainant or party <span class="req">*</span></label>
+              @if (isConfidentialVisible() || true) {
+                <input
+                  id="field-complainant"
+                  type="text"
+                  [ngModel]="form().complainant"
+                  (ngModelChange)="updateForm('complainant', $event)"
+                  [attr.aria-invalid]="!!fieldErrors()['complainant']"
+                  [attr.aria-describedby]="fieldErrors()['complainant'] ? 'err-complainant' : null"
+                />
+              }
+              @if (fieldErrors()['complainant']) {
+                <p class="field-error" id="err-complainant">{{ fieldErrors()['complainant'] }}</p>
+              }
+            </div>
+
+            <div class="field field--wide">
+              <div class="field__label-row">
+                <label for="field-summary">Summary <span class="req">*</span></label>
+                <span class="counter" [class.counter--over]="summaryCount() > 2000">{{ summaryCount() }} / 2,000</span>
+              </div>
+              <textarea
+                id="field-summary"
+                rows="4"
+                [ngModel]="form().summary"
+                (ngModelChange)="updateForm('summary', $event)"
+                [attr.aria-invalid]="!!fieldErrors()['summary']"
+                [attr.aria-describedby]="fieldErrors()['summary'] ? 'err-summary' : null"
+              ></textarea>
+              @if (fieldErrors()['summary']) {
+                <p class="field-error" id="err-summary">{{ fieldErrors()['summary'] }}</p>
+              }
+            </div>
+          </div>
+
+          <div class="card__foot">
+            <button type="button" class="btn btn--outline" (click)="saveClassification()">Save changes</button>
+          </div>
+        </section>
+
+        <!-- Investigation notes (conditional) -->
+        @if (showInvestigationNotes()) {
+          <section class="card">
+            <div class="card__head">
+              <h2>Investigation</h2>
+              <span class="confidential-tag">Confidential</span>
+            </div>
+            <div class="field">
+              @if (isConfidentialVisible()) {
+                <div class="field__label-row">
+                  <label for="field-notes">Investigation notes</label>
+                  <span class="counter">{{ notesCount() }} / 2,000</span>
+                </div>
+                <textarea id="field-notes" rows="4" placeholder="Record findings, contacts made and evidence reviewed…" [ngModel]="form().investigationNotes" (ngModelChange)="updateForm('investigationNotes', $event)"></textarea>
+              } @else {
+                <p class="restricted">This value cannot be displayed with your current access.</p>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- Remedy & outcome (conditional) -->
+        @if (showRemedyOutcome()) {
+          <section class="card">
+            <div class="card__head"><h2>Remedy &amp; outcome</h2></div>
+            <div class="field-grid">
+              <div class="field field--wide">
+                <div class="field__label-row">
+                  <label for="field-remedy">Remedy</label>
+                  <span class="counter">{{ remedyCount() }} / 2,000</span>
+                </div>
+                <textarea id="field-remedy" rows="3" placeholder="Describe the remedy offered or delivered…" [ngModel]="form().remedy" (ngModelChange)="updateForm('remedy', $event)"></textarea>
+              </div>
+              <div class="field">
+                <span id="outcome-label">Outcome</span>
+                <div class="radio-group" role="radiogroup" aria-labelledby="outcome-label">
+                  <label class="radio-pill" [class.radio-pill--active]="form().outcome === 'upheld'">
+                    <input type="radio" name="outcome" value="upheld" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)" /> Upheld
+                  </label>
+                  <label class="radio-pill" [class.radio-pill--active]="form().outcome === 'partially-upheld'">
+                    <input type="radio" name="outcome" value="partially-upheld" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)" /> Partially upheld
+                  </label>
+                  <label class="radio-pill" [class.radio-pill--active]="form().outcome === 'not-upheld'">
+                    <input type="radio" name="outcome" value="not-upheld" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)" /> Not upheld
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Closure reason (conditional) -->
+        @if (showClosureReason()) {
+          <section class="card">
+            <div class="card__head">
+              <h2>Closure</h2>
+              <span class="confidential-tag">Confidential</span>
+            </div>
+            <div class="field">
+              @if (isConfidentialVisible()) {
+                <div class="field__label-row">
+                  <label for="field-closure">Closure reason</label>
+                  <span class="counter">{{ closureCount() }} / 2,000</span>
+                </div>
+                <textarea id="field-closure" rows="3" [ngModel]="form().closureReason" (ngModelChange)="updateForm('closureReason', $event)"></textarea>
+              } @else {
+                <p class="restricted">This value cannot be displayed with your current access.</p>
+              }
+            </div>
+          </section>
+        }
+      </div>
+
+      <!-- ---------------- SIDEBAR: read-only + related/history ---------------- -->
+      <aside class="side">
+
+        <section class="card card--compact">
+          <div class="card__head"><h2>Evidence</h2></div>
+          @if (isConfidentialVisible()) {
+            <ul class="evidence-list">
+              @for (ev of caseData().evidence; track ev.label) {
+                <li>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  <span>
+                    <a href="#" (click)="$event.preventDefault()">{{ ev.label }}</a>
+                    <span class="muted">{{ ev.type }} · added by {{ ev.addedBy }}</span>
+                  </span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="restricted">This value cannot be displayed with your current access.</p>
+          }
+        </section>
+
+        <section class="card card--compact">
+          <div class="card__head"><h2>Status history</h2></div>
+          <ol class="history-list">
+            @for (h of caseData().history; track h.timestamp) {
+              <li>
+                <span class="history-list__badge" [class]="'badge--' + h.state">
+                  <span class="badge__dot"></span>{{ h.label }}
+                </span>
+                <span class="muted">{{ h.timestamp }} · {{ h.actor }}</span>
+              </li>
+            }
+          </ol>
+        </section>
+
+        <section class="card card--compact related">
+          <div class="tabs" role="tablist" aria-label="Related information">
+            <button type="button" role="tab" [attr.aria-selected]="relatedTab() === 'linked'" (click)="setRelatedTab('linked')" [class.tabs__btn--active]="relatedTab() === 'linked'" class="tabs__btn">Linked</button>
+            <button type="button" role="tab" [attr.aria-selected]="relatedTab() === 'documents'" (click)="setRelatedTab('documents')" [class.tabs__btn--active]="relatedTab() === 'documents'" class="tabs__btn">Documents</button>
+            <button type="button" role="tab" [attr.aria-selected]="relatedTab() === 'activity'" (click)="setRelatedTab('activity')" [class.tabs__btn--active]="relatedTab() === 'activity'" class="tabs__btn">Activity</button>
+            <button type="button" role="tab" [attr.aria-selected]="relatedTab() === 'integration'" (click)="setRelatedTab('integration')" [class.tabs__btn--active]="relatedTab() === 'integration'" class="tabs__btn">Integration</button>
+          </div>
+
+          <div class="tabs__panel" role="tabpanel">
+            @switch (relatedTab()) {
+              @case ('linked') {
+                <ul class="link-list">
+                  @for (l of caseData().linkedRecords; track l.reference) {
+                    <li>
+                      <a href="#" (click)="$event.preventDefault()">{{ l.label }}</a>
+                      <span class="muted">{{ l.type }} · {{ l.reference }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+              @case ('documents') {
+                <ul class="link-list">
+                  @for (ev of caseData().evidence; track ev.label) {
+                    <li>
+                      <a href="#" (click)="$event.preventDefault()">{{ ev.label }}</a>
+                      <span class="muted">{{ ev.type }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+              @case ('activity') {
+                <ul class="activity-list">
+                  @for (a of caseData().activity; track a.timestamp + a.label) {
+                    <li>
+                      <span class="activity-list__dot" aria-hidden="true"></span>
+                      <div>
+                        <p>{{ a.label }}</p>
+                        <span class="muted">{{ a.timestamp }} · {{ a.actor }}</span>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+              @case ('integration') {
+                <ul class="integration-list">
+                  <li><span class="status-dot status-dot--ok"></span> Notification service — synced</li>
+                  <li><span class="status-dot status-dot--ok"></span> Beneficiary record — linked</li>
+                  <li><span class="status-dot status-dot--warn"></span> Reporting export — pending</li>
+                </ul>
+              }
+            }
+          </div>
+        </section>
+      </aside>
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- TOAST (supports, never replaces, persistent confirmation)     -->
+  <!-- ============================================================ -->
+  @if (toast(); as t) {
+    <div class="toast" [class]="'toast--' + t.tone" role="status" aria-live="polite">{{ t.message }}</div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- DECISION / REVIEW CONFIRMATION MODAL                          -->
+  <!-- ============================================================ -->
+  @if (confirmOpen() && confirmAction(); as action) {
+    <div class="modal-backdrop" (click)="closeConfirm()">
+      <div class="modal" role="dialog" aria-modal="true" [attr.aria-labelledby]="'confirm-title'" (click)="$event.stopPropagation()">
+        <h2 id="confirm-title">Confirm {{ actionCopy[action].verb }}</h2>
+        <p class="modal__lede">Review the affected record, evidence and effective permission before continuing.</p>
+
+        <dl class="modal__facts">
+          <div><dt>Record</dt><dd>{{ caseData().reference }}</dd></div>
+          <div><dt>Current state</dt><dd>{{ stateLabel() }}</dd></div>
+          <div><dt>Resulting state</dt><dd>{{ pastTenseFor[action] }} → {{ nextStateFor[action] === 'reopened' ? 'Reopened' : (nextStateFor[action] | titlecase) }}</dd></div>
+          <div><dt>Effective permission</dt><dd>{{ role() === 'supervisor' ? 'Supervisor — full workflow authority' : 'Donor Care — assigned queue authority' }}</dd></div>
+          <div><dt>Evidence on file</dt><dd>{{ caseData().evidence.length }} item(s) attached</dd></div>
+        </dl>
+
+        @if (actionCopy[action].risky) {
+          <div class="modal__warning">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-2.96L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            This is a high-impact change. It will notify the complainant and cannot be silently undone.
+          </div>
+        }
+
+        @if (actionCopy[action].needsReason) {
+          <div class="field">
+            <label for="confirm-reason">Reason <span class="req">*</span></label>
+            <textarea id="confirm-reason" rows="3" [ngModel]="confirmReason()" (ngModelChange)="confirmReason.set($event)" placeholder="Explain the basis for this decision…"></textarea>
+            @if (confirmReasonError()) {
+              <p class="field-error">{{ confirmReasonError() }}</p>
+            }
+          </div>
+        }
+
+        <div class="modal__actions">
+          <button type="button" class="btn btn--text" (click)="closeConfirm()">Cancel</button>
+          <button type="button" class="btn btn--primary" (click)="confirmSubmit()">Confirm {{ actionCopy[action].verb }}</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</main>

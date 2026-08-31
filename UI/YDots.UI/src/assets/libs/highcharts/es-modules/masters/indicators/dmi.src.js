@@ -1,0 +1,2 @@
+/*! For license information please see dmi.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/DMI/DMIIndicator.js";export default Highcharts;

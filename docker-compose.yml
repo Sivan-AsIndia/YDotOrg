@@ -1,0 +1,572 @@
+# =================================================================================================
+# YDot platform — four ASP.NET services, one Angular app, one PostgreSQL database.
+#
+# PORTS ARE ALL IN 6700–6740, one number per purpose:
+#
+#   6700  Angular UI (nginx)          http://localhost:6700
+#   6702  IAM API                     http://localhost:6702/swagger
+#   6704  CAM API                     http://localhost:6704/swagger
+#   6706  DON API                     http://localhost:6706/swagger
+#   6708  PAY API                     http://localhost:6708/swagger
+#   6710  PostgreSQL                  localhost:6710
+#   6711  Seq (structured logs)       http://localhost:6711
+#
+# The local `dotnet run` profiles use the same numbers plus their HTTPS siblings (6703, 6705,
+# 6707, 6709) and `ng serve` uses 6701, so nothing collides whichever way the platform is started.
+#
+# ONE DATABASE, FOUR SERVICES. Each owns its own table prefix (iam_*, gm_*, cam_*, don_*, pay_*)
+# and its own EF migrations-history table, so each migrates independently against the same
+# database. Only IAM seeds it.
+# =================================================================================================
+
+name: ydot
+
+services:
+
+  # ===============================================================================================
+  # Database
+  # ===============================================================================================
+
+  ydot-postgres:
+    image: sivan67906/ydot-postgres:8.9.2
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: ydot-postgres
+    environment:
+      POSTGRES_DB: ydotphaseupdated
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: user
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      # 6710 on the host so it never collides with a local PostgreSQL on 5432.
+      - "6710:5432"
+    volumes:
+      - ydot-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ydotphaseupdated"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # MinIO — object storage for Organisation documents
+  #
+  # WHY THE FILES ARE NOT IN POSTGRES. A scanned certificate is megabytes of bytes that are never
+  # queried, only fetched whole. Putting them in the database makes every backup carry them and
+  # every row that touches the table risk dragging them along. The row keeps the metadata and a
+  # pointer; the bytes live here.
+  #
+  # S3-COMPATIBLE, so the same application code talks to AWS S3 or any other S3 gateway by
+  # changing DocumentStorageSettings__Endpoint. Nothing above IObjectStorage knows the difference.
+  # ===============================================================================================
+
+  ydot-minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: ydot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-ydotminio}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-ydotminio2026}"
+    ports:
+      # 6712 is the S3 API, and it must be published: download links are followed by the
+      # browser, not by the API, so this port is what those links point at.
+      - "6712:9000"
+      # 6713 is the MinIO console - a web UI for looking at the bucket during development.
+      - "6713:9001"
+    volumes:
+      - ydot-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # IAM — identity, organisations, roles, menus and the global masters
+  #
+  # IT STARTS FIRST AND SEEDS. Every other service validates the token IAM signs, so a signing-key
+  # mismatch here turns every call to CAM, DON and PAY into a 401 with nothing else to explain it.
+  # ===============================================================================================
+
+  ydot-iam:
+    image: sivan67906/ydot-iam:8.9.2
+    build:
+      context: .
+      dockerfile: Services/IAM/YDot.IAM.Api/Dockerfile
+    container_name: ydot-iam
+    depends_on:
+      ydot-postgres:
+        condition: service_healthy
+      # Waited for, but the API does not die without it: the bucket check at startup logs and
+      # carries on, so a storage outage costs uploads rather than sign-in.
+      ydot-minio:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+
+      # ---- Database ------------------------------------------------------------------------
+      # The service name, not localhost: inside the network the database is a DNS name.
+      DatabaseSettings__ConnectionString: "Host=ydot-postgres;Port=5432;Database=ydotphaseupdated;Username=postgres;Password=user;Include Error Detail=true"
+      DatabaseSettings__ApplyMigrationsOnStartup: "true"
+      DatabaseSettings__SeedOnStartup: "true"
+
+      # ---- Tokens --------------------------------------------------------------------------
+      # A development key. Replace it anywhere real - every token the platform has ever issued
+      # becomes forgeable to whoever holds this string.
+      JwtSettings__SigningKey: "${JWT_SIGNING_KEY:-ydot-iam-docker-signing-key-please-replace-in-every-real-environment-2026}"
+      JwtSettings__Issuer: "YDot.IAM"
+      JwtSettings__Audience: "YDot.Clients"
+      JwtSettings__AccessTokenMinutes: "60"
+      JwtSettings__RefreshTokenCookieSecure: "false"
+      JwtSettings__RefreshTokenCookieSameSite: "Lax"
+
+      # ---- Tenancy -------------------------------------------------------------------------
+      # RootDomain=localhost is what makes ten1.localhost resolve to the "ten1" Organisation,
+      # exactly as ten1.ngoplanet.com would in production. See §7.4 of the implementation guide.
+      TenancySettings__RootDomain: "localhost"
+      TenancySettings__PlatformHosts__0: "localhost"
+      TenancySettings__PlatformHosts__1: "127.0.0.1"
+      TenancySettings__PlatformHosts__2: "ydot-iam"
+      # X-Tenant honoured from loopback only, so curl and Postman can reach an Organisation
+      # endpoint without a hosts-file edit. Off in production.
+      TenancySettings__AllowHeaderOverrideOnLoopback: "true"
+      # Refuses a token whose host_name claim does not match the host it arrived on, so a token
+      # minted at ten1 cannot be replayed against ten2 even though its signature is valid.
+      #
+      # THIS USED TO BE "false", with a comment saying the UI and the API were different origins.
+      # That describes the Angular dev server, not this stack: nginx serves the bundle and proxies
+      # /api to IAM on the SAME origin, forwarding the original Host (proxy_set_header Host $host),
+      # so the token's host and the request's host already agree for every real request. Loopback
+      # stays exempt in the middleware, so curl and Postman are unaffected.
+      TenancySettings__EnforceTokenHostBinding: "true"
+
+      # ---- Document storage (MinIO) --------------------------------------------------------
+      #
+      # TWO ENDPOINTS, AND BOTH ARE NEEDED. The API talks to MinIO over the container network as
+      # "ydot-minio:9000", a name that means nothing in a browser. Download links are signed for
+      # whoever will follow them - the user's browser - so they must be signed against the
+      # address the browser can reach, which is the published port on localhost. A link signed
+      # for the internal name is valid and unreachable, which looks like a broken file.
+      DocumentStorageSettings__Endpoint: "ydot-minio:9000"
+      DocumentStorageSettings__PublicEndpoint: "localhost:6712"
+      DocumentStorageSettings__UseSsl: "false"
+      DocumentStorageSettings__PublicUseSsl: "false"
+      DocumentStorageSettings__AccessKey: "${MINIO_ROOT_USER:-ydotminio}"
+      DocumentStorageSettings__SecretKey: "${MINIO_ROOT_PASSWORD:-ydotminio2026}"
+      DocumentStorageSettings__BucketName: "ydot-organisation-documents"
+
+      # The limit the server enforces AND the number the upload box shows, because the client
+      # reads it back from the API rather than hard-coding its own copy.
+      DocumentStorageSettings__MaximumFileSizeMegabytes: "5"
+      DocumentStorageSettings__MaximumFilesPerSubmission: "10"
+
+      # A signed link is a bearer credential: whoever holds it can fetch that file until it
+      # expires. Five minutes is long enough to open a certificate and short enough that a link
+      # pasted into a chat is useless by the time anybody else clicks it.
+      DocumentStorageSettings__DownloadLinkExpirySeconds: "300"
+
+      # ---- Mail ----------------------------------------------------------------------------
+      #
+      # OFF BY DEFAULT, and that is a real choice rather than an oversight. With the relay off the
+      # activation link comes back ON THE RESPONSE and the screen shows it, so the whole invite
+      # flow is walkable with no mailbox and no credentials. With it on, the link is withheld from
+      # the response deliberately - a live activation link in an API response is a live activation
+      # link in a log file.
+      #
+      # ONE TRANSPORT, plain SMTP with TLS. There is no provider switch: point IAM_SMTP_HOST at
+      # another relay and nothing else changes. Hostinger is the default; Gmail, Elastic Email and
+      # Resend have all held this slot before it.
+      #
+      # TO SEND REAL E-MAIL, set these in .env and restart:
+      #
+      #   IAM_EMAIL_ENABLED=true
+      #   IAM_SMTP_HOST=smtp.hostinger.com
+      #   IAM_SMTP_PORT=465
+      #   IAM_SMTP_USERNAME=notifications@yourdomain.com
+      #   IAM_SMTP_PASSWORD=<the mailbox password from hPanel>
+      #   IAM_MAIL_FROM=notifications@yourdomain.com
+      #
+      #   docker compose up -d ydot-iam ydot-pay
+      #
+      # ESCAPE A DOLLAR SIGN IN THE PASSWORD AS "$$$$" IN .env. Compose interpolates that file, so a
+      # single "$$" can be read as the start of a variable name and resolve to something else - and
+      # the only symptom is the relay rejecting the credentials.
+      #
+      # PORT 465 AND 2465 ARE IMPLICIT TLS (SMTPS); 587 and 2587 are STARTTLS. They are different
+      # handshakes, and the transport chooses from the port - so a relay on either works without a
+      # second flag to keep in step. BOTH SERVICES SPEAK BOTH MODES NOW; PAY did not until its
+      # sender moved off System.Net.Mail, which has no implicit-TLS mode, and 465 therefore left
+      # receipts stalling for twenty seconds while invitations sent normally.
+      #
+      # HOSTINGER SENDS ONLY AS THE AUTHENTICATED MAILBOX or one of its aliases, and refuses
+      # anything else rather than rewriting it. IAM_MAIL_FROM may be left unset, in which case it
+      # falls back to IAM_SMTP_USERNAME - correct here, because that is an address. Point
+      # IAM_MAIL_REDIRECT_TO at a mailbox you own to catch every message before it reaches a real
+      # recipient from a test deployment.
+      EmailSettings__Enabled: "${IAM_EMAIL_ENABLED:-false}"
+      EmailSettings__SenderAddress: "${IAM_MAIL_FROM:-}"
+      EmailSettings__SenderName: "${IAM_MAIL_FROM_NAME:-YDot}"
+      EmailSettings__RedirectAllToAddress: "${IAM_MAIL_REDIRECT_TO:-}"
+      EmailSettings__SmtpHost: "${IAM_SMTP_HOST:-smtp.hostinger.com}"
+      EmailSettings__SmtpPort: "${IAM_SMTP_PORT:-465}"
+      EmailSettings__SmtpUsername: "${IAM_SMTP_USERNAME:-}"
+      EmailSettings__SmtpPassword: "${IAM_SMTP_PASSWORD:-}"
+
+      # ---- Seed ----------------------------------------------------------------------------
+      SeedSettings__Enabled: "true"
+      SeedSettings__RootDomain: "localhost"
+      SeedSettings__SuperAdminEmail: "${IAM_SUPERADMIN_EMAIL:-superadmin@ydot.local}"
+      SeedSettings__SuperAdminUsername: "superadmin"
+      SeedSettings__SuperAdminFirstName: "Platform"
+      SeedSettings__SuperAdminLastName: "Administrator"
+      SeedSettings__SuperAdminPassword: "${IAM_SUPERADMIN_PASSWORD:-SuperAdmin@2026}"
+      SeedSettings__SeedSampleTenants: "true"
+
+      # THE ID THE ACTIVATED SAMPLE ORGANISATION IS CREATED WITH, and the one value in this file
+      # that TWO services have to agree on. DON stamps its demonstration donors, leads and
+      # campaigns with the same guid (SeedSettings__OrganisationId, below) and every donor screen
+      # filters on the OrganisationId in the caller's token. Set them apart and DON's sample data
+      # is in the database and returned to nobody - Donor List, Lead Work Queue and Donor 360 all
+      # open empty with nothing to explain it.
+      #
+      # One variable feeds both, which is the point: there is no way to change one and forget the
+      # other. It is read only on a database that has never been seeded.
+      SeedSettings__SampleOrganisationId: "${SAMPLE_ORGANISATION_ID:-9fb11890-a08e-4adc-95ca-8e4d71f4dd21}"
+
+      # The password the eleven seeded demonstration accounts share. Leave it unset in
+      # anything that is not a demonstration and those accounts are not created at all.
+      SeedSettings__RoleAccountPassword: "${IAM_ROLE_ACCOUNT_PASSWORD:-YDot@2026Demo}"
+
+      # ---- Where the browser is --------------------------------------------------------------
+      # Every origin the UI can be reached on, including the tenant subdomains: CORS with
+      # credentials cannot use a wildcard, and the refresh cookie needs credentials.
+      ClientAppSettings__BaseUrl: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__1: "http://localhost:6701"
+      ClientAppSettings__AllowedOrigins__2: "http://ten1.localhost:6700"
+      ClientAppSettings__AllowedOrigins__3: "http://ten2.localhost:6700"
+      ClientAppSettings__AllowedOrigins__4: "http://ten3.localhost:6700"
+      ClientAppSettings__AllowedOrigins__5: "http://ten4.localhost:6700"
+      ClientAppSettings__AllowedOrigins__6: "http://ten5.localhost:6700"
+
+      Seq__ServerUrl: "http://seq:5341"
+    ports:
+      - "6702:8080"
+    healthcheck:
+      # A GET, not --spider. Spider mode sends HEAD, and /health is mapped for GET only, so a
+      # HEAD falls through to an authenticated route and answers 401.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # Generous: the first start runs migrations and seeds the sample Organisations.
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # CAM — campaigns, tracking assets, readiness, budgets and attribution
+  # ===============================================================================================
+
+  ydot-cam:
+    image: sivan67906/ydot-cam:8.9.2
+    build:
+      context: .
+      dockerfile: Services/CAM/YDots.CAM.API/Dockerfile
+    container_name: ydot-cam
+    depends_on:
+      ydot-postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+
+      DatabaseSettings__ConnectionString: "Host=ydot-postgres;Port=5432;Database=ydotphaseupdated;Username=postgres;Password=user;Include Error Detail=true"
+      DatabaseSettings__ApplyMigrationsOnStartup: "true"
+      DatabaseSettings__SeedOnStartup: "true"
+
+      # Must match the key IAM signs with, exactly.
+      JwtSettings__SigningKey: "${JWT_SIGNING_KEY:-ydot-iam-docker-signing-key-please-replace-in-every-real-environment-2026}"
+      JwtSettings__Issuer: "YDot.IAM"
+      JwtSettings__Audience: "YDot.Clients"
+
+      # The host a printed QR code resolves through. Getting this wrong is not recoverable once
+      # the poster is printed, which is why it is configuration rather than a default.
+      CampaignSettings__TrackingBaseUrl: "http://localhost:6700/give"
+      # AutoApproveSuperAdminSubmissions removed: it made a platform administrator both
+      # submitter and approver of the same campaign. Segregation of duties is not a setting.
+      CampaignSettings__AllowLaunchWithOutstandingChecks: "false"
+
+      ClientAppSettings__BaseUrl: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__1: "http://localhost:6701"
+
+      Seq__ServerUrl: "http://seq:5341"
+    ports:
+      - "6704:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # DON — donors, leads, consent, follow-ups and identity verification
+  # ===============================================================================================
+
+  ydot-don:
+    image: sivan67906/ydot-don:8.9.2
+    build:
+      context: .
+      dockerfile: Services/DON/YDots.DON.Api/Dockerfile
+    container_name: ydot-don
+    depends_on:
+      ydot-postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+
+      DatabaseSettings__ConnectionString: "Host=ydot-postgres;Port=5432;Database=ydotphaseupdated;Username=postgres;Password=user;Include Error Detail=true"
+      DatabaseSettings__ApplyMigrationsOnStartup: "true"
+      DatabaseSettings__SeedOnStartup: "true"
+
+      # THE SAME VALUE IAM CREATES THE SAMPLE ORGANISATION WITH. See the note beside
+      # SeedSettings__SampleOrganisationId on ydot-iam: the demonstration donors, leads and
+      # campaigns below are stamped with this guid, and if it does not match the Organisation IAM
+      # actually created, every donor screen opens empty for everybody.
+      SeedSettings__OrganisationId: "${SAMPLE_ORGANISATION_ID:-9fb11890-a08e-4adc-95ca-8e4d71f4dd21}"
+
+      JwtSettings__SigningKey: "${JWT_SIGNING_KEY:-ydot-iam-docker-signing-key-please-replace-in-every-real-environment-2026}"
+      JwtSettings__Issuer: "YDot.IAM"
+      JwtSettings__Audience: "YDot.Clients"
+
+      ClientAppSettings__BaseUrl: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__1: "http://localhost:6701"
+
+      Seq__ServerUrl: "http://seq:5341"
+    ports:
+      - "6706:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # PAY — donation intents, payments, receipts, refunds and chargebacks
+  #
+  # IT DOES NOT SEED. Seeding a payments module would mean inventing donations, and a donation is
+  # a record that money moved.
+  # ===============================================================================================
+
+  ydot-pay:
+    image: sivan67906/ydot-pay:8.9.2
+    build:
+      context: .
+      dockerfile: Services/PAY/YDot.PAY.Api/Dockerfile
+    container_name: ydot-pay
+    depends_on:
+      ydot-postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+
+      DatabaseSettings__ConnectionString: "Host=ydot-postgres;Port=5432;Database=ydotphaseupdated;Username=postgres;Password=user;Include Error Detail=true"
+      DatabaseSettings__ApplyMigrationsOnStartup: "true"
+      DatabaseSettings__SeedOnStartup: "false"
+
+      JwtSettings__SigningKey: "${JWT_SIGNING_KEY:-ydot-iam-docker-signing-key-please-replace-in-every-real-environment-2026}"
+      JwtSettings__Issuer: "YDot.IAM"
+      JwtSettings__Audience: "YDot.Clients"
+
+      PaymentSettings__FinancialYearStartMonth: "4"
+      PaymentSettings__DefaultPaymentLinkValidityMinutes: "60"
+      PaymentSettings__MaximumAttemptsBeforeSupport: "3"
+      PaymentSettings__AutoIssueReceiptOnDonation: "true"
+      PaymentSettings__AutoDeliverReceipt: "true"
+      PaymentSettings__ReceiptDocumentRoot: "/var/ydot/receipts"
+
+      # Creating a donor account when a stranger gives is IAM's decision, so PAY asks over HTTP
+      # rather than writing iam_users itself. Off by default: a failure here must never fail a
+      # donation.
+      IdentityIntegration__Enabled: "false"
+      IdentityIntegration__BaseUrl: "http://ydot-iam:8080"
+
+      # ---- Mail ------------------------------------------------------------------------------
+      #
+      # PAY SENDS THE DONOR'S RECEIPT, so it needs the relay as much as IAM does. With it off,
+      # AutoDeliverReceipt above still marks the receipt delivered and the sender writes a log
+      # line instead of sending - a donor who has just given sees "receipt sent" and never gets one.
+      #
+      # Same credentials as IAM, from the same .env file.
+      EmailSettings__Enabled: "${IAM_EMAIL_ENABLED:-false}"
+      EmailSettings__SenderAddress: "${IAM_MAIL_FROM:-}"
+      EmailSettings__SenderName: "${IAM_MAIL_FROM_NAME:-YDot Donations}"
+      EmailSettings__RedirectAllToAddress: "${IAM_MAIL_REDIRECT_TO:-}"
+      EmailSettings__SmtpHost: "${IAM_SMTP_HOST:-smtp.hostinger.com}"
+      EmailSettings__SmtpPort: "${IAM_SMTP_PORT:-465}"
+      EmailSettings__SmtpUsername: "${IAM_SMTP_USERNAME:-}"
+      EmailSettings__SmtpPassword: "${IAM_SMTP_PASSWORD:-}"
+
+      ClientAppSettings__BaseUrl: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
+      ClientAppSettings__AllowedOrigins__1: "http://localhost:6701"
+
+      # ---- Payment provider credentials ------------------------------------------------------
+      #
+      # A gateway account row holds only the NAME of the section its credentials live in, so a
+      # dump of the payments database contains no charity's merchant keys. "Razorpay" below is
+      # that name: set a pay_gateway_accounts row's ApiKeyReference to it and its GatewayName to
+      # "Razorpay", and the RazorpayGateway adapter is what serves that organisation.
+      #
+      # THE API KEY IS "key_id:key_secret" - the pair Razorpay's HTTP Basic authentication wants.
+      # Test keys begin rzp_test_; live keys begin rzp_live_ and belong in a secret store rather
+      # than in a .env file beside the compose file.
+      PaymentGateways__Razorpay__BaseUrl: "${RAZORPAY_BASE_URL:-https://api.razorpay.com/v1/}"
+      PaymentGateways__Razorpay__ApiKey: "${RAZORPAY_KEY_ID:-}:${RAZORPAY_KEY_SECRET:-}"
+      PaymentGateways__Razorpay__WebhookSecret: "${RAZORPAY_WEBHOOK_SECRET:-}"
+
+      Seq__ServerUrl: "http://seq:5341"
+    ports:
+      - "6708:8080"
+    volumes:
+      - ydot-pay-receipts:/var/ydot/receipts
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # Payment gateway rows — the one piece of setup no seeder creates
+  #
+  # WHY THIS SERVICE EXISTS. Without a row in pay_gateway_accounts, the first real step of the
+  # donation flow answers PAYMENT_GATEWAY_NOT_CONFIGURED and the donor never leaves the page, so
+  # nothing in PAY is testable: no donation means no receipt, no refund and no retry. The seeder in
+  # code (PaymentDbSeeder.SeedTestGatewayAccountAsync) deliberately writes an INACTIVE placeholder
+  # that the payment path never selects, because an automatically activated gateway is exactly the
+  # kind of row somebody discovers in production. So the working dev row comes from SQL instead,
+  # and this service is what actually runs it - previously it was a manual step in a document,
+  # which meant a fresh stack was reliably missing it.
+  #
+  # IT RUNS AFTER ydot-pay IS HEALTHY, because the table is created by that service's EF migrations
+  # and does not exist before then. It is idempotent, so re-running the stack changes nothing, and
+  # it exits 0 either way rather than holding the stack up.
+  #
+  # DEVELOPMENT ONLY. It is absent from docker-compose.deploy.yml on purpose: on a real deployment
+  # an operator configures the gateway on the Payment Gateway screen, against their own merchant
+  # account. The row it writes names a configuration section, never a credential, and the keys it
+  # resolves to are the rzp_test_ ones from .env, which move no real money.
+  # ===============================================================================================
+
+  ydot-pay-gateway-seed:
+    image: postgres:16-alpine
+    container_name: ydot-pay-gateway-seed
+    depends_on:
+      ydot-pay:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: user
+    volumes:
+      - ./docker/sql:/sql:ro
+    entrypoint: >
+      sh -c "psql -h ydot-postgres -U postgres -d ydotphaseupdated -v ON_ERROR_STOP=1
+      -f /sql/razorpay-test-gateway.sql || echo 'Gateway seed skipped; configure it on the Payment Gateway screen.'"
+    restart: "no"
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # UI — the Angular application behind nginx
+  #
+  # nginx proxies /iam-api, /cam-api, /don-api and /pay-api to the four services, so the browser
+  # sees ONE origin. That is what makes the refresh cookie work without third-party-cookie rules,
+  # and what makes ten1.localhost:6700 reach the API as the same origin it was served from.
+  # ===============================================================================================
+
+  ydot-ui:
+    image: sivan67906/ydot-ui:8.9.2
+    build:
+      context: UI/YDots.UI
+      dockerfile: Dockerfile
+      args:
+        BUILD_CONFIGURATION: docker
+    container_name: ydot-ui
+    # service_started, not service_healthy: nginx retries its upstream anyway, so an API still
+    # running migrations costs a page refresh rather than a failed start.
+    depends_on:
+      ydot-iam:
+        condition: service_started
+      ydot-cam:
+        condition: service_started
+      ydot-don:
+        condition: service_started
+      ydot-pay:
+        condition: service_started
+    ports:
+      - "6700:80"
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+  # ===============================================================================================
+  # Seq — structured logs from all four services in one place
+  # ===============================================================================================
+
+  seq:
+    image: datalust/seq:latest
+    container_name: ydot-seq
+    environment:
+      ACCEPT_EULA: "Y"
+
+      # NEWER SEQ IMAGES REFUSE TO START WITHOUT ONE OF THESE. The container exited on a
+      # DependencyResolutionException saying "No default admin password was supplied", which
+      # reads like a crash rather than a configuration prompt.
+      #
+      # Authentication OFF, deliberately: this is a local log viewer on 6711 reachable only from
+      # this machine, and a password on it would be one more credential to hand out at a demo.
+      # Anywhere real, set SEQ_FIRSTRUN_ADMINPASSWORD instead and delete this line.
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "6711:80"
+    volumes:
+      - ydot-seq-data:/data
+    restart: unless-stopped
+    networks:
+      - ydot-network
+
+networks:
+  ydot-network:
+    driver: bridge
+
+volumes:
+  ydot-postgres-data:
+  ydot-minio-data:
+  ydot-pay-receipts:
+  ydot-seq-data:

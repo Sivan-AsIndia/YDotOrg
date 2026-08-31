@@ -1,0 +1,2 @@
+/*! For license information please see indicators.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/SMA/SMAIndicator.js";import"../../Stock/Indicators/EMA/EMAIndicator.js";import MultipleLinesComposition from"../../Stock/Indicators/MultipleLinesComposition.js";const G=Highcharts;G.MultipleLinesComposition=G.MultipleLinesComposition||MultipleLinesComposition;export default Highcharts;

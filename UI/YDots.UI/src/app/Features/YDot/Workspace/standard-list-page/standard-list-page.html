@@ -1,0 +1,615 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div  [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.4.1) ============ -->
+  <header class="task-header" aria-labelledby="list-title">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="javascript:void(0)">Donations</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">All Donations</span>
+    </nav>
+
+    <div class="task-header-main">
+      <div class="task-identity">
+        <h1 class="page-title" id="list-title">{{ pageTitle }}</h1>
+        <p class="page-subtitle">{{ pageSubtitle }}</p>
+        <!-- Stable reference, lifecycle state, owner and freshness (4.4.1 Task header) -->
+        <div class="task-meta">
+          <span class="state-pill">{{ lifecycleState }}</span>
+          <span class="owner">Owner: {{ owner }}</span>
+          <span class="freshness">Data updated {{ lastRefresh() }}</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ LIST CONTROLS (4.4.1 Context and filters — view, page size, bulk, export, filters) ============ -->
+  <section class="slp-controls" aria-label="List controls">
+
+    <!-- Row 1 — View · Records per page · Actions -->
+    <div class="slp-crow slp-crow-main">
+
+      <!-- Saved view (4.4.2) -->
+      <div class="slp-view">
+        <span class="slp-view-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/>
+            <rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>
+          </svg>
+        </span>
+        <label class="slp-field">
+          <span class="slp-field-label">View</span>
+          <div class="slp-select-wrap">
+            <select class="slp-select slp-view-select" [ngModel]="savedView()"
+                    (ngModelChange)="savedView.set($event)" aria-label="Saved views">
+              @for (v of savedViews; track v) { <option [value]="v">{{ v }}</option> }
+            </select>
+            <svg class="slp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </label>
+      </div>
+
+      <span class="slp-vsep" aria-hidden="true"></span>
+
+      <!-- Records per page -->
+      <label class="slp-field">
+        <span class="slp-field-label">Records per page</span>
+        <div class="slp-pill">
+          <svg class="slp-pill-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 6h12M8 12h12M8 18h12"/>
+            <circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          <div class="slp-select-wrap">
+            <select class="slp-select slp-pagesize" [ngModel]="pageSize()"
+                    (ngModelChange)="pageSize.set($event)" aria-label="Records per page">
+              @for (n of pageSizes; track n) { <option [value]="n">{{ n }} Records</option> }
+            </select>
+            <svg class="slp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+      </label>
+
+      <!-- Actions -->
+      <div class="slp-actions">
+        <!-- Bulk action — conditional; enabled only with selected rows (4.4.2 + 4.4.3) -->
+        <div class="menu-wrap">
+          <button type="button" class="slp-btn slp-btn-soft" (click)="toggleBulkMenu()"
+                  [disabled]="!bulkAllowed()" [attr.aria-expanded]="bulkMenuOpen()" aria-haspopup="menu">
+            <svg class="slp-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="9" cy="8" r="3"/><path d="M3.6 19a5.5 5.5 0 0 1 10.8 0"/><path d="M16 5.6a3 3 0 0 1 0 5.8"/><path d="M15.8 13.7A5.5 5.5 0 0 1 20.4 19"/>
+            </svg>
+            Bulk Actions
+            <svg class="slp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          @if (bulkMenuOpen()) {
+            <div class="menu" role="menu" aria-label="Bulk actions">
+              @for (op of bulkOperations; track op) {
+                <button type="button" class="menu-item" role="menuitem" (click)="requestBulk(op)">{{ op }}</button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Export — workflow action (4.4.3) -->
+        <button type="button" class="slp-btn slp-btn-white" (click)="openExportDialog()" [disabled]="!exportAllowed()">
+          <svg class="slp-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>
+          Export
+          <svg class="slp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <!-- Filters — opens the secondary filters panel; badge shows active-filter count -->
+        <button type="button" class="slp-btn slp-btn-filters" (click)="toggleFiltersPanel()"
+                [attr.aria-expanded]="filtersPanelOpen()">
+          <svg class="slp-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+          Filters
+          @if (activeFilterSummary().length) { <span class="slp-count">{{ activeFilterSummary().length }}</span> }
+          <svg class="slp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 2 — Active filters -->
+    <div class="slp-crow slp-crow-filters" aria-label="Active filters">
+      <span class="slp-af-ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+      </span>
+      <span class="slp-af-label">Active Filters:</span>
+
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="slp-chip">
+          {{ chip.label }}
+          <button type="button" class="slp-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      }
+
+      <span class="slp-vsep slp-vsep-soft" aria-hidden="true"></span>
+
+      <button type="button" class="slp-link" (click)="clearFilters()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+        Clear All
+      </button>
+      <button type="button" class="slp-link" (click)="openSaveView()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-3.7-5.5 3.7z"/></svg>
+        Save View
+      </button>
+
+      <span class="slp-showing">Showing 1 to {{ recordCount() }} of <strong>{{ totalRecords }}</strong> records</span>
+    </div>
+  </section>
+
+  <!-- ============ WORK SURFACE: two-region layout (4.4.5 desktop) ============ -->
+  <div class="work-surface" [class.no-panel]="!filtersPanelOpen()">
+
+    <!-- ---------- MAIN WORK (4.4.1) ---------- -->
+    <section class="main-work" aria-labelledby="records-heading">
+      <div class="section-head">
+        <h2 id="records-heading" class="visually-hidden">Donation records</h2>
+        <div class="section-head-tools">
+          @if (selectedCount() > 0) {
+            <span class="selected-count" role="status">{{ selectedCount() }} selected</span>
+          }
+        </div>
+      </div>
+
+      <!-- LOADING (4.4.4) -->
+      @if (uiState() === 'loading') {
+        <div class="state-block" role="status" aria-live="polite">
+          <p class="state-title">Loading Standard list page…</p>
+          <div class="skeleton-rows" aria-hidden="true">
+            @for (n of [1,2,3,4,5,6]; track n) { <div class="skeleton-row"></div> }
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      }
+
+      <!-- EMPTY (4.4.4) -->
+      @else if (uiState() === 'empty') {
+        <div class="state-block">
+          <p class="state-title">No records match this scope and filter.</p>
+          <p class="state-body">Zero results come from the current filters, not a global zero. Adjust the range,
+            status, owner or scope, or reset filters to continue.</p>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="clearFilters()">Reset filters</button>
+        </div>
+      }
+
+      <!-- NO ACCESS (4.4.4 / 4.4.6 restricted value) -->
+      @else if (uiState() === 'no-access') {
+        <div class="state-block">
+          <p class="state-title">This value cannot be displayed with your current access.</p>
+          <p class="state-body">Restricted records, fields, counts, actions and search suggestions are hidden.
+            Return to your permitted landing page to continue.</p>
+          <a class="btn btn-ghost btn-sm" href="javascript:void(0)" (click)="uiState.set('ready')">Return to My Workspace</a>
+        </div>
+      }
+
+      <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the record set visible -->
+      @else {
+
+        <!-- Situational banners (4.4.6) -->
+        @if (uiState() === 'validation') {
+          <div class="banner banner-error" role="alert">
+            <strong>Review the highlighted filters.</strong>
+            A value does not meet the stated format or range. Correct it to continue; entered values are kept.
+          </div>
+        }
+        @if (uiState() === 'duplicate') {
+          <div class="banner banner-warn" role="alert">
+            A similar saved view already exists. Link, change the value, request review or cancel — nothing is
+            overwritten silently.
+          </div>
+        }
+        @if (uiState() === 'conflict') {
+          <div class="banner banner-warn" role="alert">
+            This record changed after you opened it. Review the latest version before continuing.
+            <span class="banner-actions">
+              <a href="javascript:void(0)" (click)="uiState.set('ready')">Compare</a>
+              <a href="javascript:void(0)" (click)="uiState.set('ready')">Reapply eligible changes</a>
+              <a href="javascript:void(0)" (click)="uiState.set('ready')">Cancel</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'dependency-failure') {
+          <div class="banner banner-warn" role="alert">
+            We could not complete the dependent service step. Your confirmed local result is unchanged.
+            <span class="banner-actions">
+              <span class="corr">Correlation INT-77213</span>
+              <a href="javascript:void(0)" (click)="uiState.set('ready')">Retry dependency</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'success') {
+          <div class="banner banner-success" role="status">
+            Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }};
+            effective {{ persistentOutcome().effectiveTime }}.
+          </div>
+        }
+
+        <!-- Filtered record set with stable columns (4.4.1 Main work) -->
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col" class="col-select">
+                  <input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleAllVisible()"
+                         aria-label="Select all records on this page" />
+                </th>
+                @for (col of columns; track col.key) {
+                  <th scope="col" [class.col-amount]="col.key === 'amount'">
+                    <button type="button" class="sort-th" (click)="requestSort(col.key)"
+                            [disabled]="!sortAllowed()"
+                            [attr.aria-sort]="sortColumn() === col.key ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      {{ col.label }}
+                      <span class="sort-icon" aria-hidden="true">
+                        @if (sortColumn() === col.key) { {{ sortDirection() === 'asc' ? '▲' : '▼' }} }
+                        @else { ⇅ }
+                      </span>
+                    </button>
+                  </th>
+                }
+                <th scope="col" class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of visibleRecords(); track r.reference) {
+                <tr [class.row-selected]="isSelected(r.reference)">
+                  <td class="col-select">
+                    <input type="checkbox" [checked]="isSelected(r.reference)" (change)="toggleRow(r.reference)"
+                           [attr.aria-label]="'Select ' + r.reference" />
+                  </td>
+                  <!-- Record reference (read-only, 4.4.2) -->
+                  <td class="cell-ref">
+                    <a class="record-link" href="javascript:void(0)">{{ r.reference }}</a>
+                    <span class="cell-sub">{{ r.type }}</span>
+                  </td>
+                  <td class="cell-type">{{ r.type }}</td>
+                  <!-- Primary name (read-only, 4.4.2) -->
+                  <td class="cell-name">{{ r.name }}</td>
+                  <td class="col-amount cell-amount">₹{{ formatAmount(r.amount) }}</td>
+                  <!-- Updated time (read-only, 4.4.2) -->
+                  <td class="cell-date">{{ r.updatedLabel }}</td>
+                  <!-- Status (catalogue value, 4.4.2) -->
+                  <td><span class="badge" [class]="statusClass(r.status)">{{ r.status }}</span></td>
+                  <td class="cell-campaign">{{ r.campaign }}</td>
+                  <td class="cell-mode">{{ r.paymentMode }}</td>
+                  <td class="col-actions">
+                    <button type="button" class="row-action" aria-label="Open record" title="Open record"
+                            routerLink="/app/workspace/standard-record-detail">⋯</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td [attr.colspan]="columns.length + 2" class="table-empty">
+                    No records match this scope and filter. Reset filters to continue.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination + totals qualified by scope (4.4.1) -->
+        <div class="pagination">
+          <span class="page-summary">
+            Showing 1 to {{ recordCount() }} of {{ recordCount() }} records
+          </span>
+          <div class="page-controls" aria-label="Pagination">
+            <button type="button" class="page-btn is-current" aria-current="page">1</button>
+            <button type="button" class="page-next" aria-label="Next page">›</button>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: filters + history / evidence (4.4.5 desktop) ---------- -->
+    @if (filtersPanelOpen()) {
+      <aside class="side-panel">
+
+        <!-- FILTERS (Filter action + fields; 4.4.2 / 4.4.3) -->
+        <section class="card filters-card" aria-labelledby="filters-heading">
+          <div class="filters-head">
+            <h2 id="filters-heading" class="panel-title"><span aria-hidden="true">⛃</span> Filters</h2>
+            <button type="button" class="link-btn" (click)="clearFilters()">Reset</button>
+          </div>
+
+          <!-- Search (4.4.2) -->
+          <div class="field">
+            <label class="field-label" for="search">Search</label>
+            <input id="search" type="search" class="control" placeholder="Search records in scope…"
+                   [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" />
+          </div>
+
+          <!-- Date range (4.4.2) -->
+          <div class="field" [class.field-invalid]="rangeInvalid()">
+            <label class="field-label" for="range-start">Date Range
+              <span class="tz-label">{{ operatingTimeZone }}</span>
+            </label>
+            <div class="range-inputs">
+              <input id="range-start" type="date" class="control" [ngModel]="rangeStart()"
+                     (ngModelChange)="rangeStart.set($event)" aria-label="Start date" />
+              <span class="range-sep" aria-hidden="true">→</span>
+              <input type="date" class="control" [ngModel]="rangeEnd()"
+                     (ngModelChange)="rangeEnd.set($event)" aria-label="End date" />
+            </div>
+            <p class="field-hint" [class.field-error]="rangeInvalid()" role="status">
+              @if (rangeInvalid()) {
+                Review Date Range. The value does not meet the stated format or range.
+              } @else {
+                Interpreted as {{ interpretedRange() }}
+              }
+            </p>
+          </div>
+
+          <!-- Donation type (catalogue filter, 4.4.1) -->
+          <fieldset class="field field-fieldset">
+            <legend class="field-label">Donation Type</legend>
+            @for (t of typeCatalogue; track t) {
+              <label class="check-row">
+                <input type="checkbox" [checked]="typeFilter()[t]" (change)="toggleType(t)" />
+                <span>{{ t }}</span>
+              </label>
+            }
+          </fieldset>
+
+          <!-- Status (catalogue values only, 4.4.2) -->
+          <div class="field">
+            <label class="field-label" for="status">Status</label>
+            <select id="status" class="control" [ngModel]="statusFilter()"
+                    (ngModelChange)="statusFilter.set($event)">
+              <option value="">Select status</option>
+              @for (s of statusCatalogue; track s) { <option [value]="s">{{ s }}</option> }
+            </select>
+          </div>
+
+          <!-- Owner — scope-aware searchable selector with identity preview (4.4.2) -->
+          <div class="field owner-field">
+            <label class="field-label" for="owner-trigger">Owner</label>
+            <button id="owner-trigger" type="button" class="control owner-trigger"
+                    [attr.aria-expanded]="ownerPickerOpen()" (click)="toggleOwnerPicker()">
+              <span class="owner-selected">
+                <span class="owner-name">{{ activeOwner().name }}</span>
+                <span class="owner-context">{{ activeOwner().reference }} · {{ activeOwner().context }}</span>
+              </span>
+              <span class="chev" aria-hidden="true">▾</span>
+            </button>
+            @if (ownerPickerOpen()) {
+              <div class="owner-popover" role="listbox" aria-label="Eligible owners">
+                <input type="search" class="control owner-search" placeholder="Search eligible owners…"
+                       [ngModel]="ownerQuery()" (ngModelChange)="ownerQuery.set($event)" aria-label="Search owners" />
+                @for (opt of ownerResults(); track opt.reference) {
+                  <button type="button" class="owner-option" role="option"
+                          [attr.aria-selected]="opt.reference === activeOwner().reference" (click)="selectOwner(opt)">
+                    <span class="owner-name">{{ opt.name }}</span>
+                    <span class="owner-context">{{ opt.reference }} · {{ opt.context }}</span>
+                  </button>
+                } @empty {
+                  <p class="owner-empty">No eligible records match your search in this scope.</p>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Campaign (catalogue filter, 4.4.1) -->
+          <div class="field">
+            <label class="field-label" for="campaign">Campaign</label>
+            <select id="campaign" class="control" [ngModel]="campaignFilter()"
+                    (ngModelChange)="campaignFilter.set($event)">
+              @for (c of campaignCatalogue; track c) { <option [value]="c">{{ c }}</option> }
+            </select>
+          </div>
+
+          <!-- Payment mode (catalogue filter, 4.4.1) -->
+          <div class="field">
+            <label class="field-label" for="mode">Payment Mode</label>
+            <select id="mode" class="control" [ngModel]="paymentModeFilter()"
+                    (ngModelChange)="paymentModeFilter.set($event)">
+              @for (m of paymentModeCatalogue; track m) { <option [value]="m">{{ m }}</option> }
+            </select>
+          </div>
+
+          <!-- Amount range (4.4.1) -->
+          <div class="field" [class.field-invalid]="amountRangeInvalid()">
+            <label class="field-label" for="amount-min">Amount Range (₹)</label>
+            <div class="range-inputs">
+              <input id="amount-min" type="number" min="0" class="control" placeholder="Min amount"
+                     [ngModel]="amountMin()" (ngModelChange)="amountMin.set($event)" aria-label="Minimum amount" />
+              <span class="range-sep" aria-hidden="true">to</span>
+              <input type="number" min="0" class="control" placeholder="Max amount"
+                     [ngModel]="amountMax()" (ngModelChange)="amountMax.set($event)" aria-label="Maximum amount" />
+            </div>
+            @if (amountRangeInvalid()) {
+              <p class="field-hint field-error" role="status">
+                Review Amount Range. The minimum cannot exceed the maximum.
+              </p>
+            }
+          </div>
+
+          <div class="filters-actions">
+            <button type="button" class="btn btn-primary btn-block" (click)="applyFilter()"
+                    [disabled]="!filterAllowed()">Apply Filters</button>
+            <button type="button" class="btn btn-ghost btn-block" (click)="openSaveView()">Save View</button>
+          </div>
+        </section>
+
+        <!-- DECISION / REVIEW (4.4.1) -->
+        <section class="card" aria-labelledby="decision-heading">
+          <h2 id="decision-heading" class="panel-title">Decision / review</h2>
+          <p class="dr-lead">Risky decisions require review and explicit confirmation before they take effect.</p>
+          <dl class="kv-list">
+            <div><dt>Before → after</dt><dd>Current order → {{ sortLabel(sortColumn()) }} ({{ sortDirection() === 'asc' ? 'Asc' : 'Desc' }})</dd></div>
+            <div><dt>Effective permission</dt><dd>ux.standard-list-page.sort</dd></div>
+            <div><dt>Evidence</dt><dd>{{ recordCount() }} records in scope · {{ lastRefresh() }}</dd></div>
+            <div><dt>Reason</dt><dd>Manage filtered record sets</dd></div>
+            <div><dt>Resulting state</dt><dd>Reordered record set · confirmed result shown</dd></div>
+          </dl>
+        </section>
+
+        <!-- RELATED AND HISTORY (4.4.1) -->
+        <section class="card" aria-labelledby="related-heading">
+          <h2 id="related-heading" class="panel-title">Related and history</h2>
+          <div class="rel-tabs" role="tablist" aria-label="Related and history">
+            @for (tab of visibleRelatedTabs(); track tab.key) {
+              <button type="button" class="rel-tab" role="tab" [class.active]="activeRelatedTab() === tab.key"
+                      [attr.aria-selected]="activeRelatedTab() === tab.key" (click)="selectRelatedTab(tab.key)">
+                {{ tab.label }}
+              </button>
+            }
+          </div>
+          <ul class="rel-list" role="list">
+            @for (row of activeRelatedRows(); track row.primary) {
+              <li class="rel-row">
+                <span class="rel-primary">{{ row.primary }}</span>
+                <span class="rel-secondary">{{ row.secondary }}</span>
+                <span class="rel-meta">{{ row.meta }}</span>
+              </li>
+            } @empty {
+              <li class="rel-empty">No entries in scope.</li>
+            }
+          </ul>
+        </section>
+
+        <!-- PERSISTENT OUTCOME (4.4.1) -->
+        <section class="card" aria-labelledby="outcome-heading">
+          <h2 id="outcome-heading" class="panel-title">Persistent outcome</h2>
+          <dl class="kv-list">
+            <div><dt>State</dt><dd>{{ persistentOutcome().state }}</dd></div>
+            <div><dt>Effective time</dt><dd>{{ persistentOutcome().effectiveTime }}</dd></div>
+            <div><dt>Downstream status</dt><dd>{{ persistentOutcome().downstreamStatus }}</dd></div>
+            <div><dt>Accountable owner</dt><dd>{{ persistentOutcome().owner }}</dd></div>
+            <div><dt>Next action</dt><dd>{{ persistentOutcome().nextAction }}</dd></div>
+          </dl>
+        </section>
+      </aside>
+    }
+  </div>
+
+  <!-- ============ HELP / FRESHNESS FOOTER (4.4.1 persistent freshness) ============ -->
+  <footer class="help-footer">
+    <div class="help-left">
+      <span class="help-title">Need help?</span>
+      <span class="help-body">Learn how to manage records effectively.</span>
+      <a class="link-btn" href="javascript:void(0)">View Help Guide →</a>
+    </div>
+    <div class="help-right">
+      <span class="help-updated">Data updated</span>
+      <span class="help-time">{{ lastRefresh() }}</span>
+    </div>
+  </footer>
+
+  <!-- ============ CONFIRM SORT DIALOG (4.4.3 Sort → 4.4.6 high-risk) ============ -->
+  @if (sortDialogOpen()) {
+    <div class="slp-modal-backdrop" (click)="cancelSort()">
+      <div class="slp-modal" role="dialog" aria-modal="true" aria-labelledby="sort-dialog-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="sort-dialog-title" class="slp-modal-title">Confirm Sort</h2>
+        <p class="slp-modal-lead">Review the affected record set, consequence, reason and effective time before the
+          reorder is applied.</p>
+        <dl class="kv-list">
+          <div><dt>Sort by</dt><dd>{{ pendingSortLabel() }}</dd></div>
+          <div><dt>Affected records</dt><dd>{{ recordCount() }} in effective scope</dd></div>
+          <div><dt>Consequence</dt><dd>Reorders only authorised records in scope</dd></div>
+          <div><dt>Reason</dt><dd>Manage filtered record sets with stable columns</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="slp-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelSort()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmSort()">Confirm sort</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ BULK ACTION DIALOG (4.4.3 Bulk action) ============ -->
+  @if (bulkDialogOpen()) {
+    <div class="slp-modal-backdrop" (click)="cancelBulk()">
+      <div class="slp-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-dialog-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="bulk-dialog-title" class="slp-modal-title">Confirm bulk action</h2>
+        <p class="slp-modal-lead">Review the affected records, consequence and reason before continuing.</p>
+        <dl class="kv-list">
+          <div><dt>Operation</dt><dd>{{ pendingBulkOperation() }}</dd></div>
+          <div><dt>Selected records</dt><dd>{{ selectedCount() }} in effective scope</dd></div>
+          <div><dt>Consequence</dt><dd>Changes only authorised records in scope</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="slp-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelBulk()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmBulk()">Confirm</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ SAVE VIEW DIALOG (4.4.3 Save view) ============ -->
+  @if (saveViewDialogOpen()) {
+    <div class="slp-modal-backdrop" (click)="cancelSaveView()">
+      <div class="slp-modal" role="dialog" aria-modal="true" aria-labelledby="saveview-dialog-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="saveview-dialog-title" class="slp-modal-title">Save view</h2>
+        <p class="slp-modal-lead">Save one draft view of the current filters. Required information is indicated.</p>
+        <div class="field">
+          <label class="field-label" for="view-name">View name</label>
+          <input id="view-name" type="text" class="control" [ngModel]="saveViewName()"
+                 (ngModelChange)="saveViewName.set($event)" placeholder="Name this view" />
+          @if (saveViewName().trim().length === 0) {
+            <p class="field-hint">Enter View name.</p>
+          }
+        </div>
+        <div class="slp-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelSaveView()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmSaveView()"
+                  [disabled]="saveViewName().trim().length === 0">Save draft</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ EXPORT DIALOG with Export reason (4.4.3 Export / 4.4.2 Confidential) ============ -->
+  @if (exportDialogOpen()) {
+    <div class="slp-modal-backdrop" (click)="cancelExport()">
+      <div class="slp-modal" role="dialog" aria-modal="true" aria-labelledby="export-dialog-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="export-dialog-title" class="slp-modal-title">Confirm Export</h2>
+        <p class="slp-modal-lead">Confirm classification, purpose, scope, count, expiry and audit reference before the
+          protected output is made available.</p>
+        <dl class="kv-list">
+          <div><dt>Classification</dt><dd>{{ exportConfirmation().classification }}</dd></div>
+          <div><dt>Purpose</dt><dd>{{ exportConfirmation().purpose }}</dd></div>
+          <div><dt>Scope</dt><dd>{{ exportConfirmation().scope }}</dd></div>
+          <div><dt>Row / file count</dt><dd>{{ exportConfirmation().rowFileCount }}</dd></div>
+          <div><dt>Expiry</dt><dd>{{ exportConfirmation().expiry }}</dd></div>
+          <div><dt>Audit reference</dt><dd>{{ exportConfirmation().auditReference }}</dd></div>
+        </dl>
+
+        <!-- Export reason — Confidential structured textarea with character counter (4.4.2) -->
+        <div class="field">
+          <label class="field-label" for="export-reason">Export reason
+            <span class="confidential-tag">Confidential</span>
+          </label>
+          <textarea id="export-reason" class="control textarea" rows="3"
+                    [ngModel]="exportReason()" (ngModelChange)="exportReason.set($event)"
+                    [attr.maxlength]="exportReasonMax"
+                    placeholder="Record the meaningful reason for this protected export…"></textarea>
+          <p class="field-hint" [class.field-error]="exportReasonCount() > 0 && !exportReasonValid()" role="status">
+            {{ exportReasonCount() }} / {{ exportReasonMax }} characters
+            (minimum {{ exportReasonMin }})
+          </p>
+        </div>
+
+        <div class="slp-modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelExport()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmExport()"
+                  [disabled]="!exportReasonValid()">Confirm export</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

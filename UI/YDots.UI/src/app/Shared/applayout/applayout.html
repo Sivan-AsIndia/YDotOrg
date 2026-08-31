@@ -1,0 +1,31 @@
+<div id="layout-wrapper">
+    <app-topheader></app-topheader>
+    <!-- sidebar-ku adjacent-ah start aagum flex row -->
+    <div class="main-content-flex d-flex">
+        <app-sidebar></app-sidebar>
+
+    
+
+        <!-- routing content: remaining space full -->
+        <div class="content-page flex-grow-1 min-w-0">
+            <app-rainbow-loader></app-rainbow-loader>
+            <router-outlet></router-outlet>
+        </div>
+    </div>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <!-- theme customizer offcanvas overlay -->
+    <app-theme></app-theme>
+</div>
+
+<div
+  class="progress-wrap d-flex align-items-center justify-content-center cursor-pointer h-40px w-40px position-fixed"
+  id="progress-scroll">
+
+    <svg class="progress-circle w-100 h-100 position-absolute" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" class="progress"/>
+    </svg>
+
+    <i class="ri-arrow-up-line fs-16 z-1 position-relative text-primary"></i>
+</div>
+
+<app-footer></app-footer>

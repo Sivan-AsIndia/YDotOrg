@@ -1,0 +1,48 @@
+/* IAM-AUTH-06 — Account unavailable. */
+
+.unavailable-card {
+  max-width: 520px;
+}
+
+.status-icon {
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 30px;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.action-panel,
+.reference-panel {
+  background-color: #f9fafb;
+}
+
+.action-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background-color: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+  font-size: 1.15rem;
+}
+
+.reference-code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  color: #1f2430;
+  /* Selectable on its own so the reference can be copied without dragging over the label. */
+  user-select: all;
+}
+
+/* Lets the flex child actually shrink so `text-truncate` has an effect on a long reference. */
+.min-w-0 {
+  min-width: 0;
+}

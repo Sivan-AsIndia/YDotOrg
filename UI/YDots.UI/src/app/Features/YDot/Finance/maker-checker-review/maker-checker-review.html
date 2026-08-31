@@ -1,0 +1,523 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+  <div  [attr.data-ui-state]="uiState()">
+    <!-- ============ TASK HEADER (4.7.1) ============ -->
+    <header class="mc-task-header" aria-labelledby="mc-title">
+      <div class="mc-header-accent" aria-hidden="true"></div>
+      <div class="mc-header-content">
+        <div class="mc-header-text">
+          <div class="mc-title-row">
+            <h1 class="mc-title" id="mc-title">{{ pageTitle }}</h1>
+            <span class="mc-state-pill">
+              <span class="mc-state-dot" aria-hidden="true"></span>
+              {{ lifecycleState() }}
+            </span>
+          </div>
+          <p class="mc-subtitle">{{ pageSubtitle }}</p>
+          <div class="mc-task-meta">
+            <span class="mc-meta-item">
+              <svg class="mc-meta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 12h6M9 16h6M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" />
+              </svg>
+              Reference: <strong>{{ reviewReference() }}</strong>
+            </span>
+            @if (linkedFrom()) {
+              <span class="mc-meta-item">
+                <svg class="mc-meta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+                  <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+                </svg>
+                Linked from: <strong>{{ linkedFrom() }}</strong>
+              </span>
+            }
+            <span class="mc-meta-item">
+              <svg class="mc-meta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+              </svg>
+              Owner: {{ owner }}
+            </span>
+            <span class="mc-meta-item">
+              <svg class="mc-meta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              Updated {{ lastRefresh() }}
+            </span>
+            <span class="mc-meta-item">
+              <svg class="mc-meta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+              </svg>
+              {{ operatingTimeZone }}
+            </span>
+          </div>
+        </div>
+
+        @if (uiState() !== 'loading' && uiState() !== 'empty' && uiState() !== 'no-access') {
+        <div class="mc-header-actions">
+          <button type="button" class="mc-btn mc-btn-ghost" [title]="delegateAllowed() ? 'Delegate' : decisionBlockedReason()" (click)="performDelegate()" [class.disabled]="!delegateAllowed()" [attr.aria-disabled]="!delegateAllowed()">
+            <svg class="mc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 3h5v5M21 3l-7 7M8 13l3 3L21 6" />
+              <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+            </svg>
+            Delegate
+          </button>
+          <button type="button" class="mc-btn mc-btn-primary" [title]="approveAllowed() ? 'Approve' : approveBlockedReason()" (click)="openApproveDialog()" [class.disabled]="!approveAllowed()" [attr.aria-disabled]="!approveAllowed()">
+            <svg class="mc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12.5 10 17.5 19 6.5" />
+            </svg>
+            Approve
+          </button>
+        </div>
+        }
+      </div>
+    </header>
+
+    <!-- Situational banners (4.7.4 / 4.7.6) -->
+    @if (uiState() === 'validation') {
+      <div class="mc-banner mc-banner-error" role="alert">
+        <span class="mc-banner-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+        </span>
+        <div class="mc-banner-body">
+          <strong>Review the highlighted fields.</strong>
+          A value does not meet the stated format or range. Correct it to continue.
+        </div>
+        <button type="button" class="mc-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+      </div>
+    }
+    @if (uiState() === 'duplicate') {
+      <div class="mc-banner mc-banner-warn" role="alert">
+        <span class="mc-banner-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 9v4M12 17h.01" />
+            <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          </svg>
+        </span>
+        <div class="mc-banner-body">
+          This review already exists. Review the candidate before continuing.
+        </div>
+        <button type="button" class="mc-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+      </div>
+    }
+    @if (uiState() === 'conflict') {
+      <div class="mc-banner mc-banner-warn" role="alert">
+        <span class="mc-banner-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+            <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" />
+          </svg>
+        </span>
+        <div class="mc-banner-body">
+          This record changed after you opened it. Review the latest version before continuing.
+          <span class="mc-banner-actions">
+            <a href="javascript:void(0)" (click)="compareConflict()">Compare</a>
+            <a href="javascript:void(0)" (click)="reapplyConflictChanges()">Reapply eligible changes</a>
+            <a href="javascript:void(0)" (click)="cancelConflict()">Cancel</a>
+          </span>
+        </div>
+      </div>
+    }
+    @if (uiState() === 'dependency-failure') {
+      <div class="mc-banner mc-banner-warn" role="alert">
+        <span class="mc-banner-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 9v4M12 17h.01" />
+            <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          </svg>
+        </span>
+        <div class="mc-banner-body">
+          We could not complete the dependent service step. Your confirmed local result is unchanged.
+          <span class="mc-banner-actions">
+            <span class="mc-corr">Correlation INT-77337</span>
+            <a href="javascript:void(0)" (click)="retryDependency()">Retry dependency</a>
+          </span>
+        </div>
+      </div>
+    }
+    @if (uiState() === 'success') {
+      <div class="mc-banner mc-banner-success" role="status">
+        <span class="mc-banner-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="m8.5 12.5 2.5 2.5 5-5" />
+          </svg>
+        </span>
+        <div class="mc-banner-body">
+          Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.
+        </div>
+        <button type="button" class="mc-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+      </div>
+    }
+
+    <!-- Loading / Empty / No-access — replace the review entirely (4.7.4) -->
+    @if (uiState() === 'loading') {
+      <div class="mc-banner mc-banner-warn" role="status" aria-live="polite">
+        <div class="mc-banner-body">
+          <strong>Loading Maker-checker review…</strong>
+          <span class="mc-banner-actions">
+            <a href="javascript:void(0)" (click)="setUiState('ready')">Cancel</a>
+          </span>
+        </div>
+      </div>
+    }
+    @else if (uiState() === 'empty') {
+      <div class="mc-banner mc-banner-warn" role="status">
+        <div class="mc-banner-body">
+          <strong>No review is in scope.</strong>
+          This can come from scope, filters, missing setup, or genuinely no record.
+          <span class="mc-banner-actions">
+            <a href="javascript:void(0)" (click)="setUiState('ready')">Reset</a>
+          </span>
+        </div>
+      </div>
+    }
+    @else if (uiState() === 'no-access') {
+      <div class="mc-banner mc-banner-warn" role="alert">
+        <div class="mc-banner-body">
+          <strong>This value cannot be displayed with your current access.</strong>
+          Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.
+          <span class="mc-banner-actions">
+            <a href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+          </span>
+        </div>
+      </div>
+    }
+    @else {
+    <!-- ============ 2-COLUMN LAYOUT: MAIN WORK (left) + SIDEBAR (right) ============ -->
+    <div class="mc-layout-grid">
+
+      <!-- LEFT: MAIN WORK (4.7.1): before/after + evidence + decision -->
+      <div class="mc-layout-main">
+        <section class="mc-main" aria-labelledby="mc-review-heading">
+          <h2 id="mc-review-heading" class="mc-visually-hidden">Review decision</h2>
+
+          <!-- Review details (4.7.2 field contract) -->
+          <div class="mc-card mc-review-card">
+            <div class="mc-card-head">
+              <span class="mc-card-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                  <path d="M14 2v6h6M9 13h6M9 17h6" />
+                </svg>
+              </span>
+              <h3 class="mc-card-title">Proposed financial action</h3>
+            </div>
+            <dl class="mc-kv mc-kv-two">
+              <div>
+                <dt>Review reference</dt>
+                <dd class="mc-dd-strong">{{ reviewReference() }}</dd>
+              </div>
+              <div>
+                <dt>Maker</dt>
+                <dd>{{ maker }}</dd>
+              </div>
+              <div>
+                <dt>Checker</dt>
+                <dd>{{ checker }}</dd>
+              </div>
+              <div>
+                <dt>Action type</dt>
+                <dd><span class="mc-tag">{{ actionType() }}</span></dd>
+              </div>
+              <div>
+                <dt>Affected references</dt>
+                <dd>{{ affectedReferences() }}</dd>
+              </div>
+              <div>
+                <dt>Due time</dt>
+                <dd class="mc-dd-due">{{ interpretedDueTime() }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Before / after comparison (4.7.2) -->
+          <div class="mc-card mc-compare-card">
+            <div class="mc-card-head">
+              <span class="mc-card-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 3v18h18" />
+                  <path d="m7 15 4-4 3 3 5-6" />
+                </svg>
+              </span>
+              <h3 class="mc-card-title">Before / after impact</h3>
+            </div>
+            <div class="mc-compare-grid">
+              <div class="mc-compare-box mc-before">
+                <span class="mc-compare-label">Before value</span>
+                <span class="mc-compare-value">{{ beforeValue() }}</span>
+              </div>
+              <div class="mc-compare-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </div>
+              <div class="mc-compare-box mc-proposed">
+                <span class="mc-compare-label">Proposed value</span>
+                <span class="mc-compare-value">{{ proposedValue() }}</span>
+              </div>
+            </div>
+            <div class="mc-impact-row">
+              <span class="mc-impact-label">
+                <svg class="mc-impact-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2v20M17 7l-5-5-5 5M7 17l5 5 5-5" />
+                </svg>
+                Amount impact
+              </span>
+              <span class="mc-impact-value">₹ {{ formatAmount(amountImpact()) }}</span>
+            </div>
+          </div>
+
+          <!-- Reason + Evidence (4.7.2) -->
+          <div class="mc-card mc-evidence-card">
+            <div class="mc-card-head">
+              <span class="mc-card-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                  <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+                </svg>
+              </span>
+              <h3 class="mc-card-title">Reason and evidence</h3>
+            </div>
+            <dl class="mc-kv">
+              <div>
+                <dt>Reason</dt>
+                <dd>{{ reason() }}</dd>
+              </div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>
+                  <span class="mc-evidence-file">
+                    <svg class="mc-file-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                    {{ evidence() }}
+                  </span>
+                  <span class="mc-conf">Confidential</span>
+                </dd>
+              </div>
+            </dl>
+
+            <!-- Conflict declaration (4.7.2) -->
+            <label class="mc-checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="conflictDeclaration()"
+                (ngModelChange)="conflictDeclaration.set($event)"
+                aria-label="Conflict declaration"
+              />
+              <span class="mc-checkbox-text">
+                <strong>Conflict declaration</strong>
+                <span>I declare no conflict of interest and confirm I am an independent authorised checker.</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- Decision actions (4.7.3) -->
+          <div class="mc-card mc-decision-card">
+            <div class="mc-card-head">
+              <span class="mc-card-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+              </span>
+              <h3 class="mc-card-title">Decision</h3>
+            </div>
+            <div class="mc-decision-actions">
+              <button type="button" class="mc-btn mc-btn-outline" [title]="returnAllowed() ? 'Return for correction' : decisionBlockedReason()" (click)="openReturnDialog()" [class.disabled]="!returnAllowed()" [attr.aria-disabled]="!returnAllowed()">
+                <svg class="mc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+                Return for correction
+              </button>
+              <button type="button" class="mc-btn mc-btn-danger" [title]="rejectAllowed() ? 'Reject' : decisionBlockedReason()" (click)="openRejectDialog()" [class.disabled]="!rejectAllowed()" [attr.aria-disabled]="!rejectAllowed()">
+                <svg class="mc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+                Reject
+              </button>
+              <button
+                type="button"
+                class="mc-btn mc-btn-primary mc-btn-approve"
+                [title]="approveAllowed() ? 'Approve' : approveBlockedReason()"
+                (click)="openApproveDialog()"
+                [class.disabled]="!approveAllowed()"
+                [attr.aria-disabled]="!approveAllowed()"
+              >
+                <svg class="mc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12.5 10 17.5 19 6.5" />
+                </svg>
+                Approve
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+    }
+    <!-- ============ END 2-COLUMN LAYOUT ============ -->
+
+    <!-- ============ APPROVE DIALOG (4.7.3 Approve — primary) ============ -->
+    @if (approveDialogOpen()) {
+      <div class="mc-modal-backdrop" (click)="cancelApprove()">
+        <div
+          class="mc-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mc-approve-title"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="mc-modal-head">
+            <span class="mc-modal-ic mc-modal-ic-primary" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.5 10 17.5 19 6.5" />
+              </svg>
+            </span>
+            <h2 id="mc-approve-title" class="mc-modal-title">Confirm Approve</h2>
+          </div>
+          <p class="mc-modal-lead">
+            Record decision, independent authority, reason, effective version, time and resulting state. Show the next accountable owner.
+          </p>
+          <dl class="mc-kv mc-modal-kv">
+            <div>
+              <dt>Review</dt>
+              <dd>{{ reviewReference() }}</dd>
+            </div>
+            <div>
+              <dt>Impact</dt>
+              <dd class="mc-amount">₹ {{ formatAmount(amountImpact()) }}</dd>
+            </div>
+            <div>
+              <dt>Consequence</dt>
+              <dd>Approves the proposed financial action</dd>
+            </div>
+          </dl>
+          <div class="mc-field">
+            <label class="mc-field-label" for="mc-approve-reason">Reason <span class="mc-req">*</span></label>
+            <textarea
+              id="mc-approve-reason"
+              class="mc-input mc-textarea"
+              rows="3"
+              [ngModel]="decisionReason()"
+              (ngModelChange)="decisionReason.set($event)"
+              [attr.maxlength]="decisionReasonMax"
+              placeholder="Record the meaningful reason for this approval…"
+            ></textarea>
+            <p class="mc-field-hint" [class.mc-field-error]="decisionReasonCount() > 0 && !decisionReasonValid()" role="status">
+              {{ decisionReasonCount() }} / {{ decisionReasonMax }} characters (minimum {{ decisionReasonMin }})
+            </p>
+          </div>
+          <div class="mc-modal-actions">
+            <button type="button" class="mc-btn mc-btn-outline" (click)="cancelApprove()">Cancel</button>
+            <button type="button" class="mc-btn mc-btn-primary" (click)="confirmApprove()" [disabled]="!decisionReasonValid()">
+              Approve
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ============ RETURN FOR CORRECTION DIALOG (4.7.3) ============ -->
+    @if (returnDialogOpen()) {
+      <div class="mc-modal-backdrop" (click)="cancelReturn()">
+        <div
+          class="mc-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mc-return-title"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="mc-modal-head">
+            <span class="mc-modal-ic mc-modal-ic-warn" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </span>
+            <h2 id="mc-return-title" class="mc-modal-title">Confirm Return for Correction</h2>
+          </div>
+          <p class="mc-modal-lead">
+            Record decision, independent authority, reason, effective version, time and resulting state.
+          </p>
+          <div class="mc-field">
+            <label class="mc-field-label" for="mc-return-reason">Reason <span class="mc-req">*</span></label>
+            <textarea
+              id="mc-return-reason"
+              class="mc-input mc-textarea"
+              rows="3"
+              [ngModel]="decisionReason()"
+              (ngModelChange)="decisionReason.set($event)"
+              [attr.maxlength]="decisionReasonMax"
+              placeholder="Record the reason for returning this for correction…"
+            ></textarea>
+            <p class="mc-field-hint" [class.mc-field-error]="decisionReasonCount() > 0 && !decisionReasonValid()" role="status">
+              {{ decisionReasonCount() }} / {{ decisionReasonMax }} characters (minimum {{ decisionReasonMin }})
+            </p>
+          </div>
+          <div class="mc-modal-actions">
+            <button type="button" class="mc-btn mc-btn-outline" (click)="cancelReturn()">Cancel</button>
+            <button type="button" class="mc-btn mc-btn-primary" (click)="confirmReturn()" [disabled]="!decisionReasonValid()">
+              Return for correction
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ============ REJECT DIALOG (4.7.3 — danger) ============ -->
+    @if (rejectDialogOpen()) {
+      <div class="mc-modal-backdrop" (click)="cancelReject()">
+        <div
+          class="mc-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mc-reject-title"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="mc-modal-head">
+            <span class="mc-modal-ic mc-modal-ic-danger" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </span>
+            <h2 id="mc-reject-title" class="mc-modal-title">Confirm Reject</h2>
+          </div>
+          <p class="mc-modal-lead">
+            Review the affected record, consequence, reason and effective time. This action preserves linked history.
+          </p>
+          <div class="mc-field">
+            <label class="mc-field-label" for="mc-reject-reason">Reason <span class="mc-req">*</span></label>
+            <textarea
+              id="mc-reject-reason"
+              class="mc-input mc-textarea"
+              rows="3"
+              [ngModel]="decisionReason()"
+              (ngModelChange)="decisionReason.set($event)"
+              [attr.maxlength]="decisionReasonMax"
+              placeholder="Record the meaningful reason for this rejection…"
+            ></textarea>
+            <p class="mc-field-hint" [class.mc-field-error]="decisionReasonCount() > 0 && !decisionReasonValid()" role="status">
+              {{ decisionReasonCount() }} / {{ decisionReasonMax }} characters (minimum {{ decisionReasonMin }})
+            </p>
+          </div>
+          <div class="mc-modal-actions">
+            <button type="button" class="mc-btn mc-btn-outline" (click)="cancelReject()">Cancel</button>
+            <button type="button" class="mc-btn mc-btn-danger" (click)="confirmReject()" [disabled]="!decisionReasonValid()">
+              Reject
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+  </div>
+  </div>

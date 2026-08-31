@@ -1,0 +1,2 @@
+/*! For license information please see current-date-indicator.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import CurrentDateIndication from"../../Extensions/CurrentDateIndication.js";const G=Highcharts;CurrentDateIndication.compose(G.Axis,G.PlotLineOrBand);export default Highcharts;

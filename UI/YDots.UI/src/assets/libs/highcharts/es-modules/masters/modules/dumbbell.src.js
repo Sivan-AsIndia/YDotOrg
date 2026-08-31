@@ -1,0 +1,2 @@
+/*! For license information please see dumbbell.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Dumbbell/DumbbellSeries.js";export default Highcharts;

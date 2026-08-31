@@ -1,0 +1,459 @@
+<main class="app-wrapper">
+    <div class="container-fluid">
+        <!-- Page Header with Breadcrumb -->
+        <div class="main-breadcrumb d-flex flex-wrap align-items-center justify-content-between my-4 position-relative gap-3">
+          <div>
+              <h2 class="breadcrumb-title mb-0 flex-grow-1 fs-16">Login Identifier Change</h2>
+              <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+            <p class="page-subtitle mb-0">Change login email or username through a separately verified process</p>
+        </div>
+          </div>
+            <div class="flex-shrink-0">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb justify-content-end mb-0">
+                        <li><i class="ri-home-4-line fs-16 me-2 lh-sm text-primary"></i></li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0)">Administration</a></li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0)">Users and Access</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Login Identifier Change</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+      
+
+        <!-- Loading State -->
+        @if (loading()) {
+            <div class="loading-container">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-3 fw-medium">Loading page data...</p>
+            </div>
+        } @else if (loadError()) {
+            <div class="text-center py-5">
+                <p class="text-danger mb-3">Failed to load page data.</p>
+                <button class="btn btn-primary" (click)="retry()">Retry</button>
+            </div>
+        } @else {
+            <form [formGroup]="identifierForm">
+                <!-- User Detail Bar -->
+                <div class="user-detail-bar">
+                    <div class="user-detail-avatar">
+                        <i class="uil uil-user-circle"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold fs-15">{{ passedUser()?.displayName || data()?.user?.displayName }}</div>
+                        <small class="text-muted">{{ userReference() || data()?.user?.reference }} &middot; Current username: {{ currentUsername() || data()?.user?.currentUsername }}</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" (click)="goBack()">
+                        <i class="ri-arrow-left-line me-1"></i> Back to Profile
+                    </button>
+                </div>
+
+                <div class="row g-4">
+                    <!-- LEFT COLUMN - Main Form -->
+                    <div class="col-lg-8">
+                        <!-- Change Login Email -->
+                        <div class="field-card">
+                            <div class="field-card-header">
+                                <div class="field-card-title">
+                                    <i class="uil uil-envelope-alt text-primary"></i>
+                                    Change Login Email
+                                </div>
+                                @if (emailValidated() && emailAvailable() === 'available') {
+                                    <span class="badge bg-success-subtle text-success fs-11">Available</span>
+                                } @else if (emailValidated() && emailAvailable() === 'unavailable') {
+                                    <span class="badge bg-danger-subtle text-danger fs-11">Unavailable</span>
+                                }
+                            </div>
+
+                            <div class="current-value-label">Current Login Email</div>
+                            <div class="current-value">{{ currentLoginEmail() || data()?.user?.currentLoginEmail }}</div>
+
+                            <div class="mb-3">
+                                <label for="newEmail" class="form-label fw-semibold fs-13">New Login Email</label>
+                                <div class="input-btn-group">
+                                    <input
+                                        type="email"
+                                        class="form-control"
+                                        id="newEmail"
+                                        formControlName="newEmail"
+                                        placeholder="Enter new email address"
+                                        [class.is-valid]="emailValidated() && emailAvailable() === 'available'"
+                                        [class.is-invalid]="emailValidated() && emailAvailable() === 'unavailable'">
+                                    <button type="button" class="btn btn-outline-primary" (click)="validateNewIdentifier('email')" [disabled]="checking() || submitting()">
+                                        @if (checking()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                        <i class="uil uil-check-circle me-1"></i>Validate
+                                    </button>
+                                </div>
+                                @if (emailValidated() && emailAvailable() === 'available') {
+                                    <div class="valid-feedback d-block">Email is available for use.</div>
+                                }
+                                @if (emailValidated() && emailAvailable() === 'unavailable') {
+                                    <div class="invalid-feedback d-block">This email is already associated with another account.</div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Change Username -->
+                        <div class="field-card">
+                            <div class="field-card-header">
+                                <div class="field-card-title">
+                                    <i class="uil uil-user text-info"></i>
+                                    Change Username
+                                </div>
+                                @if (usernameValidated() && usernameAvailable() === 'available') {
+                                    <span class="badge bg-success-subtle text-success fs-11">Available</span>
+                                } @else if (usernameValidated() && usernameAvailable() === 'unavailable') {
+                                    <span class="badge bg-danger-subtle text-danger fs-11">Unavailable</span>
+                                }
+                            </div>
+
+                            <div class="current-value-label">Current Username</div>
+                            <div class="current-value">{{ currentUsername() || data()?.user?.currentUsername }}</div>
+
+                            <div class="mb-3">
+                                <label for="newUsername" class="form-label fw-semibold fs-13">New Username</label>
+                                <div class="input-btn-group">
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="newUsername"
+                                        formControlName="newUsername"
+                                        placeholder="Enter new username (3-80 chars, alphanumeric)"
+                                        [class.is-valid]="usernameValidated() && usernameAvailable() === 'available'"
+                                        [class.is-invalid]="usernameValidated() && usernameAvailable() === 'unavailable'">
+                                    <button type="button" class="btn btn-outline-primary" (click)="validateNewIdentifier('username')" [disabled]="checking() || submitting()">
+                                        @if (checking()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                        <i class="uil uil-check-circle me-1"></i>Validate
+                                    </button>
+                                </div>
+                                @if (usernameValidated() && usernameAvailable() === 'available') {
+                                    <div class="valid-feedback d-block">Username is available for use.</div>
+                                }
+                                @if (usernameValidated() && usernameAvailable() === 'unavailable') {
+                                    <div class="invalid-feedback d-block">This username is reserved or already in use.</div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Change Reason -->
+                        <div class="field-card">
+                            <div class="field-card-title mb-3">
+                                <i class="uil uil-pen text-warning"></i>
+                                Change Reason
+                            </div>
+                            <div class="mb-1">
+                                <textarea
+                                    class="form-control"
+                                    id="changeReason"
+                                    formControlName="changeReason"
+                                    rows="3"
+                                    placeholder="Provide a detailed reason for this identifier change (10-1000 characters)"
+                                    [class.is-invalid]="identifierForm.controls.changeReason.invalid && identifierForm.controls.changeReason.touched">
+                                </textarea>
+                                @if (identifierForm.controls.changeReason.invalid && identifierForm.controls.changeReason.touched) {
+                                    <div class="invalid-feedback">
+                                        @if (identifierForm.controls.changeReason.errors?.['required']) { Reason is required. }
+                                        @if (identifierForm.controls.changeReason.errors?.['minlength']) { Minimum 10 characters. }
+                                        @if (identifierForm.controls.changeReason.errors?.['maxlength']) { Maximum 1000 characters. }
+                                    </div>
+                                }
+                                <small class="text-muted">{{ identifierForm.controls.changeReason.value?.length || 0 }}/1000</small>
+                            </div>
+                        </div>
+
+                        <!-- Validation Errors -->
+                        @if (validationErrors().length > 0) {
+                            <div class="alert alert-danger py-2 small">
+                                <ul class="mb-0 ps-3">
+                                    @for (err of validationErrors(); track err) {
+                                        <li>{{ err }}</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        <!--
+                          The buttons follow the request through its states rather than all
+                          being live at once: a change is raised, then verified by the current
+                          owner, then approved where policy needs it, and only then applied.
+                          Showing "Apply" before verification would offer a step the server
+                          would refuse.
+                        -->
+                        @if (!openRequest()) {
+                        <div class="d-flex gap-3 mb-4">
+                            <button type="button" class="btn btn-success px-4" (click)="submitIdentifierChange()" [disabled]="submitting() || loading()">
+                                @if (submitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                <i class="uil uil-check me-1"></i> Submit Change Request
+                            </button>
+                        </div>
+                        }
+
+                        @if (openRequest(); as request) {
+                        <div class="alert alert-info py-2 mb-3">
+                            <i class="uil uil-info-circle me-1"></i>
+                            <strong>{{ request.statusDisplay || request.status }}</strong> —
+                            changing the {{ request.isEmailChange ? 'sign-in address' : 'username' }}
+                            from <strong>{{ request.currentValue }}</strong>
+                            to <strong>{{ request.requestedValue }}</strong>.
+                            @if (request.expiresAtUtc) {
+                            <span class="d-block small">
+                                This request expires {{ request.expiresAtUtc | date: 'medium' }}.
+                            </span>
+                            }
+                        </div>
+
+                        <!-- Verification. The code goes to the address ALREADY on the account,
+                             never the new one: a code sent to the new address would only prove
+                             that whoever typed it can read it. -->
+                        @if (request.status === 'pendingVerification') {
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold" for="verificationCodeInput">
+                                Verification code
+                            </label>
+                            <div class="d-flex gap-2">
+                                <input id="verificationCodeInput" type="text" class="form-control"
+                                       placeholder="The code sent to {{ currentLoginEmail() }}"
+                                       [ngModel]="verificationCode()"
+                                       (ngModelChange)="verificationCode.set($event)"
+                                       [ngModelOptions]="{ standalone: true }">
+                                <button type="button" class="btn btn-primary px-4"
+                                        (click)="sendVerification()" [disabled]="submitting()">
+                                    @if (submitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                    <i class="uil uil-check-circle me-1"></i> Verify
+                                </button>
+                            </div>
+                        </div>
+                        }
+
+                        <div class="d-flex gap-3 mb-4 flex-wrap">
+                            @if (request.status === 'pendingApproval') {
+                            <button type="button" class="btn btn-success px-4" (click)="decide(true)" [disabled]="submitting()">
+                                <i class="uil uil-check me-1"></i> Approve
+                            </button>
+                            <button type="button" class="btn btn-outline-danger px-4" (click)="decide(false)" [disabled]="submitting()">
+                                <i class="uil uil-times me-1"></i> Reject
+                            </button>
+                            }
+
+                            @if (request.status === 'approved') {
+                            <button type="button" class="btn btn-success px-4" (click)="applyChange()" [disabled]="submitting()">
+                                @if (submitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                <i class="uil uil-check-circle me-1"></i> Apply the change
+                            </button>
+                            <small class="text-muted align-self-center">
+                                This signs them out everywhere. The old
+                                {{ request.isEmailChange ? 'address' : 'username' }} stops working.
+                            </small>
+                            }
+
+                            <button type="button" class="btn btn-outline-danger px-4" (click)="cancelRequest()" [disabled]="submitting()">
+                                <i class="uil uil-times me-1"></i> Cancel request
+                            </button>
+                        </div>
+                        }
+                    </div>
+
+                        <!--
+                          Past requests, including the ones that were turned down. A change
+                          rejected last month and why is exactly what somebody needs to see
+                          before approving the same change today.
+                        -->
+                        @if (requests().length > 0) {
+                        <div class="card mb-4">
+                            <div class="card-header"><h6 class="mb-0 fw-bold">Change History</h6></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>What</th>
+                                            <th>From</th>
+                                            <th>To</th>
+                                            <th>Status</th>
+                                            <th>Raised</th>
+                                            <th>By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (item of requests(); track item.id) {
+                                        <tr>
+                                            <td>{{ item.isEmailChange ? 'Sign-in address' : 'Username' }}</td>
+                                            <td class="text-muted">{{ item.currentValue }}</td>
+                                            <td>{{ item.requestedValue }}</td>
+                                            <td>
+                                                {{ item.statusDisplay || item.status }}
+                                                @if (item.rejectionReason) {
+                                                <small class="d-block text-danger">{{ item.rejectionReason }}</small>
+                                                }
+                                            </td>
+                                            <td>{{ item.requestedAtUtc | date: 'dd MMM yyyy' }}</td>
+                                            <td>{{ item.requestedByName || '—' }}</td>
+                                        </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        }
+
+                    <!-- RIGHT COLUMN - Status & Info -->
+                    <div class="col-lg-4">
+                        <!-- Change Status -->
+                        <div class="status-card">
+                            <div class="status-card-header">
+                                <i class="uil uil-info-circle text-primary"></i>
+                                Change Status
+                            </div>
+                            <div class="status-card-body">
+                                <div class="status-row">
+                                    <span class="status-label">Verification</span>
+                                    <span class="status-value">
+                                        <span class="badge"
+                                            [class.bg-warning-subtle]="verificationState() === 'Pending'"
+                                            [class.bg-info-subtle]="verificationState() === 'Sent'"
+                                            [class.bg-success-subtle]="verificationState() === 'Verified'"
+                                            [class.bg-danger-subtle]="verificationState() === 'Failed'"
+                                            [class.text-warning]="verificationState() === 'Pending'"
+                                            [class.text-info]="verificationState() === 'Sent'"
+                                            [class.text-success]="verificationState() === 'Verified'"
+                                            [class.text-danger]="verificationState() === 'Failed'">{{ verificationState() }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">Notification</span>
+                                    <span class="status-value">
+                                        <span class="badge"
+                                            [class.bg-info-subtle]="notificationState() === 'Not Notified'"
+                                            [class.bg-warning-subtle]="notificationState() === 'Sent'"
+                                            [class.bg-success-subtle]="notificationState() === 'Delivered'"
+                                            [class.text-info]="notificationState() === 'Not Notified'"
+                                            [class.text-warning]="notificationState() === 'Sent'"
+                                            [class.text-success]="notificationState() === 'Delivered'">{{ notificationState() }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">Approver</span>
+                                    <span class="status-value">{{ approver() || '—' }}</span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">Effective Time</span>
+                                    <span class="status-value">{{ effectiveTime() || '—' }}</span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">Session Revocation</span>
+                                    <span class="status-value">
+                                        <span class="badge"
+                                            [class.bg-danger-subtle]="sessionRevocation() === 'Required'"
+                                            [class.bg-success-subtle]="sessionRevocation() === 'Completed'"
+                                            [class.text-danger]="sessionRevocation() === 'Required'"
+                                            [class.text-success]="sessionRevocation() === 'Completed'">{{ sessionRevocation() }}
+                                        </span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Validation Results -->
+                        <div class="status-card">
+                            <div class="status-card-header">
+                                <i class="uil uil-check-circle text-success"></i>
+                                Validation Results
+                            </div>
+                            <div class="status-card-body">
+                                <div class="status-row">
+                                    <span class="status-label">Email</span>
+                                    <span class="status-value">
+                                        <span class="badge fs-11"
+                                            [class.bg-success-subtle]="emailAvailable() === 'available'"
+                                            [class.bg-danger-subtle]="emailAvailable() === 'unavailable'"
+                                            [class.bg-light-subtle]="emailAvailable() === 'idle'"
+                                            [class.text-success]="emailAvailable() === 'available'"
+                                            [class.text-danger]="emailAvailable() === 'unavailable'"
+                                            [class.text-muted]="emailAvailable() === 'idle'">{{ duplicateResultText() }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="status-row">
+                                    <span class="status-label">Username</span>
+                                    <span class="status-value">
+                                        <span class="badge fs-11"
+                                            [class.bg-success-subtle]="usernameAvailable() === 'available'"
+                                            [class.bg-danger-subtle]="usernameAvailable() === 'unavailable'"
+                                            [class.bg-light-subtle]="usernameAvailable() === 'idle'"
+                                            [class.text-success]="usernameAvailable() === 'available'"
+                                            [class.text-danger]="usernameAvailable() === 'unavailable'"
+                                            [class.text-muted]="usernameAvailable() === 'idle'">{{ reservedNameResultText() }}
+                                        </span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Session Revocation Notice -->
+                        @if (sessionRevocation() === 'Required') {
+                            <div class="notice-card">
+                                <div class="notice-card-header">
+                                    <i class="uil uil-exclamation-triangle"></i>
+                                    Important Notice
+                                </div>
+                                <div class="notice-card-body">
+                                    Changing a login identifier will revoke all active sessions for this user. The user will need to sign in again with the new identifier.
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </form>
+        }
+    </div>
+</main>
+
+<!-- Confirmation Modal -->
+@if (showConfirmModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+        <div class="modal-modern" (click)="$event.stopPropagation()">
+            <div class="modal-modern-header">
+                <h5>
+                    <i class="uil uil-key-skeleton me-2 text-primary"></i>
+                    Confirm Identifier Change
+                </h5>
+                <button type="button" class="btn-close" (click)="closeModal()"></button>
+            </div>
+            <div class="modal-modern-body">
+                <div class="alert alert-warning d-flex align-items-start gap-2 py-3 px-3 mb-3" role="alert">
+                    <i class="uil uil-exclamation-triangle fs-5 flex-shrink-0"></i>
+                    <p class="mb-0 fs-13">This action will revoke all active sessions. The user must sign in again with the new identifier.</p>
+                </div>
+
+                <div class="summary-box mb-3">
+                    <div class="summary-item">
+                        <span class="summary-label">New Email:</span>
+                        <span class="summary-value">{{ identifierForm.controls.newEmail.value || 'No change' }}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">New Username:</span>
+                        <span class="summary-value">{{ identifierForm.controls.newUsername.value || 'No change' }}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Reason:</span>
+                        <span class="summary-value">{{ identifierForm.controls.changeReason.value }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-modern-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeModal()" [disabled]="submitting()">Cancel</button>
+                <button type="button" class="btn btn-primary" (click)="confirmAndSubmit()" [disabled]="submitting()">
+                    @if (submitting()) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Submitting...
+                    } @else {
+                        <i class="uil uil-check-circle me-1"></i> Submit
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}

@@ -1,0 +1,2 @@
+/*! For license information please see full-screen.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import Fullscreen from"../../Extensions/Exporting/Fullscreen.js";const G=Highcharts;G.Fullscreen=G.Fullscreen||Fullscreen,G.Fullscreen.compose(G.Chart);export default Highcharts;

@@ -1,0 +1,2 @@
+/*! For license information please see timeline.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Timeline/TimelineSeries.js";export default Highcharts;

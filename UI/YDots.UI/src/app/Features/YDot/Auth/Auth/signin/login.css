@@ -1,0 +1,51 @@
+/* ---------- Login page — ensure password/email text is always visible ---------- */
+#signinForm input.form-control {
+  color: #14181F !important;
+  -webkit-text-fill-color: #14181F !important;
+  caret-color: #17423B;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+
+#signinForm input.form-control::placeholder {
+  color: #9AA1AB;
+  -webkit-text-fill-color: #9AA1AB;
+  opacity: 1;
+}
+
+#signinForm input.form-control:focus {
+  color: #14181F !important;
+  -webkit-text-fill-color: #14181F !important;
+  background-color: #FFFFFF;
+  border-color: #17423B;
+  box-shadow: 0 0 0 3px rgba(23, 66, 59, 0.12);
+}
+
+#signinForm input.form-control:focus::placeholder {
+  color: #9AA1AB;
+}
+
+/* Primary buttons within login flow */
+.login-section .btn-primary {
+  background-color: #17423B;
+  border-color: #17423B;
+}
+
+.login-section .btn-primary:hover:not(:disabled) {
+  background-color: #123530;
+  border-color: #123530;
+}
+
+.login-section .btn-primary:disabled {
+  background-color: #9DB4AF;
+  border-color: #9DB4AF;
+}
+
+.login-section .link-primary {
+  color: #17423B;
+  font-weight: 500;
+}
+
+.login-section .link-primary:hover {
+  color: #0F2F2A;
+}

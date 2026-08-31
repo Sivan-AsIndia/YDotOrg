@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>YDot</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" sizes="48x48" href="assets/images/Outlineydotlogo.ico">
+
+  <!-- Application fonts, SELF-HOSTED.
+       Outfit is the default app font; Inter, Quicksand, Playfair Display, Source Serif 4 and the
+       two IBM Plex families are used by individual screens. All seven are served from
+       assets/fonts/ rather than from fonts.googleapis.com, for three reasons: the Angular build
+       inlines remote fonts at COMPILE time and that fetch failing breaks the Docker image build
+       outright; a linked font leaves the application half-styled for anyone who cannot reach
+       Google; and requesting one discloses every visitor's IP address to a third party, which on
+       a platform holding donor records is a data-protection question rather than a performance
+       one.
+       Regenerate with scratchpad/fetch_fonts.py. -->
+  <link href="assets/fonts/fonts.css" rel="stylesheet">
+
+   <!-- layout setup -->
+    <script src="assets/js/layout-setup.js"></script>
+
+    <!-- App favicon -->
+    <!-- <link rel="shortcut icon" href="assets/images/favicon.png"> -->
+
+    <!-- plugin css -->
+    <link rel="stylesheet" type="text/css" href="assets/libs/jsvectormap/jsvectormap.min.css">
+    <!-- Simplebar Css -->
+    <link rel="stylesheet" href="assets/libs/simplebar/simplebar.min.css">
+    <!-- Swiper Css -->
+    <link href="assets/libs/swiper/swiper-bundle.min.css" rel="stylesheet">
+    <!-- Nouislider Css -->
+    <link href="assets/libs/nouislider/nouislider.min.css" rel="stylesheet">
+    <!-- Bootstrap Css -->
+    <link href="assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css">
+    <!-- icons css -->
+    <link href="assets/css/icons.min.css" rel="stylesheet" type="text/css">
+    <!-- App Css -->
+    <link href="assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
+
+</head>
+<body>
+  <app-root></app-root>
+
+  
+
+<!-- Swiper bundle js -->
+<script src="assets/libs/swiper/swiper-bundle.min.js"></script>
+<!-- Bootstrap bundle js -->
+<script src="assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+<!-- simplebar js -->
+<script src="assets/libs/simplebar/simplebar.min.js"></script>
+<!-- Scroll Top init -->
+<script src="assets/js/scroll-top.init.js"></script>
+<!-- Chart -->
+<script src="assets/libs/highcharts/highcharts.js"></script>
+<script src="assets/libs/highcharts/modules/accessibility.js"></script>
+
+<!-- Apexcharts -->
+<script src="assets/libs/apexcharts/apexcharts.min.js"></script>
+
+<!-- Vector map-->
+<script src="assets/libs/jsvectormap/jsvectormap.min.js"></script>
+
+<!-- world map -->
+<script src="assets/libs/jsvectormap/maps/world.js"></script>
+
+<!-- Init js -->
+<script src="assets/js/dashboard/social-media.init.js"></script>
+
+<!-- App js -->
+<script src="assets/js/app.js"></script>
+<script src="assets/libs/gsap/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r121/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/robin-dela/hover-effect"></script>
+
+<!-- Common init -->
+<script src="assets/js/auth/two-step-verification.init.js"></script>
+
+<!-- Auth init -->
+<script src="assets/js/auth/auth.init.js"></script>
+
+<!-- Razorpay Checkout -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</body>
+</html>

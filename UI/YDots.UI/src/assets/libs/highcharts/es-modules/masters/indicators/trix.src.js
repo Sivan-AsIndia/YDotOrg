@@ -1,0 +1,2 @@
+/*! For license information please see trix.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/TRIX/TRIXIndicator.js";export default Highcharts;

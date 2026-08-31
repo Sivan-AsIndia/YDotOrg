@@ -1,0 +1,74 @@
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\b3\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\b3\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\b3\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\b3\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDots.DON.Infrastructure.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDots.DON.Infrastructure.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDots.DON.Infrastructure.pdb
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Infrastructure.deps.json
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Infrastructure.runtimeconfig.json
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Infrastructure.dll
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Infrastructure.pdb
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Application.dll
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Domain.dll
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Application.pdb
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\bin\Debug\net10.0\YDots.DON.Domain.pdb
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.csproj.AssemblyReference.cache
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.AssemblyInfoInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.AssemblyInfo.cs
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.csproj.CoreCompileInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.sourcelink.json
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DO.E8B0DF06.Up2Date
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.dll
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\refint\YDots.DON.Infrastructure.dll
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.pdb
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\YDots.DON.Infrastructure.genruntimeconfig.cache
+D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Infrastructure\obj\Debug\net10.0\ref\YDots.DON.Infrastructure.dll

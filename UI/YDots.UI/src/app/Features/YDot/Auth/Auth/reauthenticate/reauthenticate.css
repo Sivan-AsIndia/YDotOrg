@@ -1,0 +1,56 @@
+/* IAM-AUTH-07 — Confirm it is still you. */
+
+.reauth-card {
+  max-width: 440px;
+}
+
+.reauth-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 28px;
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+/* ---- Whose account is being confirmed --------------------------------------------------- */
+
+.identity-panel {
+  background-color: #f9fafb;
+}
+
+.identity-avatar {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #4f46e5;
+  color: #fff;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Lets the flex child shrink, so `text-truncate` works on a long name or address. */
+.min-w-0 {
+  min-width: 0;
+}
+
+.pe-10 {
+  padding-right: 2.75rem;
+}
+
+.code-input {
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 8px;
+  font-weight: 600;
+}
+
+.code-input::placeholder {
+  letter-spacing: 8px;
+  color: #d1d5db;
+}

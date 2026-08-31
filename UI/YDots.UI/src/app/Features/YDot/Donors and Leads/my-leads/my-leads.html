@@ -1,0 +1,481 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3 my-leads">
+
+      @if (!permissions.view) {
+        <div class="state-panel state-panel--error" role="alert">
+          <span class="state-panel__icon" aria-hidden="true">&#9888;</span>
+          <p>You do not have permission to view assigned leads.</p>
+        </div>
+      } @else {
+
+        <!-- Header -->
+        <header class="page-header">
+          <div class="page-header__top">
+            <div>
+        
+              <h1 class="page-header__title">{{ screen.title }}</h1>
+              <p class="page-header__subtitle">{{ screen.purpose }}</p>
+            
+            </div>
+            <div class="page-header__actions">
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="refresh()">
+                Refresh
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-primary btn-sm"
+                [disabled]="!canExport"
+                (click)="exportSelected()"
+              >
+                Export Leads
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" (click)="requestOpenFollowUpQueue()">
+                Open Follow-Up Queue
+              </button>
+            </div>
+          </div>
+
+          <div class="scope-chip">
+            <span class="scope-chip__icon" aria-hidden="true">&#9679;</span>
+            <span>{{ screen.scope }}</span>
+          </div>
+        </header>
+
+        <!-- KPI summary cards -->
+        <section class="kpi-grid" aria-label="Lead summary">
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--neutral" aria-hidden="true">&#9776;</span>
+            <div>
+              <p class="kpi-card__label">Assigned Leads</p>
+              <p class="kpi-card__value">{{ kpis.assignedLeads }}</p>
+              <p class="kpi-card__sub">In your assignment</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--gray" aria-hidden="true">&#10052;</span>
+            <div>
+              <p class="kpi-card__label">Cold Leads</p>
+              <p class="kpi-card__value">{{ kpis.coldLeads }}</p>
+              <p class="kpi-card__sub">In selected scope</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--warm" aria-hidden="true">&#9728;</span>
+            <div>
+              <p class="kpi-card__label">Warm Leads</p>
+              <p class="kpi-card__value">{{ kpis.warmLeads }}</p>
+              <p class="kpi-card__sub">In selected scope</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--hot" aria-hidden="true">&#128293;</span>
+            <div>
+              <p class="kpi-card__label">Hot Leads</p>
+              <p class="kpi-card__value">{{ kpis.hotLeads }}</p>
+              <p class="kpi-card__sub">In selected scope</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--info" aria-hidden="true">&#128337;</span>
+            <div>
+              <p class="kpi-card__label">Today's Follow-Ups</p>
+              <p class="kpi-card__value">{{ kpis.followUpsDueToday }}</p>
+              <p class="kpi-card__sub">Due today</p>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-card__icon kpi-card__icon--danger" aria-hidden="true">&#10071;</span>
+            <div>
+              <p class="kpi-card__label">Overdue Follow-Ups</p>
+              <p class="kpi-card__value">{{ kpis.followUpsOverdue }}</p>
+              <p class="kpi-card__sub">Needs attention</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Pipeline -->
+        <section class="pipeline" aria-label="Lead pipeline">
+          @for (stage of pipeline; track stage.stage) {
+            <button
+              type="button"
+              class="pipeline__stage"
+              [class.pipeline__stage--active]="stageFilter() === stage.stage"
+              (click)="applyPipelineFilter(stage.stage)"
+            >
+              <span class="pipeline__label">{{ stage.stage }}</span>
+              <span class="pipeline__count">{{ stage.count }}</span>
+            </button>
+          }
+        </section>
+
+        <!-- Saved views -->
+        <section class="saved-views" aria-label="Saved views">
+          @for (view of savedFilters; track view) {
+            <button type="button" class="chip-btn" (click)="applySavedFilter(view)">
+              {{ view }}
+            </button>
+          }
+        </section>
+
+        <!-- Toolbar -->
+        <section class="toolbar" aria-label="Search and filter">
+          <div class="toolbar__field toolbar__field--search">
+            <label class="visually-hidden" for="leadSearch">Search leads</label>
+            <input
+              id="leadSearch"
+              type="search"
+              class="form-control form-control-sm"
+              placeholder="Search Name, Lead ID, Campaign"
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event)"
+            />
+          </div>
+
+          <div class="toolbar__field">
+            <label class="visually-hidden" for="stageFilter">Stage</label>
+            <select
+              id="stageFilter"
+              class="form-select form-select-sm"
+              [ngModel]="stageFilter()"
+              (ngModelChange)="stageFilter.set($event)"
+            >
+              @for (option of stageOptions(); track option) {
+                <option [value]="option">{{ option === 'All' ? 'All Stages' : option }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="toolbar__field">
+            <label class="visually-hidden" for="temperatureFilter">Temperature</label>
+            <select
+              id="temperatureFilter"
+              class="form-select form-select-sm"
+              [ngModel]="temperatureFilter()"
+              (ngModelChange)="temperatureFilter.set($event)"
+            >
+              @for (option of temperatureOptions; track option) {
+                <option [value]="option">{{ option === 'All' ? 'All Temperatures' : option }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="toolbar__field">
+            <label class="visually-hidden" for="followUpFilter">Follow-up status</label>
+            <select
+              id="followUpFilter"
+              class="form-select form-select-sm"
+              [ngModel]="followUpFilter()"
+              (ngModelChange)="followUpFilter.set($event)"
+            >
+              @for (option of followUpOptions; track option) {
+                <option [value]="option">{{ option === 'All' ? 'All Follow-Ups' : option }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="toolbar__actions">
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="resetFilters()">
+              Reset Filters
+            </button>
+          </div>
+        </section>
+
+        <!-- Bulk action toolbar -->
+        @if (hasSelection() && canBulkAct) {
+          <section class="bulk-bar" role="region" aria-label="Bulk actions">
+            <span class="bulk-bar__count">{{ selectedCount() }} selected</span>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportSelected()" [disabled]="!canExport">
+              Export Selected
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearSelection()">
+              Clear Selection
+            </button>
+          </section>
+        }
+
+        <!-- Main content: grid + drawer -->
+        <div class="content-grid">
+
+          <!-- Lead grid -->
+          <section class="grid-panel" aria-label="Assigned leads">
+
+            @if (loadError()) {
+              <div class="state-panel state-panel--error" role="alert">
+                <span class="state-panel__icon" aria-hidden="true">&#9888;</span>
+                <p>{{ loadError() }}</p>
+                <button type="button" class="btn btn-outline-primary btn-sm" (click)="refresh()">Retry</button>
+              </div>
+            } @else if (isEmpty()) {
+              <div class="state-panel">
+                <p>No assigned leads available.</p>
+                <div class="state-panel__actions">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="requestViewLeadQueue()">
+                    View Lead Queue
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="resetFilters()">
+                    Reset Filters
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="col-check">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all visible leads"
+                          [checked]="allVisibleSelected()"
+                          (change)="toggleSelectAllVisible()"
+                        />
+                      </th>
+                      <th scope="col">Lead</th>
+                      <th scope="col">Campaign</th>
+                      <!-- <th scope="col">Stage</th> -->
+                      <th scope="col">Temperature</th>
+                      <!-- <th scope="col">Health</th> -->
+                      <th scope="col">Next Follow-Up</th>
+                      <!-- <th scope="col">Follow-Up</th> -->
+                      <th scope="col" class="col-actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (lead of filteredLeads(); track trackByRef($index, lead)) {
+                      <tr
+                        [class.row-active]="activeLead()?.reference === lead.reference"
+                        (click)="openLead(lead.reference)"
+                        tabindex="0"
+                        (keyup.enter)="openLead(lead.reference)"
+                      >
+                        <td class="col-check">
+                          <input
+                            type="checkbox"
+                            [attr.aria-label]="'Select ' + lead.name"
+                            [checked]="selectedRefs().has(lead.reference)"
+                            (click)="toggleSelection(lead.reference, $event)"
+                          />
+                        </td>
+                        <td>
+                          <button type="button" class="link-cell" (click)="openLead(lead.reference); $event.stopPropagation()">
+                            {{ lead.name }}
+                          </button>
+                          <span class="cell-sub">{{ lead.reference }}</span>
+                        </td>
+                        <td class="text-truncate-cell">{{ lead.campaign }}</td>
+                        <!-- <td><span class="badge badge-stage">{{ lead.stage }}</span></td> -->
+                        <td><span class="badge" [ngClass]="temperatureClass(lead.temperature)">{{ lead.temperature }}</span></td>
+                        <!-- <td>
+                          <span class="health-score" [ngClass]="healthClass(lead.healthScore)">
+                            {{ lead.healthScore }}/100
+                          </span>
+                        </td> -->
+                        <!-- <td class="text-nowrap-cell">{{ lead.nextFollowUp }}</td> -->
+                        <td><span class="badge" [ngClass]="followUpClass(lead.followUpStatus)">{{ lead.followUpStatus }}</span></td>
+                        <td class="col-actions">
+                          <div class="row-actions">
+                            <button
+                              type="button"
+                              class="icon-btn-action"
+                              [disabled]="!canCommunicate"
+                              (click)="requestCommunicate(lead.reference); $event.stopPropagation()"
+                              aria-label="Communicate"
+                              title="Communicate"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              class="icon-btn-action"
+                              [disabled]="!canScheduleFollowUp"
+                              (click)="requestScheduleFollowUp(lead.reference); $event.stopPropagation()"
+                              aria-label="Schedule Follow-Up"
+                              title="Schedule Follow-Up"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+
+          <!-- Lead details / preview drawer -->
+          <aside class="detail-panel" aria-label="Lead details">
+            @if (activeLead(); as lead) {
+              <h2 class="detail-panel__title">LEAD DETAILS</h2>
+
+              <dl class="detail-list">
+                <div class="detail-list__row">
+                  <dt>Lead reference</dt>
+                  <dd class="ref-cell">
+                    {{ lead.reference }}
+                    <button
+                      type="button"
+                      class="icon-btn-copy"
+                      [class.icon-btn-copy--done]="copiedRef() === lead.reference"
+                      (click)="copyReference(lead.reference, $event)"
+                      [attr.aria-label]="copiedRef() === lead.reference ? 'Copied' : 'Copy lead reference'"
+                      [title]="copiedRef() === lead.reference ? 'Copied!' : 'Copy reference'"
+                    >
+                      @if (copiedRef() === lead.reference) {
+                        <!-- check icon -->
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      } @else {
+                        <!-- copy icon -->
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                      }
+                    </button>
+                  </dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Lead name</dt>
+                  <dd>{{ lead.name }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Contact details</dt>
+                  <dd>
+                    @if (lead.contactRestricted) {
+                      <span class="badge badge-restricted">&#128274; Restricted</span>
+                    } @else {
+                      <span>Available</span>
+                    }
+                  </dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Campaign or fund</dt>
+                  <dd>{{ lead.campaign }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Source</dt>
+                  <dd>{{ lead.source }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Owner</dt>
+                  <dd>{{ lead.owner }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Language</dt>
+                  <dd>{{ lead.language }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Stage</dt>
+                  <dd><span class="badge badge-stage">{{ lead.stage }}</span></dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Temperature</dt>
+                  <dd><span class="badge" [ngClass]="temperatureClass(lead.temperature)">{{ lead.temperature }}</span></dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Qualification readiness</dt>
+                  <dd>{{ lead.qualificationReadiness }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Lead health score</dt>
+                  <dd><span class="health-score" [ngClass]="healthClass(lead.healthScore)">{{ lead.healthScore }}/100</span></dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Next follow-up</dt>
+                  <dd>{{ lead.nextFollowUp }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Follow-up status</dt>
+                  <dd><span class="badge" [ngClass]="followUpClass(lead.followUpStatus)">{{ lead.followUpStatus }}</span></dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Last contact outcome</dt>
+                  <dd>{{ lead.lastContactOutcome }}</dd>
+                </div>
+                <div class="detail-list__row">
+                  <dt>Recommended next action</dt>
+                  <dd>{{ lead.recommendedNextAction }}</dd>
+                </div>
+              </dl>
+
+              <div class="detail-panel__actions">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  [disabled]="!canCommunicate"
+                  (click)="requestCommunicate(lead.reference)"
+                >
+                  Communicate
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-primary btn-sm"
+                  [disabled]="!canScheduleFollowUp"
+                  (click)="requestScheduleFollowUp(lead.reference)"
+                >
+                  Schedule Follow-Up
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-primary btn-sm"
+                  [disabled]="!canExecuteFollowUp"
+                  (click)="requestExecuteFollowUp(lead.reference)"
+                >
+                  Execute Follow-Up
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-primary btn-sm"
+                  [disabled]="!canQualify(lead)"
+                  (click)="requestQualify(lead)"
+                  title="Requires Hot temperature and Ready qualification"
+                >
+                  Qualify
+                </button>
+              </div>
+
+              <div class="detail-panel__danger">
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  [disabled]="!canMarkDormant(lead)"
+                  (click)="requestMarkDormant(lead)"
+                >
+                  Mark Dormant
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  [disabled]="!canMarkLost(lead)"
+                  (click)="requestMarkLost(lead)"
+                >
+                  Mark Lost
+                </button>
+              </div>
+            } @else {
+              <div class="state-panel">
+                <p>Select a lead to view details.</p>
+              </div>
+            }
+          </aside>
+        </div>
+      }
+    </div>
+  </div>
+</main>

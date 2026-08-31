@@ -1,0 +1,427 @@
+<main class="app-wrapper">
+    <div class="container-fluid">
+        <!-- Breadcrumb -->
+        <div class="main-breadcrumb d-flex flex-wrap align-items-center justify-content-between my-4 position-relative gap-3">
+         <div class="d-flex align-items-start justify-content-between flex-column">
+               <h2 class="breadcrumb-title mb-0 flex-grow-1 fs-16">Bulk User Administration</h2>
+                    <p class="page-subtitle mb-0">Perform narrow, reviewable actions over an authorised selection of users</p>
+
+         </div>
+            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="goBack()">
+                    <i class="uil uil-arrow-left me-1"></i>Back to Directory
+                </button>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb justify-content-end mb-0">
+                        <li><i class="ri-home-4-line fs-16 me-2 lh-sm text-primary"></i></li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0)">Administration</a></li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0)">Users and Access</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Bulk User Administration</li>
+                    </ol>
+                </nav>
+            </div>
+            <div class="gap-4 content-title d-none">
+                <div class="text-end">
+                    <h5 class="mb-2 text-white fs-16">Bulk User Administration</h5>
+                    <h6 class="text-opacity-50 text-white fs-14 fw-medium mb-0">Perform narrow, reviewable actions over an authorised selection</h6>
+                </div>
+                <div class="avatar-item avatar-lg rounded avatar-title text-white bg-white bg-opacity-10 border-0">
+                    <i class="uil uil-layer-group fs-4"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        @if (loading()) {
+            <div class="loading-container">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-3 fw-medium">Loading bulk administration data...</p>
+            </div>
+        } @else if (loadError()) {
+            <div class="text-center py-5">
+                <p class="text-danger mb-3">Failed to load data.</p>
+                <button class="btn btn-primary" (click)="retry()">Retry</button>
+            </div>
+        } @else {
+            <form [formGroup]="bulkForm">
+                <div class="row g-4">
+                    <!-- LEFT COLUMN — Main Form -->
+                    <div class="col-lg-8">
+
+                        <!-- SECTION: Bulk Action Type -->
+                        <div class="form-section">
+                            <div class="form-section-header">
+                                <div class="form-section-icon" style="background: rgba(var(--pe-primary-rgb), 0.1); color: var(--pe-primary);">
+                                    <i class="uil uil-layer-group"></i>
+                                </div>
+                                <div>
+                                    <h3 class="form-section-title">Bulk Action Type</h3>
+                                    <span class="form-section-subtitle">Select the action to perform on multiple user accounts</span>
+                                </div>
+                            </div>
+
+                            <!-- Action Card Grid -->
+                            <div class="action-grid">
+                                @for (act of data()?.availableActions; track act.value) {
+                                    <div
+                                        class="action-card-item"
+                                        [class.selected]="selectedAction() === act.value"
+                                        (click)="bulkForm.controls.action.setValue(act.value); onActionChange()">
+                                        <div class="radio-indicator"></div>
+                                        <div class="action-item-title">{{ act.label }}</div>
+                                        <div class="action-item-desc">{{ act.description }}</div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Conditional Fields -->
+                            @if (selectedAction() === 'Suspend' || selectedAction() === 'Deactivate') {
+                                <div class="conditional-field">
+                                    <label class="conditional-field-label">Reason for Suspension / Deactivation</label>
+                                    <textarea class="form-control" formControlName="suspensionReason" rows="2" placeholder="Provide a detailed reason..."></textarea>
+                                </div>
+                            }
+                            @if (selectedAction() === 'AssignAccessReview') {
+                                <div class="conditional-field">
+                                    <label class="conditional-field-label">Select Access Review Campaign</label>
+                                    <select class="form-select" formControlName="campaign">
+                                        <option value="">-- Choose a campaign --</option>
+                                        @for (camp of campaignOptions(); track camp.id) {
+                                            <option value="{{ camp.id }}">{{ camp.name }}</option>
+                                         }
+                                    </select>
+                                </div>
+                            }
+                            @if (selectedAction() === 'RequirePasswordReset' || selectedAction() === 'RevokeSessions') {
+                                <div class="conditional-field">
+                                    <label class="conditional-field-label">Effective Time</label>
+                                    <input type="datetime-local" class="form-control" formControlName="effectiveTime">
+                                </div>
+                            }
+                        </div>
+
+                        <!-- SECTION: Selection Scope -->
+                        <div class="form-section">
+                            <div class="form-section-header">
+                                <div class="form-section-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">
+                                    <i class="uil uil-sliders-v-alt"></i>
+                                </div>
+                                <div>
+                                    <h3 class="form-section-title">Selection Scope</h3>
+                                    <span class="form-section-subtitle">Define the scope of users this action applies to</span>
+                                </div>
+                            </div>
+
+                            @if (selectedUsers().length > 0) {
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold fs-13">
+                                        Selected Users from Directory
+                                        <span class="badge bg-primary-subtle text-primary ms-1">{{ selectedUsers().length }} total</span>
+                                    </label>
+                                    <div class="selected-users-list">
+                                        @for (user of visibleSelectedUsers; track user.id) {
+                                            <div class="selected-user-chip">
+                                                <span class="selected-user-avatar">{{ (user.displayName || '?').charAt(0) }}</span>
+                                                <span class="selected-user-name">{{ user.displayName }}</span>
+                                                <span class="selected-user-ref">{{ user.code }}</span>
+                                            </div>
+                                        }
+                                        @if (hiddenSelectedCount > 0) {
+                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" (click)="toggleShowAllSelected()">
+                                                <i class="uil uil-ellipsis-h me-1"></i>
+                                                {{ showAllSelected() ? 'Show less' : '+' + hiddenSelectedCount + ' more' }}
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold fs-13">Scope Type</label>
+                                <select class="form-select" formControlName="scopeType">
+                                    <option value="">-- Select scope type --</option>
+                                    @for (scope of scopeTypeOptions(); track scope.id) {
+                                        <option value="{{ scope.id }}">{{ scope.name }}</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-primary btn-sm" (click)="validateSelection()" [disabled]="loading()">
+                                    @if (loading()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                    <i class="uil uil-check-circle me-1"></i>Validate Selection
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="previewImpact()" [disabled]="totalCount() === 0">
+                                    <i class="uil uil-eye me-1"></i>Preview Impact
+                                </button>
+                            </div>
+
+                            <!-- Selection Summary -->
+                            @if (totalCount() > 0) {
+                                <div class="selection-summary">
+                                    <div class="summary-block">
+                                        <div class="summary-block-value" style="color: var(--pe-primary);">{{ totalCount() }}</div>
+                                        <div class="summary-block-label" style="color: var(--pe-primary);">Total Selected</div>
+                                    </div>
+                                    <div class="summary-block">
+                                        <div class="summary-block-value text-danger">{{ excludedCount() }}</div>
+                                        <div class="summary-block-label text-danger">Excluded</div>
+                                    </div>
+                                    <div class="summary-block">
+                                        <div class="summary-block-value text-success">{{ affectedCount() > 0 ? affectedCount() : totalCount() - excludedCount() }}</div>
+                                        <div class="summary-block-label text-success">Will be Affected</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- SECTION: Business Justification -->
+                        <div class="form-section">
+                            <div class="form-section-header">
+                                <div class="form-section-icon" style="background: rgba(217, 119, 6, 0.1); color: #d97706;">
+                                    <i class="uil uil-pen"></i>
+                                </div>
+                                <div>
+                                    <h3 class="form-section-title">Business Justification <span class="text-danger">*</span></h3>
+                                    <span class="form-section-subtitle">Explain why this bulk action is necessary</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-1">
+                                <textarea
+                                    class="form-control"
+                                    formControlName="businessJustification"
+                                    rows="3"
+                                    placeholder="Provide a detailed business justification (10-1000 characters)..."
+                                    [class.is-invalid]="bulkForm.controls.businessJustification.invalid && bulkForm.controls.businessJustification.touched">
+                                </textarea>
+                                @if (bulkForm.controls.businessJustification.invalid && bulkForm.controls.businessJustification.touched) {
+                                    <div class="invalid-feedback">
+                                        @if (bulkForm.controls.businessJustification.errors?.['required']) { Required. }
+                                        @if (bulkForm.controls.businessJustification.errors?.['minlength']) { Minimum 10 characters. }
+                                        @if (bulkForm.controls.businessJustification.errors?.['maxlength']) { Maximum 1000 characters. }
+                                    </div>
+                                }
+                                <div class="text-end mt-1">
+                                    <small class="text-muted">{{ bulkForm.controls.businessJustification.value?.length || 0 }}/1000</small>
+                                </div>
+                            </div>
+                        </div>
+
+                    
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-3 mb-4">
+                            <button type="button" class="btn btn-primary btn-sm px-4" (click)="submitBulkAction()" [disabled]="submitting() || totalCount() === 0">
+                                @if (submitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                <i class="uil uil-check me-1"></i>Submit Bulk Action
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm px-4" (click)="cancel()" [disabled]="submitting()">
+                                <i class="uil uil-times me-1"></i>Cancel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN — Sidebar -->
+                    <div class="col-lg-4">
+
+                        <!-- Action Summary -->
+                        <div class="sidebar-card">
+                            <div class="sidebar-card-header">
+                                <i class="uil uil-info-circle fs-5" style="color: var(--pe-primary);"></i>
+                                <h6>Action Summary</h6>
+                            </div>
+                            <div class="sidebar-card-body">
+                                <div class="sidebar-row">
+                                    <span class="sidebar-label">Action</span>
+                                    <span class="sidebar-value">{{ selectedAction() ? getActionLabel(selectedAction()) : '—' }}</span>
+                                </div>
+                                <div class="sidebar-row">
+                                    <span class="sidebar-label">Scope</span>
+                                    <span class="sidebar-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                                </div>
+                                <div class="sidebar-row">
+                                    <span class="sidebar-label">Approval</span>
+                                    <span class="sidebar-value">
+                                        <span class="badge bg-warning-subtle text-warning">Required</span>
+                                    </span>
+                                </div>
+                                <div class="sidebar-row">
+                                    <span class="sidebar-label">Status</span>
+                                    <span class="sidebar-value">
+                                        <span class="badge bg-info-subtle text-info">Draft</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Account Categories -->
+                        <div class="sidebar-card">
+                            <div class="sidebar-card-header">
+                                <i class="uil uil-users-alt fs-5 text-secondary"></i>
+                                <h6>Account Categories</h6>
+                            </div>
+                            <div class="sidebar-card-body">
+                                <div class="category-strip">
+                                    <div class="category-chip" style="background: #f0fdf4;">
+                                        <span class="category-chip-value text-success">{{ activeCategoryCount }}</span>
+                                        <span class="category-chip-label text-success">Active</span>
+                                    </div>
+                                    <div class="category-chip" style="background: #fffbeb;">
+                                        <span class="category-chip-value text-warning">{{ invitedCategoryCount }}</span>
+                                        <span class="category-chip-label text-warning">Invited</span>
+                                    </div>
+                                    <div class="category-chip" style="background: #fef2f2;">
+                                        <span class="category-chip-value text-danger">{{ suspendedCategoryCount }}</span>
+                                        <span class="category-chip-label text-danger">Suspended</span>
+                                    </div>
+                                    <div class="category-chip" style="background: #f8fafc;">
+                                        <span class="category-chip-value text-secondary">{{ lockedCategoryCount }}</span>
+                                        <span class="category-chip-label text-secondary">Locked</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Important Notice -->
+                        <div class="info-notice">
+                            <div class="info-notice-header">
+                                <i class="uil uil-exclamation-triangle"></i>
+                                Important Notice
+                            </div>
+                            <div class="info-notice-body">
+                                Bulk actions require independent approval. An approver will review the scope, action and justification before execution. Result files are available for download after completion.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        }
+    </div>
+</main>
+
+<!-- Preview Modal -->
+@if (showPreviewModal()) {
+    <div class="modal-overlay" (click)="closePreview()">
+        <div class="modal-modern" (click)="$event.stopPropagation()">
+            <div class="modal-modern-header">
+                <h5><i class="uil uil-eye me-2 text-info"></i>Impact Preview</h5>
+                <button type="button" class="btn-close" (click)="closePreview()"></button>
+            </div>
+            <div class="modal-modern-body">
+                <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 mb-3" role="alert">
+                    <i class="uil uil-info-circle fs-5 flex-shrink-0"></i>
+                    <p class="mb-0 small">This is a preview of the users that will be affected by this action.</p>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-row">
+                        <span class="summary-row-label">Total Affected</span>
+                        <span class="summary-row-value fw-bold" style="color: var(--pe-primary);">{{ affectedCount() > 0 ? affectedCount() : totalCount() - excludedCount() }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Excluded</span>
+                        <span class="summary-row-value">{{ excludedCount() }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Action</span>
+                        <span class="summary-row-value">{{ getActionLabel(selectedAction()) }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Scope</span>
+                        <span class="summary-row-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-modern-footer">
+                <button type="button" class="btn btn-secondary" (click)="closePreview()">Close Preview</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Confirm Modal -->
+@if (showConfirmModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+        <div class="modal-modern" (click)="$event.stopPropagation()">
+            <div class="modal-modern-header">
+                <h5><i class="uil uil-shield-exclamation me-2" style="color: var(--pe-primary);"></i>Confirm Bulk Action</h5>
+                <button type="button" class="btn-close" (click)="closeModal()"></button>
+            </div>
+            <div class="modal-modern-body">
+                <div class="alert alert-warning d-flex align-items-start gap-2 py-3 px-3 mb-3" role="alert">
+                    <i class="uil uil-exclamation-triangle fs-5 flex-shrink-0"></i>
+                    <p class="mb-0 fs-13">This action will affect <strong>{{ affectedCount() > 0 ? affectedCount() : totalCount() - excludedCount() }}</strong> users. An independent approver must review this request.</p>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-row">
+                        <span class="summary-row-label">Action</span>
+                        <span class="summary-row-value">{{ getActionLabel(selectedAction()) }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Scope</span>
+                        <span class="summary-row-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Affected Users</span>
+                        <span class="summary-row-value fw-bold" style="color: var(--pe-primary);">{{ affectedCount() > 0 ? affectedCount() : totalCount() - excludedCount() }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-modern-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeModal()" [disabled]="submitting()">Cancel</button>
+                <button type="button" class="btn btn-primary" (click)="confirmSubmit()" [disabled]="submitting()">
+                    @if (submitting()) {
+                        <span class="spinner-border spinner-border-sm me-1"></span> Processing...
+                    } @else {
+                        <i class="uil uil-check-circle me-1"></i> Confirm & Submit
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Result Modal -->
+@if (showResultModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+        <div class="modal-modern" (click)="$event.stopPropagation()">
+            <div class="modal-modern-header">
+                <h5><i class="uil uil-file-check-alt me-2 text-success"></i>Action Completed</h5>
+                <button type="button" class="btn-close" (click)="closeModal()"></button>
+            </div>
+            <div class="modal-modern-body text-center">
+                <div class="mb-3">
+                    <div style="width: 72px; height: 72px; background: #f0fdf4; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="uil uil-check-circle text-success" style="font-size: 42px;"></i>
+                    </div>
+                </div>
+                <h5 class="fw-bold mb-2">Bulk Action Executed Successfully</h5>
+                <p class="text-muted small mb-3">{{ affectedCount() > 0 ? affectedCount() : totalCount() - excludedCount() }} users have been processed.</p>
+
+                <div class="summary-box text-start mb-3">
+                    <div class="summary-row">
+                        <span class="summary-row-label">Result File</span>
+                        <span class="summary-row-value">{{ resultFileUrl() }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">Action</span>
+                        <span class="summary-row-value">{{ getActionLabel(selectedAction()) }}</span>
+                    </div>
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small" role="alert">
+                    <i class="uil uil-file-download me-1"></i>
+                    Download the result file for a detailed report.
+                </div>
+            </div>
+            <div class="modal-modern-footer justify-content-center">
+                <button type="button" class="btn btn-success" (click)="downloadResult()">
+                    <i class="uil uil-file-download me-1"></i>Download Result
+                </button>
+                <button type="button" class="btn btn-secondary" (click)="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+}

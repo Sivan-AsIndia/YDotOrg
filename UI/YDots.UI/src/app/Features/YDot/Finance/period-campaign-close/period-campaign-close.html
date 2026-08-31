@@ -1,0 +1,369 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+  <!-- ============================================================ -->
+  <!-- PAGE HEADER — flat, professional                            -->
+  <!-- ============================================================ -->
+  <header class="pci-header">
+    <div>
+      <!-- <p class="pci-eyebrow">Finance · Period & Campaign Close</p> -->
+      <div class="pci-title-row">
+        <h1 class="pci-title">{{ pageTitle }}</h1>
+        <span class="pci-state-pill">{{ lifecycleState() }}</span>
+      </div>
+      <p class="pci-subtitle">{{ pageSubtitle }}</p>
+      <div class="pci-meta">
+        <span>Reference <strong>{{ closureReference }}</strong></span>
+        @if (linkedFrom) {
+          <span class="pci-dot">•</span>
+          <span>Linked from <strong>{{ linkedFrom }}</strong></span>
+        }
+        <span class="pci-dot">•</span>
+        <span>Owner <strong>{{ owner }}</strong></span>
+        <span class="pci-dot">•</span>
+        <span>{{ lastRefresh() }}</span>
+        <span class="pci-dot">•</span>
+        <span>{{ operatingTimeZone }}</span>
+      </div>
+    </div>
+    @if (uiState() !== 'loading' && uiState() !== 'empty' && uiState() !== 'no-access') {
+    <div class="pci-header-actions">
+      <button type="button" class="btn btn-outline-primary btn-sm" [title]="validateAllowed() ? 'Validate' : validateBlockedReason()" (click)="performValidate()" [class.disabled]="!validateAllowed()" [attr.aria-disabled]="!validateAllowed()">
+        <svg class="pci-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 12l2 2 4-4" />
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+        Validate
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" [title]="signOffAllowed() ? 'Sign off' : signOffBlockedReason()" (click)="openSignOffDialog()" [class.disabled]="!signOffAllowed()" [attr.aria-disabled]="!signOffAllowed()">
+        <svg class="pci-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 12 2 2 4-4" />
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+        Sign off
+      </button>
+    </div>
+    }
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- OUTCOME PANELS                                               -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'success') {
+    <section class="pci-outcome mb-5 mt-5" role="status" aria-live="polite">
+      <span class="pci-outcome-icon" aria-hidden="true">✓</span>
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">Saved successfully</p>
+        <p class="pci-outcome-detail">
+          Reference <strong>{{ persistentOutcome().reference }}</strong> · state <strong>{{ persistentOutcome().state }}</strong> · effective <strong>{{ persistentOutcome().effectiveTime }}</strong>
+        </p>
+      </div>
+      <button type="button" class="pci-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'validation') {
+    <section class="pci-outcome pci-outcome-danger" role="alert">
+      <span class="pci-outcome-icon pci-outcome-icon-danger" aria-hidden="true">!</span>
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">Review the highlighted fields.</p>
+        <p class="pci-outcome-detail">A value does not meet the stated format or range. Correct it to continue.</p>
+      </div>
+      <button type="button" class="pci-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'duplicate') {
+    <section class="pci-outcome pci-outcome-warn" role="alert">
+      <span class="pci-outcome-icon pci-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">A closure already exists for this period.</p>
+        <p class="pci-outcome-detail">Review the candidate before continuing.</p>
+      </div>
+      <button type="button" class="pci-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'conflict') {
+    <section class="pci-outcome pci-outcome-warn" role="alert">
+      <span class="pci-outcome-icon pci-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">This record changed after you opened it.</p>
+        <p class="pci-outcome-detail">Review the latest version before continuing.</p>
+      </div>
+      <div class="pci-outcome-actions">
+        <a class="pci-link" href="javascript:void(0)" (click)="compareConflict()">Compare</a>
+        <a class="pci-link" href="javascript:void(0)" (click)="reapplyConflictChanges()">Reapply</a>
+        <a class="pci-link" href="javascript:void(0)" (click)="cancelConflict()">Cancel</a>
+      </div>
+    </section>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <section class="pci-outcome pci-outcome-warn" role="alert">
+      <span class="pci-outcome-icon pci-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">We could not complete the dependent service step.</p>
+        <p class="pci-outcome-detail">Your confirmed local result is unchanged. Correlation INT-77336.</p>
+      </div>
+      <button type="button" class="pci-btn pci-btn-outline pci-btn-sm" (click)="retryDependency()">Retry dependency</button>
+    </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- LOADING / EMPTY / NO-ACCESS — replace the workspace entirely -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'loading') {
+    <div class="pci-outcome mt-5" role="status" aria-live="polite">
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">Loading Period / campaign close…</p>
+      </div>
+      <button type="button" class="pci-btn pci-btn-outline pci-btn-sm" (click)="setUiState('ready')">Cancel</button>
+    </div>
+  }
+  @else if (uiState() === 'empty') {
+    <div class="pci-outcome mt-5" role="status">
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">No period or campaign closure is in scope.</p>
+        <p class="pci-outcome-detail">This can come from scope, filters, missing setup, or genuinely no record. Select a period or campaign to continue.</p>
+      </div>
+      <button type="button" class="pci-btn pci-btn-outline pci-btn-sm" (click)="setUiState('ready')">Select period or campaign</button>
+    </div>
+  }
+  @else if (uiState() === 'no-access') {
+    <div class="pci-outcome mt-5" role="alert">
+      <div class="pci-outcome-text">
+        <p class="pci-outcome-title">This value cannot be displayed with your current access.</p>
+        <p class="pci-outcome-detail">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+      </div>
+      <a class="pci-btn pci-btn-outline pci-btn-sm" href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+    </div>
+  }
+  @else {
+  <!-- ============================================================ -->
+  <!-- TWO-COLUMN LAYOUT: main + sticky rail                       -->
+  <!-- ============================================================ -->
+  <div class="pci-layout">
+
+    <!-- ==================== MAIN COLUMN ==================== -->
+    <div class="pci-main">
+
+      <!-- Context card: period / cut-off / checklist status -->
+      <section class="pci-card mt-5" aria-label="Closure context">
+        <div class="pci-form-grid">
+          <label class="pci-field">
+            <span class="pci-field-label">Period or campaign <span class="pci-req">*</span></span>
+            <span class="pci-select-wrap">
+              <select class="pci-select" [ngModel]="periodOrCampaign()" (ngModelChange)="periodOrCampaign.set($event)" aria-label="Period or campaign">
+                @for (p of periodOptions; track p.reference) {
+                  <option [value]="p.reference">{{ p.label }}</option>
+                }
+              </select>
+              <svg class="pci-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </span>
+          </label>
+
+          <label class="pci-field">
+            <span class="pci-field-label">Cut-off time <span class="pci-req">*</span> <span class="pci-tz">{{ operatingTimeZone }}</span></span>
+            <input type="datetime-local" class="pci-input" [ngModel]="cutOffTime()" (ngModelChange)="cutOffTime.set($event)" aria-label="Cut-off time" />
+            <span class="pci-field-hint" role="status">Interpreted as {{ interpretedCutOff() }}</span>
+          </label>
+
+          <div class="pci-field">
+            <span class="pci-field-label">Checklist status</span>
+            <span class="pci-checklist-badge" [class.pci-cb-danger]="checklistStatus().tone === 'danger'" [class.pci-cb-warn]="checklistStatus().tone === 'warn'" [class.pci-cb-success]="checklistStatus().tone === 'success'">
+              {{ checklistStatus().icon }} {{ checklistStatus().label }}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Totals grid -->
+      <div class="pci-totals-grid">
+        <div class="pci-total-card">
+          <span class="pci-total-icon pci-total-icon-indigo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Captured total</span>
+            <span class="pci-total-value">₹ {{ formatAmount(capturedTotal) }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card">
+          <span class="pci-total-icon pci-total-icon-violet">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Settled total</span>
+            <span class="pci-total-value">₹ {{ formatAmount(settledTotal) }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card">
+          <span class="pci-total-icon pci-total-icon-green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/><path d="m9 12 2 2 4-4"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Reconciled total</span>
+            <span class="pci-total-value">₹ {{ formatAmount(reconciledTotal) }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card">
+          <span class="pci-total-icon pci-total-icon-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M7 8V6a5 5 0 0 1 10 0v2"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Refunded total</span>
+            <span class="pci-total-value">₹ {{ formatAmount(refundedTotal) }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card pci-total-warn">
+          <span class="pci-total-icon pci-total-icon-amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Open exceptions</span>
+            <span class="pci-total-value">{{ openExceptions }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card pci-total-warn">
+          <span class="pci-total-icon pci-total-icon-red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><path d="M19.5 5.5 17 8"/><circle cx="12" cy="14" r="7"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Unmatched amount</span>
+            <span class="pci-total-value">₹ {{ formatAmount(unmatchedAmount) }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card">
+          <span class="pci-total-icon pci-total-icon-navy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Official total version</span>
+            <span class="pci-total-value">{{ officialTotalVersion }}</span>
+          </div>
+        </div>
+        <div class="pci-total-card pci-total-wide">
+          <span class="pci-total-icon pci-total-icon-indigo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <div>
+            <span class="pci-total-label">Approvers</span>
+            <span class="pci-total-sub">{{ approvers }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Closure checklist -->
+      <section class="pci-card" aria-labelledby="pci-checklist-heading">
+        <h2 id="pci-checklist-heading" class="pci-card-title">Closure checklist</h2>
+        <ul class="pci-checklist-list" role="list">
+          @for (item of checklist; track item.key) {
+            <li class="pci-checklist-row">
+              <span class="pci-checklist-state" [class]="checklistStateClass(item.state)">{{ item.state }}</span>
+              <span class="pci-checklist-body">
+                <span class="pci-checklist-label">{{ item.label }}</span>
+                <span class="pci-checklist-detail">{{ item.detail }}</span>
+              </span>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <!-- Carry-forward justification + sign-off decision -->
+      <section class="pci-card" aria-labelledby="pci-signoff-heading">
+        <h2 id="pci-signoff-heading" class="pci-card-title">Sign-off details</h2>
+        <div class="pci-form-grid">
+          <label class="pci-field pci-field-full">
+            <span class="pci-field-label">Carry-forward justification</span>
+            <textarea
+              class="pci-input pci-textarea"
+              rows="3"
+              [ngModel]="carryForwardJustification()"
+              (ngModelChange)="carryForwardJustification.set($event)"
+              [attr.maxlength]="carryForwardMax"
+              placeholder="Justify the ₹ {{ formatAmount(unmatchedAmount) }} unmatched amount carried forward…"
+            ></textarea>
+            <span class="pci-field-hint" [class.pci-field-error]="carryForwardCount() > 0 && !carryForwardValid()" role="status">
+              {{ carryForwardCount() }} / {{ carryForwardMax }} characters (minimum {{ carryForwardMin }})
+            </span>
+          </label>
+
+          <label class="pci-field">
+            <span class="pci-field-label">Sign-off decision</span>
+            <span class="pci-select-wrap">
+              <select class="pci-select" [ngModel]="signOffDecision()" (ngModelChange)="signOffDecision.set($event)" aria-label="Sign-off decision">
+                <option value="">Select sign-off decision</option>
+                @for (s of signOffOptions; track s) {
+                  <option [value]="s">{{ s }}</option>
+                }
+              </select>
+              <svg class="pci-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </span>
+          </label>
+
+          <div class="pci-field pci-field-actions">
+            <label class="pci-field-label">&nbsp;</label>
+            <button type="button" class="pci-btn pci-btn-outline" (click)="reopenExceptionally()" [disabled]="!reopenAllowed()">
+              Reopen exceptionally
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- SIGN OFF DIALOG                                             -->
+  <!-- ============================================================ -->
+  @if (signOffDialogOpen()) {
+    <div class="pci-modal-backdrop" (click)="cancelSignOff()">
+      <div class="pci-modal" role="dialog" aria-modal="true" aria-labelledby="pci-signoff-title" (click)="$event.stopPropagation()">
+        <h2 id="pci-signoff-title" class="pci-modal-title">Confirm Sign off</h2>
+        <p class="pci-modal-lead">Record decision, independent authority, reason, effective version, time and resulting state. Show the next accountable owner.</p>
+        <dl class="pci-kv">
+          <div>
+            <dt>Closure</dt>
+            <dd class="mono">{{ closureReference }}</dd>
+          </div>
+          <div>
+            <dt>Official total version</dt>
+            <dd>{{ officialTotalVersion }}</dd>
+          </div>
+          <div>
+            <dt>Consequence</dt>
+            <dd>Freezes the period and publishes official totals</dd>
+          </div>
+          <div>
+            <dt>Effective time</dt>
+            <dd>{{ lastRefresh() }}</dd>
+          </div>
+        </dl>
+        <div class="pci-field">
+          <label class="pci-field-label" for="pci-signoff-reason">Reason <span class="pci-req">*</span></label>
+          <textarea
+            id="pci-signoff-reason"
+            class="pci-input pci-textarea"
+            rows="3"
+            [ngModel]="signOffReason()"
+            (ngModelChange)="signOffReason.set($event)"
+            [attr.maxlength]="signOffReasonMax"
+            placeholder="Record the meaningful reason for this sign-off…"
+          ></textarea>
+          <span class="pci-field-hint" [class.pci-field-error]="signOffReasonCount() > 0 && !signOffReasonValid()" role="status">
+            {{ signOffReasonCount() }} / {{ signOffReasonMax }} characters (minimum {{ signOffReasonMin }})
+          </span>
+        </div>
+        <div class="pci-modal-actions">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="cancelSignOff()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmSignOff()" [disabled]="!signOffReasonValid()">Sign off</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+
+</main>

@@ -1,0 +1,2 @@
+/*! For license information please see adaptive.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import Adaptive from"../../Extensions/Themes/Adaptive.js";H.theme=Adaptive.options,Adaptive.apply();export default H;

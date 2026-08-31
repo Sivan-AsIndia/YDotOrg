@@ -1,0 +1,385 @@
+<!-- Begin Header -->
+<header class="app-header" id="appHeader">
+    <div class="container-fluid w-100 px-0 px-md-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-inline-flex align-items-center gap-2">
+                <a href="index" class="align-items-center logo-main d-none me-5 gap-2">
+                    <img height="33" width="33" class="logo-dark" alt="Dark Logo" src="assets/images/Outline ydot logo 2.svg" style="    width: 58px;">
+                    <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">YDot</h3>
+                </a>
+                <button type="button" class="vertical-toggle btn text-muted rounded-circle icon-btn" id="toggleSidebar" aria-label="Toggle Sidebar">
+                    <i class="ri-menu-2-line fs-4 toggle-left-arrow"></i>
+                    <i class="ri-close-line fs-4 toggle-right-arrow d-none"></i>
+                </button>
+                <button type="button" class="horizontal-toggle btn text-muted rounded-circle icon-btn header-btn d-none header-menu-btn" id="toggleHorizontal" aria-label="Toggle Menu">
+                    <i class="ri-menu-2-line fs-5 lh-sm"></i>
+                </button>
+            </div>
+            <div class="flex-shrink-0 d-flex align-items-center gap-1 gap-md-3">
+
+                <!--
+                  ORGANISATION SWITCHER.
+
+                  Only a root user sees this, because only a root user has anything to switch
+                  between. Choosing one asks the SERVER to re-issue the access token against that
+                  organisation - there is no client-side flag that could be flipped instead, and
+                  the person's own account is not changed by it. The "working inside" label is
+                  there so nobody is ever in doubt whose data is on the screen.
+                -->
+                @if (canSwitchOrganisation()) {
+                    <div class="dropdown">
+                        <button class="btn btn-sm d-flex align-items-center gap-2 org-switcher-btn"
+                                type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                (click)="onSwitcherOpened()"
+                                aria-label="Switch organisation">
+                            <i class="ri-building-4-line fs-5"></i>
+                            <span class="d-none d-md-inline text-truncate" style="max-width: 180px;">
+                                @if (isActingInOrganisation()) {
+                                    {{ currentOrganisation() }}
+                                } @else {
+                                    Choose an organisation
+                                }
+                            </span>
+                            <i class="ri-arrow-down-s-line"></i>
+                        </button>
+
+                        <div class="dropdown-menu dropdown-menu-end header-dropdown-menu shadow-sm border p-0"
+                             style="min-width: 320px;">
+                            <div class="card mb-0 border-0">
+                                <div class="card-header pb-3">
+                                    <h5 class="card-title mb-0">Organisations</h5>
+                                    @if (isActingInOrganisation()) {
+                                        <small class="text-muted">
+                                            Working inside {{ currentOrganisation() }}
+                                        </small>
+                                    }
+                                </div>
+
+                                <div class="card-body p-0" style="max-height: 320px; overflow-y: auto;">
+                                    @if (loadingOrganisations()) {
+                                        <p class="text-muted small px-4 py-3 mb-0">Loading…</p>
+                                    } @else if (selectableOrganisations().length === 0) {
+                                        <p class="text-muted small px-4 py-3 mb-0">
+                                            No organisations are available to you yet.
+                                        </p>
+                                    } @else {
+                                        <ul class="list-unstyled mb-0">
+                                            @for (option of selectableOrganisations(); track option.tenantId) {
+                                                <li>
+                                                    <button type="button"
+                                                            class="dropdown-item d-flex align-items-start gap-2 py-3"
+                                                            [disabled]="switchingTo() !== null"
+                                                            (click)="switchTo(option)">
+                                                        <i class="ri-building-4-line mt-1"></i>
+                                                        <span class="flex-grow-1 text-start">
+                                                            <span class="d-block fw-semibold">{{ option.name }}</span>
+                                                            <small class="text-muted d-block">
+                                                                {{ option.subdomain }} · {{ option.status }}
+                                                            </small>
+                                                            @if (!isOperable(option)) {
+                                                                <small class="text-warning d-block">
+                                                                    Still onboarding — you can review it, but not work in it.
+                                                                </small>
+                                                            }
+                                                        </span>
+                                                        @if (switchingTo() === option.tenantId) {
+                                                            <i class="ri-loader-4-line mt-1"></i>
+                                                        }
+                                                    </button>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+
+                                <!--
+                                    The way back out, shown only while actually inside an
+                                    Organisation. Entering one replaces the sidebar with that
+                                    Organisation's menu, so the platform branch disappears and
+                                    there was previously nothing anywhere that led back to it.
+                                -->
+                                @if (isActingInOrganisation()) {
+                                    <div class="card-footer border-top">
+                                        <button type="button"
+                                                class="dropdown-item d-flex align-items-center gap-2 px-0 fw-medium small"
+                                                [disabled]="leaving()"
+                                                (click)="exitOrganisation()">
+                                            <i class="ri-logout-box-line"></i>
+                                            <span class="flex-grow-1 text-start">
+                                                Leave {{ currentOrganisation() }}
+                                                <small class="text-muted d-block">
+                                                    Go back to platform level
+                                                </small>
+                                            </span>
+                                            @if (leaving()) {
+                                                <i class="ri-loader-4-line"></i>
+                                            }
+                                        </button>
+                                    </div>
+                                }
+
+                                <div class="card-footer border-top">
+                                    <a routerLink="/app/administration/organisation/directory"
+                                       class="fw-medium small">
+                                        Manage organisations
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+             
+           
+                <div class="dropdown pe-dropdown-mega">
+                    <button class="btn text-muted rounded-circle icon-btn fs-5 header-menu-btn position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
+                        <i class="ri-notification-4-line"></i>
+                        <div class="icon-dot bg-danger"><span class="ping bg-danger"></span></div>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-clickable dropdown-mega-md dropdown-menu-end header-dropdown-menu shadow-sm border p-0">
+                        <div class="card mb-0 border-0">
+                            <div class="card-header pb-5">
+                                <h5 class="card-title">Notifications</h5>
+                                <a href="#!" class="fw-medium">See All</a>
+                            </div>
+                            <div class="card-body p-0">
+                                <ul class="nav nav-tabs-bordered nav-dark justify-content-evenly" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <a class="nav-link px-2 active" data-bs-toggle="tab" href="#all" role="tab" aria-selected="false" tabindex="-1">
+                                            <span>All</span>
+                                            <span class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">3</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <a class="nav-link px-2" data-bs-toggle="tab" href="#messages" role="tab" aria-selected="true">
+                                            <span>Messages</span>
+                                            <span class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">2</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <a class="nav-link px-2" data-bs-toggle="tab" href="#tasks" role="tab" aria-selected="false" tabindex="-1">
+                                            <span>Tasks</span>
+                                            <span class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">3</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item align-middle" role="presentation">
+                                        <a class="nav-link px-2" data-bs-toggle="tab" href="#alerts" role="tab" aria-selected="false" tabindex="-1">
+                                            <span>Alerts</span>
+                                            <span class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">0</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                                <div class="tab-content norification-tab" id="notificationTabContent">
+                                    <div class="tab-pane fade show active" id="all" role="tabpanel">
+                                        <div class="notification-panel" data-simplebar style="max-height: 324px;">
+                                            <div class="notification">
+                                                <h6 class="message mb-2">You have a new task</h6>
+                                                <p class="fs-14 text-muted mb-0">Just now</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">New message from Naomi</h6>
+                                                <p class="fs-14 text-muted mb-0">1 hour ago</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">Your role has been set to Admin</h6>
+                                                <p class="fs-14 text-muted mb-0">3 days ago</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">New message from Robert</h6>
+                                                <p class="fs-14 text-muted mb-0">2 weeks ago</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">Payment received from Jonathan</h6>
+                                                <p class="fs-14 text-muted mb-0">3 days ago</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">New comment on your post</h6>
+                                                <p class="fs-14 text-muted mb-0">5 hours ago</p>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 text-end">
+                                            <a href="#!" class="text-body"><i class="ri-check-double-line fs-5 text-primary"></i> Mark all as read</a>
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="messages" role="tabpanel">
+                                        <div class="notification-panel" data-simplebar style="max-height: 324px;">
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">New message from Emma</h6>
+                                                <p class="fs-14 text-muted mb-0">5 minutes ago</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">Reminder: Meeting at 3 PM</h6>
+                                                <p class="fs-14 text-muted mb-0">30 minutes ago</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">Newsletter from Marketing</h6>
+                                                <p class="fs-14 text-muted mb-0">1 day ago</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">System message: Update complete</h6>
+                                                <p class="fs-14 text-muted mb-0">4 days ago</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">Message archived from Clara</h6>
+                                                <p class="fs-14 text-muted mb-0">1 week ago</p>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 text-end">
+                                            <a href="#!" class="text-body"><i class="ri-check-double-line fs-5 text-primary"></i> Mark all as read</a>
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="tasks" role="tabpanel">
+                                        <div class="notification-panel" data-simplebar style="max-height: 324px;">
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">Task assigned: UI Design</h6>
+                                                <p class="fs-14 text-muted mb-0">Just now</p>
+                                            </div>
+                                            <div class="notification">
+                                                <h6 class="message mb-2">Submit project report</h6>
+                                                <p class="fs-14 text-muted mb-0">2 hours ago</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">Task completed: API Integration</h6>
+                                                <p class="fs-14 text-muted mb-0">Yesterday</p>
+                                            </div>
+                                            <div class="notification unread">
+                                                <h6 class="message mb-2">Code review: Pending approval</h6>
+                                                <p class="fs-14 text-muted mb-0">1 week ago</p>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 text-end">
+                                            <a href="#!" class="text-body"><i class="ri-check-double-line fs-5 text-primary"></i> Mark all as read</a>
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="alerts" role="tabpanel">
+                                        <div class="d-flex flex-column justify-content-center align-items-center text-center p-5 min-h-350px">
+                                            <img src="https://cdn-icons-png.flaticon.com/512/564/564619.png" alt="No Alert Box" width="70" class="mb-5" />
+                                            <h5 class="mb-3">All caught up!</h5>
+                                            <p class="text-muted mb-0 lh-base max-w-300px">You don’t have any new alerts right now. Keep an eye here for updates.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn text-muted rounded-circle icon-btn fs-5 header-menu-btn d-none d-md-inline-flex" type="button" id="toggleFullscreen" aria-label="Toggle fullscreen">
+                    <i class="ri-fullscreen-line"></i>
+                </button>
+                <!-- <div id="toggleMode">
+                    <button id="theme-toggle" class="btn icon-btn theme-toggle" title="Toggles light & dark theme" aria-label="Switch to dark theme" aria-live="polite" type="button">
+                        <svg class="sun-and-moon" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24">
+                            <mask class="moon" id="moon-mask">
+                                <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                                <circle cx="24" cy="10" r="6" fill="black" />
+                            </mask>
+                            <circle class="sun" cx="12" cy="12" r="6" mask="url(#moon-mask)" fill="currentColor" />
+                            <g class="sun-beams" stroke="currentColor">
+                                <line x1="12" y1="1" x2="12" y2="3" />
+                                <line x1="12" y1="21" x2="12" y2="23" />
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                                <line x1="1" y1="12" x2="3" y2="12" />
+                                <line x1="21" y1="12" x2="23" y2="12" />
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                            </g>
+                        </svg>
+                    </button>
+                </div> -->
+                <div class="dropdown pe-dropdown-mega">
+                    <button class="btn p-0 gap-2 text-start d-flex align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="text-end mt-2 d-none d-md-block">
+                            <span class="user-name d-block lh-1 fs-14">{{ username() }}</span>
+                            <span class="text-muted fw-normal fs-13">{{ userRole() }}</span>
+                        </span>
+                        <span class="story-ring h-40px w-40px rounded-circle d-flex justify-content-center align-items-center p-0">
+                            <img src="assets/images/profile.jpg" alt="Avatar" class="h-36px w-36px rounded-circle user-img">
+                        </span>
+                    </button>
+                    <div class="dropdown-menu dropdown-mega-xs dropdown-menu-end header-dropdown-menu shadow-sm border">
+                        <div class="d-flex gap-4 align-items-center justify-content-between mb-2 py-2 px-4 border rounded-2">
+                            <div>
+                                <h6 class="mb-1 fs-14">{{ username() }}</h6>
+                                <small class="text-muted mb-0">{{ userEmail() }}</small>
+                            </div>
+                            <div class="story-ring h-36px w-36px  rounded-circle d-flex justify-content-center align-items-center">
+                                <img src="assets/images/profile.jpg" alt="Avatar" class="h-44px w-44px rounded-circle">
+                            </div>
+                        </div>
+                        <div>
+                            <ul class="list-unstyled mb-0">
+                                <li class="profile-item">
+                                    <a routerLink="administration/access/user-profile-and-access" class="text-body">
+                                        <i class="ri-user-line me-3"></i>Profile
+                                    </a>
+                                </li>
+                                <li class="profile-item">
+                                    <a routerLink="administration/access/my-security" class="text-body d-flex align-items-center justify-content-between">
+                                        <span>
+                                            <i class="ri-shield-user-line me-3"></i>My Security
+                                        </span>
+                                    </a>
+                                </li>
+                                <!-- <li class="profile-item">
+                                    <a href="#!" class="text-body d-flex align-items-center justify-content-between ">
+                                        <span>
+                                            <i class="ri-vip-crown-line me-3"></i>Subscription
+                                        </span>
+                                        <span class="badge bg-success-subtle text-success">PRO</span>
+                                    </a>
+                                </li> -->
+                                <li class="profile-item">
+                                    <a href="#!" class="text-body">
+                                        <i class="ri-settings-3-line me-3"></i>Settings
+                                    </a>
+                                </li>
+                                <li class="profile-item">
+                                    <a href="#!" class="text-body">
+                                        <i class="ri-question-line me-3"></i>Help center
+                                    </a>
+                                </li>
+                                <!-- Sign-out is a button, not a link: it has to call the API so the
+                                     server revokes the session and clears the HttpOnly refresh cookie.
+                                     An <a href> would only change the URL and leave both alive. -->
+                                <li class="profile-item">
+                                    <button type="button" class="text-danger btn btn-link text-decoration-none p-0 w-100 text-start" (click)="signOut()">
+                                        <i class="ri-logout-box-r-line me-3"></i>Sign out
+                                    </button>
+                                </li>
+                                <li class="profile-item">
+                                    <button type="button" class="text-danger btn btn-link text-decoration-none p-0 w-100 text-start" (click)="signOutEverywhere()">
+                                        <i class="ri-shut-down-line me-3"></i>Sign out everywhere
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<!-- END Header -->
+
+<div class="header-wrapper"></div>
+
+<!-- Search Modal -->
+<div class="modal fade search-modal" id="searchModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header d-block">
+                <div class="form-icon">
+                    <input type="text" class="form-control form-control-icon" id="searchInputInModal" placeholder="Search" required>
+                    <div class="header-search-btn w-44px">
+                        <i class="ri-search-line text-muted fs-16"></i>
+                    </div>
+                    <button type="button" class="btn-close position-absolute end-0 top-50 translate-middle-y d-inline-block m-0" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body" data-simplebar id="list-items">
+                <ul class="list-unstyled mb-0" id="searchList"></ul>
+            </div>
+        </div>
+    </div>
+</div>

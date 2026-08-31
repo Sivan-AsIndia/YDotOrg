@@ -1,0 +1,1154 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="cr-page" [attr.data-ui-state]="uiState()">
+      <!-- ============ TASK HEADER ============ -->
+      <header class="cr-task-header" aria-labelledby="cr-title">
+        <div class="cr-header-text">
+          <h1 class="cr-title" id="cr-title">Campaign Overview</h1>
+          <!-- Owner and freshness -->
+          <div class="cr-task-meta">
+            <span class="cr-meta-item">Owner: {{ owner() }}</span>
+            <span class="cr-meta-item">Data updated {{ lastRefresh() }}</span>
+          </div>
+        </div>
+
+        <!-- Header actions: Filters toggle, Compare, Export (workflow), Create (primary) -->
+        <div class="cr-header-actions">
+          <button
+            #crFiltersToggle
+            type="button"
+            class="btn btn-primary btn-sm cr-filters-toggle"
+            (click)="toggleFilters()"
+            [attr.aria-expanded]="filtersOpen()"
+          >
+            <svg
+              class="cr-ic"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z" />
+            </svg>
+            {{ filtersOpen() ? 'Hide Filters' : 'Filters' }}
+            @if (activeFilterSummary().length) {
+              <span class="cr-count">{{ activeFilterSummary().length }}</span>
+            }
+          </button>
+
+          @if (permissions().view) {
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              (click)="openCompare()"
+              [disabled]="!compareAllowed()"
+              [attr.title]="selectedCount() < 2 ? 'Select at least two campaigns to compare' : null"
+            >
+              <svg
+                class="cr-ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M8 3v18M16 3v18" />
+                <path d="M3 8h5M16 8h5M3 16h5M16 16h5" />
+              </svg>
+              Compare
+              @if (selectedCount() > 0) {
+                <span class="cr-count">{{ selectedCount() }}</span>
+              }
+            </button>
+          }
+
+          @if (permissions().export) {
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              (click)="openExportDialog()"
+              [disabled]="!exportAllowed()"
+            >
+              <svg
+                class="cr-ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3.5v11" />
+                <path d="m7.5 10 4.5 4.5 4.5-4.5" />
+                <path d="M4.5 20h15" />
+              </svg>
+              Export
+            </button>
+          }
+
+          @if (permissions().create) {
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              (click)="openCreate()"
+              [disabled]="!createAllowed()"
+            >
+              <svg
+                class="cr-ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              New Campaign
+            </button>
+          }
+        </div>
+      </header>
+
+      <!-- ============ CONTEXT AND FILTERS — revealed via Filters button ============ -->
+      @if (filtersOpen()) {
+        <section class="cr-filters-card" aria-label="Search and filters"
+                 appClickOutside [clickOutsideExcept]="crFiltersToggle" (appClickOutside)="filtersOpen.set(false)">
+          <div class="cr-filter-grid">
+            <!-- Campaign name or code — scope-aware searchable selector -->
+            <label class="cr-field cr-field-search">
+              <span class="cr-field-label">Search</span>
+              <span class="cr-input-wrap">
+                <input
+                  type="search"
+                  class="cr-input"
+                  placeholder="Search by campaign name…"
+                  [ngModel]="searchTerm()"
+                  (ngModelChange)="searchTerm.set($event); currentPage.set(1)"
+                  aria-label="Search by campaign name or code"
+                />
+                <svg
+                  class="cr-input-ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </span>
+            </label>
+
+            <!-- Status — catalogue values only -->
+            <label class="cr-field">
+              <span class="cr-field-label">Status</span>
+              <span class="cr-select-wrap">
+                <select
+                  class="cr-select"
+                  [ngModel]="statusFilter()"
+                  (ngModelChange)="statusFilter.set($event); currentPage.set(1)"
+                  aria-label="Status"
+                >
+                  <option value="">All Statuses</option>
+                  @for (s of statusCatalogue; track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+                <svg
+                  class="cr-chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+
+            <!-- Owner — scope-aware searchable selector with identity preview -->
+            <label class="cr-field">
+              <span class="cr-field-label">Owner</span>
+              <span class="cr-select-wrap">
+                <select
+                  class="cr-select"
+                  [ngModel]="ownerFilter()"
+                  (ngModelChange)="ownerFilter.set($event); currentPage.set(1)"
+                  aria-label="Owner"
+                >
+                  @for (o of ownerOptions(); track o.reference) {
+                    <option [value]="o.reference">
+                      {{ o.reference === 'USR-0000' ? 'All Owners' : o.name + ' · ' + o.reference }}
+                    </option>
+                  }
+                </select>
+                <svg
+                  class="cr-chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+
+            <!-- Date range — date picker with time-zone label -->
+            <div class="cr-field" [class.cr-field-invalid]="rangeInvalid()">
+              <span class="cr-field-label"
+                >Campaign Date <span class="cr-tz">{{ operatingTimeZone }}</span></span
+              >
+              <div class="cr-range">
+                <span class="cr-input-wrap">
+                  <input
+                    type="date"
+                    class="cr-input"
+                    [ngModel]="rangeStart()"
+                    (ngModelChange)="rangeStart.set($event)"
+                    aria-label="Start date"
+                  />
+                </span>
+                <span class="cr-range-sep" aria-hidden="true">→</span>
+                <span class="cr-input-wrap">
+                  <input
+                    type="date"
+                    class="cr-input"
+                    [ngModel]="rangeEnd()"
+                    (ngModelChange)="rangeEnd.set($event)"
+                    aria-label="End date"
+                  />
+                </span>
+              </div>
+            </div>
+
+            <!-- More filters — progressive disclosure holding Data scope -->
+            <div class="cr-field cr-field-more">
+              <span class="cr-field-label" aria-hidden="true">&nbsp;</span>
+              <button
+                #crMoreBtn
+                type="button"
+                class="cr-btn cr-btn-outline cr-more-btn"
+                (click)="toggleMoreFilters()"
+                [attr.aria-expanded]="moreFiltersOpen()"
+              >
+                <svg
+                  class="cr-ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z" />
+                </svg>
+                More Filters
+                @if (moreFiltersCount()) {
+                  <span class="cr-count">{{ moreFiltersCount() }}</span>
+                }
+              </button>
+            </div>
+          </div>
+
+          <!-- More filters panel (scope) — collapsed by default -->
+          @if (moreFiltersOpen()) {
+            <div class="cr-more-panel"
+                 appClickOutside [clickOutsideExcept]="crMoreBtn" (appClickOutside)="moreFiltersOpen.set(false)">
+              <label class="cr-field">
+                <span class="cr-field-label">Data scope</span>
+                <span class="cr-select-wrap">
+                  <select
+                    class="cr-select"
+                    [ngModel]="scopeFilter()"
+                    (ngModelChange)="scopeFilter.set($event)"
+                    aria-label="Data scope"
+                  >
+                    @for (sc of scopeOptions; track sc) {
+                      <option [value]="sc">{{ sc }}</option>
+                    }
+                  </select>
+                  <svg
+                    class="cr-chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </span>
+              </label>
+              <p class="cr-field-hint" [class.cr-field-error]="rangeInvalid()" role="status">
+                @if (rangeInvalid()) {
+                  Review Campaign Date. The value does not meet the stated format or range.
+                } @else {
+                  Interpreted as {{ interpretedRange() }}
+                }
+              </p>
+              <div class="cr-more-actions">
+                <button
+                  type="button"
+                  class="cr-btn cr-btn-primary cr-btn-sm"
+                  (click)="applyFilter()"
+                  [disabled]="!filterAllowed()"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Active filter summary + saved views -->
+          <div class="cr-active-row">
+            <div class="cr-active-left">
+              <span class="cr-active-label">Active Filters:</span>
+              @for (chip of activeFilterSummary(); track chip.key) {
+                <span class="cr-chip">
+                  {{ chip.label }}
+                  <button
+                    type="button"
+                    class="cr-chip-x"
+                    (click)="removeFilterChip(chip.key)"
+                    [attr.aria-label]="'Remove filter ' + chip.label"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </span>
+              } @empty {
+                <span class="cr-active-none">None applied</span>
+              }
+              <button type="button" class="cr-link" (click)="clearFilters()">Clear All</button>
+            </div>
+
+            <div class="cr-active-right">
+              <span class="cr-saved-label">Saved Views:</span>
+              <span class="cr-select-wrap cr-saved-select">
+                <select
+                  class="cr-select"
+                  [ngModel]="savedView()"
+                  (ngModelChange)="savedView.set($event)"
+                  aria-label="Saved views"
+                >
+                  @for (v of savedViews; track v) {
+                    <option [value]="v">{{ v }}</option>
+                  }
+                </select>
+                <svg
+                  class="cr-chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+              <button type="button" class="cr-link" (click)="applyFilter()">Save View</button>
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ============ MAIN WORK: campaign register ============ -->
+      <section class="cr-main" aria-labelledby="cr-records-heading">
+        <h2 id="cr-records-heading" class="cr-visually-hidden">Campaign records</h2>
+
+        <!-- Top pager row: totals qualified by scope (records-per-page removed). Hidden under no-access — counts are restricted content too. -->
+        @if (uiState() !== 'no-access') {
+          <div class="cr-pager-row">
+            <span class="cr-showing"
+              >Showing {{ pageStart() }} to {{ pageEnd() }} of
+              <strong>{{ recordCount() }}</strong> records</span
+            >
+          </div>
+        }
+
+        <!-- Situational banners -->
+        @if (uiState() === 'validation') {
+          <div class="cr-banner cr-banner-error" role="alert">
+            <strong>Review the highlighted filters.</strong>
+            A value does not meet the stated format or range. Correct it to continue; entered values
+            are kept.
+            <button
+              type="button"
+              class="cr-banner-x"
+              (click)="dismissBanner()"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        }
+        @if (uiState() === 'duplicate') {
+          <div class="cr-banner cr-banner-warn" role="alert">
+            A campaign with this name already exists. Link, change the value, request review or
+            cancel — nothing is overwritten silently.
+            <button
+              type="button"
+              class="cr-banner-x"
+              (click)="dismissBanner()"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        }
+        @if (uiState() === 'conflict') {
+          <div class="cr-banner cr-banner-warn" role="alert">
+            This record changed after you opened it. Review the latest version before continuing.
+            <span class="cr-banner-actions">
+              <a href="javascript:void(0)" (click)="dismissBanner()">Compare</a>
+              <a href="javascript:void(0)" (click)="dismissBanner()">Reapply eligible changes</a>
+              <a href="javascript:void(0)" (click)="dismissBanner()">Cancel</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'dependency-failure') {
+          <div class="cr-banner cr-banner-warn" role="alert">
+            We could not complete the dependent service step. Your confirmed local result is
+            unchanged.
+            <span class="cr-banner-actions">
+              <span class="cr-corr">Correlation INT-77213</span>
+              <a href="javascript:void(0)" (click)="dismissBanner()">Retry dependency</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'success') {
+          <div class="cr-banner cr-banner-success" role="status">
+            Saved successfully. Reference {{ persistentOutcome().reference }}; state
+            {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.
+            <button
+              type="button"
+              class="cr-banner-x"
+              (click)="dismissBanner()"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        }
+
+        <!-- LOADING -->
+        @if (uiState() === 'loading') {
+          <div class="cr-state-block" role="status" aria-live="polite">
+            <p class="cr-state-title">Loading Campaign register…</p>
+            <div class="cr-skeleton" aria-hidden="true">
+              @for (n of [1, 2, 3, 4, 5, 6]; track n) {
+                <div class="cr-skeleton-row"></div>
+              }
+            </div>
+            <button
+              type="button"
+              class="cr-btn cr-btn-outline cr-btn-sm"
+              (click)="setUiState('ready')"
+            >
+              Cancel
+            </button>
+          </div>
+        }
+
+        <!-- LOAD FAILED — never let this masquerade as "no results". The register reads from
+             the API, and a failed read leaves the same empty list a filter with no matches
+             does. Telling somebody to adjust their filters when the request failed sends them
+             looking in exactly the wrong place. -->
+        @else if (loadError()) {
+          <div class="cr-state-block">
+            <p class="cr-state-title">The campaign register could not be loaded.</p>
+            <p class="cr-state-body">{{ loadError() }}</p>
+            <div class="cr-state-actions">
+              <button type="button" class="cr-btn cr-btn-outline cr-btn-sm" (click)="reload()">
+                Try again
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- LOADING — distinct from empty, so a slow first paint is not read as "none". -->
+        @else if (isLoading() && records().length === 0) {
+          <div class="cr-state-block">
+            <p class="cr-state-title">Loading campaigns…</p>
+          </div>
+        }
+
+        <!-- EMPTY -->
+        @else if (uiState() === 'empty') {
+          <div class="cr-state-block">
+            <p class="cr-state-title">No campaigns match this scope and filter.</p>
+            <p class="cr-state-body">
+              Zero results come from the current filters, not a global zero. Adjust the search,
+              status, owner, date or scope, or reset filters to continue.
+            </p>
+            <div class="cr-state-actions">
+              <button
+                type="button"
+                class="cr-btn cr-btn-outline cr-btn-sm"
+                (click)="clearFilters()"
+              >
+                Reset filters
+              </button>
+              @if (createAllowed()) {
+                <button
+                  type="button"
+                  class="cr-btn cr-btn-primary cr-btn-sm"
+                  (click)="openCreate()"
+                >
+                  New Campaign
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- NO ACCESS -->
+        @else if (uiState() === 'no-access') {
+          <div class="cr-state-block">
+            <p class="cr-state-title">This value cannot be displayed with your current access.</p>
+            <p class="cr-state-body">
+              Restricted records, fields, counts, actions and search suggestions are hidden. Return
+              to your permitted landing page to continue.
+            </p>
+            <a
+              class="cr-btn cr-btn-outline cr-btn-sm"
+              href="javascript:void(0)"
+              (click)="setUiState('ready')"
+              >Return to My Workspace</a
+            >
+          </div>
+        }
+
+        <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the register visible -->
+        @else {
+          <div class="cr-table-scroll">
+            <table class="cr-table">
+              <thead>
+                <tr>
+                  @for (col of columns; track col.key) {
+                    <th
+                      scope="col"
+                      [class.cr-col-num]="col.numeric"
+                      [attr.aria-sort]="
+                        sortColumn() === col.key
+                          ? sortDirection() === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      "
+                    >
+                      <button
+                        type="button"
+                        class="cr-th-btn"
+                        (click)="requestSort(col.key)"
+                        [disabled]="!col.sortable"
+                      >
+                        {{ col.label }}
+                        @if (col.sortable) {
+                          <span class="cr-sort-ic" aria-hidden="true">
+                            @if (sortColumn() === col.key) {
+                              {{ sortDirection() === 'asc' ? '▲' : '▼' }}
+                            } @else {
+                              ⇅
+                            }
+                          </span>
+                        }
+                      </button>
+                    </th>
+                  }
+                  <th scope="col" class="cr-col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of pagedRecords(); track r.code) {
+                  <tr
+                    class="cr-row-selectable"
+                    [class.cr-row-selected]="isSelected(r.code)"
+                    (click)="toggleRow(r.code)"
+                    [attr.aria-pressed]="isSelected(r.code)"
+                    [attr.aria-label]="'Select ' + r.name"
+                  >
+                    <!-- Campaign name (+ code stable reference, Purpose via title/mobile) — read-only -->
+                    <td class="cr-cell-name" data-label="Campaign">
+                      <div class="cr-name-wrap">
+                        <a
+                          class="cr-name-link"
+                          href="javascript:void(0)"
+                          (click)="openRecord(r); $event.stopPropagation()"
+                          [title]="r.purpose"
+                          >{{ r.name }}</a
+                        >
+                      </div>
+                      <span class="cr-code">{{ r.code }}</span>
+                      <span class="cr-purpose">{{ r.purpose }}</span>
+                    </td>
+
+                    <!-- Status (catalogue value) -->
+                    <td data-label="Status">
+                      <span class="cr-badge" [class]="statusClass(r.status)">{{ r.status }}</span>
+                    </td>
+
+                    <!-- Progress percentage (read-only, server-derived) -->
+                    <td class="cr-col-num cr-progress-cell" data-label="Progress">
+                      <div class="cr-progress">
+                        <span class="cr-progress-val">{{ r.progress }}%</span>
+                        <span class="cr-progress-track" aria-hidden="true">
+                          <span
+                            class="cr-progress-fill"
+                            [class.cr-progress-hold]="r.status === 'Paused'"
+                            [style.width.%]="r.progress > 100 ? 100 : r.progress"
+                          ></span>
+                        </span>
+                      </div>
+                    </td>
+
+                    <!-- Owner (identity preview). Every owner shows as a circular avatar
+                         (profile picture when available, otherwise initials). Hovering an avatar
+                         reveals the owner's name; clicking one opens that owner's full details;
+                         clicking the cell opens the full owner list for the campaign. -->
+                    <td class="cr-cell-owner" data-label="Owner" (click)="$event.stopPropagation()">
+                      <div class="cr-owner-avatars" (click)="openOwnersPopup(r)">
+                        <span class="cr-avatar-stack-group" aria-hidden="false">
+                          @for (o of ownersOf(r); track o.reference) {
+                            <button
+                              type="button"
+                              class="cr-avatar-btn"
+                              (click)="openOwnerDetail(o); $event.stopPropagation()"
+                              [title]="o.name"
+                              [attr.aria-label]="'View ' + o.name"
+                            >
+                              @if (o.avatarUrl && !avatarFailed(o.reference)) {
+                                <img
+                                  class="cr-avatar cr-avatar-img"
+                                  [src]="o.avatarUrl"
+                                  [alt]="o.name"
+                                  (error)="onAvatarError(o.reference)"
+                                />
+                              } @else {
+                                <span class="cr-avatar" [attr.data-tone]="o.tone">{{ o.initials }}</span>
+                              }
+                            </button>
+                          }
+                        </span>
+                        @if (ownersOf(r).length === 1) {
+                          <span class="cr-owner-name">{{ ownersOf(r)[0].name }}</span>
+                        } @else {
+                          <span class="cr-owner-name cr-owner-name-muted">{{ ownersOf(r).length }} owners</span>
+                        }
+                      </div>
+                    </td>
+
+                    <!-- Launch (Start) date; End date surfaced as sub-text -->
+                    <td class="cr-cell-date" data-label="Launch Date">
+                      <span class="cr-date-main">{{ formatDate(r.startDate) }}</span>
+                      @if (r.endDate) {
+                        <span class="cr-date-sub">Ends {{ formatDate(r.endDate) }}</span>
+                      }
+                    </td>
+
+                    <!-- Row actions: Open / Export / Delete unused draft -->
+                    <td class="cr-col-actions" (click)="$event.stopPropagation()">
+                      <div class="cr-menu-wrap">
+                        <button
+                          #crRowBtn
+                          type="button"
+                          class="cr-row-action"
+                          (click)="toggleRowMenu(r.code)"
+                          [attr.aria-expanded]="openRowMenu() === r.code"
+                          aria-haspopup="menu"
+                          aria-label="Row actions"
+                        >
+                          ⋯
+                        </button>
+                        @if (openRowMenu() === r.code) {
+                          <div class="cr-menu" role="menu" aria-label="Campaign actions"
+                               [class.cr-menu-up]="$last && !$first"
+                               appClickOutside [clickOutsideExcept]="crRowBtn" (appClickOutside)="openRowMenu.set(null)">
+                            <button
+                              type="button"
+                              class="cr-menu-item"
+                              role="menuitem"
+                              (click)="openRecord(r)"
+                            >
+                              Open
+                            </button>
+                            @if (canEdit(r)) {
+                              <button
+                                type="button"
+                                class="cr-menu-item"
+                                role="menuitem"
+                                (click)="openEdit(r)"
+                              >
+                                Edit
+                              </button>
+                            }
+                            <button
+                              type="button"
+                              class="cr-menu-item"
+                              role="menuitem"
+                              (click)="openReadiness(r)"
+                            >
+                              Open readiness checklist
+                            </button>
+                            @if (canApprove(r)) {
+                              <button
+                                type="button"
+                                class="cr-menu-item cr-menu-item-primary"
+                                role="menuitem"
+                                (click)="requestApprove(r)"
+                              >
+                                Approve
+                              </button>
+                            }
+                            @if (canDeleteDraft(r)) {
+                              <button
+                                type="button"
+                                class="cr-menu-item cr-menu-danger"
+                                role="menuitem"
+                                (click)="requestDeleteDraft(r)"
+                              >
+                                Delete unused draft
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td [attr.colspan]="columns.length + 1" class="cr-table-empty">
+                      No campaigns match this scope and filter. Reset filters to continue.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer: pagination -->
+          <div class="cr-table-footer">
+            <nav class="cr-pagination" aria-label="Pagination">
+              <button
+                type="button"
+                class="cr-page-btn"
+                aria-label="Previous page"
+                [disabled]="currentPage() === 1"
+                (click)="goToPage(currentPage() - 1)"
+              >
+                ‹
+              </button>
+              @for (p of pageNumbers(); track p) {
+                <button
+                  type="button"
+                  class="cr-page-btn"
+                  [class.is-current]="currentPage() === p"
+                  [attr.aria-current]="currentPage() === p ? 'page' : null"
+                  (click)="goToPage(p)"
+                >
+                  {{ p }}
+                </button>
+              }
+              <button
+                type="button"
+                class="cr-page-btn"
+                aria-label="Next page"
+                [disabled]="currentPage() === totalPages()"
+                (click)="goToPage(currentPage() + 1)"
+              >
+                ›
+              </button>
+            </nav>
+          </div>
+        }
+      </section>
+
+      <!-- ============ COMPARE DIALOG ============ -->
+      @if (compareDialogOpen()) {
+        <div class="cr-modal-backdrop" (click)="closeCompare()">
+          <div
+            class="cr-modal cr-modal-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-compare-title"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="cr-compare-title" class="cr-modal-title">Compare campaigns</h2>
+            <p class="cr-modal-lead">
+              Comparing {{ compareRecords().length }} selected campaigns from the current scope.
+            </p>
+            <div class="cr-table-scroll">
+              <table class="cr-table cr-compare-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Field</th>
+                    @for (r of compareRecords(); track r.code) {
+                      <th scope="col">
+                        {{ r.name }}<br /><span class="cr-code">{{ r.code }}</span>
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Status</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>
+                        <span class="cr-badge" [class]="statusClass(r.status)">{{ r.status }}</span>
+                      </td>
+                    }
+                  </tr>
+                  <tr>
+                    <td>Owner</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>{{ ownerOf(r.ownerReference).name }}</td>
+                    }
+                  </tr>
+                  <tr>
+                    <td>Launch Date</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>{{ formatDate(r.startDate) }}</td>
+                    }
+                  </tr>
+                  <tr>
+                    <td>End Date</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>{{ formatDate(r.endDate) }}</td>
+                    }
+                  </tr>
+                  <tr>
+                    <td>Progress</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>{{ r.progress }}%</td>
+                    }
+                  </tr>
+                  <tr>
+                    <td>Purpose</td>
+                    @for (r of compareRecords(); track r.code) {
+                      <td>{{ r.purpose }}</td>
+                    }
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-primary" (click)="closeCompare()">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ OWNERS POPUP — all owners of the campaign with basic details;
+           the list scrolls inside itself when there are many ============ -->
+      @if (ownersPopupTarget(); as target) {
+        <div class="cr-modal-backdrop" (click)="closeOwnersPopup()">
+          <div
+            class="cr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-owners-title"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="cr-owners-title" class="cr-modal-title">Owners</h2>
+            <p class="cr-modal-lead">
+              {{ target.name }} <span class="cr-code">{{ target.code }}</span> has
+              {{ ownersOf(target).length }} accountable {{ ownersOf(target).length === 1 ? 'owner' : 'owners' }}.
+            </p>
+            <ul class="cr-owners-list">
+              @for (o of ownersOf(target); track o.reference) {
+                <li class="cr-owners-list-item">
+                  <button type="button" class="cr-owners-list-btn" (click)="openOwnerDetail(o)" [attr.aria-label]="'View ' + o.name">
+                    @if (o.avatarUrl && !avatarFailed(o.reference)) {
+                      <img class="cr-avatar cr-avatar-img" [src]="o.avatarUrl" [alt]="o.name" (error)="onAvatarError(o.reference)" />
+                    } @else {
+                      <span class="cr-avatar" [attr.data-tone]="o.tone" aria-hidden="true">{{ o.initials }}</span>
+                    }
+                    <span class="cr-owner-inner">
+                      <span class="cr-owner-name">{{ o.name }}</span>
+                      <span class="cr-owner-context">{{ o.context }}</span>
+                    </span>
+                  </button>
+                </li>
+              }
+            </ul>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-primary" (click)="closeOwnersPopup()">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ SINGLE OWNER DETAIL POPUP — clicking one avatar shows full details ============ -->
+      @if (ownerDetailTarget(); as o) {
+        <div class="cr-modal-backdrop" (click)="closeOwnerDetail()">
+          <div
+            class="cr-modal cr-modal-owner"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-owner-detail-title"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="cr-owner-detail-head">
+              @if (o.avatarUrl && !avatarFailed(o.reference)) {
+                <img class="cr-avatar cr-avatar-lg cr-avatar-img" [src]="o.avatarUrl" [alt]="o.name" (error)="onAvatarError(o.reference)" />
+              } @else {
+                <span class="cr-avatar cr-avatar-lg" [attr.data-tone]="o.tone" aria-hidden="true">{{ o.initials }}</span>
+              }
+              <div>
+                <h2 id="cr-owner-detail-title" class="cr-modal-title">{{ o.name }}</h2>
+                <p class="cr-owner-detail-sub">{{ o.context }}</p>
+              </div>
+            </div>
+            <dl class="cr-kv">
+              <div><dt>Reference</dt><dd class="mono">{{ o.reference }}</dd></div>
+              <div><dt>Role &amp; region</dt><dd>{{ o.context }}</dd></div>
+              @if (o.email) { <div><dt>Email</dt><dd>{{ o.email }}</dd></div> }
+              @if (o.phone) { <div><dt>Phone</dt><dd>{{ o.phone }}</dd></div> }
+            </dl>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-primary" (click)="closeOwnerDetail()">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ EXPORT DIALOG ============ -->
+      @if (exportDialogOpen()) {
+        <div class="cr-modal-backdrop" (click)="cancelExport()">
+          <div
+            class="cr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-export-title"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="cr-export-title" class="cr-modal-title">Confirm Export</h2>
+            <p class="cr-modal-lead">
+              Confirm classification, purpose, scope, count, expiry and audit reference before the
+              protected output is made available.
+            </p>
+            <dl class="cr-kv">
+              <div>
+                <dt>Classification</dt>
+                <dd>{{ exportConfirmation().classification }}</dd>
+              </div>
+              <div>
+                <dt>Purpose</dt>
+                <dd>{{ exportConfirmation().purpose }}</dd>
+              </div>
+              <div>
+                <dt>Scope</dt>
+                <dd>{{ exportConfirmation().scope }}</dd>
+              </div>
+              <div>
+                <dt>Row / file count</dt>
+                <dd>{{ exportConfirmation().rowFileCount }}</dd>
+              </div>
+              <div>
+                <dt>Expiry</dt>
+                <dd>{{ exportConfirmation().expiry }}</dd>
+              </div>
+              <div>
+                <dt>Audit reference</dt>
+                <dd>{{ exportConfirmation().auditReference }}</dd>
+              </div>
+            </dl>
+            <div class="cr-field">
+              <label class="cr-field-label" for="cr-export-reason"
+                >Export reason <span class="cr-conf-tag">Confidential</span></label
+              >
+              <textarea
+                id="cr-export-reason"
+                class="cr-input cr-textarea"
+                rows="3"
+                [ngModel]="exportReason()"
+                (ngModelChange)="exportReason.set($event)"
+                [attr.maxlength]="exportReasonMax"
+                placeholder="Record the meaningful reason for this protected export…"
+              ></textarea>
+              <p
+                class="cr-field-hint"
+                [class.cr-field-error]="exportReasonCount() > 0 && !exportReasonValid()"
+                role="status"
+              >
+                {{ exportReasonCount() }} / {{ exportReasonMax }} characters (minimum
+                {{ exportReasonMin }})
+              </p>
+            </div>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-outline" (click)="cancelExport()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="cr-btn cr-btn-primary"
+                (click)="confirmExport()"
+                [disabled]="!exportReasonValid()"
+              >
+                Confirm export
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ DELETE UNUSED DRAFT DIALOG ============ -->
+      @if (deleteDialogOpen() && deleteTarget()) {
+        <div class="cr-modal-backdrop" (click)="cancelDelete()">
+          <div
+            class="cr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-delete-title"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="cr-delete-title" class="cr-modal-title">Confirm Delete unused draft</h2>
+            <p class="cr-modal-lead">
+              Review the affected record, consequence, reason and effective time. Linked history is
+              preserved; this cannot be undone.
+            </p>
+            <dl class="cr-kv">
+              <div>
+                <dt>Campaign</dt>
+                <dd>{{ deleteTarget()!.name }} · {{ deleteTarget()!.code }}</dd>
+              </div>
+              <div>
+                <dt>Consequence</dt>
+                <dd>Removes an unused draft with no downstream reference</dd>
+              </div>
+              <div>
+                <dt>Resulting state</dt>
+                <dd>Draft deleted · register total reduced by one</dd>
+              </div>
+              <div>
+                <dt>Effective time</dt>
+                <dd>{{ lastRefresh() }}</dd>
+              </div>
+            </dl>
+            <div class="cr-field">
+              <label class="cr-field-label" for="cr-delete-reason"
+                >Reason <span class="cr-conf-tag">Required</span></label
+              >
+              <textarea
+                id="cr-delete-reason"
+                class="cr-input cr-textarea"
+                rows="3"
+                [ngModel]="deleteReason()"
+                (ngModelChange)="deleteReason.set($event)"
+                [attr.maxlength]="deleteReasonMax"
+                placeholder="Record the named reason for deleting this draft…"
+              ></textarea>
+              <p
+                class="cr-field-hint"
+                [class.cr-field-error]="deleteReasonCount() > 0 && !deleteReasonValid()"
+                role="status"
+              >
+                {{ deleteReasonCount() }} / {{ deleteReasonMax }} characters (minimum
+                {{ deleteReasonMin }})
+              </p>
+            </div>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-outline" (click)="cancelDelete()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="cr-btn cr-btn-danger"
+                (click)="confirmDelete()"
+                [disabled]="!deleteReasonValid()"
+              >
+                Delete draft
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Approve dialog — Super Admin or Campaign Manager approving a Submitted campaign
+           (never the campaign's own creator); confirming moves it to Approved then Scheduled. -->
+      @if (approveDialogOpen() && approveTarget()) {
+        <div class="cr-modal-backdrop" (click)="cancelApprove()">
+          <div
+            class="cr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cr-approve-title"
+            (click)="$event.stopPropagation()"
+          >
+            <h2 id="cr-approve-title" class="cr-modal-title">Confirm Approve</h2>
+            <p class="cr-modal-lead">
+              Approving moves this campaign out of Submitted and schedules it for launch.
+            </p>
+            <dl class="cr-kv">
+              <div>
+                <dt>Campaign</dt>
+                <dd>{{ approveTarget()!.name }} · {{ approveTarget()!.code }}</dd>
+              </div>
+              <div>
+                <dt>Before</dt>
+                <dd>Submitted</dd>
+              </div>
+              <div>
+                <dt>After</dt>
+                <dd>Approved → Scheduled</dd>
+              </div>
+              <div>
+                <dt>Effective permission</dt>
+                <dd class="mono">cam.campaign.approve</dd>
+              </div>
+              <div>
+                <dt>Effective time</dt>
+                <dd>{{ lastRefresh() }}</dd>
+              </div>
+            </dl>
+            <div class="cr-modal-actions">
+              <button type="button" class="cr-btn cr-btn-outline" (click)="cancelApprove()">
+                Cancel
+              </button>
+              <button type="button" class="cr-btn cr-btn-primary" (click)="confirmApprove()">
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</main>

@@ -1,0 +1,2 @@
+/*! For license information please see dark-unica.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import DarkUnicaTheme from"../../Extensions/Themes/DarkUnica.js";H.theme=DarkUnicaTheme.options,DarkUnicaTheme.apply();export default H;

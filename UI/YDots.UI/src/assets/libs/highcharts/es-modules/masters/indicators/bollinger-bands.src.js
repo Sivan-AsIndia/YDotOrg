@@ -1,0 +1,2 @@
+/*! For license information please see bollinger-bands.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/BB/BBIndicator.js";export default Highcharts;

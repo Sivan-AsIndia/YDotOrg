@@ -1,0 +1,2 @@
+/*! For license information please see mfi.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/MFI/MFIIndicator.js";export default Highcharts;

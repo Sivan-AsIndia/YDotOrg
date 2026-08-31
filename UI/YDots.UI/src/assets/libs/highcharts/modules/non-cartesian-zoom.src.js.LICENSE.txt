@@ -1,0 +1,11 @@
+/**
+ * @license Highcharts JS v12.3.0 (2025-06-21)
+ * @module highcharts/modules/mouse-wheel-zoom
+ * @requires highcharts
+ *
+ * Non-cartesian series zoom module
+ *
+ * (c) 2024 Hubert Kozik
+ *
+ * License: www.highcharts.com/license
+ */

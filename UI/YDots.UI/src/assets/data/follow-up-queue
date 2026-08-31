@@ -1,0 +1,33 @@
+{
+  "screen": {
+    "viewId": "SCR-DON-008",
+    "title": "Follow-Up Queue",
+    "route": "/fundraising/follow-ups/queue",
+    "purpose": "Daily working screen used by fundraisers, team leads, and managers to execute pending follow-ups.",
+    "primaryAction": "New Follow-Up",
+    "viewPermission": "don.follow-ups.view",
+    "primaryUsers": ["Fundraiser", "Manager"]
+  },
+  "permissions": {
+    "view": true,
+    "complete": true,
+    "reschedule": true,
+    "reassign": true,
+    "cancel": true,
+    "escalate": true
+  },
+  "states": {
+    "pending": "Pending execution",
+    "completed": "Task finished",
+    "cancelled": "Discarded but retained for reporting",
+    "rescheduled": "Moved to future date",
+    "escalated": "Escalated to management"
+  },
+  "actions": [
+    { "id": "complete", "label": "Complete", "permission": "don.follow-ups.complete" },
+    { "id": "reschedule", "label": "Reschedule", "permission": "don.follow-ups.reschedule" },
+    { "id": "reassign", "label": "Reassign", "permission": "don.follow-ups.reassign" },
+    { "id": "cancel", "label": "Cancel", "permission": "don.follow-ups.cancel" },
+    { "id": "escalate", "label": "Escalate", "permission": "don.follow-ups.escalate" }
+  ]
+}

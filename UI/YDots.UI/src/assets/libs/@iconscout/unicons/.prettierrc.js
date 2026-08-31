@@ -1,0 +1,1 @@
+module.exports={tabWidth:2,semi:!1,singleQuote:!0,trailingComma:"all"};

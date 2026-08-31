@@ -1,0 +1,350 @@
+<main class="app-wrapper">
+<div class="page">
+  <!-- Access / scope strip (matches reference pattern) -->
+  <section class="access-strip" aria-label="Access simulator">
+    <div class="access-strip__label">ACCESS SIMULATOR</div>
+    <div class="access-strip__controls">
+      <div class="field-inline">
+        <label class="field-label" for="effectiveRole">Effective role</label>
+        <select id="effectiveRole" class="select select--sm" [(ngModel)]="effectiveRole" (change)="onScopeChange()">
+          <option value="Fundraiser">Fundraiser</option>
+          <option value="Donor Care">Donor Care</option>
+          <option value="Assigned agent">Assigned agent</option>
+          <option value="Supervisor">Supervisor</option>
+          <option value="Integration Operator">Integration Operator</option>
+          <option value="Authorised Administrator">Authorised Administrator</option>
+        </select>
+      </div>
+      <div class="scope-pills" role="group" aria-label="Effective data scope">
+        <button type="button" class="pill" [class.pill--active]="scopeUnits.includes('Donation Operations')" (click)="toggleScope('Donation Operations')">Donation Operations</button>
+        <button type="button" class="pill" [class.pill--active]="scopeUnits.includes('Community Outreach')" (click)="toggleScope('Community Outreach')">Community Outreach</button>
+        <button type="button" class="pill pill--muted">Major Gifts</button>
+        <button type="button" class="pill pill--muted">Corporate Partnerships</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Task header -->
+  <header class="task-header">
+    <div class="task-header__left">
+      <h1 class="task-title">Suppression and contact restriction</h1>
+      <p class="task-meta">
+        <span>{{ filteredRestrictions.length }} restrictions in scope</span>
+        <span class="dot">·</span>
+        <span>Last refreshed {{ lastRefreshed }}</span>
+        <button type="button" class="link-btn" (click)="refresh()">Refresh</button>
+      </p>
+    </div>
+    <div class="task-header__actions">
+      <button type="button" class="btn btn--ghost" (click)="exportList()" [disabled]="!canExport">Export</button>
+      <button type="button" class="btn btn--primary" (click)="openAddPanel()" [disabled]="!canAdd">
+        <span class="btn__icon" aria-hidden="true">+</span>
+        Add restriction
+      </button>
+    </div>
+  </header>
+
+  <!-- Filters + summary -->
+  <section class="filter-card" aria-label="Filters and summary">
+    <div class="filter-row">
+      <div class="field grow">
+        <label class="field-label" for="searchQ">Party, reference or reason</label>
+        <input id="searchQ" type="search" class="input" placeholder="Search within your effective scope…" [(ngModel)]="searchQuery" (input)="applyFilters()" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="filterType">Restriction type</label>
+        <select id="filterType" class="select" [(ngModel)]="filterType" (change)="applyFilters()">
+          <option value="">All types</option>
+          <option value="Channel suppression">Channel suppression</option>
+          <option value="Purpose block">Purpose block</option>
+          <option value="Full contact hold">Full contact hold</option>
+          <option value="Temporary pause">Temporary pause</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="filterChannel">Channel</label>
+        <select id="filterChannel" class="select" [(ngModel)]="filterChannel" (change)="applyFilters()">
+          <option value="">All channels</option>
+          <option value="Email">Email</option>
+          <option value="SMS">SMS</option>
+          <option value="Phone">Phone</option>
+          <option value="WhatsApp">WhatsApp</option>
+          <option value="Postal">Postal</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="filterStatus">Status</label>
+        <select id="filterStatus" class="select" [(ngModel)]="filterStatus" (change)="applyFilters()">
+          <option value="">All statuses</option>
+          <option value="Active">Active</option>
+          <option value="Scheduled">Scheduled</option>
+          <option value="Expired">Expired</option>
+          <option value="Withdrawn">Withdrawn</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="quick-filters">
+      <button type="button" class="chip" [class.chip--active]="quickFilter === 'all'" (click)="setQuick('all')">All restrictions</button>
+      <button type="button" class="chip" [class.chip--active]="quickFilter === 'active'" (click)="setQuick('active')">Active only</button>
+      <button type="button" class="chip" [class.chip--active]="quickFilter === 'mine'" (click)="setQuick('mine')">Recorded by me</button>
+      <button type="button" class="chip" [class.chip--active]="quickFilter === 'review'" (click)="setQuick('review')">Due for review</button>
+    </div>
+
+    <div class="metrics" role="group" aria-label="Scoped totals">
+      <div class="metric">
+        <span class="metric__value">{{ metrics.total }}</span>
+        <span class="metric__label">Restrictions (scoped)</span>
+      </div>
+      <div class="metric">
+        <span class="metric__value">{{ metrics.active }}</span>
+        <span class="metric__label">Active</span>
+      </div>
+      <div class="metric">
+        <span class="metric__value">{{ metrics.dueReview }}</span>
+        <span class="metric__label">Due for review</span>
+      </div>
+      <div class="metric">
+        <span class="metric__value">{{ metrics.expiringSoon }}</span>
+        <span class="metric__label">Expiring ≤ 30 days</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main work area: list of restrictions -->
+  <section class="work-area" aria-label="Restriction list">
+    <!-- Empty state -->
+    <div class="empty-state" *ngIf="!loading && filteredRestrictions.length === 0">
+      <div class="empty-state__icon" aria-hidden="true">⊘</div>
+      <h2 class="empty-state__title">No restrictions match your scope</h2>
+      <p class="empty-state__text">
+        Zero results may come from the current filters, missing setup, or genuinely no records in your effective scope.
+      </p>
+      <div class="empty-state__actions">
+        <button type="button" class="btn btn--ghost" (click)="clearFilters()">Reset filters</button>
+        <button type="button" class="btn btn--primary" (click)="openAddPanel()" *ngIf="canAdd">Add restriction</button>
+      </div>
+    </div>
+
+    <!-- Loading skeleton -->
+    <div class="skeleton-list" *ngIf="loading" aria-busy="true" aria-label="Loading restrictions">
+      <div class="skeleton-card" *ngFor="let i of [1,2,3]"></div>
+    </div>
+
+    <!-- Restriction cards (non-striped, paper surface) -->
+    <ul class="restriction-list" *ngIf="!loading && filteredRestrictions.length > 0" role="list">
+      <li class="restriction-card" *ngFor="let item of filteredRestrictions; trackBy: trackByRef" [attr.data-status]="item.status">
+        <div class="restriction-card__main">
+          <div class="restriction-card__identity">
+            <div class="status-ring" [attr.data-status]="item.status" aria-hidden="true">
+              <span class="status-ring__pct">{{ item.daysLeft ?? '—' }}</span>
+            </div>
+            <div>
+              <div class="restriction-card__title-row">
+                <span class="ref">{{ item.reference }}</span>
+                <h3 class="party-name">{{ item.partyName }}</h3>
+                <span class="badge" [attr.data-status]="item.status">{{ item.status }}</span>
+              </div>
+              <p class="restriction-card__desc">{{ item.restrictionType }} · {{ item.channel }} · {{ item.purposeSummary }}</p>
+              <p class="restriction-card__meta">
+                <span>Recorded by {{ item.recordedBy }}</span>
+                <span class="sep">·</span>
+                <span>{{ item.effectiveFrom }} → {{ item.effectiveTo || 'Open-ended' }}</span>
+                <span class="sep">·</span>
+                <span>{{ item.scopeUnit }}</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="restriction-card__side">
+            <div class="review-info" *ngIf="item.reviewDate">
+              <span class="review-label">Review</span>
+              <span class="review-date" [class.review-date--due]="item.reviewDue">{{ item.reviewDate }}</span>
+            </div>
+            <div class="card-actions">
+              <button type="button" class="btn btn--ghost btn--sm" (click)="reviewHistory(item)" title="Review history">History</button>
+              <button type="button" class="btn btn--ghost btn--sm" (click)="requestException(item)" *ngIf="canRequestException">Exception</button>
+              <button type="button" class="btn btn--danger-ghost btn--sm" (click)="confirmWithdraw(item)" *ngIf="canWithdraw && item.status === 'Active'">Withdraw</button>
+              <button type="button" class="btn btn--primary btn--sm" (click)="openDetail(item)">Open</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reason preview (confidential – only when in scope) -->
+        <div class="restriction-card__reason" *ngIf="item.reasonPreview">
+          <span class="reason-label">Reason</span>
+          <span class="reason-text">{{ item.reasonPreview }}</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Add / Edit restriction panel (slide-over) -->
+  <div class="panel-backdrop" *ngIf="panelOpen" (click)="closePanel()" aria-hidden="true"></div>
+  <aside class="side-panel" [class.side-panel--open]="panelOpen" role="dialog" aria-modal="true" aria-labelledby="panelTitle" *ngIf="panelOpen">
+    <header class="side-panel__header">
+      <h2 id="panelTitle">{{ editingItem ? 'Update restriction' : 'Add restriction' }}</h2>
+      <button type="button" class="icon-btn" (click)="closePanel()" aria-label="Close panel">×</button>
+    </header>
+
+    <div class="side-panel__body">
+      <!-- Persistent outcome banner -->
+      <div class="outcome-banner" *ngIf="lastOutcome" role="status">
+        <strong>Saved successfully.</strong>
+        Reference {{ lastOutcome.reference }}; state {{ lastOutcome.state }}; effective {{ lastOutcome.effectiveTime }}.
+      </div>
+
+      <!-- Validation summary -->
+      <div class="error-summary" *ngIf="validationErrors.length" role="alert">
+        <p class="error-summary__title">Please correct the following:</p>
+        <ul>
+          <li *ngFor="let err of validationErrors">
+            <a href="javascript:void(0)" (click)="focusField(err.field)">{{ err.message }}</a>
+          </li>
+        </ul>
+      </div>
+
+      <form class="form" (ngSubmit)="submitRestriction()" novalidate>
+        <!-- Party reference (read-only when editing / pre-selected) -->
+        <div class="field">
+          <label class="field-label" for="partyRef">Party reference</label>
+          <div class="input-with-action">
+            <input id="partyRef" class="input" type="text" [(ngModel)]="form.partyReference" name="partyReference"
+                   [readonly]="!!editingItem" placeholder="Search or paste stable party reference…" />
+            <button type="button" class="btn btn--ghost btn--sm" *ngIf="!editingItem" (click)="lookupParty()">Lookup</button>
+          </div>
+          <p class="field-hint">Server-derived identity is shown after selection. Copy preserves the exact stable value.</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="restrictionType">Restriction type <span class="req">*</span></label>
+            <select id="restrictionType" class="select" [(ngModel)]="form.restrictionType" name="restrictionType" required>
+              <option value="">Select type…</option>
+              <option value="Channel suppression">Channel suppression</option>
+              <option value="Purpose block">Purpose block</option>
+              <option value="Full contact hold">Full contact hold</option>
+              <option value="Temporary pause">Temporary pause</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="channel">Channel <span class="req">*</span></label>
+            <select id="channel" class="select" [(ngModel)]="form.channel" name="channel" required>
+              <option value="">Select channel…</option>
+              <option value="Email">Email</option>
+              <option value="SMS">SMS</option>
+              <option value="Phone">Phone</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="Postal">Postal</option>
+              <option value="All channels">All channels</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="purpose">Purpose</label>
+          <textarea id="purpose" class="textarea" rows="2" [(ngModel)]="form.purpose" name="purpose"
+                    maxlength="2000" placeholder="Describe the communication purpose being restricted…"></textarea>
+          <div class="char-count">{{ (form.purpose || '').length }} / 2,000</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="effectiveFrom">Effective from <span class="req">*</span></label>
+            <input id="effectiveFrom" type="datetime-local" class="input" [(ngModel)]="form.effectiveFrom" name="effectiveFrom" required />
+            <p class="field-hint">Operating time zone: Asia/Kolkata</p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="effectiveTo">Effective to</label>
+            <input id="effectiveTo" type="datetime-local" class="input" [(ngModel)]="form.effectiveTo" name="effectiveTo" />
+            <p class="field-hint">Leave blank for open-ended</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="reason">Reason <span class="req">*</span></label>
+          <textarea id="reason" class="textarea" rows="3" [(ngModel)]="form.reason" name="reason"
+                    maxlength="2000" required placeholder="Provide a clear, accountable reason (minimum 10 characters)…"></textarea>
+          <div class="char-count">{{ (form.reason || '').length }} / 2,000</div>
+          <p class="field-hint confidential">Confidential — visible only within record scope and purpose</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="evidence">Evidence source</label>
+          <div class="upload-zone" [class.upload-zone--has-file]="form.evidenceName" (click)="triggerUpload()" (keydown.enter)="triggerUpload()" tabindex="0" role="button">
+            <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" />
+            <ng-container *ngIf="!form.evidenceName; else hasFile">
+              <span class="upload-icon" aria-hidden="true">📎</span>
+              <span>Attach approved evidence or link existing record</span>
+              <span class="upload-hint">PDF, images or documents · max 10 MB</span>
+            </ng-container>
+            <ng-template #hasFile>
+              <span class="file-chip">
+                {{ form.evidenceName }}
+                <button type="button" class="file-chip__remove" (click)="clearEvidence($event)" aria-label="Remove file">×</button>
+              </span>
+              <span class="upload-status">Ready · classification pending</span>
+            </ng-template>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="recordedBy">Recorded by</label>
+            <input id="recordedBy" class="input" type="text" [(ngModel)]="form.recordedBy" name="recordedBy" readonly />
+          </div>
+          <div class="field">
+            <label class="field-label" for="reviewDate">Review date</label>
+            <input id="reviewDate" type="date" class="input" [(ngModel)]="form.reviewDate" name="reviewDate" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="overrideAuth">Override authority</label>
+          <input id="overrideAuth" class="input" type="text" [(ngModel)]="form.overrideAuthority" name="overrideAuthority"
+                 placeholder="Only when policy requires explicit authority…" />
+        </div>
+
+        <!-- Decision / review preview -->
+        <div class="decision-preview" *ngIf="form.restrictionType && form.channel">
+          <h3 class="decision-preview__title">Consequence preview</h3>
+          <ul class="decision-preview__list">
+            <li>Communication on <strong>{{ form.channel }}</strong> for the selected purpose will be blocked from the effective start.</li>
+            <li>Evidence and review history will be preserved; the restriction can later be withdrawn with reason.</li>
+            <li>Downstream systems receive the restriction via the approved integration path.</li>
+          </ul>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn--ghost" (click)="closePanel()">Cancel</button>
+          <button type="submit" class="btn btn--primary" [disabled]="submitting">
+            {{ submitting ? 'Saving…' : (editingItem ? 'Save changes' : 'Add restriction') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <!-- High-risk confirmation modal -->
+  <div class="modal-backdrop" *ngIf="confirmModal" (click)="cancelConfirm()"></div>
+  <div class="modal" *ngIf="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle">Confirm {{ confirmModal.action }}</h2>
+    <p>Review the affected record, consequence, reason and effective time.</p>
+    <div class="modal__detail">
+      <p><strong>Reference:</strong> {{ confirmModal.item.reference }}</p>
+      <p><strong>Party:</strong> {{ confirmModal.item.partyName }}</p>
+      <p><strong>Action:</strong> {{ confirmModal.action }}</p>
+    </div>
+    <div class="field" *ngIf="confirmModal.requiresReason">
+      <label class="field-label" for="confirmReason">Named reason <span class="req">*</span></label>
+      <textarea id="confirmReason" class="textarea" rows="2" [(ngModel)]="confirmReason" placeholder="Required for accountable history…"></textarea>
+    </div>
+    <div class="modal__actions">
+      <button type="button" class="btn btn--ghost" (click)="cancelConfirm()">Cancel</button>
+      <button type="button" class="btn btn--danger" (click)="executeConfirm()" [disabled]="confirmModal.requiresReason && !confirmReason.trim()">
+        Confirm {{ confirmModal.action }}
+      </button>
+    </div>
+  </div>
+</div>
+</main>

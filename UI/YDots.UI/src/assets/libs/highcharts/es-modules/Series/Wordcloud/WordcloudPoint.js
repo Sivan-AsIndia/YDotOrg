@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{column:{prototype:{pointClass:ColumnPoint}}}=SeriesRegistry.seriesTypes;import U from"../../Core/Utilities.js";const{extend:extend}=U;class WordcloudPoint extends ColumnPoint{isValid(){return!0}}extend(WordcloudPoint.prototype,{weight:1});export default WordcloudPoint;

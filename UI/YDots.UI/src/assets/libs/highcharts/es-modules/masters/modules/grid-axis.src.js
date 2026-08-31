@@ -1,0 +1,2 @@
+/*! For license information please see grid-axis.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import GridAxis from"../../Core/Axis/GridAxis.js";const G=Highcharts;GridAxis.compose(G.Axis,G.Chart,G.Tick);export default Highcharts;

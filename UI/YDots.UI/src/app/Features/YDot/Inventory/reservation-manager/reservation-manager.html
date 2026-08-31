@@ -1,0 +1,263 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <div class="page-header-gradient mb-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+          <div>
+            <h3 class="mb-1 fw-bold fs-24 inv-title">{{ data.screen.title }}</h3>
+            <p class="mb-0 fs-14 inv-subtitle">{{ data.screen.purpose }}</p>
+            <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+              <span class="text-muted small">Owner: {{ owner }}</span>
+              <span class="text-muted small">Data updated {{ lastRefresh() }}</span>
+              <span class="text-muted small">{{ operatingTimeZone }}</span>
+              <span class="inv-scope-chip">{{ data.screen.scope }}</span>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <span class="iam-status-pill">{{ lifecycleState }}</span>
+            <button class="btn btn-sm btn-outline-secondary" (click)="performAction('Reserve')">
+              <i class="ri-lock-line me-1"></i> Reserve
+            </button>
+          </div>
+        </div>
+      </div>
+
+      @if (uiState() === 'success') {
+        <div class="alert alert-success d-flex align-items-center justify-content-between py-2 mb-3" role="status">
+          <span>Saved successfully. Reference {{ data.screen.viewId }}; state {{ lifecycleState }}; effective {{ lastRefresh() }}.</span>
+          <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+        </div>
+      }
+      @if (uiState() === 'empty') {
+        <div class="empty-state">
+          <div class="empty-state-icon"><i class="ri-file-search-line"></i></div>
+          <h5 class="fw-bold">No records found</h5>
+          <p class="text-muted mb-3">No records match the current scope and filters.</p>
+          <button class="btn btn-outline-primary" (click)="clearFilters()"><i class="ri-filter-off-line me-1"></i> Clear filters</button>
+        </div>
+      }
+      @else {
+        <div class="filter-bar-wrap mb-4">
+          <div class="filter-topbar">
+            <div class="filter-topbar-search">
+              <i class="ri-search-line"></i>
+              <input type="text" placeholder="Search by reservation, item or allocation…"
+                     [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)">
+            </div>
+            <select class="inv-filter-select" [ngModel]="stateFilter()" (ngModelChange)="stateFilter.set($event); currentPage.set(1)">
+              <option value="">All states</option>
+              @for (s of data.reservationStates; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            <button class="btn btn-primary btn-sm px-3" (click)="applyFilter()">
+              <i class="ri-equalizer-line"></i> Filter
+            </button>
+          </div>
+        </div>
+
+        @if (activeFilterSummary().length) {
+          <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+            <span class="fw-active-label">Active Filters:</span>
+            @for (chip of activeFilterSummary(); track chip.key) {
+              <span class="fw-chip">
+                {{ chip.label }}
+                <button type="button" class="fw-chip-x" (click)="removeFilterChip(chip.key)"><i class="ri-close-line"></i></button>
+              </span>
+            }
+            <button type="button" class="fw-link" (click)="clearFilters()">Clear All</button>
+          </div>
+        }
+
+        <div class="card border">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 inv-table">
+              <thead>
+                <tr>
+                  <th width="50"></th>
+                  <th>Reservation ref</th>
+                  <th class="d-none d-md-table-cell">Allocation / Event</th>
+                  <th class="d-none d-sm-table-cell">State</th>
+                  <th>Item</th>
+                  <th class="d-none d-lg-table-cell">Batch</th>
+                  <th class="d-none d-lg-table-cell">Warehouse</th>
+                  <th class="text-end d-none d-sm-table-cell">Qty</th>
+                  <th class="text-end d-none d-md-table-cell">Available</th>
+                  <th class="text-end d-none d-md-table-cell">Reserved</th>
+                  <th class="d-none d-xl-table-cell">Required by</th>
+                  <th class="d-none d-xl-table-cell">Expiry time</th>
+                  <th class="d-none d-sm-table-cell">Status</th>
+                  <th class="text-end d-none d-xxl-table-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of pagedRecords(); track r.reservationReference) {
+                  <tr>
+                    <td>
+                      <button class="btn btn-sm btn-outline-primary inv-plus-btn" title="View details" (click)="openDetail(r)">
+                        <i class="ri-add-line"></i>
+                      </button>
+                    </td>
+                    <td class="small fw-mono">{{ r.reservationReference }}</td>
+                    <td class="d-none d-md-table-cell">
+                      <div class="fw-semibold text-body">{{ r.approvedAllocationOrEvent }}</div>
+                      <div class="text-muted small">{{ r.eventOrAllocation }}</div>
+                    </td>
+                    <td class="d-none d-sm-table-cell"><span class="badge" [class]="stateBadgeClass(r.reservationState)">{{ r.reservationState }}</span></td>
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <div class="inv-avatar">{{ r.itemName.charAt(0) }}</div>
+                        <div>
+                          <span class="fw-semibold text-body">{{ r.item }}</span>
+                          <div class="text-muted small">{{ r.itemName }}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="small fw-mono d-none d-lg-table-cell">{{ r.eligibleBatch }}</td>
+                    <td class="small d-none d-lg-table-cell">{{ r.warehouse }}</td>
+                    <td class="text-end fw-semibold d-none d-sm-table-cell">{{ r.quantity }}</td>
+                    <td class="text-end d-none d-md-table-cell">{{ r.availableQuantity }}</td>
+                    <td class="text-end inv-available d-none d-md-table-cell">{{ r.reservedQuantity }}</td>
+                    <td class="small d-none d-xl-table-cell">{{ r.requiredByDate }}</td>
+                    <td class="small d-none d-xl-table-cell">{{ r.expiryTime }}</td>
+                    <td class="d-none d-sm-table-cell">
+                      <span class="badge" [class]="stateBadgeClass(r.statusHistory.label)">
+                        {{ r.statusHistory.icon }} {{ r.statusHistory.label }}
+                      </span>
+                    </td>
+                    <td class="text-end d-none d-xxl-table-cell">
+                      <button class="btn btn-sm btn-outline-primary" title="Reserve" (click)="performAction('Reserve')"><i class="ri-lock-line"></i></button>
+                      <button class="btn btn-sm btn-outline-warning" title="Release" (click)="performAction('Release')"><i class="ri-unlock-line"></i></button>
+                      <button class="btn btn-sm btn-outline-danger" title="Expire" (click)="performAction('Expire')"><i class="ri-close-line"></i></button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="14" class="text-center text-muted py-4">No records match this scope and filter.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small class="text-muted">Showing <strong>{{ pageStart() }}</strong> to <strong>{{ pageEnd() }}</strong> of <strong>{{ recordCount() }}</strong> records</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" [class.disabled]="currentPage() === 1">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() - 1)"><i class="ri-arrow-left-s-line"></i></a>
+                </li>
+                @for (p of pageNumbers(); track p) {
+                  <li class="page-item" [class.active]="currentPage() === p">
+                    <a class="page-link" href="javascript:void(0)" (click)="goToPage(p)">{{ p }}</a>
+                  </li>
+                }
+                <li class="page-item" [class.disabled]="currentPage() === totalPages()">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() + 1)"><i class="ri-arrow-right-s-line"></i></a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      }
+
+      <div class="row g-3 mt-2">
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-1">Decision / review</h6>
+              <p class="text-muted small mb-3">Risky decisions require review and explicit confirmation before they take effect.</p>
+              <dl class="fw-kv mb-0">
+                <div><dt>Before → after</dt><dd>Reservation state transition with evidence</dd></div>
+                <div><dt>Effective permission</dt><dd>inv.reservation-manager.reserve · release</dd></div>
+                <div><dt>Evidence</dt><dd>{{ recordCount() }} reservations in scope</dd></div>
+                <div><dt>Reason</dt><dd>Release reason required and captured</dd></div>
+                <div><dt>Resulting state</dt><dd>Confirmed lifecycle state shown persistently</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Related and history</h6>
+              <ul class="fw-rel-list" role="list">
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">ALLOC-2025-0231</span>
+                  <span class="fw-rel-secondary">Approved allocation · Educate a Child</span>
+                  <span class="fw-rel-meta">P. Raghavan · 10 Aug 2025</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">SKU-BS-001 · BAT-2025-001</span>
+                  <span class="fw-rel-secondary">Eligible batch · Blind Stick</span>
+                  <span class="fw-rel-meta">R. Kumar · 12 Aug 2025</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">DIST-2025-0112</span>
+                  <span class="fw-rel-secondary">Consumption · Distribution</span>
+                  <span class="fw-rel-meta">P. Nair · 16 Aug 2025</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Persistent outcome</h6>
+              <dl class="fw-kv mb-0">
+                <div><dt>Reference</dt><dd>{{ data.screen.viewId }}</dd></div>
+                <div><dt>State</dt><dd>{{ lifecycleState }}</dd></div>
+                <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+                <div><dt>Downstream status</dt><dd>{{ recordCount() }} reservations in scope</dd></div>
+                <div><dt>Accountable owner</dt><dd>{{ owner }}</dd></div>
+                <div><dt>Next action</dt><dd>Reserve eligible stock</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ROW DETAIL MODAL (responsive popup) ===== -->
+  @if (detailRow(); as r) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom">
+            <h5 class="modal-title fw-bold"><i class="ri-lock-line me-2" style="color: var(--dm-olive);"></i>{{ r.reservationReference }}</h5>
+            <button type="button" class="btn-close" (click)="closeDetail()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2">
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Allocation / Event</small><span class="fw-medium small">{{ r.approvedAllocationOrEvent }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Event / Allocation</small><span class="fw-medium small">{{ r.eventOrAllocation }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">State</small><span class="fw-medium small">{{ r.reservationState }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Item</small><span class="fw-medium small">{{ r.item }} · {{ r.itemName }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Batch</small><span class="fw-medium small">{{ r.eligibleBatch }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Warehouse</small><span class="fw-medium small">{{ r.warehouse }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Qty</small><span class="fw-medium small">{{ r.quantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Available</small><span class="fw-medium small">{{ r.availableQuantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Reserved</small><span class="fw-medium small">{{ r.reservedQuantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Required by</small><span class="fw-medium small">{{ r.requiredByDate }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Expiry time</small><span class="fw-medium small">{{ r.expiryTime }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Status</small><span class="fw-medium small">{{ r.statusHistory.icon }} {{ r.statusHistory.label }}</span></div></div>
+            </div>
+          </div>
+          <div class="modal-footer border-top">
+            <div class="d-flex gap-1 flex-wrap w-100 justify-content-end">
+              <button class="btn btn-sm btn-outline-primary" (click)="performAction('Reserve'); closeDetail()">
+                <i class="ri-lock-line me-1"></i> Reserve
+              </button>
+              <button class="btn btn-sm btn-outline-warning" (click)="performAction('Release'); closeDetail()">
+                <i class="ri-unlock-line me-1"></i> Release
+              </button>
+              <button class="btn btn-sm btn-outline-danger" (click)="performAction('Expire'); closeDetail()">
+                <i class="ri-close-line me-1"></i> Expire
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+</main>

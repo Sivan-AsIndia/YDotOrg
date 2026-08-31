@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";const{getArgumentValue:getArgumentValue}=FormulaProcessor;function OR(r,e){for(let o,t=0,u=r.length;t<u;++t)if(o=getArgumentValue(r[t],e),"object"==typeof o){if(OR(o,e))return!0}else if(o)return!0;return!1}FormulaProcessor.registerProcessorFunction("OR",OR);export default OR;

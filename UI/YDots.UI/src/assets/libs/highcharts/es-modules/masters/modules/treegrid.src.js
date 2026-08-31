@@ -1,0 +1,2 @@
+/*! For license information please see treegrid.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import TreeGridAxis from"../../Core/Axis/TreeGrid/TreeGridAxis.js";const G=Highcharts;TreeGridAxis.compose(G.Axis,G.Chart,G.Series,G.Tick);export default Highcharts;

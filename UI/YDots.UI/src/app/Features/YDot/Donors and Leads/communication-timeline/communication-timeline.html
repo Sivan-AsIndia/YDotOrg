@@ -1,0 +1,665 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+
+      <!-- HEADER -->
+      <header class="ct-header">
+      
+
+        <div class="ct-header-row">
+          <div class="ct-header-titleblock">
+            <div class="ct-title-line">
+              <h1 class="ct-title">{{ relationship().name }} &ndash; Communication Timeline</h1>
+           
+            </div>
+            <p class="ct-subtitle">Track all communication and engagement history.</p>
+        
+          </div>
+
+          <div class="ct-header-actions">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              [disabled]="isRefreshing()"
+              (click)="refreshTimeline()"
+            >
+              {{ isRefreshing() ? 'Refreshing…' : 'Refresh' }}
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openExportModal()">
+              Export Timeline
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="handleOpenMyLeads()">
+              Open My Leads
+            </button>
+          </div>
+        </div>
+
+        <div class="ct-scope-pill">
+          <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true">
+            <path d="M8 1a5 5 0 0 0-5 5c0 3.5 5 9 5 9s5-5.5 5-9a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
+          </svg>
+          <span>{{ relationship().campaign }} &middot; {{ relationship().source }}</span>
+        </div>
+      </header>
+
+      <!-- LEAD SUMMARY CARD -->
+      <section class="ct-card ct-summary-card" aria-label="Lead summary">
+        <div class="ct-summary-grid">
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Lead ID</span>
+            <span class="ct-summary-value">{{ relationship().reference }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Name</span>
+            <span class="ct-summary-value">{{ relationship().name }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Mobile</span>
+            <span class="ct-summary-value">{{ relationship().mobile }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Email</span>
+            <span class="ct-summary-value ct-truncate">{{ relationship().email }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Campaign</span>
+            <span class="ct-summary-value">{{ relationship().campaign }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Lead Source</span>
+            <span class="ct-summary-value">{{ relationship().source }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Owner</span>
+            <span class="ct-summary-value">{{ relationship().owner }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Preferred Contact</span>
+            <span class="ct-summary-value">{{ relationship().preferredContactMethod }} &middot; {{ relationship().bestContactTime }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Stage</span>
+            <span class="ct-summary-value">{{ relationship().stage }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Temperature</span>
+            <span class="ct-badge" [ngClass]="temperatureClass(currentTemperature())">{{ currentTemperature() }}</span>
+          </div>
+          <div class="ct-summary-group">
+            <span class="ct-summary-label">Donation Potential</span>
+            <span class="ct-badge" [ngClass]="donationPotentialClass(donationPotential())">{{ donationPotential() }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI CARDS -->
+      <section class="ct-kpi-grid" aria-label="Communication KPIs">
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-total">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M2 3h12v8H4.5L2 13.5V3Z" /></svg>
+          </span>
+          <span class="ct-kpi-label">Total Communications</span>
+          <span class="ct-kpi-value">{{ totalCommunications() }}</span>
+          <span class="ct-kpi-caption">In this timeline</span>
+        </div>
+
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-calls">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M3 2h3l1.5 3.5L6 7a8 8 0 0 0 3 3l1.5-1.5L14 10v3a1 1 0 0 1-1 1C7.5 14 2 8.5 2 3a1 1 0 0 1 1-1Z" /></svg>
+          </span>
+          <span class="ct-kpi-label">Calls</span>
+          <span class="ct-kpi-value">{{ callsCount() }}</span>
+          <span class="ct-kpi-caption">Logged calls</span>
+        </div>
+
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-meetings">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12"/></svg>
+          </span>
+          <span class="ct-kpi-label">Meetings</span>
+          <span class="ct-kpi-value">{{ meetingsCount() }}</span>
+          <span class="ct-kpi-caption">Logged meetings</span>
+        </div>
+
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-emails">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="1.2"/><path d="m2.5 4 5.5 4 5.5-4"/></svg>
+          </span>
+          <span class="ct-kpi-label">Emails</span>
+          <span class="ct-kpi-value">{{ emailsCount() }}</span>
+          <span class="ct-kpi-caption">Logged emails</span>
+        </div>
+
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-last">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.2l2.2 1.3"/></svg>
+          </span>
+          <span class="ct-kpi-label">Last Contact</span>
+          <span class="ct-kpi-value ct-kpi-value-text">{{ lastContactDisplay() }}</span>
+          <span class="ct-kpi-caption">Most recent touchpoint</span>
+        </div>
+
+        <div class="ct-kpi-card">
+          <span class="ct-kpi-icon ct-kpi-icon-next">
+            <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M5.5 2v3M10.5 2v3"/></svg>
+          </span>
+          <span class="ct-kpi-label">Next Follow-Up</span>
+          <span class="ct-kpi-value ct-kpi-value-text">{{ nextFollowUpDisplay() }}</span>
+          <span class="ct-kpi-caption">Upcoming scheduled action</span>
+        </div>
+      </section>
+
+      <div class="ct-body-grid">
+        <div class="ct-main-column">
+
+          <!-- QUICK ACTION TOOLBAR -->
+          <div class="ct-toolbar">
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Call')">Log Call</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Email')">Log Email</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('SMS')">Log SMS</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('WhatsApp')">Log WhatsApp</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Meeting')">Log Meeting</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Visit')">Log Visit</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Event')">Log Event</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Internal Note')">Add Internal Note</button>
+          </div>
+
+          <!-- TABS + FILTER TOGGLE -->
+          <div class="ct-tabs-row">
+            <div class="ct-tabs" role="tablist" aria-label="Communication type filter">
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'All'" (click)="setTab('All')">All</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'Call'" (click)="setTab('Call')">Calls</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'Email'" (click)="setTab('Email')">Emails</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'SMS'" (click)="setTab('SMS')">SMS</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'WhatsApp'" (click)="setTab('WhatsApp')">WhatsApp</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'Meeting'" (click)="setTab('Meeting')">Meetings</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'Event'" (click)="setTab('Event')">Events</button>
+              <button type="button" class="ct-tab" [class.active]="activeTab() === 'Important'" (click)="setTab('Important')">Important</button>
+            </div>
+
+            <button
+              type="button"
+              class="btn btn-outline-primary btn-sm ct-filters-btn"
+              [class.active]="isFilterOpen()"
+              (click)="toggleFilterPanel()"
+              aria-haspopup="true"
+              [attr.aria-expanded]="isFilterOpen()"
+            >
+              <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M2 3h12l-4.5 5.5V13l-3 1.2V8.5L2 3Z"/></svg>
+              Filters
+            </button>
+          </div>
+
+          <!-- ADVANCED FILTERS -->
+          @if (isFilterOpen()) {
+            <section class="ct-card ct-filters-panel" aria-label="Advanced filters">
+              <div class="ct-filters-grid">
+                <label class="ct-field">
+                  <span class="ct-field-label">Communication Type</span>
+                  <select class="ct-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+                    <option value="All">All Types</option>
+                    @for (type of communicationTypes; track type) {
+                      <option [value]="type">{{ type }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="ct-field">
+                  <span class="ct-field-label">Outcome</span>
+                  <select class="ct-select" [ngModel]="outcomeFilter()" (ngModelChange)="outcomeFilter.set($event)">
+                    <option value="All">All Outcomes</option>
+                    @for (outcome of outcomes; track outcome) {
+                      <option [value]="outcome">{{ outcome }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="ct-field">
+                  <span class="ct-field-label">Direction</span>
+                  <select class="ct-select" [ngModel]="directionFilter()" (ngModelChange)="directionFilter.set($event)">
+                    <option value="All">All</option>
+                    <option value="Incoming">Incoming</option>
+                    <option value="Outgoing">Outgoing</option>
+                  </select>
+                </label>
+
+                <label class="ct-field ct-field-checkbox">
+                  <input type="checkbox" [ngModel]="importantOnly()" (ngModelChange)="importantOnly.set($event)" />
+                  <span>Important only</span>
+                </label>
+
+                <label class="ct-field">
+                  <span class="ct-field-label">From</span>
+                  <input type="date" class="ct-select" [ngModel]="dateFromFilter()" (ngModelChange)="dateFromFilter.set($event)" />
+                </label>
+
+                <label class="ct-field">
+                  <span class="ct-field-label">To</span>
+                  <input type="date" class="ct-select" [ngModel]="dateToFilter()" (ngModelChange)="dateToFilter.set($event)" />
+                </label>
+              </div>
+
+              <div class="ct-filters-actions">
+                <button type="button" class="btn btn-outline-primary btn-sm" (click)="resetFilters()">Reset Filters</button>
+                <button type="button" class="btn btn-primary btn-sm" (click)="isFilterOpen.set(false)">Apply Filters</button>
+              </div>
+            </section>
+          }
+
+          <!-- TIMELINE -->
+          <section class="ct-timeline" aria-label="Communication timeline">
+            @if (filteredRecords().length === 0) {
+              <div class="ct-card ct-empty-state">
+                <p class="ct-empty-title">No communication history available.</p>
+                <div class="ct-empty-actions">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Call')">Log First Call</button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Email')">Log First Email</button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Meeting')">Log First Meeting</button>
+                </div>
+              </div>
+            } @else {
+              @for (record of filteredRecords(); track record.id) {
+                <article class="ct-timeline-card">
+                  <div class="ct-timeline-rail">
+                    <span class="ct-timeline-dot">{{ communicationIcon(record.type) }}</span>
+                    <span class="ct-timeline-line"></span>
+                  </div>
+
+                  <div class="ct-card ct-timeline-content">
+                    <div class="ct-timeline-top">
+                      <div class="ct-timeline-type">
+                        <span class="ct-timeline-type-name">{{ record.type }}</span>
+                        @if (record.important) {
+                          <span class="ct-important" title="Important">&#9733; Important</span>
+                        }
+                      </div>
+
+                      <div class="ct-timeline-menu">
+                        <button
+                          type="button"
+                          class="ct-menu-trigger"
+                          (click)="toggleActionMenu(record)"
+                          aria-haspopup="true"
+                          [attr.aria-expanded]="isActionMenuOpen() && menuRecordId() === record.id"
+                          aria-label="Timeline actions"
+                        >
+                          &#8942;
+                        </button>
+
+                        @if (isActionMenuOpen() && menuRecordId() === record.id) {
+                          <div class="ct-menu" role="menu">
+                            <button type="button" role="menuitem" (click)="openDetails(record)">View Details</button>
+                            <button type="button" role="menuitem" (click)="editCommunication(record)">Edit</button>
+                            <button type="button" role="menuitem" (click)="openTemperatureModal()">Update Temperature</button>
+                            <button type="button" role="menuitem" (click)="openDonationPotentialModal()">Update Donation Potential</button>
+                            <button type="button" role="menuitem" (click)="toggleImportant(record)">
+                              {{ record.important ? 'Unmark Important' : 'Mark Important' }}
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
+
+                    <div class="ct-timeline-meta">
+                      <span>{{ record.date }} &middot; {{ record.time }}</span>
+                      <span class="ct-meta-dot">&middot;</span>
+                      <span>Recorded by {{ record.createdBy }}</span>
+                      <span class="ct-meta-dot">&middot;</span>
+                      <span>{{ record.direction }}</span>
+                    </div>
+
+                    <span class="ct-badge" [ngClass]="outcomeClass(record.outcome)">{{ record.outcome }}</span>
+
+                    <p class="ct-timeline-summary">{{ record.summary | slice: 0:200 }}</p>
+
+                    <div class="ct-timeline-footer">
+                      @if (record.attachment) {
+                        <span class="ct-attachment">&#128206; 1 Attachment</span>
+                      }
+                      @if (record.followUpDate) {
+                        <span class="ct-badge" [ngClass]="followUpStatusClass(record.followUpStatus)">
+                          Follow-Up {{ record.followUpStatus }} &middot; {{ record.followUpDate }}
+                        </span>
+                      }
+                    </div>
+
+                    <div class="ct-timeline-actions">
+                      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openDetails(record)">View Details</button>
+                      <button type="button" class="btn btn-outline-primary btn-sm" (click)="editCommunication(record)">Edit</button>
+                    </div>
+                  </div>
+                </article>
+              }
+            }
+          </section>
+        </div>
+
+        <!-- RIGHT SIDE PANELS -->
+        <aside class="ct-side-column">
+          <section class="ct-card ct-panel" aria-label="Suggested next actions">
+            <h2 class="ct-panel-title">Suggested Next Actions</h2>
+            <div class="ct-suggestion">
+              <span class="ct-suggestion-label">{{ suggestedAction().label }}</span>
+              <p class="ct-suggestion-detail">{{ suggestedAction().detail }}</p>
+              <button type="button" class="btn btn-primary btn-sm" (click)="openFollowUpPlanner()">
+                Act On Suggestion
+              </button>
+            </div>
+          </section>
+
+          <section class="ct-card ct-panel" aria-label="Relationship health">
+            <h2 class="ct-panel-title">Relationship Health</h2>
+            <span class="ct-badge ct-health-badge" [ngClass]="relationshipHealthClass(relationshipHealthStatus())">
+              {{ relationshipHealthStatus() }}
+            </span>
+            <p class="ct-panel-reason">{{ relationshipHealthReason() }}</p>
+          </section>
+
+          <section class="ct-card ct-panel" aria-label="Activity insights">
+            <h2 class="ct-panel-title">Activity Insights</h2>
+            <dl class="ct-insights-list">
+              <div class="ct-insights-row">
+                <dt>Communication Trend</dt>
+                <dd>{{ communicationTrend() }}</dd>
+              </div>
+              <div class="ct-insights-row">
+                <dt>Engagement Trend</dt>
+                <dd>{{ engagementTrend() }}</dd>
+              </div>
+              <div class="ct-insights-row">
+                <dt>Meeting Count</dt>
+                <dd>{{ meetingsCount() }}</dd>
+              </div>
+              <div class="ct-insights-row">
+                <dt>Follow-Up Completion</dt>
+                <dd>{{ followUpCompletionRate() }}%</dd>
+              </div>
+            </dl>
+            <div class="ct-score">
+              <span class="ct-score-label">Lead Health Score</span>
+              <span class="ct-score-value">{{ leadHealthScore() }} / 100</span>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- COMMUNICATION DETAIL DRAWER -->
+@if (isDetailDrawerOpen() && selectedCommunication(); as record) {
+  <div class="ct-overlay" (click)="closeDetails()"></div>
+  <aside class="ct-drawer" role="dialog" aria-modal="true" aria-label="Communication details">
+    <div class="ct-drawer-header">
+      <h2>{{ record.type }} &middot; {{ record.date }}</h2>
+      <button type="button" class="ct-drawer-close" (click)="closeDetails()" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="ct-drawer-body">
+      <div class="ct-detail-row"><span>Type</span><strong>{{ record.type }}</strong></div>
+      <div class="ct-detail-row"><span>Date</span><strong>{{ record.date }}</strong></div>
+      <div class="ct-detail-row"><span>Time</span><strong>{{ record.time }}</strong></div>
+      <div class="ct-detail-row"><span>Direction</span><strong>{{ record.direction }}</strong></div>
+      <div class="ct-detail-row"><span>Outcome</span><strong>{{ record.outcome }}</strong></div>
+      <div class="ct-detail-row"><span>Engagement Level</span><strong>{{ record.engagement }}</strong></div>
+      @if (record.quality) {
+        <div class="ct-detail-row"><span>Communication Quality</span><strong>{{ record.quality }}</strong></div>
+      }
+      <div class="ct-detail-block">
+        <span>Summary</span>
+        <p>{{ record.summary }}</p>
+      </div>
+      @if (record.notes) {
+        <div class="ct-detail-block">
+          <span>Internal Notes</span>
+          <p>{{ record.notes }}</p>
+        </div>
+      }
+      @if (record.attachment) {
+        <div class="ct-detail-row"><span>Attachments</span><strong>&#128206; {{ record.attachment }}</strong></div>
+      }
+      @if (record.followUpDate) {
+        <div class="ct-detail-row">
+          <span>Related Follow-Up</span>
+          <strong>{{ record.followUpStatus }} &middot; {{ record.followUpDate }}</strong>
+        </div>
+      }
+    </div>
+
+    <div class="ct-drawer-footer">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="editCommunication(record)">Edit</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openTemperatureModal()">Update Temperature</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openDonationPotentialModal()">Update Donation Potential</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDetails()">Close</button>
+    </div>
+  </aside>
+}
+
+<!-- LOG COMMUNICATION DRAWER -->
+@if (isEntryDrawerOpen()) {
+  <div class="ct-overlay" (click)="closeEntryDrawer()"></div>
+  <aside class="ct-drawer" role="dialog" aria-modal="true" aria-label="Log communication">
+    <div class="ct-drawer-header">
+      <h2>{{ editingId() ? 'Edit Communication' : 'Log Communication' }}</h2>
+      <button type="button" class="ct-drawer-close" (click)="closeEntryDrawer()" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="ct-drawer-body">
+      @if (formErrors().length) {
+        <div class="ct-form-errors" role="alert">
+          <ul>
+            @for (error of formErrors(); track error) {
+              <li>{{ error }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <label class="ct-field">
+        <span class="ct-field-label">Communication Type <em>*</em></span>
+        <select class="ct-select" [ngModel]="form().type" (ngModelChange)="updateForm('type', $event)">
+          @for (type of communicationTypes; track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="ct-field-row">
+        <label class="ct-field">
+          <span class="ct-field-label">Communication Date <em>*</em></span>
+          <input
+            type="date"
+            class="ct-select"
+            [ngModel]="form().date"
+            [attr.max]="getTodayIso()"
+            (ngModelChange)="updateForm('date', $event)"
+          />
+        </label>
+
+        <label class="ct-field">
+          <span class="ct-field-label">Communication Time <em>*</em></span>
+          <input type="time" class="ct-select" [ngModel]="form().time" (ngModelChange)="updateForm('time', $event)" />
+        </label>
+      </div>
+
+      <label class="ct-field">
+        <span class="ct-field-label">Direction <em>*</em></span>
+        <select class="ct-select" [ngModel]="form().direction" (ngModelChange)="updateForm('direction', $event)">
+          <option value="Incoming">Incoming</option>
+          <option value="Outgoing">Outgoing</option>
+        </select>
+      </label>
+
+      <label class="ct-field">
+        <span class="ct-field-label">Outcome <em>*</em></span>
+        <select class="ct-select" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)">
+          @for (outcome of outcomes; track outcome) {
+            <option [value]="outcome">{{ outcome }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="ct-field-row">
+        <label class="ct-field">
+          <span class="ct-field-label">Engagement Level <em>*</em></span>
+          <select class="ct-select" [ngModel]="form().engagement" (ngModelChange)="updateForm('engagement', $event)">
+            @for (level of engagementLevels; track level) {
+              <option [value]="level">{{ level }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="ct-field">
+          <span class="ct-field-label">Communication Quality <em>*</em></span>
+          <select class="ct-select" [ngModel]="form().quality" (ngModelChange)="updateForm('quality', $event)">
+            @for (quality of qualities; track quality) {
+              <option [value]="quality">{{ quality }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <label class="ct-field">
+        <span class="ct-field-label">
+          Summary <em>*</em>
+          <span class="ct-char-count">{{ form().summary.length }}/2000</span>
+        </span>
+        <textarea
+          class="ct-textarea"
+          rows="4"
+          maxlength="2000"
+          [ngModel]="form().summary"
+          (ngModelChange)="updateForm('summary', $event)"
+        ></textarea>
+      </label>
+
+      <label class="ct-field">
+        <span class="ct-field-label">
+          Internal Notes
+          <span class="ct-char-count">{{ form().notes.length }}/3000</span>
+        </span>
+        <textarea
+          class="ct-textarea"
+          rows="3"
+          maxlength="3000"
+          [ngModel]="form().notes"
+          (ngModelChange)="updateForm('notes', $event)"
+        ></textarea>
+      </label>
+
+      <label class="ct-field">
+        <span class="ct-field-label">Attachments <span class="ct-hint">PDF, DOCX, PNG, JPG &middot; Max 10MB</span></span>
+        <input type="file" class="ct-file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onAttachmentSelected($event)" />
+        @if (form().attachmentName) {
+          <span class="ct-attachment">&#128206; {{ form().attachmentName }}</span>
+        }
+      </label>
+
+      <label class="ct-field ct-field-checkbox">
+        <input type="checkbox" [ngModel]="form().important" (ngModelChange)="updateForm('important', $event)" />
+        <span>Important Communication</span>
+      </label>
+    </div>
+
+    <div class="ct-drawer-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeEntryDrawer()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" (click)="saveCommunication()">Save Communication</button>
+    </div>
+  </aside>
+}
+
+<!-- UPDATE TEMPERATURE MODAL -->
+@if (isTemperatureModalOpen()) {
+  <div class="ct-overlay" (click)="closeTemperatureModal()"></div>
+  <div class="ct-modal" role="dialog" aria-modal="true" aria-label="Update temperature">
+    <h2 class="ct-modal-title">Update Temperature</h2>
+
+    <div class="ct-detail-row"><span>Current Temperature</span><strong>{{ currentTemperature() }}</strong></div>
+
+    <label class="ct-field">
+      <span class="ct-field-label">New Temperature <em>*</em></span>
+      <select class="ct-select" [ngModel]="newTemperature()" (ngModelChange)="newTemperature.set($event)">
+        @for (temperature of temperatures; track temperature) {
+          <option [value]="temperature">{{ temperature }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="ct-field">
+      <span class="ct-field-label">Reason <em>*</em></span>
+      <textarea
+        class="ct-textarea"
+        rows="3"
+        [ngModel]="temperatureReason()"
+        (ngModelChange)="temperatureReason.set($event)"
+      ></textarea>
+    </label>
+
+    <div class="ct-modal-footer">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeTemperatureModal()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="!temperatureReason().trim()" (click)="saveTemperature()">
+        Save
+      </button>
+    </div>
+  </div>
+}
+
+<!-- UPDATE DONATION POTENTIAL MODAL -->
+@if (isDonationPotentialModalOpen()) {
+  <div class="ct-overlay" (click)="closeDonationPotentialModal()"></div>
+  <div class="ct-modal" role="dialog" aria-modal="true" aria-label="Update donation potential">
+    <h2 class="ct-modal-title">Update Donation Potential</h2>
+
+    <div class="ct-detail-row"><span>Current Potential</span><strong>{{ donationPotential() }}</strong></div>
+
+    <label class="ct-field">
+      <span class="ct-field-label">New Donation Potential <em>*</em></span>
+      <select class="ct-select" [ngModel]="newDonationPotential()" (ngModelChange)="newDonationPotential.set($event)">
+        @for (potential of donationPotentials; track potential) {
+          <option [value]="potential">{{ potential }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="ct-field">
+      <span class="ct-field-label">Reason <em>*</em></span>
+      <textarea
+        class="ct-textarea"
+        rows="3"
+        [ngModel]="donationPotentialReason()"
+        (ngModelChange)="donationPotentialReason.set($event)"
+      ></textarea>
+    </label>
+
+    <div class="ct-modal-footer">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeDonationPotentialModal()">Cancel</button>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        [disabled]="!donationPotentialReason().trim()"
+        (click)="saveDonationPotential()"
+      >
+        Save
+      </button>
+    </div>
+  </div>
+}
+
+
+<!-- EXPORT MODAL -->
+@if (isExportModalOpen()) {
+  <div class="ct-overlay" (click)="closeExportModal()"></div>
+  <div class="ct-modal ct-modal-sm" role="dialog" aria-modal="true" aria-label="Export timeline">
+    <h2 class="ct-modal-title">Export Timeline</h2>
+    <p class="ct-modal-copy">Choose a format to export the currently filtered communications.</p>
+
+    <div class="ct-export-options">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportAsExcel()">Excel</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportAsPdf()">PDF</button>
+    </div>
+
+    <div class="ct-modal-footer">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeExportModal()">Close</button>
+    </div>
+  </div>
+}

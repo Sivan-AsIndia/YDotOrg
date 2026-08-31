@@ -1,0 +1,236 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <div class="page-header-gradient mb-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+          <div>
+            <h3 class="mb-1 fw-bold fs-24 inv-title">{{ data.screen.title }}</h3>
+            <p class="mb-0 fs-14 inv-subtitle">{{ data.screen.purpose }}</p>
+            <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+              <span class="text-muted small">Owner: {{ owner }}</span>
+              <span class="text-muted small">Data updated {{ lastRefresh() }}</span>
+              <span class="text-muted small">{{ operatingTimeZone }}</span>
+              <span class="inv-scope-chip">{{ data.screen.scope }}</span>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <span class="iam-status-pill">{{ lifecycleState }}</span>
+            <button class="btn btn-sm btn-outline-secondary" (click)="performAction('Freeze/control')">
+              <i class="ri-snowy-line me-1"></i> Freeze/control
+            </button>
+            <button class="btn btn-sm btn-primary" (click)="performAction('Approve adjustment')">
+              <i class="ri-check-double-line me-1"></i> Approve
+            </button>
+          </div>
+        </div>
+      </div>
+
+      @if (uiState() === 'success') {
+        <div class="alert alert-success d-flex align-items-center justify-content-between py-2 mb-3" role="status">
+          <span>Saved successfully. Reference {{ data.screen.viewId }}; state {{ lifecycleState }}; effective {{ lastRefresh() }}.</span>
+          <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+        </div>
+      }
+      @if (uiState() === 'empty') {
+        <div class="empty-state">
+          <div class="empty-state-icon"><i class="ri-file-search-line"></i></div>
+          <h5 class="fw-bold">No records found</h5>
+          <p class="text-muted mb-3">No records match the current scope and filters.</p>
+          <button class="btn btn-outline-primary" (click)="clearFilters()"><i class="ri-filter-off-line me-1"></i> Clear filters</button>
+        </div>
+      }
+      @else {
+        <div class="filter-bar-wrap mb-4">
+          <div class="filter-topbar">
+            <div class="filter-topbar-search">
+              <i class="ri-search-line"></i>
+              <input type="text" placeholder="Search by session ref, warehouse or item…"
+                     [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)">
+            </div>
+            <button class="btn btn-primary btn-sm px-3" (click)="applyFilter()">
+              <i class="ri-equalizer-line"></i> Filter
+            </button>
+          </div>
+        </div>
+
+        <div class="card border">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 inv-table">
+              <thead>
+                <tr>
+                  <th width="50"></th>
+                  <th>Count session</th>
+                  <th class="d-none d-md-table-cell">Warehouse / Zone</th>
+                  <th class="d-none d-lg-table-cell">Count date</th>
+                  <th class="d-none d-lg-table-cell">Count team</th>
+                  <th class="text-center d-none d-sm-table-cell">Blind</th>
+                  <th class="text-end d-none d-md-table-cell">Expected</th>
+                  <th>Item / Batch</th>
+                  <th class="text-end d-none d-sm-table-cell">Counted</th>
+                  <th class="text-end d-none d-md-table-cell">System</th>
+                  <th class="text-end d-none d-sm-table-cell">Variance</th>
+                  <th class="d-none d-xl-table-cell">Reason</th>
+                  <th class="d-none d-xl-table-cell">Adjustment</th>
+                  <th class="d-none d-sm-table-cell">Approval state</th>
+                  <th class="text-end d-none d-xxl-table-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of pagedRecords(); track r.countSessionReference) {
+                  <tr>
+                    <td>
+                      <button class="btn btn-sm btn-outline-primary inv-plus-btn" title="View details" (click)="openDetail(r)">
+                        <i class="ri-add-line"></i>
+                      </button>
+                    </td>
+                    <td class="small fw-mono">{{ r.countSessionReference }}</td>
+                    <td class="small d-none d-md-table-cell">{{ r.warehouseAndZone }}</td>
+                    <td class="small d-none d-lg-table-cell">{{ r.countDate }}</td>
+                    <td class="small d-none d-lg-table-cell">{{ r.countTeam }}</td>
+                    <td class="text-center d-none d-sm-table-cell">{{ r.blindCountSetting ? '✓' : '—' }}</td>
+                    <td class="text-end d-none d-md-table-cell">{{ r.expectedItems }}</td>
+                    <td class="small fw-mono">{{ r.countedItemAndBatch }}</td>
+                    <td class="text-end fw-semibold d-none d-sm-table-cell">{{ r.countedQuantity }}</td>
+                    <td class="text-end d-none d-md-table-cell">{{ r.systemQuantity }}</td>
+                    <td class="text-end fw-semibold inv-warn-text d-none d-sm-table-cell">{{ r.variance }}</td>
+                    <td class="small inv-reason d-none d-xl-table-cell">{{ r.varianceReason }}</td>
+                    <td class="small fw-mono d-none d-xl-table-cell">{{ r.adjustmentProposal }}</td>
+                    <td class="d-none d-sm-table-cell">
+                      <span class="badge" [class]="toneBadgeClass(r.approvalState.tone)">
+                        {{ r.approvalState.icon }} {{ r.approvalState.label }}
+                      </span>
+                    </td>
+                    <td class="text-end d-none d-xxl-table-cell">
+                      <button class="btn btn-sm btn-outline-primary" title="Count" (click)="performAction('Count')"><i class="ri-tally-line"></i></button>
+                      <button class="btn btn-sm btn-outline-warning" title="Recount" (click)="performAction('Recount')"><i class="ri-refresh-line"></i></button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="15" class="text-center text-muted py-4">No records match this scope and filter.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small class="text-muted">Showing <strong>{{ pageStart() }}</strong> to <strong>{{ pageEnd() }}</strong> of <strong>{{ recordCount() }}</strong> records</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" [class.disabled]="currentPage() === 1">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() - 1)"><i class="ri-arrow-left-s-line"></i></a>
+                </li>
+                @for (p of pageNumbers(); track p) {
+                  <li class="page-item" [class.active]="currentPage() === p">
+                    <a class="page-link" href="javascript:void(0)" (click)="goToPage(p)">{{ p }}</a>
+                  </li>
+                }
+                <li class="page-item" [class.disabled]="currentPage() === totalPages()">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() + 1)"><i class="ri-arrow-right-s-line"></i></a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      }
+
+      <div class="row g-3 mt-2">
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-1">Decision / review</h6>
+              <p class="text-muted small mb-3">Variance adjustments require independent review and explicit confirmation.</p>
+              <dl class="fw-kv mb-0">
+                <div><dt>Before → after</dt><dd>Counted vs System qty with variance</dd></div>
+                <div><dt>Effective permission</dt><dd>inv.stock-count-session.count · approve</dd></div>
+                <div><dt>Evidence</dt><dd>{{ recordCount() }} count sessions in scope</dd></div>
+                <div><dt>Reason</dt><dd>Variance reason required for reconciliation</dd></div>
+                <div><dt>Resulting state</dt><dd>Approval state shown persistently</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Related and history</h6>
+              <ul class="fw-rel-list" role="list">
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">CSC-2025-0201</span>
+                  <span class="fw-rel-secondary">Count · Zone A · Chennai</span>
+                  <span class="fw-rel-meta">Team 1 · 22 Aug 2025</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">ADJ-2025-0033</span>
+                  <span class="fw-rel-secondary">Adjustment proposal</span>
+                  <span class="fw-rel-meta">S. Iyer · 22 Aug 2025</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">IMG-2025-0401</span>
+                  <span class="fw-rel-secondary">Evidence photo</span>
+                  <span class="fw-rel-meta">Uploaded · 22 Aug 2025</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Persistent outcome</h6>
+              <dl class="fw-kv mb-0">
+                <div><dt>Reference</dt><dd>{{ data.screen.viewId }}</dd></div>
+                <div><dt>State</dt><dd>{{ lifecycleState }}</dd></div>
+                <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+                <div><dt>Downstream status</dt><dd>{{ recordCount() }} sessions in scope</dd></div>
+                <div><dt>Accountable owner</dt><dd>{{ owner }}</dd></div>
+                <div><dt>Next action</dt><dd>Approve pending variance</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ROW DETAIL MODAL (responsive popup) ===== -->
+  @if (detailRow(); as r) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom">
+            <h5 class="modal-title fw-bold"><i class="ri-tally-line me-2" style="color: var(--dm-olive);"></i>{{ r.countSessionReference }}</h5>
+            <button type="button" class="btn-close" (click)="closeDetail()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2">
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Warehouse / Zone</small><span class="fw-medium small">{{ r.warehouseAndZone }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Count date</small><span class="fw-medium small">{{ r.countDate }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Count team</small><span class="fw-medium small">{{ r.countTeam }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Blind count</small><span class="fw-medium small">{{ r.blindCountSetting ? 'Yes' : 'No' }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Expected items</small><span class="fw-medium small">{{ r.expectedItems }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Item / Batch</small><span class="fw-medium small">{{ r.countedItemAndBatch }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Counted</small><span class="fw-medium small">{{ r.countedQuantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">System</small><span class="fw-medium small">{{ r.systemQuantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Variance</small><span class="fw-medium small">{{ r.variance }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Recount qty</small><span class="fw-medium small">{{ r.recountQuantity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Reason</small><span class="fw-medium small">{{ r.varianceReason }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Evidence</small><span class="fw-medium small">{{ r.evidence }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Adjustment</small><span class="fw-medium small">{{ r.adjustmentProposal }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Approval state</small><span class="fw-medium small">{{ r.approvalState.icon }} {{ r.approvalState.label }}</span></div></div>
+            </div>
+          </div>
+          <div class="modal-footer border-top">
+            <div class="d-flex gap-1 flex-wrap w-100 justify-content-end">
+              <button class="btn btn-sm btn-outline-primary" (click)="performAction('Count'); closeDetail()">
+                <i class="ri-tally-line me-1"></i> Count
+              </button>
+              <button class="btn btn-sm btn-outline-warning" (click)="performAction('Recount'); closeDetail()">
+                <i class="ri-refresh-line me-1"></i> Recount
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+</main>

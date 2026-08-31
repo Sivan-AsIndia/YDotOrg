@@ -1,0 +1,2 @@
+/*! For license information please see arrow-symbols.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import ArrowSymbols from"../../Extensions/ArrowSymbols.js";const G=Highcharts;ArrowSymbols.compose(G.SVGRenderer);export default Highcharts;

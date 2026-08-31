@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The domain layer stays dependency free on purpose: entities, enums, value
+    objects and event records only use the base class library.
+    TargetFramework, Nullable and ImplicitUsings come from Directory.Build.props.
+  -->
+
+</Project>

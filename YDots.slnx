@@ -1,0 +1,40 @@
+<Solution>
+  <Folder Name="/Services/" />
+  <Folder Name="/Services/CAM/">
+    <Project Path="Services/CAM/YDots.CAM.API/YDots.CAM.API.csproj" Id="78343b50-2f62-4e7a-a1c0-7858a34cff39" />
+    <Project Path="Services/CAM/YDots.CAM.Application/YDots.CAM.Application.csproj" Id="30fd139c-da3a-4017-a399-ae246bca36f9" />
+    <Project Path="Services/CAM/YDots.CAM.Domain/YDots.CAM.Domain.csproj" Id="4765a594-98b4-4194-8e33-97eda388aea0" />
+    <Project Path="Services/CAM/YDots.CAM.Infrastructure/YDots.CAM.Infrastructure.csproj" Id="499a564a-9446-4152-90b3-fead35b55932" />
+  </Folder>
+  <Folder Name="/Services/DON/">
+    <File Path="Services/DON/Directory.Build.props" />
+    <File Path="Services/DON/Directory.Packages.props" />
+    <Project Path="Services/DON/YDots.DON.Api/YDots.DON.Api.csproj" Id="01b5dc59-2505-4794-82ec-b6ffe4afb00f" />
+    <Project Path="Services/DON/YDots.DON.Application/YDots.DON.Application.csproj" Id="feb725d0-2ce0-4b1d-99d0-f26d23b7c17c" />
+    <Project Path="Services/DON/YDots.DON.Domain/YDots.DON.Domain.csproj" Id="ed5e8aad-9b2f-446f-8933-25033ec01258" />
+    <Project Path="Services/DON/YDots.DON.Infrastructure/YDots.DON.Infrastructure.csproj" Id="1cbe088b-bb65-4467-a97c-16db420f6f57" />
+  </Folder>
+  <Folder Name="/Services/IAM/">
+    <Project Path="Services/IAM/YDot.IAM.Api/YDot.IAM.Api.csproj" Id="93bbe51b-2b72-4896-9e0a-6b8152d1b3c9" />
+    <Project Path="Services/IAM/YDot.IAM.Application/YDot.IAM.Application.csproj" Id="852923c1-68de-4c58-830d-41ea2ebafbeb" />
+    <Project Path="Services/IAM/YDot.IAM.Domain/YDot.IAM.Domain.csproj" Id="dfe03cf5-29e0-43f2-a8e9-c91b39ab3d3c" />
+    <Project Path="Services/IAM/YDot.IAM.Infrastructure/YDot.IAM.Infrastructure.csproj" Id="28225ed9-0fe2-422e-879c-6c8688c73be8" />
+  </Folder>
+  <Folder Name="/Services/PAY/">
+    <Project Path="Services/PAY/YDot.PAY.Api/YDot.PAY.Api.csproj" Id="7714238d-ca63-483a-b556-ae4dc3049584" />
+    <Project Path="Services/PAY/YDot.PAY.Application/YDot.PAY.Application.csproj" Id="b03f0739-6bc4-452b-89c6-92f43c281ca2" />
+    <Project Path="Services/PAY/YDot.PAY.Domain/YDot.PAY.Domain.csproj" Id="94b0ba2f-9e2f-4205-86e7-6e89caf4e795" />
+    <Project Path="Services/PAY/YDot.PAY.Infrastructure/YDot.PAY.Infrastructure.csproj" Id="18ea4985-fa3f-4105-80cf-54ce14a38522" />
+  </Folder>
+  <Folder Name="/UI/">
+    <File Path="UI/YDots.UI/angular.json" />
+    <File Path="UI/YDots.UI/package.json" />
+    <File Path="UI/YDots.UI/tsconfig.json" />
+    <File Path="UI/YDots.UI/Dockerfile" />
+    <File Path="UI/YDots.UI/nginx.conf" />
+    <File Path="UI/YDots.UI/README.md" />
+  </Folder>
+  <Project Path="docker-compose.dcproj">
+    <Build />
+  </Project>
+</Solution>

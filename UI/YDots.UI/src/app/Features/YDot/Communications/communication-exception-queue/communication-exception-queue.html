@@ -1,0 +1,276 @@
+<main class="app-wrapper">
+<div class="page">
+
+  <!-- ============ Header ============ -->
+  <header class="page-header">
+    <div class="heading-block">
+      <p class="eyebrow">Engagement · Integration Operator / Supervisor</p>
+      <h1>Communication exception queue</h1>
+      <p class="subtitle">
+        {{ filteredCount }} of {{ totalInScope }} exceptions in scope
+        <span class="dot">·</span>
+        Last refreshed {{ lastRefreshed }}
+        <button type="button" class="link-btn" (click)="refresh()">Refresh</button>
+      </p>
+    </div>
+
+    <div class="state-preview" role="group" aria-label="Preview UI state for design review">
+      <span class="state-preview-label">Preview state</span>
+      <div class="segmented">
+        <button
+          type="button"
+          *ngFor="let s of previewStates"
+          [class.active]="viewState === s.key"
+          (click)="setViewState(s.key)"
+        >{{ s.label }}</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ Stat cards ============ -->
+  <section class="stats-row" *ngIf="viewState === 'normal'">
+    <div class="stat-card">
+      <span class="stat-value">{{ totalInScope }}</span>
+      <span class="stat-label">Total in scope</span>
+    </div>
+    <div class="stat-card accent-retry">
+      <span class="stat-value">{{ retryingCount }}</span>
+      <span class="stat-label">Retrying</span>
+    </div>
+    <div class="stat-card accent-escalate">
+      <span class="stat-value">{{ escalatedCount }}</span>
+      <span class="stat-label">Escalated</span>
+    </div>
+    <div class="stat-card accent-suppress">
+      <span class="stat-value">{{ suppressedCount }}</span>
+      <span class="stat-label">Suppressed</span>
+    </div>
+  </section>
+
+  <!-- ============ Filters ============ -->
+  <section class="filters-card" *ngIf="viewState === 'normal'" aria-label="Filter exceptions">
+    <div class="filter-field">
+      <label for="failureType">Failure type</label>
+      <select id="failureType" [(ngModel)]="failureTypeFilter">
+        <option *ngFor="let t of failureTypes">{{ t }}</option>
+      </select>
+    </div>
+    <div class="filter-field">
+      <label for="provider">Provider</label>
+      <input id="provider" type="text" placeholder="Search provider…" [(ngModel)]="providerFilter" />
+    </div>
+    <div class="filter-field">
+      <label for="state">State</label>
+      <select id="state" [(ngModel)]="stateFilter">
+        <option *ngFor="let s of stateOptions">{{ s }}</option>
+      </select>
+    </div>
+    <div class="filter-field">
+      <label for="age">Age</label>
+      <input id="age" type="text" placeholder="e.g. 1h, 2d…" [(ngModel)]="ageFilter" />
+    </div>
+    <button type="button" class="reset-link" (click)="resetFilters()" [disabled]="!hasActiveFilters()">
+      Reset filters
+    </button>
+  </section>
+
+  <!-- ============ Loading state ============ -->
+  <section class="state-panel" *ngIf="viewState === 'loading'" aria-live="polite" aria-busy="true">
+    <span class="sr-only">Loading communication exception queue…</span>
+    <div class="skeleton-row" *ngFor="let i of skeletonRows">
+      <span class="skeleton-chip"></span>
+      <span class="skeleton-line long"></span>
+      <span class="skeleton-line short"></span>
+    </div>
+  </section>
+
+  <!-- ============ Empty state ============ -->
+  <section class="state-panel empty-panel" *ngIf="viewState === 'empty'">
+    <div class="state-icon" aria-hidden="true">📭</div>
+    <h2>No exceptions match this view</h2>
+    <p *ngIf="hasActiveFilters(); else noSetupCopy">
+      Zero results come from your active filters, not from the underlying queue. Adjust or reset them to see more events.
+    </p>
+    <ng-template #noSetupCopy>
+      <p>Zero results come from your current scope — nothing has bounced, been blocked, unmatched or rejected recently.</p>
+    </ng-template>
+    <button type="button" class="btn-secondary" (click)="resetFilters(); setViewState('normal')">Reset filters</button>
+  </section>
+
+  <!-- ============ No access state ============ -->
+  <section class="state-panel no-access-panel" *ngIf="viewState === 'noAccess'">
+    <div class="state-icon" aria-hidden="true">🔒</div>
+    <h2>You don't have access to this queue</h2>
+    <p>Your current role doesn't include permission to view the communication exception queue. Ask an administrator to grant Integration Operator or Supervisor access.</p>
+    <button type="button" class="btn-secondary" (click)="setViewState('normal')">Return to my workspace</button>
+  </section>
+
+  <!-- ============ Conflict banner ============ -->
+  <div class="banner conflict-banner" *ngIf="viewState === 'conflict'" role="alert">
+    <div class="banner-copy">
+      <strong>This record changed after you opened it.</strong>
+      <p>Review the latest version before continuing. Your entered values have been kept.</p>
+    </div>
+    <div class="banner-actions">
+      <button type="button" class="btn-secondary" (click)="setViewState('normal')">Compare</button>
+      <button type="button" class="btn-primary" (click)="setViewState('normal')">Reapply changes</button>
+      <button type="button" class="link-btn" (click)="setViewState('normal')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ============ Dependency failure banner ============ -->
+  <div class="banner dependency-banner" *ngIf="viewState === 'dependencyFailure'" role="alert">
+    <div class="banner-copy">
+      <strong>We could not complete the dependent service step.</strong>
+      <p>Your confirmed local result is unchanged. Correlation reference DEP-2026-4471.</p>
+    </div>
+    <div class="banner-actions">
+      <button type="button" class="btn-primary" (click)="setViewState('normal')">Retry dependency</button>
+    </div>
+  </div>
+
+  <!-- ============ Grouped queue ============ -->
+  <section class="queue" *ngIf="viewState === 'normal'">
+    <div class="group" *ngFor="let group of groups">
+      <div class="group-header">
+        <span class="group-badge" [ngClass]="stateBadgeClass(group.state)">{{ group.state }}</span>
+        <span class="group-count">{{ group.records.length }}</span>
+      </div>
+
+      <button
+        type="button"
+        class="record-card"
+        *ngFor="let r of group.records; trackBy: trackById"
+        (click)="openRecord(r)"
+      >
+        <span class="record-icon" [ngClass]="stateBadgeClass(r.state)" aria-hidden="true">{{ failureIcon(r.failureType) }}</span>
+
+        <span class="record-main">
+          <span class="record-top">
+            <span class="record-ref">{{ r.eventReference }}</span>
+            <span class="record-type">{{ r.failureType }}</span>
+            <span class="record-provider">{{ r.provider }}</span>
+          </span>
+          <span class="record-reason">{{ r.failureReason }}</span>
+          <span class="record-meta">
+            <span>Attempts {{ r.attempts }}</span>
+            <span class="dot">·</span>
+            <span>Next retry {{ r.nextRetry }}</span>
+            <span class="dot">·</span>
+            <span>Owner {{ r.owner }}</span>
+          </span>
+        </span>
+
+        <span class="record-side">
+          <span class="record-age">{{ r.age }}</span>
+          <span class="chip" [ngClass]="stateBadgeClass(r.state)">{{ r.state }}</span>
+        </span>
+      </button>
+    </div>
+
+    <p class="no-groups" *ngIf="groups.length === 0">No exceptions match the current filters.</p>
+  </section>
+</div>
+
+<!-- ============ Detail drawer ============ -->
+<div class="scrim" *ngIf="detailOpen" (click)="closeDetail()"></div>
+<aside
+  class="drawer"
+  *ngIf="detailOpen && selected"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="'Exception ' + selected.eventReference"
+>
+  <header class="drawer-header">
+    <div>
+      <p class="eyebrow">{{ selected.failureType }} · {{ selected.provider }}</p>
+      <h2>{{ selected.eventReference }}</h2>
+      <span class="chip" [ngClass]="stateBadgeClass(selected.state)">{{ selected.state }}</span>
+    </div>
+    <button type="button" class="icon-btn" (click)="closeDetail()" aria-label="Close detail panel">✕</button>
+  </header>
+
+  <div class="drawer-body">
+    <section class="detail-section">
+      <h3>Event</h3>
+      <dl>
+        <div><dt>Conversation or message</dt><dd>{{ selected.conversationRef }}</dd></div>
+        <div><dt>Provider response code</dt><dd>{{ selected.providerResponseCode }}</dd></div>
+        <div><dt>Failure reason</dt><dd>{{ selected.failureReason }}</dd></div>
+        <div><dt>Masked payload summary</dt><dd>{{ selected.maskedPayloadSummary }}</dd></div>
+        <div><dt>Attempts</dt><dd>{{ selected.attempts }}</dd></div>
+        <div><dt>Next retry</dt><dd>{{ selected.nextRetry }}</dd></div>
+        <div><dt>Owner</dt><dd>{{ selected.owner }}</dd></div>
+        <div><dt>Age</dt><dd>{{ selected.age }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="detail-section" *ngIf="selected.resolutionAction || selected.resolutionReason">
+      <h3>Resolution history</h3>
+      <dl>
+        <div *ngIf="selected.resolutionAction"><dt>Resolution action</dt><dd>{{ selected.resolutionAction }}</dd></div>
+        <div *ngIf="selected.linkedRecord"><dt>Linked record</dt><dd>{{ selected.linkedRecord }}</dd></div>
+        <div *ngIf="selected.resolutionReason"><dt>Resolution reason</dt><dd>{{ selected.resolutionReason }}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <footer class="drawer-actions">
+    <button type="button" class="btn-primary" (click)="requestAction('retry')">Retry</button>
+    <button type="button" class="btn-secondary" (click)="requestAction('link')">Link</button>
+    <button type="button" class="btn-secondary" (click)="requestAction('suppress')">Suppress</button>
+    <button type="button" class="btn-danger" (click)="requestAction('escalate')">Escalate</button>
+  </footer>
+</aside>
+
+<!-- ============ Action confirmation modal ============ -->
+<div class="scrim" *ngIf="pendingAction" (click)="cancelAction()"></div>
+<div
+  class="modal"
+  *ngIf="pendingAction && selected"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="'Confirm ' + actionLabel(pendingAction)"
+>
+  <h2>Confirm {{ actionLabel(pendingAction) }}</h2>
+  <p class="modal-context">Review the affected record, consequence, reason and effective time before continuing.</p>
+
+  <div class="modal-record">
+    <span class="record-ref">{{ selected.eventReference }}</span>
+    <span class="record-provider">{{ selected.provider }} · {{ selected.failureType }}</span>
+  </div>
+
+  <div class="form-field" *ngIf="pendingAction === 'link'">
+    <label for="linkedRecord">Linked record</label>
+    <input id="linkedRecord" type="text" [(ngModel)]="actionLinkedRecord" placeholder="e.g. PARTY-44210" />
+  </div>
+
+  <div class="form-field">
+    <label for="resolutionReason">
+      Resolution reason
+      <span *ngIf="pendingAction === 'suppress' || pendingAction === 'escalate'" class="required">*</span>
+    </label>
+    <textarea
+      id="resolutionReason"
+      rows="4"
+      maxlength="2000"
+      [(ngModel)]="actionReason"
+      placeholder="Explain the resolution for this record. Minimum 10 characters."
+    ></textarea>
+    <span class="char-count">{{ actionReason.length }}/2,000</span>
+  </div>
+
+  <p class="form-error" *ngIf="actionError" role="alert">{{ actionError }}</p>
+
+  <div class="modal-actions">
+    <button type="button" class="btn-secondary" (click)="cancelAction()">Cancel</button>
+    <button type="button" class="btn-primary" (click)="confirmAction()">Confirm {{ actionLabel(pendingAction) }}</button>
+  </div>
+</div>
+
+<!-- ============ Toast ============ -->
+<div class="toast" *ngIf="toast" [ngClass]="toast.tone" role="status" aria-live="polite">
+  <span>{{ toast.message }}</span>
+  <button type="button" class="icon-btn" (click)="dismissToast()" aria-label="Dismiss notification">✕</button>
+</div>
+</main>

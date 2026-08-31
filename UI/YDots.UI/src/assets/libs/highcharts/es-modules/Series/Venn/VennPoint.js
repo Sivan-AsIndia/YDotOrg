@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{scatter:{prototype:{pointClass:ScatterPoint}}}=SeriesRegistry.seriesTypes;import U from"../../Core/Utilities.js";const{isNumber:isNumber}=U;class VennPoint extends ScatterPoint{isValid(){return isNumber(this.value)}shouldDraw(){return!!this.shapeArgs}}export default VennPoint;

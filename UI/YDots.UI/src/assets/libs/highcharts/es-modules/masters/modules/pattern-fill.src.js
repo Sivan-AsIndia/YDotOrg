@@ -1,0 +1,2 @@
+/*! For license information please see pattern-fill.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import PatternFill from"../../Extensions/PatternFill.js";const G=Highcharts;G.patterns=PatternFill.patterns,PatternFill.compose(G.Chart,G.Series,G.SVGRenderer);export default Highcharts;

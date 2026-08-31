@@ -1,0 +1,6 @@
+@YDot.IAM.Api_HostAddress = http://localhost:5017
+
+GET {{YDot.IAM.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

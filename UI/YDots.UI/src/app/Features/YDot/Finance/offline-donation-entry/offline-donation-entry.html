@@ -1,0 +1,445 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div class="ode-page">
+
+  <!-- ============================================================ -->
+  <!-- PAGE HEADER — flat text header                              -->
+  <!-- ============================================================ -->
+  <header class="ode-header">
+    <div>
+      <!-- <p class="ode-eyebrow">Finance · Donations</p> -->
+      <div class="ode-title-row">
+        <h1 class="ode-title">{{ pageTitle }}</h1>
+        <span class="ode-state-pill">{{ lifecycleState }}</span>
+      </div>
+      <p class="ode-subtitle">{{ pageSubtitle }}</p>
+      <div class="ode-meta">
+        <span>Owner <strong>{{ owner }}</strong></span>
+        <span class="ode-dot">•</span>
+        <span>{{ lastRefresh() }}</span>
+        <span class="ode-dot">•</span>
+        <span>{{ operatingTimeZone }}</span>
+      </div>
+    </div>
+    @if (uiState() !== 'loading' && uiState() !== 'empty' && uiState() !== 'no-access') {
+    <div class="ode-header-actions">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="runDuplicateCheck()" [class.disabled]="!duplicateCheckAllowed()" [attr.aria-disabled]="!duplicateCheckAllowed()">
+        Duplicate check
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" (click)="saveDraft()" [disabled]="!draftAllowed()">
+        <svg class="ode-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Save Draft
+      </button>
+    </div>
+    }
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- OUTCOME PANELS                                               -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'success') {
+    <section class="ode-outcome" role="status" aria-live="polite">
+      <span class="ode-outcome-icon" aria-hidden="true">✓</span>
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">Saved successfully</p>
+        <p class="ode-outcome-detail">
+          Reference <strong>{{ persistentOutcome().reference }}</strong> · state <strong>{{ persistentOutcome().state }}</strong> · effective <strong>{{ persistentOutcome().effectiveTime }}</strong>
+        </p>
+      </div>
+      <button type="button" class="ode-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'validation') {
+    <section class="ode-outcome ode-outcome-danger" role="alert">
+      <span class="ode-outcome-icon ode-outcome-icon-danger" aria-hidden="true">!</span>
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">Review the highlighted fields.</p>
+        <p class="ode-outcome-detail">Required fields are missing or a value does not meet the stated format or range. Correct them to continue; entered safe values are kept.</p>
+      </div>
+      <button type="button" class="ode-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'duplicate') {
+    <section class="ode-outcome ode-outcome-warn" role="alert">
+      <span class="ode-outcome-icon ode-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">Possible duplicate candidates found.</p>
+        <p class="ode-outcome-detail">Review the safe candidate category and comparison route before continuing.</p>
+      </div>
+      <button type="button" class="ode-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'conflict') {
+    <section class="ode-outcome ode-outcome-warn" role="alert">
+      <span class="ode-outcome-icon ode-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">This record changed after you opened it.</p>
+        <p class="ode-outcome-detail">Review the latest version before continuing.</p>
+      </div>
+      <div class="ode-outcome-actions">
+        <a class="ode-link" href="javascript:void(0)" (click)="compareConflict()">Compare</a>
+        <a class="ode-link" href="javascript:void(0)" (click)="reapplyConflictChanges()">Reapply</a>
+        <a class="ode-link" href="javascript:void(0)" (click)="cancelConflict()">Cancel</a>
+      </div>
+    </section>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <section class="ode-outcome ode-outcome-warn" role="alert">
+      <span class="ode-outcome-icon ode-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">We could not complete the dependent service step.</p>
+        <p class="ode-outcome-detail">Your confirmed local result is unchanged. Correlation INT-77333.</p>
+      </div>
+      <button type="button" class="ode-btn ode-btn-outline ode-btn-sm" (click)="retryDependency()">Retry dependency</button>
+    </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- LOADING / EMPTY / NO-ACCESS — replace the form entirely      -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'loading') {
+    <div class="ode-outcome" role="status" aria-live="polite">
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">Loading Offline donation entry…</p>
+      </div>
+      <button type="button" class="ode-btn ode-btn-outline ode-btn-sm" (click)="setUiState('ready')">Cancel</button>
+    </div>
+  }
+  @else if (uiState() === 'empty') {
+    <div class="ode-outcome" role="status">
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">No draft or offline donation record is in scope.</p>
+        <p class="ode-outcome-detail">This can come from scope, filters, missing setup, or genuinely no record yet. Start a new draft to continue.</p>
+      </div>
+      <button type="button" class="ode-btn ode-btn-outline ode-btn-sm" (click)="setUiState('ready')">Start new draft</button>
+    </div>
+  }
+  @else if (uiState() === 'no-access') {
+    <div class="ode-outcome" role="alert">
+      <div class="ode-outcome-text">
+        <p class="ode-outcome-title">This value cannot be displayed with your current access.</p>
+        <p class="ode-outcome-detail">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+      </div>
+      <a class="ode-btn ode-btn-outline ode-btn-sm" href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+    </div>
+  }
+  @else {
+  <!-- ============================================================ -->
+  <!-- REFERENCE STRIP — draft info at a glance                    -->
+  <!-- ============================================================ -->
+  <div class="ode-ref-strip">
+    <div class="ode-ref-item">
+      <span class="ode-ref-label">Draft reference</span>
+      <span class="ode-ref-value mono">{{ draftReference() }}</span>
+    </div>
+    <div class="ode-ref-item">
+      <span class="ode-ref-label">Transaction ref</span>
+      <span class="ode-ref-value mono">{{ transactionReference() }}</span>
+    </div>
+    <div class="ode-ref-item">
+      <span class="ode-ref-label">Approval</span>
+      <span class="ode-ref-value">{{ approvalState().label }}</span>
+    </div>
+    <div class="ode-ref-item">
+      <span class="ode-ref-label">Evidence</span>
+      <span class="ode-ref-value">{{ evidenceStatus().label }}</span>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN FORM — one column centered (max 720px)                 -->
+  <!-- ============================================================ -->
+  <section class="ode-form-wrap" aria-labelledby="ode-form-heading">
+    <h2 id="ode-form-heading" class="ode-visually-hidden">Offline donation entry form</h2>
+
+    <!-- Donation details -->
+    <div class="ode-card">
+      <h3 class="ode-card-title">
+        <span class="ode-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></span>
+        Donation details
+      </h3>
+      <div class="ode-form-body">
+
+        <!-- Instrument type (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Instrument type <span class="ode-req">*</span></span>
+          <span class="ode-select-wrap">
+            <select class="ode-select" [ngModel]="instrumentType()" (ngModelChange)="instrumentType.set($event)" aria-label="Instrument type">
+              <option value="">Select instrument type</option>
+              @for (i of instrumentCatalogue; track i) {
+                <option [value]="i">{{ i }}</option>
+              }
+            </select>
+            <svg class="ode-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+          @if (!instrumentType()) {
+            <span class="ode-field-hint">Enter Instrument type.</span>
+          }
+        </label>
+
+        <!-- Transaction or receipt reference (read-only) -->
+        <div class="ode-field">
+          <span class="ode-field-label">Transaction or receipt reference</span>
+          <span class="ode-readonly mono">{{ transactionReference() }}</span>
+        </div>
+
+        <!-- Donation date (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Donation date <span class="ode-req">*</span> <span class="ode-tz">{{ operatingTimeZone }}</span></span>
+          <input type="date" class="ode-input" [ngModel]="donationDate()" (ngModelChange)="donationDate.set($event)" aria-label="Donation date" />
+          <span class="ode-field-hint" role="status">Interpreted as {{ interpretedDate() }}</span>
+        </label>
+
+        <!-- Amount (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Amount <span class="ode-req">*</span></span>
+          <input
+            type="number"
+            class="ode-input"
+            [ngModel]="amount()"
+            (ngModelChange)="amount.set(toNumber($event))"
+            placeholder="0.00"
+            min="0"
+            [attr.aria-invalid]="amount() !== null && !amountValid()"
+            aria-label="Amount"
+          />
+          @if (amount() !== null && !amountValid()) {
+            <span class="ode-field-hint ode-field-error">Review Amount. The value does not meet the stated format or range.</span>
+          }
+        </label>
+
+        <!-- Currency (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Currency <span class="ode-req">*</span></span>
+          <span class="ode-select-wrap">
+            <select class="ode-select" [ngModel]="currency()" (ngModelChange)="currency.set($event)" aria-label="Currency">
+              @for (c of currencyCatalogue(); track c) {
+                <option [value]="c">{{ c }}</option>
+              }
+            </select>
+            <svg class="ode-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Donor and campaign -->
+    <div class="ode-card">
+      <h3 class="ode-card-title">
+        <span class="ode-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg></span>
+        Donor and campaign
+      </h3>
+      <div class="ode-form-body">
+
+        <!-- Donor (conditional) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Donor</span>
+          <span class="ode-select-wrap">
+            <select class="ode-select" [ngModel]="donor()" (ngModelChange)="donor.set($event)" aria-label="Donor">
+              @for (d of donorOptions; track d.reference) {
+                <option [value]="d.reference">{{ d.name }} · {{ d.context }}</option>
+              }
+            </select>
+            <svg class="ode-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+
+        <!-- Campaign or fund (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Campaign or fund <span class="ode-req">*</span></span>
+          <span class="ode-select-wrap">
+            <select class="ode-select" [ngModel]="campaign()" (ngModelChange)="campaign.set($event)" aria-label="Campaign or fund">
+              <option value="">Select campaign or fund</option>
+              @for (c of campaignOptions; track c.reference) {
+                <option [value]="c.reference">{{ c.label }}</option>
+              }
+            </select>
+            <svg class="ode-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+          @if (!campaign()) {
+            <span class="ode-field-hint">Enter Campaign or fund.</span>
+          }
+        </label>
+
+        <!-- Bank or collection account (required) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Bank or collection account <span class="ode-req">*</span></span>
+          <span class="ode-select-wrap">
+            <select class="ode-select" [ngModel]="bankAccount()" (ngModelChange)="bankAccount.set($event)" aria-label="Bank or collection account">
+              <option value="">Select bank or collection account</option>
+              @for (b of bankAccountOptions; track b.reference) {
+                <option [value]="b.reference">{{ b.label }}</option>
+              }
+            </select>
+            <svg class="ode-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+          @if (!bankAccount()) {
+            <span class="ode-field-hint">Enter Bank or collection account.</span>
+          }
+        </label>
+
+        <!-- Deposit date (conditional) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Deposit date <span class="ode-tz">{{ operatingTimeZone }}</span></span>
+          <input type="date" class="ode-input" [ngModel]="depositDate()" (ngModelChange)="depositDate.set($event)" aria-label="Deposit date" />
+        </label>
+      </div>
+    </div>
+
+    <!-- Evidence and notes -->
+    <div class="ode-card">
+      <h3 class="ode-card-title">
+        <span class="ode-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+        Evidence and notes
+      </h3>
+      <div class="ode-form-body">
+
+        <!-- Evidence document (required, confidential) -->
+        <div class="ode-field">
+          <span class="ode-field-label">Evidence document <span class="ode-req">*</span> <span class="ode-conf">Confidential</span></span>
+          <label class="ode-upload">
+            <input
+              type="file"
+              class="ode-file-input"
+              (change)="evidenceFile.set($event.target.files?.[0]?.name ?? '')"
+              aria-label="Evidence document upload"
+            />
+            <span class="ode-upload-text">
+              @if (evidenceFile()) {
+                {{ evidenceFile() }}
+              } @else {
+                Choose a file — PDF, JPG or PNG up to 10 MB
+              }
+            </span>
+            <span class="ode-upload-btn">Browse</span>
+          </label>
+          <span class="ode-field-hint" role="status">
+            Upload status: {{ evidenceStatus().label }} — upload, scan, classification and link status shown separately before submit.
+          </span>
+          @if (!evidenceFile()) {
+            <span class="ode-field-hint">Enter Evidence document.</span>
+          }
+        </div>
+
+        <!-- Notes (conditional) -->
+        <label class="ode-field">
+          <span class="ode-field-label">Notes</span>
+          <textarea
+            class="ode-input ode-textarea"
+            rows="3"
+            [ngModel]="notes()"
+            (ngModelChange)="notes.set($event)"
+            [attr.maxlength]="notesMax"
+            placeholder="Add notes about the offline donation…"
+          ></textarea>
+          <span class="ode-field-hint" [class.ode-field-error]="notesCount() > 0 && notesCount() < notesMin" role="status">
+            {{ notesCount() }} / {{ notesMax }} characters (minimum {{ notesMin }} when provided)
+          </span>
+        </label>
+
+        <!-- Duplicate candidates (read-only) -->
+        @if (showDuplicateCandidates()) {
+          <div class="ode-duplicates">
+            <span class="ode-field-label">Duplicate candidates</span>
+            <ul class="ode-dup-list" role="list">
+              @for (c of duplicateCandidates; track c) {
+                <li class="ode-dup-row">{{ c }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Duplicate check action -->
+    @if (duplicateCheckAllowed() && !showDuplicateCandidates()) {
+      <div class="ode-action-row">
+        <button type="button" class="ode-btn ode-btn-outline" (click)="runDuplicateCheck()">Run duplicate check</button>
+      </div>
+    }
+    @if (showDuplicateCandidates()) {
+      <div class="ode-action-row">
+        <button type="button" class="ode-btn ode-btn-outline" (click)="showDuplicateCandidates.set(false); uiState.set('ready')">Dismiss candidates</button>
+      </div>
+    }
+
+    <!-- Form footer: submit / delete -->
+    <div class="ode-form-footer">
+      <span class="ode-readonly ode-readonly-small">Draft reference: {{ draftReference() }} · Approval: {{ approvalState().label }}</span>
+      <div class="ode-form-actions">
+        <button type="button" class="btn btn-danger btn-sm" [title]="deleteDraftTitle()" (click)="openDeleteDialog()" [class.disabled]="!deleteDraftAllowed()" [attr.aria-disabled]="!deleteDraftAllowed()">
+          Delete unused draft
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" [title]="submitTitle()" (click)="submit()" [class.disabled]="!submitAllowed()" [attr.aria-disabled]="!submitAllowed()">
+          Submit
+        </button>
+      </div>
+    </div>
+  </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- DELETE UNUSED DRAFT DIALOG                                   -->
+  <!-- ============================================================ -->
+  @if (deleteDialogOpen()) {
+    <div class="ode-modal-backdrop" (click)="cancelDelete()">
+      <div class="ode-modal" role="dialog" aria-modal="true" aria-labelledby="ode-delete-title" (click)="$event.stopPropagation()">
+        <h2 id="ode-delete-title" class="ode-modal-title">Confirm Delete unused draft</h2>
+        <p class="ode-modal-lead">Review the affected record, consequence, reason and effective time. Linked history is preserved; this cannot be undone.</p>
+        <dl class="ode-kv">
+          <div>
+            <dt>Draft</dt>
+            <dd class="mono">{{ draftReference() }}</dd>
+          </div>
+          <div>
+            <dt>Consequence</dt>
+            <dd>Removes an unused draft with no downstream reference</dd>
+          </div>
+          <div>
+            <dt>Resulting state</dt>
+            <dd>Draft deleted · transaction reference retained</dd>
+          </div>
+          <div>
+            <dt>Effective time</dt>
+            <dd>{{ lastRefresh() }}</dd>
+          </div>
+        </dl>
+        <div class="ode-field">
+          <label class="ode-field-label" for="ode-delete-reason">Reason <span class="ode-req">*</span></label>
+          <textarea
+            id="ode-delete-reason"
+            class="ode-input ode-textarea"
+            rows="3"
+            [ngModel]="deleteReason()"
+            (ngModelChange)="deleteReason.set($event)"
+            [attr.maxlength]="deleteReasonMax"
+            placeholder="Record the named reason for deleting this draft…"
+          ></textarea>
+          <span class="ode-field-hint" [class.ode-field-error]="deleteReasonCount() > 0 && !deleteReasonValid()" role="status">
+            {{ deleteReasonCount() }} / {{ deleteReasonMax }} characters (minimum {{ deleteReasonMin }})
+          </span>
+        </div>
+        <div class="ode-modal-actions">
+          <button type="button" class="ode-btn ode-btn-outline" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="ode-btn ode-btn-danger" (click)="confirmDelete()" [disabled]="!deleteReasonValid()">Delete draft</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</div>
+</main>

@@ -1,0 +1,443 @@
+<main class="app-wrapper">
+<div class="gc-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER ============ -->
+  <header class="gc-task-header">
+    <div class="gc-header-text">
+      <h1 class="gc-title">{{ pageTitle }}</h1>
+      <p class="gc-subtitle">{{ pageSubtitle }}</p>
+    </div>
+
+    @if (permissions().manage) {
+      <div class="gc-header-actions">
+        <button type="button" class="gc-btn gc-btn-primary gc-btn-sm" (click)="openAdd()">
+          <svg class="gc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add an account
+        </button>
+      </div>
+    }
+  </header>
+
+  @switch (uiState()) {
+    @case ('no-access') {
+      <section class="gc-state gc-state-blocked" role="status">
+        <h2 class="gc-state-title">You do not have access to the gateway configuration</h2>
+        <p class="gc-state-body">
+          This screen decides where an organisation’s donations settle, so it needs the
+          <code>pay.gateway.view</code> permission. Ask an administrator rather than trying
+          another route — the server refuses this data whichever screen asks.
+        </p>
+      </section>
+    }
+
+    @case ('loading') {
+      <section class="gc-state" role="status" aria-live="polite">
+        <h2 class="gc-state-title">Loading the gateway configuration…</h2>
+      </section>
+    }
+
+    @case ('error') {
+      <section class="gc-state gc-state-error" role="alert">
+        <h2 class="gc-state-title">The configuration could not be loaded</h2>
+        <p class="gc-state-body">{{ errorMessage() }}</p>
+        <button type="button" class="gc-btn gc-btn-outline gc-btn-sm" (click)="load()">Try again</button>
+      </section>
+    }
+
+    @default {
+      <!-- ============ THE ANSWER EVERYBODY CAME FOR ============ -->
+      <section
+        class="gc-status"
+        [class.gc-status-good]="canTakeDonations()"
+        [class.gc-status-blocked]="!canTakeDonations()"
+        role="status"
+      >
+        <div class="gc-status-icon" aria-hidden="true">
+          @if (canTakeDonations()) {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          } @else {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v5M12 17.5v.5"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          }
+        </div>
+
+        <div class="gc-status-body">
+          @if (canTakeDonations()) {
+            <h2 class="gc-status-title">This organisation can take donations</h2>
+            <p class="gc-status-note">
+              {{ liveAccount()?.gatewayName }} · merchant {{ liveAccount()?.merchantId }} ·
+              settling in {{ liveAccount()?.settlementCurrencyCode }}
+            </p>
+          } @else {
+            <h2 class="gc-status-title">This organisation cannot take donations</h2>
+            <p class="gc-status-note">{{ blockedReason() }}</p>
+          }
+        </div>
+      </section>
+
+      @if (hasMultipleLiveAccounts()) {
+        <!--
+          TWO LIVE ACCOUNTS IS A REAL PROBLEM, not a warning to dismiss. Donations split between
+          two merchant accounts depending on which the server picks, which is very hard to notice
+          and very unpleasant to unpick at the year end.
+        -->
+        <section class="gc-alert gc-alert-error" role="alert">
+          <strong>More than one live account is active.</strong>
+          Donations may settle into either merchant account. Deactivate all but one.
+        </section>
+      }
+
+      @if (uiState() === 'empty') {
+        <section class="gc-state" role="status">
+          <h2 class="gc-state-title">No gateway account is configured</h2>
+          <p class="gc-state-body">
+            Until one is, the public donation form cannot take payments. Add a test account first
+            and confirm a payment reaches the provider before switching anything live.
+          </p>
+          @if (permissions().manage) {
+            <button type="button" class="gc-btn gc-btn-primary gc-btn-sm" (click)="openAdd()">Add an account</button>
+          }
+        </section>
+      } @else {
+        <!-- ============ THE ACCOUNTS ============ -->
+        <section class="gc-accounts" aria-label="Gateway accounts">
+          @for (account of accounts(); track account.id) {
+            <article class="gc-account" [class.gc-account-test]="account.isTestMode">
+              <header class="gc-account-head">
+                <div class="gc-account-identity">
+                  <h3 class="gc-account-name">{{ account.gatewayName }}</h3>
+                  <p class="gc-account-merchant">Merchant {{ account.merchantId }}</p>
+                </div>
+
+                <div class="gc-account-badges">
+                  <!--
+                    TEST MODE IS THE LOUDEST THING ON THE CARD. A test account mistaken for a live
+                    one produces donations that appear, receipts that issue, and a bank account
+                    that stays empty.
+                  -->
+                  @if (account.isTestMode) {
+                    <span class="gc-badge gc-badge-test">TEST MODE — no real money</span>
+                  } @else {
+                    <span class="gc-badge gc-badge-live">LIVE</span>
+                  }
+
+                  @if (account.isActive) {
+                    <span class="gc-badge gc-badge-good">Active</span>
+                  } @else {
+                    <span class="gc-badge gc-badge-neutral">Inactive</span>
+                  }
+                </div>
+              </header>
+
+              <dl class="gc-account-facts">
+                <div>
+                  <dt>Settlement currency</dt>
+                  <dd>{{ account.settlementCurrencyCode }}</dd>
+                </div>
+
+                <div>
+                  <dt>API key</dt>
+                  <dd>
+                    @if (account.hasApiKey) {
+                      <span class="gc-ok">Configured</span>
+                    } @else {
+                      <span class="gc-missing">Not configured — payments will be refused</span>
+                    }
+                  </dd>
+                </div>
+
+                <div>
+                  <dt>Webhook secret</dt>
+                  <dd>
+                    @if (account.hasWebhookSecret) {
+                      <span class="gc-ok">Configured</span>
+                    } @else {
+                      <span class="gc-missing">Not configured — confirmations cannot be verified</span>
+                    }
+                  </dd>
+                </div>
+
+                <div>
+                  <dt>Payment link validity</dt>
+                  <dd>{{ account.paymentLinkValidityMinutes }} minutes</dd>
+                </div>
+
+                <div>
+                  <dt>Methods</dt>
+                  <dd>{{ account.enabledMethods.length ? account.enabledMethods.join(', ') : 'All the provider allows' }}</dd>
+                </div>
+
+                <div>
+                  <dt>Return URL</dt>
+                  <dd class="gc-url">{{ account.returnUrl ?? 'Not set' }}</dd>
+                </div>
+
+                <div>
+                  <dt>Webhook URL</dt>
+                  <dd class="gc-url">{{ account.webhookUrl ?? 'Not set' }}</dd>
+                </div>
+
+                <div>
+                  <dt>Last changed</dt>
+                  <dd>{{ when(account.updatedAtUtc ?? account.createdAtUtc) }}</dd>
+                </div>
+              </dl>
+
+              @if (account.notes) {
+                <p class="gc-account-notes">{{ account.notes }}</p>
+              }
+
+              @if (permissions().manage) {
+                <footer class="gc-account-actions">
+                  <button type="button" class="gc-btn gc-btn-outline gc-btn-sm" (click)="openEdit(account)">
+                    Edit
+                  </button>
+
+                  @if (account.isActive) {
+                    <button type="button" class="gc-btn gc-btn-danger gc-btn-sm" (click)="deactivate(account)">
+                      Deactivate
+                    </button>
+                  }
+                </footer>
+              }
+            </article>
+          }
+        </section>
+      }
+
+      @if (lastRefresh()) {
+        <p class="gc-refresh-note">Last read {{ lastRefresh() }}</p>
+      }
+    }
+  }
+
+  <!-- ============ THE EDITOR ============ -->
+  @if (editorOpen()) {
+    <div class="gc-modal-backdrop" (click)="closeEditor()">
+      <div class="gc-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="gc-editor-title">
+        <header class="gc-modal-head">
+          <h2 class="gc-modal-title" id="gc-editor-title">
+            {{ editing() ? 'Edit gateway account' : 'Add a gateway account' }}
+          </h2>
+          <button type="button" class="gc-modal-x" (click)="closeEditor()" aria-label="Close">×</button>
+        </header>
+
+        <div class="gc-modal-body">
+          <!--
+            THE SECRETS NOTE IS FIRST, because it is the thing people are most likely to get wrong:
+            these fields hold the NAME of a configuration key, not the key.
+          -->
+          <p class="gc-note">
+            The two secret fields below hold <strong>references</strong> — the names of
+            configuration entries the server resolves when it calls the provider. Never paste an
+            actual API key or webhook secret into a browser form.
+          </p>
+
+          <div class="gc-form-grid">
+            <label class="gc-field">
+              <span class="gc-field-label">Provider</span>
+              <input
+                class="gc-input"
+                list="gc-gateways"
+                [ngModel]="formGatewayName()"
+                (ngModelChange)="formGatewayName.set($event)"
+                [class.gc-invalid]="formSubmitted() && !gatewayNameValid()"
+              />
+              <datalist id="gc-gateways">
+                @for (option of gatewayOptions; track option) {
+                  <option [value]="option"></option>
+                }
+              </datalist>
+              @if (formSubmitted() && !gatewayNameValid()) {
+                <span class="gc-error-text">Name the payment provider.</span>
+              }
+            </label>
+
+            <label class="gc-field">
+              <span class="gc-field-label">Merchant ID</span>
+              <input
+                class="gc-input"
+                [ngModel]="formMerchantId()"
+                (ngModelChange)="formMerchantId.set($event)"
+                [class.gc-invalid]="formSubmitted() && !merchantIdValid()"
+              />
+              @if (formSubmitted() && !merchantIdValid()) {
+                <span class="gc-error-text">
+                  The merchant ID identifies the account the money lands in. It is required.
+                </span>
+              }
+            </label>
+
+            <label class="gc-field">
+              <span class="gc-field-label">Settlement currency</span>
+              <select class="gc-input" [ngModel]="formCurrency()" (ngModelChange)="formCurrency.set($event)">
+                @for (option of currencyOptions(); track option) {
+                  <option [value]="option">{{ option }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="gc-field">
+              <span class="gc-field-label">Payment link validity (minutes)</span>
+              <input
+                type="number"
+                class="gc-input"
+                min="5"
+                max="10080"
+                [ngModel]="formValidityMinutes()"
+                (ngModelChange)="formValidityMinutes.set($event)"
+                [class.gc-invalid]="formSubmitted() && !validityValid()"
+              />
+              @if (formSubmitted() && !validityValid()) {
+                <span class="gc-error-text">Between 5 minutes and 7 days.</span>
+              }
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">
+                API key reference
+                @if (editing()) { <span class="gc-hint">— leave blank to keep the current one</span> }
+              </span>
+              <input
+                class="gc-input"
+                [ngModel]="formApiKeyReference()"
+                (ngModelChange)="formApiKeyReference.set($event)"
+                placeholder="e.g. Payments:Razorpay:Live:ApiKey"
+              />
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">
+                Webhook secret reference
+                @if (editing()) { <span class="gc-hint">— leave blank to keep the current one</span> }
+              </span>
+              <input
+                class="gc-input"
+                [ngModel]="formWebhookSecretReference()"
+                (ngModelChange)="formWebhookSecretReference.set($event)"
+                placeholder="e.g. Payments:Razorpay:Live:WebhookSecret"
+              />
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">Return URL</span>
+              <input
+                class="gc-input"
+                [ngModel]="formReturnUrl()"
+                (ngModelChange)="formReturnUrl.set($event)"
+                [class.gc-invalid]="formSubmitted() && !returnUrlValid()"
+                placeholder="Where the donor is sent after paying"
+              />
+              @if (formSubmitted() && !returnUrlValid()) {
+                <span class="gc-error-text">That is not a valid URL.</span>
+              }
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">Webhook URL</span>
+              <input
+                class="gc-input"
+                [ngModel]="formWebhookUrl()"
+                (ngModelChange)="formWebhookUrl.set($event)"
+                [class.gc-invalid]="formSubmitted() && !webhookUrlValid()"
+                placeholder="https://…"
+              />
+              @if (formSubmitted() && !webhookUrlValid()) {
+                <span class="gc-error-text">
+                  The webhook URL must be HTTPS. A confirmation sent over plain HTTP can be read
+                  and forged by anybody on the path, and that confirmation is what turns a payment
+                  into a recorded donation.
+                </span>
+              }
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">Enabled methods</span>
+              <input
+                class="gc-input"
+                [ngModel]="formEnabledMethods()"
+                (ngModelChange)="formEnabledMethods.set($event)"
+                placeholder="card, netbanking, upi — leave blank for everything the provider allows"
+              />
+            </label>
+
+            <label class="gc-field gc-field-wide">
+              <span class="gc-field-label">Notes</span>
+              <textarea
+                class="gc-input gc-textarea"
+                rows="2"
+                [ngModel]="formNotes()"
+                (ngModelChange)="formNotes.set($event)"
+              ></textarea>
+            </label>
+          </div>
+
+          <!-- ============ THE TWO SWITCHES THAT MATTER ============ -->
+          <div class="gc-switches">
+            <label class="gc-switch">
+              <input type="checkbox" [ngModel]="formIsTestMode()" (ngModelChange)="formIsTestMode.set($event)" />
+              <span class="gc-switch-body">
+                <span class="gc-switch-title">Test mode</span>
+                <span class="gc-switch-note">
+                  No real money moves. Donations appear, receipts issue, and nothing reaches the
+                  bank account — which is exactly why a test account left looking live is dangerous.
+                </span>
+              </span>
+            </label>
+
+            <label class="gc-switch">
+              <input type="checkbox" [ngModel]="formIsActive()" (ngModelChange)="formIsActive.set($event)" />
+              <span class="gc-switch-body">
+                <span class="gc-switch-title">Active</span>
+                <span class="gc-switch-note">
+                  An inactive account is configured and takes nothing. Only one live account should
+                  be active at a time.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          @if (isGoingLive()) {
+            <!--
+              THE ONE CHANGE HERE THAT STARTS MOVING REAL MONEY. A typed confirmation rather than a
+              checkbox, because a checkbox is too easy to tick while thinking about something else.
+            -->
+            <div class="gc-golive" role="alert">
+              <h3 class="gc-golive-title">This will start taking real donations</h3>
+              <p class="gc-golive-note">
+                Saving switches {{ formGatewayName() || 'this provider' }} to live and active.
+                Real payments will settle into merchant account
+                <strong>{{ formMerchantId() || '—' }}</strong> from the moment you save.
+                Type <strong>GO LIVE</strong> to confirm.
+              </p>
+              <input
+                class="gc-input gc-golive-input"
+                [ngModel]="goLiveConfirmation()"
+                (ngModelChange)="goLiveConfirmation.set($event)"
+                placeholder="GO LIVE"
+                aria-label="Type GO LIVE to confirm"
+              />
+              @if (formSubmitted() && !goLiveConfirmed()) {
+                <span class="gc-error-text">Type GO LIVE exactly to confirm.</span>
+              }
+            </div>
+          }
+        </div>
+
+        <footer class="gc-modal-foot">
+          <button type="button" class="gc-btn gc-btn-outline" (click)="closeEditor()">Cancel</button>
+          <button
+            type="button"
+            class="gc-btn"
+            [class.gc-btn-primary]="!isGoingLive()"
+            [class.gc-btn-danger]="isGoingLive()"
+            [disabled]="saving()"
+            (click)="save()"
+          >
+            {{ saving() ? 'Saving…' : isGoingLive() ? 'Save and go live' : 'Save' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+</div>
+</main>

@@ -1,0 +1,186 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  @if (notFound()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-error-warning-line"></i></div>
+      <h3 class="org-empty-title">Organisation not found</h3>
+      <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-primary org-btn-sm">Back to Directory</a>
+    </div>
+  } @else if (organisation(); as org) {
+    <div class="org-breadcrumb">
+      <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+      <span class="sep">/</span>
+      <a [routerLink]="['/app/administration/organisation/organisations', org.id]">{{ org.name }}</a>
+      <span class="sep">/</span>
+      <span class="current">Verify</span>
+    </div>
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title"><span class="org-title-icon"><i class="ri-shield-check-line"></i></span>Verification &amp; Approval</h1>
+        <p class="org-subtitle">Review the submission, then approve or send it back for correction.</p>
+      </div>
+    </div>
+
+    @if (alreadyProcessed()) {
+      <div class="org-banner org-banner-info">
+        <i class="ri-information-line"></i>
+        <span>This organisation is no longer awaiting verification. Current status: <strong>{{ org.status }}</strong>.</span>
+      </div>
+    }
+
+    <div class="org-doc-columns">
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--blue">Organisation Summary</h3>
+      <dl class="org-dl">
+        <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
+        <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id }}</dd></div>
+        <div class="org-dl-row"><dt>Type</dt><dd>{{ org.organisationType }}</dd></div>
+        <div class="org-dl-row"><dt>Owner</dt><dd>{{ org.ownerName }} &middot; {{ org.ownerEmail }}</dd></div>
+        <div class="org-dl-row"><dt>Submitted / Updated</dt><dd>{{ org.updatedDate }}</dd></div>
+        <div class="org-dl-row"><dt>Current Status</dt><dd><span class="org-badge" [ngClass]="org.statusClass">{{ org.status }}</span></dd></div>
+        <div class="org-dl-row"><dt>Verification Status</dt><dd><span class="org-badge" [ngClass]="verificationClass()">{{ verificationLabel() }}</span></dd></div>
+      </dl>
+    </section>
+
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--plum">Organisation Review</h3>
+      <dl class="org-dl">
+        <div class="org-dl-row"><dt>Registration Details</dt><dd>{{ org.legalStructure }} &middot; Reg. No. {{ org.registrationNumber || '—' }}</dd></div>
+        <div class="org-dl-row"><dt>Address</dt><dd>{{ formattedAddress() }}</dd></div>
+        <div class="org-dl-row"><dt>Contact</dt><dd>{{ org.email }} &middot; {{ org.phone }}</dd></div>
+        <div class="org-dl-row"><dt>Owner Details</dt><dd>{{ org.ownerName }} ({{ org.ownerDesignation || 'No designation' }}) &middot; {{ org.ownerEmail }} &middot; {{ org.ownerMobile }}</dd></div>
+        <div class="org-dl-row"><dt>12A</dt><dd [class.is-good]="org.compliance.twelveA.applicable">{{ org.compliance.twelveA.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+        <div class="org-dl-row"><dt>80G</dt><dd [class.is-good]="org.compliance.eightyG.applicable">{{ org.compliance.eightyG.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+        <div class="org-dl-row"><dt>FCRA</dt><dd [class.is-good]="org.compliance.fcra.applicable">{{ org.compliance.fcra.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+        <div class="org-dl-row"><dt>GST</dt><dd [class.is-good]="org.compliance.gst.applicable">{{ org.compliance.gst.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+      </dl>
+    </section>
+
+        <section class="org-doc-section org-doc-section--full">
+          <h3 class="org-doc-heading org-doc-heading--gold">Document Review</h3>
+          <div class="org-doc-list">
+            @for (d of org.documents; track d.id) {
+              <div class="org-doc-row">
+                <span class="org-doc-icon"
+                      [ngClass]="{
+                        'is-good': d.status === 'Accepted',
+                        'is-error': d.status === 'Rejected',
+                        'is-blue': d.status === 'Uploaded' || d.status === 'Under Review'
+                      }"><i class="ri-file-text-line"></i></span>
+                <div class="org-doc-main">
+                  <p class="org-doc-name">
+                    {{ d.name }}
+                    <span class="org-doc-req" [ngClass]="d.required ? 'is-required' : 'is-optional'">{{ d.required ? 'Required' : 'Optional' }}</span>
+                  </p>
+                  <p class="org-doc-meta">
+                    {{ d.status === 'Pending' ? 'Not uploaded' : ('Uploaded ' + (d.uploadedDate || '—')) }}
+                  </p>
+                </div>
+                <span class="org-badge"
+                      [ngClass]="{
+                        'org-badge-muted': d.status === 'Pending' || d.status === 'Not Applicable',
+                        'org-badge-blue': d.status === 'Uploaded' || d.status === 'Under Review',
+                        'org-badge-good': d.status === 'Accepted',
+                        'org-badge-error': d.status === 'Rejected'
+                      }">{{ d.status }}</span>
+              </div>
+            }
+          </div>
+        </section>
+
+    <section class="org-doc-section org-doc-section--full">
+          <h3 class="org-doc-heading">Decision</h3>
+          @if (approveError()) {
+            <div class="org-banner org-banner-error"><i class="ri-error-warning-line"></i><span>{{ approveError() }}</span></div>
+          }
+          @if (!approvalCheck().ok && !alreadyProcessed()) {
+            <div class="org-banner org-banner-warn"><i class="ri-error-warning-line"></i><span>Organisation cannot be approved because required information or applicable documents are incomplete.</span></div>
+          }
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="org-btn org-btn-primary org-btn-sm" [disabled]="alreadyProcessed() || !approvalCheck().ok || approving()" (click)="approve()">
+              @if (approving()) { <span class="org-spinner"></span> Approving... } @else { <i class="ri-checkbox-circle-line"></i> Approve }
+            </button>
+            <button type="button" class="org-btn org-btn-danger-outline org-btn-sm" [disabled]="alreadyProcessed()" (click)="openRequestChanges()">
+              <i class="ri-error-warning-line"></i> Request Changes
+            </button>
+            <a [routerLink]="['/app/administration/organisation/organisations', org.id]" class="org-btn org-btn-ghost org-btn-sm">Back to Organisation Details</a>
+          </div>
+        </section>
+    </div>
+  } @else {
+    <div class="org-breadcrumb">
+      <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+      <span class="sep">/</span>
+      <span class="current">Registration &amp; Verification</span>
+    </div>
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title"><span class="org-title-icon"><i class="ri-shield-check-line"></i></span>Registration &amp; Verification</h1>
+        <p class="org-subtitle">Select an organisation to review its submission, then approve or send it back for correction.</p>
+      </div>
+    </div>
+
+    @if (verificationQueue().length) {
+      <div class="org-card org-card--blue">
+        <div class="org-card-header"><span class="org-card-icon is-blue"><i class="ri-file-list-3-line"></i></span><h2 class="org-card-title">Organisations for Review</h2></div>
+        <div class="org-table-scroll">
+          <table class="org-table">
+            <thead><tr><th>Organisation</th><th>ID</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+              @for (item of verificationQueue(); track item.id) {
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.id }}</td>
+                  <td><span class="org-badge" [ngClass]="item.statusClass">{{ item.status }}</span></td>
+                  <td>{{ item.updatedDate }}</td>
+                  <td class="text-end">
+                    <a [routerLink]="['/app/administration/organisation/registration-verification', item.id]" class="org-btn org-btn-primary org-btn-sm">Review</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="org-card org-empty">
+        <div class="org-empty-icon"><i class="ri-inbox-line"></i></div>
+        <h3 class="org-empty-title">No organisations yet</h3>
+        <p class="org-empty-body">Register an organisation first &mdash; it will appear here for verification.</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a routerLink="/app/administration/organisation/setup-wizard" class="org-btn org-btn-primary org-btn-sm">Register Organisation</a>
+          <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-ghost org-btn-sm">Back to Directory</a>
+        </div>
+      </div>
+    }
+  }
+</div>
+</div>
+</main>
+
+@if (showRequestChanges()) {
+  <div class="org-modal-backdrop">
+    <div class="org-modal">
+      <div class="org-modal-header">
+        <h3 class="org-modal-title"><i class="ri-error-warning-line"></i>Request Changes</h3>
+        <button type="button" class="org-modal-close" (click)="closeRequestChanges()">&times;</button>
+      </div>
+      <div class="org-field">
+        <label class="org-field-label">Change Reason<span class="req">*</span></label>
+        <textarea class="org-textarea" [class.is-invalid]="changeReasonError"
+                  placeholder="e.g. PAN document is unclear. Please upload a readable copy."
+                  [ngModel]="changeReason()" (ngModelChange)="changeReason.set($event)"></textarea>
+        @if (changeReasonError) { <span class="org-field-error">{{ changeReasonError }}</span> }
+      </div>
+      <div class="org-modal-actions">
+        <button type="button" class="org-btn org-btn-ghost org-btn-sm" [disabled]="requesting()" (click)="closeRequestChanges()">Cancel</button>
+        <button type="button" class="org-btn org-btn-danger org-btn-sm" [disabled]="requesting()" (click)="submitRequestChanges()">
+          @if (requesting()) { <span class="org-spinner"></span> Submitting... } @else { Submit }
+        </button>
+      </div>
+    </div>
+  </div>
+}

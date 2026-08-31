@@ -1,0 +1,230 @@
+/* IAM-AUTH-02 — Accept invitation and activate account. */
+
+.activation-card {
+  /* Wider than the other auth cards because step 1 shows a two-column detail panel. */
+  max-width: 620px;
+}
+
+/* ---- Progress rail -----------------------------------------------------------------------
+   Shows where the person is and how much is left. The dot changes shape as well as colour, so
+   the state is still readable without colour vision. */
+
+.stepper {
+  gap: 0;
+}
+
+.step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: #eef0f4;
+  color: #6b7280;
+  border: 2px solid #eef0f4;
+  transition: all 0.2s ease;
+}
+
+.step-node.active .step-dot {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.step-node.done .step-dot {
+  background-color: #d1fae5;
+  border-color: #10b981;
+  color: #059669;
+}
+
+.step-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.step-node.active .step-label {
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.step-line {
+  flex: 1 1 auto;
+  height: 2px;
+  background-color: #eef0f4;
+  /* Pulls the connector up to the dots rather than the labels below them. */
+  margin: 0 0.25rem 1.15rem;
+  min-width: 18px;
+  transition: background-color 0.2s ease;
+}
+
+.step-line.done {
+  background-color: #10b981;
+}
+
+/* ---- Step 1: read-only detail panel ------------------------------------------------------ */
+
+.detail-panel {
+  background-color: #f9fafb;
+}
+
+.detail-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  margin-bottom: 0.1rem;
+}
+
+.detail-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1f2430;
+  word-break: break-word;
+}
+
+/* ---- Step 2: password checklist ----------------------------------------------------------- */
+
+.pe-10 {
+  padding-right: 2.75rem;
+}
+
+.rule-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+
+.rule-list li i {
+  font-size: 0.95rem;
+  width: 1rem;
+  flex-shrink: 0;
+}
+
+.rule-list li.met {
+  color: #059669;
+}
+
+/* ---- Step 3: second factor ------------------------------------------------------------------ */
+
+.mfa-toggle {
+  background-color: #f9fafb;
+}
+
+.method-option {
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.method-option:hover {
+  border-color: #c7cbd3;
+}
+
+.method-option.selected {
+  border-color: #4f46e5;
+  background-color: #eef2ff;
+}
+
+.method-icon {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background-color: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+  font-size: 1.1rem;
+}
+
+.setup-panel {
+  background-color: #f9fafb;
+}
+
+.qr-holder {
+  /* A white plate behind the QR: scanners cope far better with maximum contrast, and a coloured
+     page background bleeding through is a common reason a scan fails. */
+  width: 240px;
+  min-height: 240px;
+  padding: 10px;
+  background-color: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.secret-box {
+  background-color: #fff;
+}
+
+.secret-box code {
+  font-size: 1rem;
+  letter-spacing: 2px;
+  word-break: break-all;
+  color: #1f2430;
+}
+
+.code-input {
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 8px;
+  font-weight: 600;
+}
+
+.code-input::placeholder {
+  letter-spacing: 8px;
+  color: #d1d5db;
+}
+
+/* ---- Step 4: recovery codes ------------------------------------------------------------------ */
+
+.recovery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  background-color: #f9fafb;
+}
+
+.recovery-code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  color: #1f2430;
+  /* Selectable on its own so a person can copy a single code without dragging over the rest. */
+  user-select: all;
+}
+
+@media (max-width: 420px) {
+  .recovery-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Cancel and edit dialog --------------------------------------------------------------------- */
+
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  z-index: 1055;
+}
+
+.cancel-dialog {
+  max-width: 460px;
+}

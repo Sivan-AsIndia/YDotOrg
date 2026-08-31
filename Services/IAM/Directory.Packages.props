@@ -1,0 +1,63 @@
+﻿<Project>
+  <!--
+    Central Package Management for the IAM service only.
+
+    MSBuild walks up from each project directory and stops at the first
+    Directory.Packages.props it finds, so this file governs the four YDot.IAM.*
+    projects and nothing else. DON keeps its own copy next door.
+
+    Versions are deliberately identical to Services/DON/Directory.Packages.props:
+    the two services share one PostgreSQL database and one JWT signing key, so a
+    version drift between them would be a real source of surprises.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup Label="Entity Framework Core">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup Label="Identity, authentication and tokens">
+    <!-- The Domain layer derives User/Role from IdentityUser/IdentityRole. This is the
+         lightweight store package that carries those base classes and nothing else - no
+         ASP.NET, no HTTP - so the domain project stays free of web dependencies while
+         still being the real IdentityCore model. -->
+    <PackageVersion Include="Microsoft.Extensions.Identity.Stores" Version="10.0.10" />
+    <!-- IdentityCore only: IAM customises its own tables and never uses the
+         cookie/UI half of ASP.NET Core Identity. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+  </ItemGroup>
+  <ItemGroup Label="Application layer extensions">
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup Label="API surface and documentation">
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+  <ItemGroup Label="Object storage">
+    <!-- MinIO is S3-compatible, so this same client talks to AWS S3 or any S3 gateway by
+         changing the endpoint in configuration. Nothing above IObjectStorage knows which. -->
+    <PackageVersion Include="Minio" Version="6.0.5" />
+    <!-- SMTP. Replaces System.Net.Mail.SmtpClient, which Microsoft documents as unsuitable
+         for new work and which cannot open an implicit-TLS connection on port 465 at all. -->
+    <PackageVersion Include="MailKit" Version="4.8.0" />
+  </ItemGroup>
+  <ItemGroup Label="Logging">
+    <!-- Serilog.AspNetCore already brings the Console and File sinks with it. -->
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Async" Version="2.1.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,1032 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div  [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER ============ -->
+  <header class="tam-task-header" aria-labelledby="tam-title">
+    <div class="tam-header-text">
+      <h1 class="tam-title" id="tam-title">
+        {{ pageTitle }}
+        <span class="tam-info" title="Create and control links and QR destinations." aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+        </span>
+      </h1>
+      <p class="tam-subtitle">{{ pageSubtitle }}</p>
+      <!-- Stable reference, lifecycle state, owner and freshness -->
+      <div class="tam-task-meta">
+        <span class="tam-ref">{{ taskReference }}</span>
+        <span class="tam-state-pill">{{ lifecycleState }}</span>
+        <span class="tam-meta-item">Owner: {{ owner }}</span>
+        <span class="tam-meta-item">Data updated {{ lastRefresh() }}</span>
+      </div>
+    </div>
+
+    <!-- One primary action: Generate — appears only when role, permission, scope, state and dependencies allow -->
+    <div class="tam-header-actions">
+      <button #tamFiltersToggle type="button" class="tam-btn tam-btn-outline tam-btn-sm tam-filter-toggle" (click)="toggleFiltersVisible()"
+              [attr.aria-expanded]="filtersVisible()">
+        <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
+        @if (activeFilterSummary().length) { <span class="tam-count">{{ activeFilterSummary().length }}</span> }
+      </button>
+      <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()" [disabled]="!generateAllowed()">
+        <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Create
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ CONTEXT: TOTALS QUALIFIED BY SCOPE AND LAST REFRESH ============ -->
+  <section class="tam-metrics" aria-label="Tracking asset totals in scope">
+    <div class="tam-metric">
+      <span class="tam-metric-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg></span>
+      <div class="tam-metric-body">
+        <span class="tam-metric-label">Total assets</span>
+        <span class="tam-metric-value">{{ totalRecords() }}</span>
+        <span class="tam-metric-sub">Across {{ assetTypeCount() }} types</span>
+      </div>
+    </div>
+    <div class="tam-metric">
+      <span class="tam-metric-ic tam-ic-good" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>
+      <div class="tam-metric-body">
+        <span class="tam-metric-label">Active</span>
+        <span class="tam-metric-value">{{ activeCount() }}</span>
+        <span class="tam-metric-sub">Asset status: Active</span>
+      </div>
+    </div>
+    <div class="tam-metric">
+      <span class="tam-metric-ic tam-ic-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M8 19v-6"/><path d="M12 19V9"/><path d="M16 19v-4"/><path d="M20 19V7"/></svg></span>
+      <div class="tam-metric-body">
+        <span class="tam-metric-label">Total usage</span>
+        <span class="tam-metric-value">{{ formatUsage(totalUsage()) }}</span>
+        <span class="tam-metric-sub">Clicks / scans in scope</span>
+      </div>
+    </div>
+    <div class="tam-metric">
+      <span class="tam-metric-ic tam-ic-warn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+      <div class="tam-metric-body">
+        <span class="tam-metric-label">Pending approval</span>
+        <span class="tam-metric-value">{{ pendingApprovalCount() }}</span>
+        <span class="tam-metric-sub">Approval state: Pending review</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONTEXT AND FILTERS — shown only when the Filter button is used ============ -->
+  @if (filtersVisible()) {
+  <section class="tam-filters-card" aria-label="Search and filters"
+           appClickOutside [clickOutsideExcept]="tamFiltersToggle" (appClickOutside)="filtersVisible.set(false)">
+    <div class="tam-filters-toolbar">
+      <span class="tam-filters-heading">Filters</span>
+      <button type="button" class="tam-link" (click)="toggleFiltersVisible()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        Hide filters
+      </button>
+    </div>
+    <div class="tam-filter-grid">
+      <!-- Search — scope-aware search -->
+      <label class="tam-field tam-field-search">
+        <span class="tam-field-label">Search</span>
+        <span class="tam-input-wrap">
+          <input type="search" class="tam-input" placeholder="Search by reference, destination or campaign…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)"
+                 aria-label="Search tracking assets" />
+          <svg class="tam-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+
+      <!-- Asset type — in-app themed single-select -->
+      <div class="tam-field">
+        <span class="tam-field-label">Asset type</span>
+        <div class="tam-combo" [class.is-open]="openMenu() === 'f-assetType'" appClickOutside (appClickOutside)="onClickOutside('f-assetType')">
+          <button type="button" class="tam-combo-btn" (click)="toggleMenu('f-assetType')"
+                  role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'f-assetType'" aria-label="Asset type">
+            <span class="tam-combo-value" [class.tam-combo-ph]="!assetTypeFilter()">{{ assetTypeFilter() || 'All types' }}</span>
+            <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          @if (openMenu() === 'f-assetType') {
+            <ul class="tam-combo-list" role="listbox">
+              <li role="option" [attr.aria-selected]="!assetTypeFilter()"><button type="button" class="tam-combo-option" [class.is-selected]="!assetTypeFilter()" (click)="assetTypeFilter.set(''); closeMenu()">All types</button></li>
+              @for (t of assetTypeCatalogue; track t) {
+                <li role="option" [attr.aria-selected]="assetTypeFilter() === t"><button type="button" class="tam-combo-option" [class.is-selected]="assetTypeFilter() === t" (click)="assetTypeFilter.set(t); closeMenu()">{{ t }}</button></li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Channel — in-app themed single-select -->
+      <div class="tam-field">
+        <span class="tam-field-label">Channel</span>
+        <div class="tam-combo" [class.is-open]="openMenu() === 'f-channel'" appClickOutside (appClickOutside)="onClickOutside('f-channel')">
+          <button type="button" class="tam-combo-btn" (click)="toggleMenu('f-channel')"
+                  role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'f-channel'" aria-label="Channel">
+            <span class="tam-combo-value" [class.tam-combo-ph]="!channelFilter()">{{ channelFilter() || 'All channels' }}</span>
+            <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          @if (openMenu() === 'f-channel') {
+            <ul class="tam-combo-list" role="listbox">
+              <li role="option" [attr.aria-selected]="!channelFilter()"><button type="button" class="tam-combo-option" [class.is-selected]="!channelFilter()" (click)="channelFilter.set(''); closeMenu()">All channels</button></li>
+              @for (c of channelCatalogue; track c) {
+                <li role="option" [attr.aria-selected]="channelFilter() === c"><button type="button" class="tam-combo-option" [class.is-selected]="channelFilter() === c" (click)="channelFilter.set(c); closeMenu()">{{ c }}</button></li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Asset status — in-app themed single-select -->
+      <div class="tam-field">
+        <span class="tam-field-label">Status</span>
+        <div class="tam-combo" [class.is-open]="openMenu() === 'f-status'" appClickOutside (appClickOutside)="onClickOutside('f-status')">
+          <button type="button" class="tam-combo-btn" (click)="toggleMenu('f-status')"
+                  role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'f-status'" aria-label="Asset status">
+            <span class="tam-combo-value" [class.tam-combo-ph]="!statusFilter()">{{ statusFilter() || 'All statuses' }}</span>
+            <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          @if (openMenu() === 'f-status') {
+            <ul class="tam-combo-list" role="listbox">
+              <li role="option" [attr.aria-selected]="!statusFilter()"><button type="button" class="tam-combo-option" [class.is-selected]="!statusFilter()" (click)="statusFilter.set(''); closeMenu()">All statuses</button></li>
+              @for (s of statusCatalogue; track s) {
+                <li role="option" [attr.aria-selected]="statusFilter() === s"><button type="button" class="tam-combo-option" [class.is-selected]="statusFilter() === s" (click)="statusFilter.set(s); closeMenu()">{{ s }}</button></li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Active from / to — date range with time-zone label -->
+      <div class="tam-field" [class.tam-field-invalid]="rangeInvalid()">
+        <span class="tam-field-label">Date range <span class="tam-tz">{{ operatingTimeZone }}</span></span>
+        <div class="tam-range">
+          <span class="tam-input-wrap">
+            <input type="date" class="tam-input" [ngModel]="rangeStart()" (ngModelChange)="rangeStart.set($event)" aria-label="Active from date" />
+          </span>
+          <span class="tam-range-sep" aria-hidden="true">→</span>
+          <span class="tam-input-wrap">
+            <input type="date" class="tam-input" [ngModel]="rangeEnd()" (ngModelChange)="rangeEnd.set($event)" aria-label="Active to date" />
+          </span>
+        </div>
+      </div>
+
+      <!-- Filters — progressive disclosure holding Data scope -->
+      <div class="tam-field tam-field-more">
+        <span class="tam-field-label" aria-hidden="true">&nbsp;</span>
+        <button #tamMoreBtn type="button" class="tam-btn tam-btn-outline tam-more-btn" (click)="toggleMoreFilters()"
+                [attr.aria-expanded]="moreFiltersOpen()">
+          <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+          Filters
+          @if (moreFiltersCount()) { <span class="tam-count">{{ moreFiltersCount() }}</span> }
+        </button>
+      </div>
+    </div>
+
+    <!-- Secondary filters panel (Data scope) — collapsed by default -->
+    @if (moreFiltersOpen()) {
+      <div class="tam-more-panel"
+           appClickOutside [clickOutsideExcept]="tamMoreBtn" (appClickOutside)="moreFiltersOpen.set(false)">
+        <div class="tam-field">
+          <span class="tam-field-label">Data scope</span>
+          <div class="tam-combo" [class.is-open]="openMenu() === 'f-scope'" appClickOutside (appClickOutside)="onClickOutside('f-scope')">
+            <button type="button" class="tam-combo-btn" (click)="toggleMenu('f-scope')"
+                    role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'f-scope'" aria-label="Data scope">
+              <span class="tam-combo-value">{{ scopeFilter() }}</span>
+              <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            @if (openMenu() === 'f-scope') {
+              <ul class="tam-combo-list" role="listbox">
+                @for (sc of scopeOptions; track sc) {
+                  <li role="option" [attr.aria-selected]="scopeFilter() === sc"><button type="button" class="tam-combo-option" [class.is-selected]="scopeFilter() === sc" (click)="scopeFilter.set(sc); closeMenu()">{{ sc }}</button></li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+        <p class="tam-field-hint" [class.tam-field-error]="rangeInvalid()" role="status">
+          @if (rangeInvalid()) { Review Date range. The value does not meet the stated format or range. }
+          @else { Interpreted as {{ interpretedRange() }} }
+        </p>
+        <div class="tam-more-actions">
+          <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="applyFilter()" [disabled]="!filterAllowed()">Apply filters</button>
+        </div>
+      </div>
+    }
+
+    <!-- Active-filter summary + saved filter -->
+    <div class="tam-active-row">
+      <span class="tam-active-label">Active filters:</span>
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="tam-chip">
+          {{ chip.label }}
+          <button type="button" class="tam-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      } @empty {
+        <span class="tam-active-none">None applied</span>
+      }
+      <!-- Clear all appears only when at least one filter value is set -->
+      @if (activeFilterSummary().length) {
+        <button type="button" class="tam-link" (click)="clearFilters()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+          Clear all
+        </button>
+      }
+
+      <span class="tam-active-spacer"></span>
+
+      <span class="tam-saved-label">Saved filter:</span>
+      <div class="tam-combo tam-saved-select" [class.is-open]="openMenu() === 'f-saved'" appClickOutside (appClickOutside)="onClickOutside('f-saved')">
+        <button type="button" class="tam-combo-btn" (click)="toggleMenu('f-saved')"
+                role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'f-saved'" aria-label="Saved filter">
+          <span class="tam-combo-value">{{ savedView() }}</span>
+          <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        @if (openMenu() === 'f-saved') {
+          <ul class="tam-combo-list tam-combo-list-end" role="listbox">
+            @for (v of savedViews; track v) {
+              <li role="option" [attr.aria-selected]="savedView() === v"><button type="button" class="tam-combo-option" [class.is-selected]="savedView() === v" (click)="savedView.set(v); closeMenu()">{{ v }}</button></li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  </section>
+  }
+
+  <!-- ============ WORK AREA: index + overlay detail drawer ============
+       The index always keeps the full canvas width; the asset detail opens as a
+       fixed half-canvas drawer on top of it (not in-flow), so the table layout
+       never has to reflow when an asset is selected. -->
+  <div class="tam-work">
+
+    <!-- ---------- MAIN WORK: tracking asset index ---------- -->
+    <section class="tam-main" aria-labelledby="tam-records-heading">
+      <h2 id="tam-records-heading" class="tam-visually-hidden">Tracking assets</h2>
+
+      <!-- Situational banners -->
+      @if (uiState() === 'validation') {
+        <div class="tam-banner tam-banner-error" role="alert">
+          <strong>Review the highlighted fields.</strong>
+          A value does not meet the stated format or range. Correct it to continue; entered values are kept.
+          <button type="button" class="tam-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+        </div>
+      }
+      @if (uiState() === 'duplicate') {
+        <div class="tam-banner tam-banner-warn" role="alert">
+          A tracking asset with this destination and channel already exists. Link, merge, change the value, request
+          review or cancel — nothing is overwritten silently.
+          <button type="button" class="tam-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+        </div>
+      }
+      @if (uiState() === 'conflict') {
+        <div class="tam-banner tam-banner-warn" role="alert">
+          This record changed after you opened it. Review the latest version before continuing.
+          <span class="tam-banner-actions">
+            <a href="javascript:void(0)" (click)="dismissBanner()">Compare</a>
+            <a href="javascript:void(0)" (click)="reapplyLatestVersion()">Reapply eligible changes</a>
+            <a href="javascript:void(0)" (click)="dismissBanner()">Cancel</a>
+          </span>
+        </div>
+      }
+      @if (uiState() === 'dependency-failure') {
+        <div class="tam-banner tam-banner-warn" role="alert">
+          We could not complete the dependent service step. Your confirmed local result is unchanged.
+          <span class="tam-banner-actions">
+            <span class="tam-corr">Correlation INT-88421</span>
+            <a href="javascript:void(0)" (click)="dismissBanner()">Retry dependency</a>
+          </span>
+        </div>
+      }
+      @if (uiState() === 'success') {
+        <div class="tam-banner tam-banner-success" role="status">
+          Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }};
+          effective {{ persistentOutcome().effectiveTime }}. Pending dependencies and the next permitted route are shown
+          in Persistent outcome.
+          @if (generatedReferences().length > 1) {
+            <span class="tam-multi-generated">Created {{ generatedReferences().length }} place assets: {{ generatedReferences().join(', ') }}.</span>
+          }
+          <button type="button" class="tam-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+        </div>
+      }
+
+      <!-- LOADING -->
+      @if (uiState() === 'loading') {
+        <div class="tam-state-block" role="status" aria-live="polite">
+          <p class="tam-state-title">Loading Tracking asset manager…</p>
+          <div class="tam-skeleton" aria-hidden="true">
+            @for (n of [1,2,3,4,5,6]; track n) { <div class="tam-skeleton-row"></div> }
+          </div>
+          <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      }
+
+      <!-- EMPTY -->
+      @else if (uiState() === 'empty') {
+        <div class="tam-state-block">
+          <p class="tam-state-title">No tracking assets match this scope and filter.</p>
+          <p class="tam-state-body">Zero results come from the current filters, not a global zero. Adjust the search,
+            type, channel, status, date or scope, or reset filters to continue.</p>
+          <div class="tam-state-actions">
+            <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="clearFilters()">Reset filters</button>
+            @if (generateAllowed()) {
+              <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()">Create</button>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- NO ACCESS -->
+      @else if (uiState() === 'no-access') {
+        <div class="tam-state-block">
+          <p class="tam-state-title">This value cannot be displayed with your current access.</p>
+          <p class="tam-state-body">Restricted records, fields, counts, actions and search suggestions are hidden.
+            Return to your permitted landing page to continue.</p>
+          <a class="tam-btn tam-btn-outline tam-btn-sm" href="javascript:void(0)" (click)="setUiState('ready')">Return to My Workspace</a>
+        </div>
+      }
+
+      <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the index visible -->
+      @else {
+        <div class="tam-table-scroll">
+          <table class="tam-table">
+            <thead>
+              <tr>
+                <th scope="col">Asset</th>
+                <th scope="col">Type</th>
+                <th scope="col">Channel</th>
+                <th scope="col">Destination / URL</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="tam-col-num">Usage</th>
+                <th scope="col" class="tam-col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of pagedRecords(); track r.trackingReference) {
+                <tr [class.tam-row-selected]="isSelected(r.trackingReference)"
+                    (click)="selectAsset(r.trackingReference)">
+                  <!-- Tracking reference (stable, read-only) + Campaign context -->
+                  <td class="tam-cell-asset" data-label="Asset">
+                    <button type="button" class="tam-asset-link" (click)="selectAsset(r.trackingReference); $event.stopPropagation()">
+                      {{ r.trackingReference }}
+                    </button>
+                    <span class="tam-asset-campaign">{{ campaignOf(r.campaignRef).name }}</span>
+                  </td>
+
+                  <!-- Asset type (catalogue value) -->
+                  <td data-label="Type"><span class="tam-type">{{ r.assetType }}</span></td>
+
+                  <!-- Channel (catalogue value) -->
+                  <td data-label="Channel">{{ r.channel }}</td>
+
+                  <!-- Destination + Generated URL or QR (read-only) -->
+                  <td class="tam-cell-dest" data-label="Destination / URL">
+                    <span class="tam-dest-url">{{ r.generatedUrl }}</span>
+                    <span class="tam-dest-sub">{{ r.destination }}</span>
+                  </td>
+
+                  <!-- Asset status (catalogue value) -->
+                  <td data-label="Status">
+                    <span class="tam-badge" [class]="statusClass(r.assetStatus)">{{ r.assetStatus }}</span>
+                  </td>
+
+                  <!-- Usage count (read-only) -->
+                  <td class="tam-col-num tam-usage" data-label="Usage">{{ formatUsage(r.usageCount) }}</td>
+
+                  <!-- Row actions: Test / Approve / Disable / Replace / Delete unused draft -->
+                  <td class="tam-col-actions" (click)="$event.stopPropagation()">
+                    <div class="tam-menu-wrap">
+                      <button #tamRowBtn type="button" class="tam-row-action" (click)="toggleRowMenu(r.trackingReference)"
+                              [attr.aria-expanded]="openRowMenu() === r.trackingReference" aria-haspopup="menu"
+                              aria-label="Row actions">⋯</button>
+                      @if (openRowMenu() === r.trackingReference) {
+                        <div class="tam-menu" role="menu" aria-label="Tracking asset actions"
+                             appClickOutside [clickOutsideExcept]="tamRowBtn" (appClickOutside)="openRowMenu.set(null)">
+                          <button type="button" class="tam-menu-item" role="menuitem" (click)="selectAsset(r.trackingReference)">Open</button>
+                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestSubmit(r)"
+                                  [disabled]="!submitAllowed(r)" [title]="submitAllowed(r) ? '' : submitDisabledReason(r)">Submit</button>
+                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestApprove(r)"
+                                  [disabled]="!approveAllowed(r)" [title]="approveAllowed(r) ? '' : approveDisabledReason(r)">Approve</button>
+                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestEdit(r)"
+                                  [disabled]="!editAllowed(r)" [title]="editAllowed(r) ? '' : editDisabledReason(r)">Edit</button>
+                          <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem" (click)="requestDisable(r)"
+                                  [disabled]="!disableAllowed(r)" [title]="disableAllowed(r) ? '' : disableDisabledReason(r)">Disable</button>
+                          @if (canDeleteDraft(r)) {
+                            <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem"
+                                    (click)="requestDeleteDraft(r)">Delete unused draft</button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="tam-table-empty">
+                    No tracking assets match this scope and filter. Reset filters to continue.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer: time-zone note + pagination -->
+        <div class="tam-table-footer">
+          <span class="tam-tz-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            All times are in IST
+          </span>
+          <nav class="tam-pagination" aria-label="Pagination">
+            <button type="button" class="tam-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
+            @for (p of pageNumbers(); track p) {
+              <button type="button" class="tam-page-btn" [class.is-current]="currentPage() === p"
+                      [attr.aria-current]="currentPage() === p ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+            }
+            <button type="button" class="tam-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
+          </nav>
+        </div>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: asset details ----------
+         Hidden until a row is selected; opens as a fixed half-canvas drawer that
+         overlays the right of the viewport (dimming backdrop behind it). Full-width
+         on small screens so it stays usable on every device. -->
+    @if (selectedAsset(); as a) {
+      <div class="tam-detail-backdrop" (click)="selectAsset('')" aria-hidden="true"></div>
+      <aside class="tam-detail" role="dialog" aria-modal="true" aria-label="Asset details">
+        <div class="tam-detail-head">
+          <div class="tam-detail-id">
+            <span class="tam-detail-badge" aria-hidden="true">
+              @if (a.isQr) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M20 14v.01M14 20v.01M20 20v.01M17 20v.01M20 17v.01"/></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>
+              }
+            </span>
+            <div>
+              <h2 class="tam-detail-title">{{ a.trackingReference }}
+                <span class="tam-badge" [class]="statusClass(a.assetStatus)">{{ a.assetStatus }}</span>
+              </h2>
+              <p class="tam-detail-sub">{{ a.assetType }} · {{ a.channel }}</p>
+            </div>
+          </div>
+          <button type="button" class="tam-detail-close" (click)="selectAsset('')" aria-label="Close asset details">✕</button>
+        </div>
+
+        <!-- OVERVIEW: all read-only field values + persistent outcome -->
+        <div class="tam-detail-body" role="tabpanel">
+            <dl class="tam-kv">
+              <div><dt>Tracking reference</dt><dd>{{ a.trackingReference }}</dd></div>
+              <div><dt>Asset type</dt><dd>{{ a.assetType }}</dd></div>
+              <div><dt>Channel</dt><dd>{{ a.channel }}</dd></div>
+              @if (a.place) { <div><dt>Place</dt><dd>{{ a.place }}</dd></div> }
+              @if (a.placeCity) { <div><dt>City</dt><dd>{{ a.placeCity }}</dd></div> }
+              @if (a.placeState) { <div><dt>State</dt><dd>{{ a.placeState }}</dd></div> }
+              @for (f of a.placeCustomFields ?? []; track f.key) { <div><dt>{{ f.key }}</dt><dd>{{ f.value }}</dd></div> }
+              <div><dt>Campaign</dt><dd>{{ campaignOf(a.campaignRef).name }} · {{ a.campaignRef }}</dd></div>
+              <div><dt>Destination</dt><dd class="tam-break">{{ a.destination }}</dd></div>
+              <div><dt>Source</dt><dd>{{ a.source || '—' }}</dd></div>
+              <div><dt>Medium</dt><dd>{{ a.medium || '—' }}</dd></div>
+              <div><dt>Content tag</dt><dd>{{ a.contentTag || '—' }}</dd></div>
+              <div><dt>Active from</dt><dd>{{ formatDate(a.activeFrom) }}</dd></div>
+              <div><dt>Active to</dt><dd>{{ formatDate(a.activeTo) }}</dd></div>
+              <div><dt>Approval state</dt><dd><span class="tam-badge" [class]="approvalClass(a.approvalState)">{{ a.approvalState }}</span></dd></div>
+              <div><dt>Usage count</dt><dd>{{ formatUsage(a.usageCount) }}</dd></div>
+              <div><dt>Total received</dt><dd>{{ formatMoney(a.amountReceived) }}</dd></div>
+            </dl>
+
+            <!-- Generated URL or QR — read-only; copy/open preserves the exact stable value -->
+            <div class="tam-generated">
+              <span class="tam-generated-label">Generated URL or QR</span>
+              @if (a.isQr) {
+                <span class="tam-qr" role="img" [attr.aria-label]="'QR code for ' + a.generatedUrl">
+                  <svg [attr.viewBox]="qrViewBox()" shape-rendering="crispEdges" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+                    <rect width="100%" height="100%" fill="#ffffff"/>
+                    <path [attr.d]="qrPath()" fill="#1e2a24"/>
+                  </svg>
+                </span>
+              }
+              <code class="tam-generated-url">{{ a.generatedUrl }}</code>
+              <div class="tam-generated-actions">
+                <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="copyUrl(a.generatedUrl)">
+                  <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                  {{ copiedRef() === a.trackingReference ? 'Copied' : 'Copy' }}
+                </button>
+                <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="openUrl(a.generatedUrl)">
+                  <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>
+                  Open
+                </button>
+                <!-- Download details — hidden for now; re-enable later if needed.
+                <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="downloadAssetDetails(a)">
+                  <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  Download details
+                </button>
+                -->
+                @if (a.isQr) {
+                  <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="downloadQr(a)">
+                    <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z"/></svg>
+                    Download QR
+                  </button>
+                }
+                <button type="button" class="tam-btn tam-btn-outline tam-btn-sm" (click)="shareAsset(a)">
+                  <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="m8.1 10.7 7.8-4.4M8.1 13.3l7.8 4.4"/></svg>
+                  Share
+                </button>
+              </div>
+              @if (shareStatus()) {
+                <p class="tam-field-hint" role="status">{{ shareStatus() }}</p>
+              }
+            </div>
+
+            <!-- Available workflow actions on this asset -->
+            <div class="tam-detail-actions">
+              <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="requestSubmit(a)" [disabled]="!submitAllowed(a)" [title]="submitAllowed(a) ? '' : submitDisabledReason(a)">Submit</button>
+              <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestApprove(a)" [disabled]="!approveAllowed(a)" [title]="approveAllowed(a) ? '' : approveDisabledReason(a)">Approve</button>
+              <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestEdit(a)" [disabled]="!editAllowed(a)" [title]="editAllowed(a) ? '' : editDisabledReason(a)">Edit</button>
+              <button type="button" class="tam-btn tam-btn-danger tam-btn-sm" (click)="requestDisable(a)" [disabled]="!disableAllowed(a)" [title]="disableAllowed(a) ? '' : disableDisabledReason(a)">Disable</button>
+            </div>
+            <!-- Disabled options explain the missing permission, state or dependency rather than a
+                 plain grey-out. -->
+            @if (!approveAllowed(a) && approveDisabledReason(a)) {
+              <p class="tam-field-hint">{{ approveDisabledReason(a) }}</p>
+            }
+          </div>
+      </aside>
+    }
+  </div>
+
+  <!-- ============ GENERATE DIALOG ============ -->
+  @if (generateDialogOpen()) {
+    <div class="tam-modal-backdrop" (click)="cancelGenerate()">
+      <div class="tam-modal tam-modal-wide" role="dialog" aria-modal="true" aria-labelledby="tam-generate-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-generate-title" class="tam-modal-title">Create asset manager</h2>
+        <p class="tam-modal-lead">Create a link or QR destination inside your effective scope. The tracking reference and
+          generated URL or QR are derived by the server after generation.</p>
+
+        <!-- Error summary linking to the exact fields -->
+        @if (errorSummary().length > 0) {
+          <div class="tam-error-summary" role="alert" aria-label="There is a problem">
+            <strong>There is a problem</strong>
+            <ul>
+              @for (e of errorSummary(); track e.key) {
+                <li><a href="javascript:void(0)">{{ e.label }}</a></li>
+              }
+            </ul>
+          </div>
+        }
+
+        <div class="tam-form-grid">
+          <!-- Campaign (required) — captured FIRST: selecting it auto-fills channel, source and
+               active from/to from what was chosen for that campaign in the Campaign Wizard -->
+          <div class="tam-field tam-field-span" [class.tam-field-invalid]="missing('campaign')">
+            <label class="tam-field-label" for="g-campaign">Campaign <span class="tam-req">*</span></label>
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-campaign'" appClickOutside (appClickOutside)="onClickOutside('g-campaign')">
+              <button id="g-campaign" type="button" class="tam-combo-btn" (click)="toggleMenu('g-campaign')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-campaign'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gCampaign()">{{ gCampaign() ? (campaignOf(gCampaign()).name + ' · ' + gCampaign()) : 'Select an eligible campaign in scope…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-campaign') {
+                <ul class="tam-combo-list" role="listbox">
+                  @for (c of campaignOptions(); track c.reference) {
+                    <li role="option" [attr.aria-selected]="gCampaign() === c.reference">
+                      <button type="button" class="tam-combo-option" [class.is-selected]="gCampaign() === c.reference" (click)="onCampaignSelect(c.reference); closeMenu()">
+                        <span class="tam-combo-opt-label">{{ c.name }}</span>
+                        <span class="tam-combo-opt-context">{{ c.reference }} · {{ c.context }}</span>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="tam-combo-empty">No eligible campaign in scope.</li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (gCampaign()) { <p class="tam-field-hint">Selected: {{ campaignOf(gCampaign()).name }} · {{ campaignOf(gCampaign()).context }} — channel, source and active dates below were fetched from this campaign.</p> }
+            @if (missing('campaign')) { <p class="tam-field-hint tam-field-error">Enter Campaign.</p> }
+          </div>
+
+          <!-- Asset type (required) — searchable controlled choice -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('assetType')">
+            <label class="tam-field-label" for="g-assetType">Asset type <span class="tam-req">*</span></label>
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-assetType'" appClickOutside (appClickOutside)="onClickOutside('g-assetType')">
+              <button id="g-assetType" type="button" class="tam-combo-btn" (click)="toggleMenu('g-assetType')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-assetType'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gAssetType()">{{ gAssetType() || 'Select an asset type…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-assetType') {
+                <ul class="tam-combo-list" role="listbox">
+                  @for (t of assetTypeCatalogue; track t) {
+                    <li role="option" [attr.aria-selected]="gAssetType() === t"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetType() === t" (click)="gAssetType.set(t); closeMenu()">{{ t }}</button></li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (missing('assetType')) { <p class="tam-field-hint tam-field-error">Enter Asset type.</p> }
+          </div>
+
+          <!-- Channel (required) — searchable controlled choice; auto-filled from the campaign -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('channel')">
+            <label class="tam-field-label" for="g-channel">Channel <span class="tam-req">*</span></label>
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-channel'" appClickOutside (appClickOutside)="onClickOutside('g-channel')">
+              <button id="g-channel" type="button" class="tam-combo-btn" (click)="toggleMenu('g-channel')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-channel'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gChannel()">{{ gChannel() || 'Select a channel…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-channel') {
+                <ul class="tam-combo-list" role="listbox">
+                  <li role="option" [attr.aria-selected]="!gChannel()"><button type="button" class="tam-combo-option" [class.is-selected]="!gChannel()" (click)="gChannel.set(''); closeMenu()">Select a channel…</button></li>
+                  @for (c of channelCatalogue; track c) {
+                    <li role="option" [attr.aria-selected]="gChannel() === c"><button type="button" class="tam-combo-option" [class.is-selected]="gChannel() === c" (click)="gChannel.set(c); closeMenu()">{{ c }}</button></li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (missing('channel')) { <p class="tam-field-hint tam-field-error">Enter Channel.</p> }
+            @else if (isOnGround()) { <p class="tam-field-hint">On-ground event — add one or more places below; each gets its own separate QR/link.</p> }
+          </div>
+
+          @if (!isOnGround()) {
+            <!-- Destination (required) — the landing URL this QR / short link / UTM link sends
+                 people to; the tracking asset has nothing to resolve to without it. -->
+            <div class="tam-field tam-field-span" [class.tam-field-invalid]="missing('destination')">
+              <label class="tam-field-label" for="g-destination">Destination <span class="tam-req">*</span></label>
+              <input id="g-destination" type="text" class="tam-input" [ngModel]="gDestination()"
+                     (ngModelChange)="gDestination.set($event)" placeholder="e.g. https://ydot.org/educate-a-child/donate" />
+              @if (missing('destination')) { <p class="tam-field-hint tam-field-error">Enter Destination.</p> }
+              @else { <p class="tam-field-hint">The web page this link or QR code opens when scanned or clicked.</p> }
+            </div>
+          } @else {
+            <!-- On-ground event: one customisable place per row, each with its own destination
+                 lets the team see which physical place is driving the most contributions. -->
+            <div class="tam-field tam-field-span" [class.tam-field-invalid]="missing('places')">
+              <label class="tam-field-label">Places <span class="tam-req">*</span></label>
+              <div class="tam-places">
+                @for (p of gPlaces(); track p.id; let i = $index) {
+                  <div class="tam-place-card">
+                    <div class="tam-place-row">
+                      <!-- Place name — editable -->
+                      <label class="tam-place-cell">
+                        <span class="tam-place-cell-label">Place name</span>
+                        <input type="text" class="tam-input" placeholder="Place name (e.g. Main entrance stall)"
+                               [ngModel]="p.label" (ngModelChange)="updatePlaceLabel(p.id, $event)" />
+                      </label>
+                      <!-- City — read-only, fetched from the selected campaign (not typed by hand) -->
+                      <label class="tam-place-cell">
+                        <span class="tam-place-cell-label">City</span>
+                        <input type="text" class="tam-input tam-input-auto" readonly
+                               placeholder="From campaign" [ngModel]="p.city" [ngModelOptions]="{ standalone: true }" />
+                      </label>
+                      <!-- State — read-only, fetched from the selected campaign (not typed by hand) -->
+                      <label class="tam-place-cell">
+                        <span class="tam-place-cell-label">State</span>
+                        <input type="text" class="tam-input tam-input-auto" readonly
+                               placeholder="From campaign" [ngModel]="p.state" [ngModelOptions]="{ standalone: true }" />
+                      </label>
+                      <button type="button" class="tam-btn tam-btn-outline tam-btn-sm tam-place-remove" (click)="removePlace(p.id)" [disabled]="gPlaces().length <= 1">Remove</button>
+                    </div>
+                    <!-- Destination — editable -->
+                    <label class="tam-place-cell tam-place-dest">
+                      <span class="tam-place-cell-label">Destination</span>
+                      <input type="text" class="tam-input" placeholder="Destination for this place"
+                             [ngModel]="p.destination" (ngModelChange)="updatePlaceDestination(p.id, $event)" />
+                    </label>
+
+                    <!-- Customisable add fields — attach any further named detail to this place -->
+                    <div class="tam-place-custom">
+                      @for (f of p.customFields; track f.id) {
+                        <div class="tam-place-custom-row">
+                          <input type="text" class="tam-input" placeholder="Field name (e.g. Stall number)"
+                                 [ngModel]="f.key" (ngModelChange)="updatePlaceCustomFieldKey(p.id, f.id, $event)" />
+                          <input type="text" class="tam-input" placeholder="Value"
+                                 [ngModel]="f.value" (ngModelChange)="updatePlaceCustomFieldValue(p.id, f.id, $event)" />
+                          <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="removePlaceCustomField(p.id, f.id)" aria-label="Remove custom field">✕</button>
+                        </div>
+                      }
+                      <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="addPlaceCustomField(p.id)">+ Add custom field</button>
+                    </div>
+
+                    <!-- Generated QR / link for this exact place — shown right beside its entry -->
+                    @if (previewReady() && p.destination.trim()) {
+                      <div class="tam-place-preview-inline">
+                        @if (gAssetType() === 'QR Code') {
+                          <span class="tam-qr tam-qr-sm" role="img" [attr.aria-label]="'QR code preview for ' + p.label">
+                            <svg [attr.viewBox]="previewQrViewBox(placePreviewUrl(i))" shape-rendering="crispEdges" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+                              <rect width="100%" height="100%" fill="#ffffff"/>
+                              <path [attr.d]="previewQrPath(placePreviewUrl(i))" fill="#1e2a24"/>
+                            </svg>
+                          </span>
+                        }
+                        <span class="tam-preview-body">
+                          <span class="tam-preview-ref mono">{{ placePreviewReference(i) }} @if (p.label.trim()) { · {{ p.label.trim() }} }</span>
+                          <code class="tam-preview-url">{{ placePreviewUrl(i) }}</code>
+                        </span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+              <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="addPlace()">+ Add another place</button>
+              @if (missing('places')) { <p class="tam-field-hint tam-field-error">Enter at least one place name and destination.</p> }
+            </div>
+          }
+
+          <!-- Source (required) — text input; sits directly below Asset type -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('source')">
+            <label class="tam-field-label" for="g-source">Source <span class="tam-req">*</span></label>
+            <input id="g-source" type="text" class="tam-input" [ngModel]="gSource()" (ngModelChange)="gSource.set($event)"
+                   placeholder="e.g. newsletter" />
+            @if (missing('source')) { <p class="tam-field-hint tam-field-error">Enter Source.</p> }
+          </div>
+
+          <!-- Medium (required) — text input; sits directly below Channel -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('medium')">
+            <label class="tam-field-label" for="g-medium">Medium <span class="tam-req">*</span></label>
+            <input id="g-medium" type="text" class="tam-input" [ngModel]="gMedium()" (ngModelChange)="gMedium.set($event)"
+                   placeholder="e.g. email" />
+            @if (missing('medium')) { <p class="tam-field-hint tam-field-error">Enter Medium.</p> }
+          </div>
+
+          <!-- Content tag (optional) — text input, left column -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="g-contentTag">Content tag</label>
+            <input id="g-contentTag" type="text" class="tam-input" [ngModel]="gContentTag()" (ngModelChange)="gContentTag.set($event)"
+                   [attr.maxlength]="gContentTagMax" placeholder="e.g. may-issue" />
+            <p class="tam-field-hint">{{ gContentTag().length }} / {{ gContentTagMax }} characters</p>
+          </div>
+
+          <!-- Asset status (required) — catalogue value, right column beside Content tag -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="g-status">Asset status <span class="tam-req">*</span></label>
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-status'" appClickOutside (appClickOutside)="onClickOutside('g-status')">
+              <button id="g-status" type="button" class="tam-combo-btn" (click)="toggleMenu('g-status')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-status'">
+                <span class="tam-combo-value">{{ gAssetStatus() }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-status') {
+                <ul class="tam-combo-list" role="listbox">
+                  <li role="option" [attr.aria-selected]="gAssetStatus() === 'Draft'"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetStatus() === 'Draft'" (click)="gAssetStatus.set('Draft'); closeMenu()">Draft</button></li>
+                  <li role="option" [attr.aria-selected]="gAssetStatus() === 'Submitted'"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetStatus() === 'Submitted'" (click)="gAssetStatus.set('Submitted'); closeMenu()">Submitted</button></li>
+                  <li role="option" [attr.aria-selected]="gAssetStatus() === 'Approved'"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetStatus() === 'Approved'" (click)="gAssetStatus.set('Approved'); closeMenu()">Approved</button></li>
+                  <li role="option" [attr.aria-selected]="gAssetStatus() === 'Active'"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetStatus() === 'Active'" (click)="gAssetStatus.set('Active'); closeMenu()">Active</button></li>
+                  <li role="option" [attr.aria-selected]="gAssetStatus() === 'Inactive'"><button type="button" class="tam-combo-option" [class.is-selected]="gAssetStatus() === 'Inactive'" (click)="gAssetStatus.set('Inactive'); closeMenu()">Inactive</button></li>
+                </ul>
+              }
+            </div>
+          </div>
+
+          <!-- Active from (required) — date with time-zone label -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('activeFrom')">
+            <label class="tam-field-label" for="g-activeFrom">Active from <span class="tam-req">*</span> <span class="tam-tz">{{ operatingTimeZone }}</span></label>
+            <input id="g-activeFrom" type="date" class="tam-input" [ngModel]="gActiveFrom()" (ngModelChange)="gActiveFrom.set($event)" />
+            @if (missing('activeFrom')) { <p class="tam-field-hint tam-field-error">Enter Active from.</p> }
+          </div>
+
+          <!-- Active to (required) — date with time-zone label -->
+          <div class="tam-field" [class.tam-field-invalid]="missing('activeTo') || gRangeInvalid()">
+            <label class="tam-field-label" for="g-activeTo">Active to <span class="tam-req">*</span> <span class="tam-tz">{{ operatingTimeZone }}</span></label>
+            <input id="g-activeTo" type="date" class="tam-input" [ngModel]="gActiveTo()" (ngModelChange)="gActiveTo.set($event)" />
+            @if (gRangeInvalid()) { <p class="tam-field-hint tam-field-error">Review Active to. The value does not meet the stated format or range.</p> }
+            @else if (missing('activeTo')) { <p class="tam-field-hint tam-field-error">Enter Active to.</p> }
+          </div>
+          @if (gActiveFrom() || gActiveTo()) {
+            <p class="tam-field-hint tam-field-span" role="status">Interpreted as {{ gInterpretedRange() }}</p>
+          }
+        </div>
+
+        <!-- Live preview — the QR / link appears here as soon as there's enough information,
+             before the asset is actually generated. On-ground places preview
+             inline beside each place instead, since each place gets its own separate result. -->
+        @if (previewReady() && !isOnGround()) {
+          <div class="tam-preview" role="status" aria-label="Asset preview">
+            <span class="tam-preview-heading">Preview</span>
+            <div class="tam-preview-row">
+              @if (gAssetType() === 'QR Code') {
+                <span class="tam-qr tam-qr-sm" role="img" aria-label="QR code preview">
+                  <svg [attr.viewBox]="previewQrViewBox(previewUrl())" shape-rendering="crispEdges" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+                    <rect width="100%" height="100%" fill="#ffffff"/>
+                    <path [attr.d]="previewQrPath(previewUrl())" fill="#1e2a24"/>
+                  </svg>
+                </span>
+              }
+              <span class="tam-preview-body">
+                <span class="tam-preview-ref mono">{{ previewReference() }}</span>
+                <code class="tam-preview-url">{{ previewUrl() }}</code>
+              </span>
+            </div>
+          </div>
+        }
+
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelGenerate()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmGenerate()">Create</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ SUBMIT DIALOG ============ -->
+  @if (submitDialogOpen() && submitTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelSubmit()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-submit-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-submit-title" class="tam-modal-title">Submit tracking asset</h2>
+        <p class="tam-modal-lead">Submit this draft for approval. It moves from Draft to Submitted and is opened for
+          independent review; the stable tracking reference and history are preserved.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ submitTarget()!.trackingReference }}</dd></div>
+          <div><dt>Destination</dt><dd class="tam-break">{{ submitTarget()!.destination }}</dd></div>
+          <div><dt>Before → after</dt><dd>{{ submitTarget()!.assetStatus }} → Submitted</dd></div>
+        </dl>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelSubmit()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmSubmit()">Submit for approval</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ APPROVE DIALOG ============ -->
+  @if (approveDialogOpen() && approveTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelApprove()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-approve-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-approve-title" class="tam-modal-title">Confirm Approve</h2>
+        <p class="tam-modal-lead">Review the affected record, consequence, reason and effective time. This decision records
+          independent authority and moves the asset forward.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ approveTarget()!.trackingReference }}</dd></div>
+          <div><dt>Before → after</dt><dd>{{ approveTarget()!.approvalState }} → Approved</dd></div>
+          <div><dt>Independent authority</dt><dd>Authorised independent approver</dd></div>
+          <div><dt>Effective version</dt><dd>v-current · {{ lastRefresh() }}</dd></div>
+          <div><dt>Resulting state</dt><dd>Approved · next accountable owner: {{ owner }}</dd></div>
+        </dl>
+        <div class="tam-field">
+          <label class="tam-field-label" for="tam-approve-reason">Reason <span class="tam-conf-tag">Required</span></label>
+          <textarea id="tam-approve-reason" class="tam-input tam-textarea" rows="3"
+                    [ngModel]="approveReason()" (ngModelChange)="approveReason.set($event)"
+                    [attr.maxlength]="approveReasonMax"
+                    placeholder="Record the reason for approving this tracking asset…"></textarea>
+          <p class="tam-field-hint" [class.tam-field-error]="approveReasonCount() > 0 && !approveReasonValid()" role="status">
+            {{ approveReasonCount() }} / {{ approveReasonMax }} characters (minimum {{ approveReasonMin }})
+          </p>
+        </div>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelApprove()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmApprove()" [disabled]="!approveReasonValid()">Confirm approve</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ DISABLE DIALOG ============ -->
+  @if (disableDialogOpen() && disableTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelDisable()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-disable-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-disable-title" class="tam-modal-title">Confirm Disable</h2>
+        <p class="tam-modal-lead">Review the affected record, consequence, reason and effective time. Linked history is
+          preserved; the tracking reference is retained.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ disableTarget()!.trackingReference }}</dd></div>
+          <div><dt>Consequence</dt><dd>Stops new redirects and scans for this asset</dd></div>
+          <div><dt>Resulting state</dt><dd>Disabled · linked history preserved</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="tam-field">
+          <label class="tam-field-label" for="tam-disable-reason">Reason <span class="tam-conf-tag">Required</span></label>
+          <textarea id="tam-disable-reason" class="tam-input tam-textarea" rows="3"
+                    [ngModel]="disableReason()" (ngModelChange)="disableReason.set($event)"
+                    [attr.maxlength]="disableReasonMax"
+                    placeholder="Record the reason for disabling this tracking asset…"></textarea>
+          <p class="tam-field-hint" [class.tam-field-error]="disableReasonCount() > 0 && !disableReasonValid()" role="status">
+            {{ disableReasonCount() }} / {{ disableReasonMax }} characters (minimum {{ disableReasonMin }})
+          </p>
+        </div>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelDisable()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-danger" (click)="confirmDisable()" [disabled]="!disableReasonValid()">Disable asset</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ EDIT DIALOG (Draft only) ============ -->
+  @if (editDialogOpen() && editTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelEdit()">
+      <div class="tam-modal tam-modal-wide" role="dialog" aria-modal="true" aria-labelledby="tam-edit-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-edit-title" class="tam-modal-title">Edit tracking asset</h2>
+        <p class="tam-modal-lead">Edit this draft's details while preserving the stable tracking reference and its linked
+          history. Editing is only available while the asset is a Draft.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ editTarget()!.trackingReference }} <span class="tam-hint-inline">(preserved)</span></dd></div>
+          <div><dt>Status</dt><dd><span class="tam-badge" [class]="statusClass(editTarget()!.assetStatus)">{{ editTarget()!.assetStatus }}</span></dd></div>
+        </dl>
+
+        <div class="tam-form-grid">
+          <!-- Destination (required) -->
+          <div class="tam-field tam-field-span" [class.tam-field-invalid]="editSubmitted() && !editDestinationValid()">
+            <label class="tam-field-label" for="tam-edit-dest">Destination <span class="tam-req">*</span></label>
+            <input id="tam-edit-dest" type="text" class="tam-input" [ngModel]="editDestination()"
+                   (ngModelChange)="editDestination.set($event)" placeholder="Enter the destination URL or path" />
+            @if (editSubmitted() && !editDestinationValid()) { <p class="tam-field-hint tam-field-error">Enter Destination.</p> }
+          </div>
+
+          <!-- Channel -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="tam-edit-channel">Channel</label>
+            <div class="tam-combo" [class.is-open]="openMenu() === 'e-channel'" appClickOutside (appClickOutside)="onClickOutside('e-channel')">
+              <button id="tam-edit-channel" type="button" class="tam-combo-btn" (click)="toggleMenu('e-channel')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'e-channel'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!editChannel()">{{ editChannel() || 'Select a channel…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'e-channel') {
+                <ul class="tam-combo-list" role="listbox">
+                  <li role="option" [attr.aria-selected]="!editChannel()"><button type="button" class="tam-combo-option" [class.is-selected]="!editChannel()" (click)="editChannel.set(''); closeMenu()">Select a channel…</button></li>
+                  @for (c of channelCatalogue; track c) {
+                    <li role="option" [attr.aria-selected]="editChannel() === c"><button type="button" class="tam-combo-option" [class.is-selected]="editChannel() === c" (click)="editChannel.set(c); closeMenu()">{{ c }}</button></li>
+                  }
+                </ul>
+              }
+            </div>
+          </div>
+
+          <!-- Source -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="tam-edit-source">Source</label>
+            <input id="tam-edit-source" type="text" class="tam-input" [ngModel]="editSource()" (ngModelChange)="editSource.set($event)" placeholder="e.g. newsletter" />
+          </div>
+
+          <!-- Medium -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="tam-edit-medium">Medium</label>
+            <input id="tam-edit-medium" type="text" class="tam-input" [ngModel]="editMedium()" (ngModelChange)="editMedium.set($event)" placeholder="e.g. email" />
+          </div>
+
+          <!-- Content tag -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="tam-edit-content">Content tag</label>
+            <input id="tam-edit-content" type="text" class="tam-input" [ngModel]="editContentTag()" (ngModelChange)="editContentTag.set($event)" [attr.maxlength]="gContentTagMax" placeholder="e.g. may-issue" />
+          </div>
+
+          <!-- Active from -->
+          <div class="tam-field">
+            <label class="tam-field-label" for="tam-edit-from">Active from <span class="tam-tz">{{ operatingTimeZone }}</span></label>
+            <input id="tam-edit-from" type="date" class="tam-input" [ngModel]="editActiveFrom()" (ngModelChange)="editActiveFrom.set($event)" />
+          </div>
+
+          <!-- Active to -->
+          <div class="tam-field" [class.tam-field-invalid]="editRangeInvalid()">
+            <label class="tam-field-label" for="tam-edit-to">Active to <span class="tam-tz">{{ operatingTimeZone }}</span></label>
+            <input id="tam-edit-to" type="date" class="tam-input" [ngModel]="editActiveTo()" (ngModelChange)="editActiveTo.set($event)" />
+            @if (editRangeInvalid()) { <p class="tam-field-hint tam-field-error">Review Active to. The value does not meet the stated format or range.</p> }
+          </div>
+        </div>
+
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelEdit()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmEdit()">Save changes</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ DELETE UNUSED DRAFT DIALOG ============ -->
+  @if (deleteDialogOpen() && deleteTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelDelete()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-delete-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-delete-title" class="tam-modal-title">Confirm Delete unused draft</h2>
+        <p class="tam-modal-lead">Delete is available only for an unused draft with no downstream reference. Review the
+          affected record, consequence, reason and effective time; required history is preserved.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ deleteTarget()!.trackingReference }}</dd></div>
+          <div><dt>Consequence</dt><dd>Removes an unused draft with no downstream reference</dd></div>
+          <div><dt>Resulting state</dt><dd>Draft deleted · linked evidence retained</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="tam-field">
+          <label class="tam-field-label" for="tam-delete-reason">Reason <span class="tam-conf-tag">Required</span></label>
+          <textarea id="tam-delete-reason" class="tam-input tam-textarea" rows="3"
+                    [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($event)"
+                    [attr.maxlength]="deleteReasonMax"
+                    placeholder="Record the named reason for deleting this unused draft…"></textarea>
+          <p class="tam-field-hint" [class.tam-field-error]="deleteReasonCount() > 0 && !deleteReasonValid()" role="status">
+            {{ deleteReasonCount() }} / {{ deleteReasonMax }} characters (minimum {{ deleteReasonMin }})
+          </p>
+        </div>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-danger" (click)="confirmDeleteDraft()" [disabled]="!deleteReasonValid()">Delete draft</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

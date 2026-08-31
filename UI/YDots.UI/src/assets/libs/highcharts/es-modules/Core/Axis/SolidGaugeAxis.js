@@ -1,0 +1,1 @@
+"use strict";import ColorAxisLike from"./Color/ColorAxisLike.js";import U from"../Utilities.js";const{extend:extend}=U;function init(i){extend(i,ColorAxisLike)}const SolidGaugeAxis={init:init};export default SolidGaugeAxis;

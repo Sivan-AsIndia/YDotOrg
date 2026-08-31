@@ -1,0 +1,2 @@
+/*! For license information please see solid-gauge.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/SolidGauge/SolidGaugeSeries.js";export default Highcharts;

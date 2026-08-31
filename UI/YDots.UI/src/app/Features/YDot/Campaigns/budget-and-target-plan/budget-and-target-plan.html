@@ -1,0 +1,599 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+    <!-- Header -->
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+        <div>
+          <h3 class="mb-1 fw-bold fs-24">{{ pageTitle }}</h3>
+          <p class="mb-0 fs-14">{{ pageSubtitle }}</p>
+        </div>
+        @if (permissions().view) {
+          <div class="d-flex gap-2">
+            @if (permissions().allocate) {
+              <button type="button" class="btn btn-outline-light btn-sm px-3" (click)="openAllocate()">
+                <i class="ri-file-add-line me-1"></i> New Plan
+              </button>
+            }
+            <button type="button" class="btn btn-primary btn-sm px-3" (click)="refresh()" [disabled]="uiState() === 'loading'">
+              @if (uiState() === 'loading') { <span class="spinner-border spinner-border-sm me-1"></span> }
+              <i class="ri-refresh-line me-1"></i> Refresh
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (!permissions().view) {
+      <!-- No access -->
+      <div class="empty-state">
+        <div class="empty-state-icon"><i class="ri-lock-2-line"></i></div>
+        <h5 class="fw-bold">This area is not available for your access</h5>
+        <p class="text-muted mb-0">You do not have permission to view budget and target plans in this scope.</p>
+      </div>
+    } @else {
+
+    <!-- Meta Info Strip -->
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+      <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+        <i class="ri-folder-line me-1"></i> Scope: <strong>{{ scope }}</strong>
+      </span>
+      <span class="badge bg-info bg-opacity-10 text-info px-3 py-2">
+        <i class="ri-user-line me-1"></i> Owner: <strong>{{ owner }}</strong>
+      </span>
+      <span class="badge bg-secondary bg-opacity-10 text-secondary px-3 py-2">
+        <i class="ri-time-line me-1"></i> Updated {{ lastRefresh() }}
+      </span>
+    </div>
+
+    <!-- Empty State -->
+    @if (filteredPlans().length === 0) {
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="ri-file-search-line"></i>
+        </div>
+        @if (emptyReason() === 'no-records') {
+          <h5 class="fw-bold">No plans yet in this scope</h5>
+          <p class="text-muted mb-3">No budget and target plans have been allocated for {{ scope }}. This is your scope, not a global total.</p>
+          @if (permissions().allocate) {
+            <button class="btn btn-outline-primary" (click)="openAllocate()">
+              <i class="ri-file-add-line me-1"></i> Allocate the first plan
+            </button>
+          }
+        } @else {
+          <h5 class="fw-bold">No plans match the current filters</h5>
+          <p class="text-muted mb-3">No plans match your search or filters in this scope. Adjust or clear them to see more.</p>
+          <button class="btn btn-outline-primary" (click)="clearFilters()">
+            <i class="ri-filter-off-line me-1"></i> Clear filters
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Summary Stats -->
+    <div class="row g-3 mb-1 mt-2">
+      <div class="col-md-3 col-6">
+        <div class="card border shadow-sm" data-tone="total">
+          <div class="card-body text-center py-3">
+            <div class="fs-3 fw-bold text-primary">{{ plans.length }}</div>
+            <div class="small text-muted">Total Plans</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border shadow-sm" data-tone="approved">
+          <div class="card-body text-center py-3">
+            <div class="fs-3 fw-bold text-success">{{ getApprovedCount() }}</div>
+            <div class="small text-muted">Approved</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border shadow-sm" data-tone="submitted">
+          <div class="card-body text-center py-3">
+            <div class="fs-3 fw-bold text-warning">{{ getSubmittedCount() }}</div>
+            <div class="small text-muted">Submitted</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border shadow-sm" data-tone="target">
+          <div class="card-body text-center py-3">
+            <div class="fs-3 fw-bold text-secondary">{{ formatTotalAmount() }}</div>
+            <div class="small text-muted">Total Target</div>
+          </div>
+        </div>
+      </div>
+    </div>
+ <!-- Filter Section -->
+    <div class="filter-bar-wrap mb-4">
+      <input type="checkbox" id="planFilterToggle" class="filter-panel-toggle-input" hidden>
+
+      <div class="filter-topbar">
+        <div class="filter-topbar-search">
+          <i class="ri-search-line"></i>
+          <input type="text" placeholder="Search by campaign, owner or reference"
+                 [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+        </div>
+        <label for="planFilterToggle" class="btn btn-primary btn-sm px-3">
+          <i class="ri-equalizer-line"></i> Filter
+          @if (hasActiveFilters()) { <span class="filter-topbar-dot"></span> }
+        </label>
+      </div>
+
+      <label for="planFilterToggle" class="filter-modal-backdrop" aria-hidden="true"></label>
+
+      <div class="filter-modal" role="dialog" aria-modal="true" aria-label="Filters">
+        <div class="filter-modal-header">
+          <h5>Filters</h5>
+          <label for="planFilterToggle" class="filter-modal-close">
+            <i class="ri-close-line fs-18"></i>
+          </label>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Approval status</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="approvalRadio" [checked]="filterApproval() === ''" (change)="filterApproval.set('')">
+                <span class="check-box"></span> All statuses
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="approvalRadio" [checked]="filterApproval() === 'Draft'" (change)="filterApproval.set('Draft')">
+                <span class="check-box"></span> Draft
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="approvalRadio" [checked]="filterApproval() === 'Submitted'" (change)="filterApproval.set('Submitted')">
+                <span class="check-box"></span> Submitted
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="approvalRadio" [checked]="filterApproval() === 'Approved'" (change)="filterApproval.set('Approved')">
+                <span class="check-box"></span> Approved
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="approvalRadio" [checked]="filterApproval() === 'Rejected'" (change)="filterApproval.set('Rejected')">
+                <span class="check-box"></span> Rejected
+              </label>
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Reconciled result</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="reconciledRadio" [checked]="filterReconciled() === ''" (change)="filterReconciled.set('')">
+                <span class="check-box"></span> All results
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="reconciledRadio" [checked]="filterReconciled() === 'On Track'" (change)="filterReconciled.set('On Track')">
+                <span class="check-box"></span> On Track
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="reconciledRadio" [checked]="filterReconciled() === 'Exceeded'" (change)="filterReconciled.set('Exceeded')">
+                <span class="check-box"></span> Exceeded
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="reconciledRadio" [checked]="filterReconciled() === 'Pending'" (change)="filterReconciled.set('Pending')">
+                <span class="check-box"></span> Pending
+              </label>
+              <label class="check-pill">
+                <input type="radio" name="reconciledRadio" [checked]="filterReconciled() === 'Not Started'" (change)="filterReconciled.set('Not Started')">
+                <span class="check-box"></span> Not Started
+              </label>
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Campaign</div>
+            <div class="filter-chip-select mb-3">
+              <i class="ri-flag-line"></i>
+              <select [ngModel]="filterCampaign()" (ngModelChange)="filterCampaign.set($event)">
+                <option value="">All campaigns</option>
+                @for (c of uniqueCampaigns(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+
+            <div class="filter-panel-label">Budget category</div>
+            <div class="filter-chip-select">
+              <i class="ri-price-tag-3-line"></i>
+              <select [ngModel]="filterBudgetCategory()" (ngModelChange)="filterBudgetCategory.set($event)">
+                <option value="">All categories</option>
+                @for (c of uniqueBudgetCategories(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-panel-footer">
+          <button type="button" class="filter-reset-link" (click)="clearFilters()">Clear</button>
+          <label for="planFilterToggle" class="btn btn-primary btn-sm px-4 mb-0">Apply</label>
+        </div>
+      </div>
+    </div>
+    <!-- Table Card -->
+    @if (filteredPlans().length > 0) {
+    <div class="card border">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <!-- <th>Plan Reference</th> -->
+              <th>Campaign</th>
+              <th>Period</th>
+              <th>Target Dimension</th>
+              <th>Owner</th>
+              <th class="text-end">Target Amount</th>
+              <th>Budget Category</th>
+              <th class="text-end">Budget Amount</th>
+              <th class="text-end">Volume</th>
+              <!-- <th>Assumptions</th> -->
+              <th>Version</th>
+              <th>Approval</th>
+              <th>Reconciled</th>
+              <th class="text-end">Variance</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of paginatedPlans(); track p.reference) {
+              <tr>
+                <!-- <td><span class="fw-medium">{{ p.reference }}</span></td> -->
+                <td>{{ p.campaign }}</td>
+                <td>{{ p.planPeriod }}</td>
+                <td>{{ p.targetDimension }}</td>
+                <td>{{ p.owner }}</td>
+                <td class="text-end fw-semibold font-monospace">{{ formatAmount(p.targetAmount) }}</td>
+                <td>{{ p.budgetCategory }}</td>
+                <td class="text-end fw-semibold font-monospace">{{ formatAmount(p.budgetAmount) }}</td>
+                <td class="text-end">{{ p.expectedVolume }}</td>
+                <!-- <td>
+                  <span class="assumptions-trigger" title="{{ p.assumptions }}">
+                    <i class="ri-information-line"></i>
+                  </span>
+                </td> -->
+                <td><span class="badge bg-light text-dark">{{ p.version }}</span></td>
+                <td>
+                  <span class="badge {{ getApprovalBadgeClass(p.approvalState) }}">
+                    {{ p.approvalState }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge {{ getReconciledBadgeClass(p.actualReconciledResult) }}">
+                    {{ p.actualReconciledResult }}
+                  </span>
+                </td>
+                <td class="text-end fw-semibold {{ getVarianceBadgeClass(p.variance) }}">{{ p.variance }}</td>
+                <td class="text-center">
+                  @if (canRevise(p) || canSubmit(p) || canApprove(p)) {
+                    <div class="dropdown">
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="ri-more-2-fill"></i>
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end">
+                        @if (canRevise(p)) {
+                          <li><a class="dropdown-item" href="javascript:void(0)" (click)="openRowAction(p, 'revise')"><i class="ri-edit-line me-2 text-warning"></i>Revise</a></li>
+                        }
+                        @if (canSubmit(p)) {
+                          <li><a class="dropdown-item" href="javascript:void(0)" (click)="openRowAction(p, 'submit')"><i class="ri-send-plane-line me-2 text-info"></i>Submit</a></li>
+                        }
+                        @if (canApprove(p)) {
+                          <li><a class="dropdown-item" href="javascript:void(0)" (click)="openRowAction(p, 'approve')"><i class="ri-check-double-line me-2 text-success"></i>Approve</a></li>
+                        }
+                      </ul>
+                    </div>
+                  } @else {
+                    <span class="text-muted small">—</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <small class="text-muted">
+          Showing <strong>{{ paginatedPlans().length }}</strong> of <strong>{{ filteredPlans().length }}</strong> plans
+          | Target: <strong class="text-primary">{{ formatTotalAmount() }}</strong>
+          | Budget: <strong class="text-info">{{ getTotalBudget() }}</strong>
+        </small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item" [class.disabled]="currentPage() === 1">
+              <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() - 1)">
+                <i class="ri-arrow-left-s-line"></i>
+              </a>
+            </li>
+            @if (pageNumbers()[0] > 1) {
+              <li class="page-item"><a class="page-link" href="javascript:void(0)" (click)="goToPage(1)">1</a></li>
+              @if (pageNumbers()[0] > 2) { <li class="page-item disabled"><a class="page-link" href="javascript:void(0)">...</a></li> }
+            }
+            @for (p of pageNumbers(); track p) {
+              <li class="page-item" [class.active]="currentPage() === p">
+                <a class="page-link" href="javascript:void(0)" (click)="goToPage(p)">{{ p }}</a>
+              </li>
+            }
+            @if (pageNumbers()[pageNumbers().length - 1] < totalPages) {
+              @if (pageNumbers()[pageNumbers().length - 1] < totalPages - 1) { <li class="page-item disabled"><a class="page-link" href="javascript:void(0)">...</a></li> }
+              <li class="page-item"><a class="page-link" href="javascript:void(0)" (click)="goToPage(totalPages)">{{ totalPages }}</a></li>
+            }
+            <li class="page-item" [class.disabled]="currentPage() === totalPages">
+              <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() + 1)">
+                <i class="ri-arrow-right-s-line"></i>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+    }
+    }
+  </div>
+</div>
+
+<!-- ===== ACTION MODAL ===== -->
+@if (showActionModal()) {
+  <div class="modal d-block" tabindex="-1" (click)="closeActionModal()">
+    <div class="modal-dialog modal-dialog-centered modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">
+            <i class="ri-funds-line me-2" style="color: var(--accent);"></i>
+            @switch (uiState()) {
+              @case ('success') { Confirmation }
+              @case ('duplicate') { Possible duplicate plan }
+              @case ('conflict') { Record changed }
+              @case ('dependency-failure') { Dependent step failed }
+              @default { {{ getActionLabel() }} Plan }
+            }
+          </h5>
+          <button type="button" class="btn-close" (click)="closeActionModal()"></button>
+        </div>
+
+        <div class="modal-body">
+          @switch (uiState()) {
+
+            <!-- Persistent success -->
+            @case ('success') {
+              @if (successResult(); as r) {
+                <div class="text-center py-2">
+                  <div class="mb-2"><i class="ri-checkbox-circle-fill text-success" style="font-size: 2.4rem;"></i></div>
+                  <h6 class="fw-bold mb-1">Saved successfully</h6>
+                  <p class="text-muted mb-3">Reference {{ r.reference }}; state {{ r.state }}; effective {{ r.effectiveTime }}.</p>
+                  <div class="d-inline-flex flex-column gap-2 text-start p-3 rounded bg-light">
+                    <span><span class="text-muted">Reference:</span> <strong>{{ r.reference }}</strong></span>
+                    <span><span class="text-muted">Resulting version:</span> <strong>{{ r.version }}</strong></span>
+                    <span><span class="text-muted">State:</span> <strong>{{ r.state }}</strong></span>
+                    <span><span class="text-muted">Effective:</span> <strong>{{ r.effectiveTime }}</strong></span>
+                    <span><span class="text-muted">Next:</span> <strong>{{ r.nextAction }}</strong></span>
+                  </div>
+                </div>
+              }
+            }
+
+            <!-- Duplicate / conflict candidate -->
+            @case ('duplicate') {
+              <div class="alert alert-warning mb-2">
+                A plan already exists for this campaign, plan period and target dimension
+                (<strong>{{ duplicateOf() }}</strong>). Allocating another would double count the same dimension.
+              </div>
+              <p class="text-muted mb-0">Change a value to make this distinct, or cancel and revise the existing plan instead. The existing plan is never overwritten.</p>
+            }
+
+            <!-- Record changed since load -->
+            @case ('conflict') {
+              <div class="alert alert-warning mb-2">
+                This record changed after you opened it. Review the latest version before continuing.
+              </div>
+              <p class="text-muted mb-0">Your proposed values are retained. Review the latest version, then reapply eligible changes or cancel.</p>
+            }
+
+            <!-- Dependency failure -->
+            @case ('dependency-failure') {
+              <div class="alert alert-danger mb-2">
+                We could not complete the dependent service step. Your confirmed local result is unchanged.
+              </div>
+              <p class="text-muted mb-2">
+                The plan version was saved and submitted locally, but the external finance system did not accept it.
+                Retry only the failed step using the correlation reference below.
+              </p>
+              <div class="p-2 rounded bg-light"><span class="text-muted">Correlation reference:</span> <strong>{{ correlationRef() }}</strong></div>
+            }
+
+            <!-- Form / confirm -->
+            @default {
+              @if (selectedPlan(); as plan) {
+                <div class="d-flex align-items-center gap-3 mb-3 p-3 rounded bg-light">
+                  <div class="action-plan-avatar">{{ plan.reference.slice(-3) }}</div>
+                  <div>
+                    <h6 class="mb-0 fw-semibold">{{ plan.reference }}</h6>
+                    <small class="text-muted">{{ plan.campaign }} · {{ plan.planPeriod }} · current {{ plan.version }} ({{ plan.approvalState }})</small>
+                  </div>
+                </div>
+              }
+
+              <!-- Validation summary -->
+              @if (uiState() === 'validation' && errorList().length) {
+                <div class="alert alert-danger" role="alert">
+                  <div class="fw-semibold mb-1">Please correct the following:</div>
+                  <ul class="mb-0 ps-3">
+                    @for (e of errorList(); track e.field) {
+                      <li><a href="javascript:void(0)" class="alert-link" (click)="null">{{ e.message }}</a></li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (actionMode() === 'allocate' || actionMode() === 'revise') {
+                <!-- Fields & controls -->
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-campaign">Campaign <span class="text-danger">*</span></label>
+                    <select id="f-campaign" class="form-select" [class.is-invalid]="fieldError('campaign')"
+                            [ngModel]="fCampaignRef()" (ngModelChange)="onCampaignSelect($event)">
+                      <option value="">Select a campaign in scope…</option>
+                      @for (c of campaignOptions(); track c.code) {
+                        <option [value]="c.code">{{ c.name }} · {{ c.code }}</option>
+                      }
+                    </select>
+                    @if (fieldError('campaign')) { <div class="invalid-feedback d-block">{{ fieldError('campaign') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-owner">Owner or team <span class="text-danger">*</span></label>
+                    <select id="f-owner" class="form-select" [class.is-invalid]="fieldError('owner')"
+                            [ngModel]="fOwnerRef()" (ngModelChange)="onOwnerSelect($event)">
+                      <option value="">Select an owner in scope…</option>
+                      @for (o of ownerOptions(); track o.ref) {
+                        <option [value]="o.ref">{{ o.name }} · {{ o.ref }}</option>
+                      }
+                    </select>
+                    @if (fieldError('owner')) { <div class="invalid-feedback d-block">{{ fieldError('owner') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-planPeriod">Plan period <span class="text-danger">*</span></label>
+                    <input id="f-planPeriod" type="text" class="form-control" placeholder="e.g. FY 2025-26"
+                           [class.is-invalid]="fieldError('planPeriod')"
+                           [ngModel]="fPlanPeriod()" (ngModelChange)="fPlanPeriod.set($event)">
+                    @if (fieldError('planPeriod')) { <div class="invalid-feedback d-block">{{ fieldError('planPeriod') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-targetDimension">Target dimension <span class="text-danger">*</span></label>
+                    <input id="f-targetDimension" type="text" class="form-control" placeholder="e.g. Education"
+                           [class.is-invalid]="fieldError('targetDimension')"
+                           [ngModel]="fTargetDimension()" (ngModelChange)="fTargetDimension.set($event)">
+                    @if (fieldError('targetDimension')) { <div class="invalid-feedback d-block">{{ fieldError('targetDimension') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-targetAmount">Target amount (₹) <span class="text-danger">*</span></label>
+                    <input id="f-targetAmount" type="text" inputmode="decimal" class="form-control" placeholder="0.00"
+                           [class.is-invalid]="fieldError('targetAmount')"
+                           [ngModel]="fTargetAmount()" (ngModelChange)="fTargetAmount.set($event)">
+                    @if (fieldError('targetAmount')) { <div class="invalid-feedback d-block">{{ fieldError('targetAmount') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-budgetCategory">Budget category <span class="text-danger">*</span></label>
+                    <input id="f-budgetCategory" type="text" class="form-control" placeholder="e.g. Programme"
+                           [class.is-invalid]="fieldError('budgetCategory')"
+                           [ngModel]="fBudgetCategory()" (ngModelChange)="fBudgetCategory.set($event)">
+                    @if (fieldError('budgetCategory')) { <div class="invalid-feedback d-block">{{ fieldError('budgetCategory') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-budgetAmount">Budget amount (₹) <span class="text-danger">*</span></label>
+                    <input id="f-budgetAmount" type="text" inputmode="decimal" class="form-control" placeholder="0.00"
+                           [class.is-invalid]="fieldError('budgetAmount')"
+                           [ngModel]="fBudgetAmount()" (ngModelChange)="fBudgetAmount.set($event)">
+                    @if (fieldError('budgetAmount')) { <div class="invalid-feedback d-block">{{ fieldError('budgetAmount') }}</div> }
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="f-expectedVolume">Expected volume <span class="text-danger">*</span></label>
+                    <input id="f-expectedVolume" type="text" inputmode="numeric" class="form-control" placeholder="0"
+                           [class.is-invalid]="fieldError('expectedVolume')"
+                           [ngModel]="fExpectedVolume()" (ngModelChange)="fExpectedVolume.set($event)">
+                    @if (fieldError('expectedVolume')) { <div class="invalid-feedback d-block">{{ fieldError('expectedVolume') }}</div> }
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold" for="f-assumptions">Assumptions <span class="text-danger">*</span></label>
+                    <textarea id="f-assumptions" class="form-control" rows="3" maxlength="2000"
+                              placeholder="Explain the basis for these figures (10–2000 characters)…"
+                              [class.is-invalid]="fieldError('assumptions')"
+                              [ngModel]="fAssumptions()" (ngModelChange)="fAssumptions.set($event)"></textarea>
+                    <div class="d-flex justify-content-between">
+                      @if (fieldError('assumptions')) { <div class="invalid-feedback d-block">{{ fieldError('assumptions') }}</div> } @else { <span></span> }
+                      <small class="text-muted">{{ fAssumptions().length }}/2000</small>
+                    </div>
+                  </div>
+                </div>
+                @if (actionMode() === 'revise') {
+                  <p class="text-muted small mt-3 mb-0"><i class="ri-information-line me-1"></i>Saving creates a new Draft version under the same reference. The current version stays intact in history.</p>
+                }
+              }
+
+              @if (actionMode() === 'submit') {
+                @if (selectedPlan(); as plan) {
+                  <div class="row g-2 mb-3">
+                    <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Target Amount</small><span class="fw-medium">{{ formatAmount(plan.targetAmount) }}</span></div></div>
+                    <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Budget Amount</small><span class="fw-medium">{{ formatAmount(plan.budgetAmount) }}</span></div></div>
+                  </div>
+                  <p class="mb-0">Submit <strong>{{ plan.version }}</strong> of <strong>{{ plan.reference }}</strong> for independent review. Resubmitting the same version has no additional effect.</p>
+                }
+              }
+
+              @if (actionMode() === 'approve') {
+                @if (selectedPlan(); as plan) {
+                  <div class="alert alert-warning mb-3">
+                    Confirm Approve. Review the affected record, consequence, reason and effective time.
+                  </div>
+                  <ul class="mb-3 small">
+                    <li>Affected record: <strong>{{ plan.reference }}</strong>, version <strong>{{ plan.version }}</strong>.</li>
+                    <li>Consequence: this version becomes the current Approved plan; any previously approved version is superseded (kept in history) and only this version is counted toward totals.</li>
+                  </ul>
+                  @if (isSelfApproval()) {
+                    <div class="alert alert-danger mb-0">{{ selfApprovalMessage() }}</div>
+                  } @else {
+                    <label class="form-label small fw-semibold">Approval reason <span class="text-danger">*</span></label>
+                    <textarea class="form-control" rows="3" placeholder="Record the basis for this approval decision…"
+                              [ngModel]="approveReason()" (ngModelChange)="approveReason.set($event)"></textarea>
+                  }
+                }
+              }
+            }
+          }
+        </div>
+
+        <div class="modal-footer border-top">
+          @switch (uiState()) {
+            @case ('success') {
+              <button class="btn btn-primary" (click)="closeActionModal()"><i class="ri-check-line me-1"></i> Done</button>
+            }
+            @case ('duplicate') {
+              <button class="btn btn-light" (click)="closeActionModal()">Cancel</button>
+              <button class="btn btn-primary" (click)="setUiState('ready')">Change a value</button>
+            }
+            @case ('conflict') {
+              <button class="btn btn-light" (click)="closeActionModal()">Cancel</button>
+              <button class="btn btn-primary" (click)="reloadLatest()">Review latest version</button>
+            }
+            @case ('dependency-failure') {
+              <button class="btn btn-light" (click)="closeActionModal()">Close</button>
+              <button class="btn btn-primary" (click)="retryDependency()" [disabled]="actionSubmitting()">
+                @if (actionSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Retry finance step
+              </button>
+            }
+            @default {
+              <button class="btn btn-light" (click)="closeActionModal()">Cancel</button>
+              @if (actionMode() === 'allocate' || actionMode() === 'revise') {
+                <button class="btn {{ getActionButtonClass() }}" (click)="saveForm()" [disabled]="actionSubmitting()">
+                  @if (actionSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  <i class="ri-check-line me-1"></i> {{ getActionLabel() }}
+                </button>
+              }
+              @if (actionMode() === 'submit') {
+                <button class="btn btn-primary" (click)="confirmSubmit()" [disabled]="actionSubmitting()">
+                  @if (actionSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  <i class="ri-send-plane-line me-1"></i> Submit
+                </button>
+              }
+              @if (actionMode() === 'approve') {
+                <button class="btn btn-success" (click)="confirmApprove()"
+                        [disabled]="actionSubmitting() || isSelfApproval() || !approveReason().trim()">
+                  @if (actionSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  <i class="ri-check-double-line me-1"></i> Approve
+                </button>
+              }
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+</main>

@@ -1,0 +1,318 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div role="main">
+
+
+
+  <!-- ============================= Task header ============================= -->
+  <header class="task-header">
+    <div class="task-header-main">
+      <div class="task-title-row">
+        <h1 class="task-title">{{ pageTitle }}</h1>
+        <span class="badge badge--{{ lifecycleState().toLowerCase().replace(' ', '-') }}">{{ lifecycleState() }}</span>
+      </div>
+      <p class="task-meta">
+        <span>Owner&nbsp;<strong>{{ owner }}</strong></span>
+        <span class="dot">·</span>
+        <span>Updated <strong>{{ lastRefresh() }}</strong></span>
+        <span class="dot">·</span>
+        <span>{{ operatingTimeZone }}</span>
+      </p>
+    </div>
+
+    <div class="task-header-actions">
+      <button type="button" class="btn btn--ghost" [title]="validateImpactAllowed() ? 'Validate impact' : workflowBlockedReason()" (click)="performValidateImpact()" [class.disabled]="!validateImpactAllowed()" [attr.aria-disabled]="!validateImpactAllowed()">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.5 12a7.5 7.5 0 0 1 15 0" />
+          <path d="M12 4.5v4" />
+          <path d="M4.5 12H3" />
+          <path d="M21 12h-1.5" />
+          <path d="M12 19.5v-4" />
+          <path d="m8 11-5 3 10 5 5-3-10-5z" />
+        </svg>
+        Validate impact
+      </button>
+      <button type="button" class="btn btn--primary" [title]="submitTitle()" (click)="submitCorrection()" [class.disabled]="!submitAllowed()" [attr.aria-disabled]="!submitAllowed()">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        Submit correction
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================= Error summary ============================= -->
+  @if (uiState() === 'validation') {
+    <div class="error-summary" role="alert" aria-label="Form errors">
+      <p class="error-summary-title">Review the highlighted fields</p>
+      <ul>
+        <li>Required fields are missing or a value does not meet the stated format or range. Correct them to continue; entered safe values are kept.</li>
+      </ul>
+      <button type="button" class="banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+  @if (uiState() === 'duplicate') {
+    <div class="banner banner--warn" role="alert">
+      <p>This correction already exists. Review the candidate before continuing.</p>
+      <button type="button" class="banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+  @if (uiState() === 'conflict') {
+    <div class="banner banner--warn" role="alert">
+      <p>This record changed after you opened it. Review the latest version before continuing.</p>
+      <div class="banner-actions">
+        <button type="button" class="btn btn--secondary btn--tiny" (click)="dismissBanner()">Compare</button>
+        <button type="button" class="btn btn--secondary btn--tiny" (click)="dismissBanner()">Reapply eligible changes</button>
+        <button type="button" class="btn btn--ghost btn--tiny" (click)="dismissBanner()">Cancel</button>
+      </div>
+    </div>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <div class="banner banner--warn" role="alert">
+      <p>We could not complete the dependent service step. Your confirmed local result is unchanged.</p>
+      <div class="banner-actions">
+        <span class="corr">Correlation INT-77338</span>
+        <button type="button" class="btn btn--secondary btn--tiny" (click)="dismissBanner()">Retry dependency</button>
+      </div>
+    </div>
+  }
+  @if (uiState() === 'success') {
+    <div class="banner banner--success" role="status">
+      <p>Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.</p>
+      <button type="button" class="banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+
+  <!-- ============================= Main two-region layout ============================= -->
+  <div class="layout-grid">
+
+    <!-- ------------------------- Main work area ------------------------- -->
+    <div class="work-area">
+
+      <!-- Correction details -->
+      <section class="card" aria-labelledby="grp-correction">
+        <h2 id="grp-correction" class="card-title">Correction details</h2>
+
+        <div class="field-row field-row--two">
+          <div class="field">
+            <label class="field-label" for="originalTransaction">Original transaction</label>
+            <input
+              id="originalTransaction"
+              type="text"
+              class="text-input"
+              [ngModel]="originalTransaction()"
+              (ngModelChange)="originalTransaction.set($event)"
+            />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="correctionType">Correction type</label>
+            <select id="correctionType" class="select-input" [ngModel]="correctionType()" (ngModelChange)="correctionType.set($event)">
+              <option value="">Select correction type</option>
+              @for (t of correctionTypeOptions; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="affectedAmount">Affected amount</label>
+            <input
+              id="affectedAmount"
+              type="number"
+              class="text-input"
+              [class.input--error]="affectedAmount() !== null && !amountValid()"
+              [ngModel]="affectedAmount()"
+              (ngModelChange)="affectedAmount.set(toNumber($event))"
+              placeholder="0.00"
+            />
+            @if (affectedAmount() !== null && !amountValid()) {
+              <p class="field-error">Review Affected amount. The value does not meet the stated format or range.</p>
+            }
+          </div>
+
+          <div class="field">
+            <label class="field-label">Correct value</label>
+            <div class="readonly-value readonly-value--good">{{ correctValue() }}</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="accountingDate">Accounting date <span class="tz">{{ operatingTimeZone }}</span></label>
+            <input id="accountingDate" type="date" class="text-input" [ngModel]="accountingDate()" (ngModelChange)="accountingDate.set($event)" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Reason and people -->
+      <section class="card" aria-labelledby="grp-reason">
+        <h2 id="grp-reason" class="card-title">Reason and people</h2>
+
+        <div class="field-row field-row--two">
+          <div class="field">
+            <label class="field-label" for="reasonCategory">Reason category </label>
+            <select id="reasonCategory" class="select-input" [ngModel]="reasonCategory()" (ngModelChange)="reasonCategory.set($event)">
+              <option value="">Select reason category</option>
+              @for (r of reasonCategoryOptions; track r) {
+                <option [value]="r">{{ r }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Requester</label>
+            <div class="readonly-value">{{ requester }}</div>
+          </div>
+
+          <div class="field field--span">
+            <label class="field-label" for="detailedReason">Detailed reason</label>
+            <textarea
+              id="detailedReason"
+              class="textarea"
+              rows="3"
+              [ngModel]="detailedReason()"
+              (ngModelChange)="detailedReason.set($event)"
+              [attr.maxlength]="detailedReasonMax"
+              placeholder="Record the detailed reason for this correction…"
+            ></textarea>
+            <div class="field-footer">
+              <p class="field-help" [class.field-error]="detailedReasonCount() > 0 && !detailedReasonValid()" role="status">
+                {{ detailedReasonCount() }} / {{ detailedReasonMax }} characters (minimum {{ detailedReasonMin }})
+              </p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Evidence </label>
+            <div class="readonly-value">
+              <svg class="file-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                <path d="M14 2v6h6" />
+              </svg>
+              {{ evidenceFile() }}
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Checker</label>
+            <div class="readonly-value">{{ checker }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Impact and result -->
+      <section class="card" aria-labelledby="grp-impact">
+        <h2 id="grp-impact" class="card-title">Impact and result</h2>
+
+        <div class="field-row field-row--two">
+          <div class="field">
+            <label class="field-label" for="downstreamImpact">Downstream impact</label>
+            <textarea
+              id="downstreamImpact"
+              class="textarea"
+              rows="2"
+              [ngModel]="downstreamImpact()"
+              (ngModelChange)="downstreamImpact.set($event)"
+              placeholder="Describe the downstream impact of this correction…"
+            ></textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Resulting balance</label>
+            <span class="balance-pill balance-pill--success">
+              <span aria-hidden="true">{{ resultingBalance.icon }}</span> {{ resultingBalance.label }}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Action row -->
+      <div class="action-row">
+        <button type="button" class="btn btn--ghost" [title]="cancelDraftAllowed() ? 'Cancel draft' : cancelDraftBlockedReason()" (click)="openCancelDialog()" [class.disabled]="!cancelDraftAllowed()" [attr.aria-disabled]="!cancelDraftAllowed()">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+          Cancel draft
+        </button>
+        <div class="action-group">
+          <button type="button" class="btn btn--ghost" [title]="approveAllowed() ? 'Approve' : workflowBlockedReason()" (click)="approve()" [class.disabled]="!approveAllowed()" [attr.aria-disabled]="!approveAllowed()">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12.5 10 17.5 19 6.5" />
+            </svg>
+            Approve
+          </button>
+          <button type="button" class="btn btn--ghost" [title]="postReversalAllowed() ? 'Post reversal' : workflowBlockedReason()" (click)="postReversal()" [class.disabled]="!postReversalAllowed()" [attr.aria-disabled]="!postReversalAllowed()">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            Post reversal
+          </button>
+          <button type="button" class="btn btn--primary" [title]="submitTitle()" (click)="submitCorrection()" [class.disabled]="!submitAllowed()" [attr.aria-disabled]="!submitAllowed()">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+            Submit correction
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================= Cancel draft modal ============================= -->
+  @if (cancelDialogOpen()) {
+    <div class="modal-backdrop" (click)="cancelCancel()">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-title"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 id="cancel-title" class="modal-title">Confirm Cancel Draft</h2>
+        <p class="modal-lead">
+          Review the affected record, consequence, reason and effective time. This action preserves linked history.
+        </p>
+        <dl class="kv">
+          <div>
+            <dt>Consequence</dt>
+            <dd>Cancels the draft correction; no downstream processing</dd>
+          </div>
+          <div>
+            <dt>Effective time</dt>
+            <dd>{{ lastRefresh() }}</dd>
+          </div>
+        </dl>
+        <div class="field">
+          <label class="field-label" for="cancelReason">Reason <span class="req">*</span></label>
+          <textarea
+            id="cancelReason"
+            class="textarea"
+            rows="3"
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+            [attr.maxlength]="cancelReasonMax"
+            placeholder="Record the named reason for cancelling this draft…"
+          ></textarea>
+          <div class="field-footer">
+            <p class="field-help" [class.field-error]="cancelReasonCount() > 0 && !cancelReasonValid()" role="status">
+              {{ cancelReasonCount() }} / {{ cancelReasonMax }} characters (minimum {{ cancelReasonMin }})
+            </p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn--ghost" (click)="cancelCancel()">Keep draft</button>
+          <button type="button" class="btn btn--danger" (click)="confirmCancel()" [disabled]="!cancelReasonValid()">
+            Cancel draft
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</div>
+</main>

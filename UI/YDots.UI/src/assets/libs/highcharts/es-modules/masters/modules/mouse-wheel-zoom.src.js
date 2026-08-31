@@ -1,0 +1,2 @@
+/*! For license information please see mouse-wheel-zoom.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import MouseWheelZoom from"../../Extensions/MouseWheelZoom/MouseWheelZoom.js";const G=Highcharts;G.MouseWheelZoom=G.MouseWheelZoom||MouseWheelZoom,G.MouseWheelZoom.compose(G.Chart);export default Highcharts;

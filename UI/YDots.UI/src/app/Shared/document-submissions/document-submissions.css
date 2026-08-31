@@ -1,0 +1,423 @@
+/*
+  Grouped document submissions.
+
+  Everything here is scoped under .ds so the component can sit inside the Organisation profile
+  screen and the Registration Review screen without either one's styles reaching in or leaking
+  out. Colours come from the theme's own custom properties where the app defines them, with a
+  literal fallback so the component still reads correctly if it is dropped somewhere that has
+  not set them.
+*/
+
+.ds {
+  --ds-ink: var(--bs-body-color, #1f2430);
+  --ds-muted: var(--bs-secondary-color, #6b7280);
+  --ds-line: var(--bs-border-color, #e3e6ec);
+  --ds-surface: var(--bs-body-bg, #ffffff);
+  --ds-sunk: var(--bs-tertiary-bg, #f6f7f9);
+  --ds-accent: var(--bs-primary, #2f6f5e);
+
+  --ds-approve: #2f6446;
+  --ds-approve-soft: #e4f0e9;
+  --ds-reject: #8e3336;
+  --ds-reject-soft: #f8e6e6;
+  --ds-pending: #8a6516;
+  --ds-pending-soft: #fbf0da;
+  --ds-return: #1f5679;
+  --ds-return-soft: #e2eef6;
+
+  display: block;
+  color: var(--ds-ink);
+}
+
+/* ---- Header ---------------------------------------------------------------- */
+
+.ds-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.ds-title { font-size: 17px; font-weight: 600; margin: 0 0 3px; }
+.ds-sub { font-size: 13.5px; color: var(--ds-muted); margin: 0; max-width: 62ch; }
+
+/* ---- Buttons --------------------------------------------------------------- */
+
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 9px 15px;
+  border-radius: 7px;
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+
+.ds-btn:hover:not(:disabled) { background: var(--ds-sunk); }
+.ds-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ds-btn:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+
+.ds-btn.is-primary { background: var(--ds-accent); border-color: var(--ds-accent); color: #fff; }
+.ds-btn.is-primary:hover:not(:disabled) { filter: brightness(1.07); }
+
+.ds-btn.is-approve { color: var(--ds-approve); border-color: var(--ds-approve); }
+.ds-btn.is-reject { color: var(--ds-reject); border-color: var(--ds-reject); }
+.ds-btn.is-return { color: var(--ds-return); border-color: var(--ds-return); }
+
+.ds-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ds-muted);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.ds-icon-btn:hover:not(:disabled) { background: var(--ds-sunk); color: var(--ds-ink); }
+.ds-icon-btn.is-danger:hover:not(:disabled) { color: var(--ds-reject); }
+.ds-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ds-icon-btn:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 1px; }
+
+/* ---- Alerts and empty states ------------------------------------------------ */
+
+.ds-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.ds-alert.is-error {
+  background: var(--ds-reject-soft);
+  color: var(--ds-reject);
+  border: 1px solid color-mix(in srgb, var(--ds-reject) 25%, transparent);
+}
+
+.ds-alert-close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ds-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px;
+  border: 1px dashed var(--ds-line);
+  border-radius: 9px;
+  color: var(--ds-muted);
+  font-size: 14px;
+  background: var(--ds-sunk);
+}
+
+.ds-empty.is-warn {
+  background: var(--ds-pending-soft);
+  border-color: color-mix(in srgb, var(--ds-pending) 30%, transparent);
+  color: var(--ds-pending);
+}
+
+.ds-spin { animation: ds-rotate 1s linear infinite; }
+
+@keyframes ds-rotate { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-spin { animation: none; }
+  .ds-btn, .ds-drop { transition: none; }
+}
+
+/* ---- New submission form ----------------------------------------------------- */
+
+.ds-newform {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ds-line);
+  border-radius: 9px;
+  background: var(--ds-sunk);
+  margin-bottom: 18px;
+}
+
+.ds-field { display: flex; flex-direction: column; gap: 5px; }
+.ds-field--wide { grid-column: 1 / -1; }
+
+.ds-label { font-size: 12.5px; font-weight: 600; color: var(--ds-muted); }
+.ds-optional { font-weight: 400; opacity: .75; }
+
+.ds-input {
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+  width: 100%;
+}
+
+.ds-input:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: -1px; }
+
+.ds-newform-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+/* ---- Submission card ---------------------------------------------------------- */
+
+.ds-card {
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  background: var(--ds-surface);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.ds-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 26px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.ds-card-ident { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ds-card-title { font-size: 15.5px; font-weight: 600; margin: 0; }
+.ds-card-type { font-size: 12.5px; color: var(--ds-muted); }
+
+.ds-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.ds-badge.is-approved { background: var(--ds-approve-soft); color: var(--ds-approve); }
+.ds-badge.is-rejected { background: var(--ds-reject-soft); color: var(--ds-reject); }
+.ds-badge.is-pending  { background: var(--ds-pending-soft); color: var(--ds-pending); }
+.ds-badge.is-returned { background: var(--ds-return-soft); color: var(--ds-return); }
+.ds-badge.is-draft    { background: var(--ds-sunk); color: var(--ds-muted); }
+
+/* The metadata a reviewer reads before opening anything. */
+.ds-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.ds-meta dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ds-muted);
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+
+.ds-meta dd { margin: 0; font-weight: 500; }
+.ds-kinds { color: var(--ds-muted); font-weight: 400; margin-left: 5px; }
+
+.ds-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  color: var(--ds-muted);
+  background: var(--ds-sunk);
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin: 14px 0 0;
+}
+
+.ds-note.is-decision.is-rejected { background: var(--ds-reject-soft); color: var(--ds-reject); }
+.ds-note.is-decision.is-returned { background: var(--ds-return-soft); color: var(--ds-return); }
+.ds-note.is-decision.is-approved { background: var(--ds-approve-soft); color: var(--ds-approve); }
+
+/* ---- Files -------------------------------------------------------------------- */
+
+.ds-files { list-style: none; margin: 14px 0 0; padding: 0; }
+
+.ds-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--ds-surface);
+}
+
+.ds-file-icon { font-size: 20px; color: var(--ds-muted); flex: none; }
+.ds-file-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+
+.ds-file-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-file-sub { font-size: 12px; color: var(--ds-muted); }
+.ds-hash { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.ds-file-actions { display: flex; gap: 2px; flex: none; }
+
+/* ---- Drop zone ------------------------------------------------------------------ */
+
+.ds-drop {
+  margin-top: 14px;
+  padding: 22px;
+  border: 2px dashed var(--ds-line);
+  border-radius: 9px;
+  text-align: center;
+  background: var(--ds-sunk);
+  transition: border-color .12s ease, background-color .12s ease;
+}
+
+.ds-drop.is-over {
+  border-color: var(--ds-accent);
+  background: color-mix(in srgb, var(--ds-accent) 8%, transparent);
+}
+
+.ds-drop-icon { font-size: 26px; color: var(--ds-muted); display: block; margin-bottom: 6px; }
+.ds-drop-main { font-size: 14px; margin: 0 0 4px; }
+
+.ds-drop-link {
+  color: var(--ds-accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The limits, stated before a file is chosen rather than after it is refused. */
+.ds-drop-limits { font-size: 12.5px; color: var(--ds-muted); margin: 0; }
+
+/* ---- Progress -------------------------------------------------------------------- */
+
+.ds-progress { display: flex; flex-direction: column; gap: 8px; }
+
+.ds-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  justify-content: center;
+}
+
+.ds-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ds-line);
+  overflow: hidden;
+}
+
+.ds-progress-bar {
+  height: 100%;
+  background: var(--ds-accent);
+  border-radius: 3px;
+  transition: width .15s ease;
+}
+
+/* ---- Actions and decision -------------------------------------------------------- */
+
+.ds-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.ds-card-actions:empty { display: none; }
+
+.ds-decide {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--ds-line);
+  border-radius: 9px;
+  background: var(--ds-sunk);
+}
+
+.ds-decide-head { font-size: 14.5px; font-weight: 600; margin: 0 0 10px; }
+.ds-decide-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 12px; }
+
+/* ---- Preview pane ------------------------------------------------------------------ */
+
+.ds-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  background: rgba(15, 19, 25, .62);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.ds-modal-body {
+  background: var(--ds-surface);
+  border-radius: 11px;
+  width: min(1000px, 100%);
+  height: min(84vh, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+}
+
+.ds-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ds-line);
+}
+
+.ds-modal-title { font-size: 14.5px; font-weight: 600; }
+.ds-modal-size { font-size: 12.5px; color: var(--ds-muted); margin-right: auto; }
+
+.ds-modal-view {
+  flex: 1;
+  min-height: 0;
+  background: var(--ds-sunk);
+  display: grid;
+  place-items: center;
+  overflow: auto;
+}
+
+.ds-modal-frame { width: 100%; height: 100%; border: 0; }
+.ds-modal-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* ---- Narrow screens ------------------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  .ds-newform { grid-template-columns: 1fr; }
+  .ds-card-head { flex-direction: column; }
+  .ds-meta { gap: 6px 18px; }
+}

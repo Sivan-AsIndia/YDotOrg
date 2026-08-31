@@ -1,0 +1,452 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div  [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.6.1) ============ -->
+  <header class="task-header" aria-labelledby="nc-title">
+   
+
+    <div class="task-header-main">
+      <div class="task-identity">
+        <span class="title-badge" aria-hidden="true"><i class="ri-notification-3-line"></i></span>
+        <div>
+          <h1 class="page-title" id="nc-title">{{ pageTitle }}</h1>
+          <p class="page-subtitle">{{ pageSubtitle }}</p>
+          <!-- Stable reference, lifecycle state, owner, active scope and freshness (4.6.1 Task header) -->
+          <div class="task-meta">
+            <span class="state-pill">{{ lifecycleState }}</span>
+            <span class="scope">Scope: {{ activeScope }}</span>
+            <span class="owner">Owner: {{ owner }}</span>
+            <span class="freshness">Updated {{ lastRefresh() }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Primary action (Read) plus Manage preference — each shown only when role, permission,
+           scope, state and dependencies allow it (4.6.1 / 4.6.3). -->
+      <div class="task-actions">
+        @if (managePreferenceAllowed()) {
+          <button type="button" class="btn btn-ghost" (click)="openPreference()">
+            <i class="ri-settings-3-line" aria-hidden="true"></i> Notification settings
+          </button>
+        }
+        @if (readAllowed()) {
+          <button type="button" class="btn btn-primary mark-read" (click)="requestReadAll()" [disabled]="unreadCount() === 0">
+            <i class="ri-check-double-line" aria-hidden="true"></i> Mark all as read
+          </button>
+        }
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ QUICK-FILTER TABS: Read state + Notification type with scoped totals (4.6.1) ============ -->
+  <nav class="nc-tabs" aria-label="Notification quick filters">
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'all'" (click)="selectTab('all')">
+      All <span class="tab-count">{{ totalInScope() }}</span>
+    </button>
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'Unread'" (click)="selectTab('Unread')">
+      Unread <span class="tab-count">{{ unreadCount() }}</span>
+    </button>
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'Action Required'" (click)="selectTab('Action Required')">
+      Action Required <span class="tab-count">{{ typeCount('Action Required') }}</span>
+    </button>
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'Mention'" (click)="selectTab('Mention')">
+      Mentions <span class="tab-count">{{ typeCount('Mention') }}</span>
+    </button>
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'Update'" (click)="selectTab('Update')">
+      Updates <span class="tab-count">{{ typeCount('Update') }}</span>
+    </button>
+    <button type="button" class="nc-tab" [class.active]="savedFilter() === 'System'" (click)="selectTab('System')">
+      System <span class="tab-count">{{ typeCount('System') }}</span>
+    </button>
+  </nav>
+
+  <!-- ============ TWO-REGION LAYOUT: work area + secondary panel (4.6.5 desktop) ============ -->
+  <div class="nc-grid">
+
+    <!-- ---------- MAIN WORK: informational alerts, task-oriented (4.6.1 Main work) ---------- -->
+    <section class="nc-main card" aria-labelledby="nc-list-heading">
+      <h2 id="nc-list-heading" class="visually-hidden">Notifications</h2>
+
+      <!-- Search + active-filter summary + list controls (4.6.1 Context and filters) -->
+      <div class="list-toolbar">
+        <div class="search-field">
+          <i class="ri-search-line" aria-hidden="true"></i>
+          <input type="search" class="control" placeholder="Search notifications…" aria-label="Search notifications"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" (keyup.enter)="applyFilter()" />
+        </div>
+        <div class="list-controls">
+          <button type="button" class="link-btn" (click)="toggleSort()" aria-label="Toggle sort order">
+            <i class="ri-arrow-up-down-line" aria-hidden="true"></i>
+            {{ sortNewestFirst() ? 'Newest first' : 'Oldest first' }}
+          </button>
+        </div>
+      </div>
+
+      @if (activeFilterSummary().length) {
+        <div class="filter-summary" aria-label="Active filters">
+          @for (chip of activeFilterSummary(); track chip.key) {
+            <span class="chip">
+              {{ chip.label }}
+              <button type="button" class="chip-x" (click)="removeFilterChip(chip.key)"
+                      [attr.aria-label]="'Remove filter ' + chip.label">×</button>
+            </span>
+          }
+          <button type="button" class="link-btn clear-all" (click)="resetFilters()">Clear all</button>
+        </div>
+      }
+
+      <!-- ===== State: Loading (4.6.4) ===== -->
+      @if (uiState() === 'loading') {
+        <div class="state-block" role="status" aria-live="polite">
+          <p class="state-title">Loading notifications…</p>
+          <div class="skeleton-row" *ngFor="let i of [1,2,3,4]"></div>
+        </div>
+      }
+
+      <!-- ===== State: Empty (4.6.4) ===== -->
+      @else if (uiState() === 'empty') {
+        <div class="state-block empty" role="status">
+          <i class="ri-inbox-line state-ic" aria-hidden="true"></i>
+          <p class="state-title">No notifications match this view</p>
+          <p class="state-desc">
+            This is limited to your effective scope and current filters — it is not a global zero.
+            Adjust the Read state, Notification type or Date range to see more.
+          </p>
+          @if (permissions.view) {
+            <button type="button" class="btn btn-ghost" (click)="resetFilters()">Reset filters</button>
+          }
+        </div>
+      }
+
+      <!-- ===== State: No access (4.6.4) ===== -->
+      @else if (uiState() === 'no-access') {
+        <div class="state-block no-access" role="alert">
+          <i class="ri-lock-2-line state-ic" aria-hidden="true"></i>
+          <p class="state-title">You do not have access to this view</p>
+          <p class="state-desc">Restricted records, counts, actions and suggestions are hidden. Return to your permitted landing page.</p>
+          <a class="btn btn-primary" routerLink="/app/dashboard">Back to dashboard</a>
+        </div>
+      }
+
+      <!-- ===== Ready / Success / Validation / Duplicate / Conflict / Dependency states over the list ===== -->
+      @else {
+
+        <!-- Validation (4.6.4 / 4.6.6 invalid value) -->
+        @if (uiState() === 'validation') {
+          <div class="banner banner-error" role="alert">
+            <p class="banner-title">Review the highlighted filters</p>
+            <ul class="banner-list">
+              @if (rangeInvalid()) {
+                <li><a href="javascript:void(0)" (click)="filtersPanelOpen.set(true)">Review Date range. The value does not meet the stated range.</a></li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Duplicate (4.6.4) -->
+        @if (uiState() === 'duplicate') {
+          <div class="banner banner-warn" role="alert">
+            <p class="banner-title">A similar preference already exists</p>
+            <p>Compare the candidate before continuing. Never overwrite silently — link, change the value, request review or cancel.</p>
+          </div>
+        }
+
+        <!-- Conflict (4.6.4 / 4.6.6 record conflict) -->
+        @if (uiState() === 'conflict') {
+          <div class="banner banner-warn" role="alert">
+            <p class="banner-title">This record changed after you opened it</p>
+            <p>Review the latest version before continuing. Your proposed values are retained.</p>
+            <div class="banner-actions">
+              <button type="button" class="btn btn-sm btn-ghost" (click)="setUiState('ready')">Compare</button>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="setUiState('ready')">Reapply eligible changes</button>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="setUiState('ready')">Cancel</button>
+            </div>
+          </div>
+        }
+
+        <!-- Dependency failure (4.6.4) -->
+        @if (uiState() === 'dependency-failure') {
+          <div class="banner banner-info" role="alert">
+            <p class="banner-title">Your confirmed local result is unchanged</p>
+            <p>We could not complete the dependent delivery step. Correlation reference INT-77213.</p>
+            <div class="banner-actions">
+              <button type="button" class="btn btn-sm btn-ghost" (click)="setUiState('ready')">Retry delivery</button>
+            </div>
+          </div>
+        }
+
+        <!-- Success (4.6.4) — persistent, not a toast alone -->
+        @if (uiState() === 'success') {
+          <div class="banner banner-success" role="status">
+            <p class="banner-title">Saved successfully</p>
+            <p>
+              Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }};
+              effective {{ persistentOutcome().effectiveTime }}. Pending dependencies: {{ persistentOutcome().downstreamStatus }}.
+            </p>
+          </div>
+        }
+
+        <!-- Persistent confirmation for Open source (4.6.3 — not a toast alone) -->
+        @if (lastOpenedSource()) {
+          <div class="banner banner-success" role="status">
+            <p class="banner-title">Source record opened</p>
+            <p>Opened {{ lastOpenedSource()!.source }} from {{ lastOpenedSource()!.notification }}.</p>
+            <div class="banner-actions">
+              <button type="button" class="btn btn-sm btn-ghost" (click)="dismissOpenedSource()">Dismiss</button>
+            </div>
+          </div>
+        }
+
+        <!-- Freshness / group label + totals qualified by scope and last refresh (4.6.1) -->
+        <div class="list-group-head">
+          <span class="group-label">Notifications</span>
+          <span class="group-meta">{{ visibleCount() }} of {{ totalInScope() }} in scope · Updated {{ lastRefresh() }}</span>
+        </div>
+
+        <!-- Informational alerts, one-column task-oriented rows (not a database table) (4.6.1) -->
+        <ul class="notif-list">
+          @for (n of visibleNotifications(); track n.reference) {
+            <li class="notif-row" [class.unread]="!n.read">
+              <span class="notif-icon" [ngClass]="typeIconClass(n.type)" aria-hidden="true">
+                <i [ngClass]="n.icon"></i>
+              </span>
+
+              <div class="notif-body">
+                <div class="notif-line1">
+                  @if (!n.read) { <span class="unread-dot" aria-label="Unread"></span> }
+                  <!-- Notification title (read-only, 4.6.2) -->
+                  <span class="notif-title">{{ n.title }}</span>
+                  <span class="notif-time">{{ n.createdLabel }}</span>
+                </div>
+                <!-- Summary (read-only, 4.6.2) -->
+                <p class="notif-summary">{{ n.summary }}</p>
+                <div class="notif-line3">
+                  <!-- Notification type tag (4.6.2) -->
+                  <span class="tag" [ngClass]="typeClass(n.type)">{{ n.type }}</span>
+                  <!-- Source record (read-only, 4.6.2) -->
+                  <span class="notif-source"><i class="ri-links-line" aria-hidden="true"></i> {{ n.sourceRecord }}</span>
+                  <!-- Actionable task reference (read-only, 4.6.2) -->
+                  @if (n.actionableTaskRef !== '—') {
+                    <span class="notif-task"><i class="ri-task-line" aria-hidden="true"></i> {{ n.actionableTaskRef }}</span>
+                  }
+                  <!-- Channel preference (read-only, 4.6.2) -->
+                  <span class="notif-channel"><i class="ri-broadcast-line" aria-hidden="true"></i> {{ n.channelPreference }}</span>
+                </div>
+              </div>
+
+              <div class="notif-actions">
+                <!-- Open source (4.6.3) -->
+                @if (openSourceAllowed()) {
+                  <button type="button" class="btn btn-sm"
+                          [ngClass]="n.type === 'Action Required' ? 'btn-outline' : 'btn-ghost'"
+                          (click)="openSource(n)">{{ n.openLabel }}</button>
+                }
+                <!-- Read (4.6.3) — per row -->
+                @if (readAllowed() && !n.read) {
+                  <button type="button" class="icon-btn" title="Mark as read"
+                          aria-label="Mark as read" (click)="requestRead(n)">
+                    <i class="ri-check-line" aria-hidden="true"></i>
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: filters, summary, decision, history, outcome (4.6.1 + 4.6.5) ---------- -->
+    <aside class="nc-side">
+
+      <!-- Context and filters (4.6.1 + 4.6.2) -->
+      <section class="card side-card">
+        <div class="side-head">
+          <h2 class="panel-title">Filters</h2>
+          <button type="button" class="link-btn" (click)="resetFilters()">Clear all</button>
+        </div>
+
+        <div class="filters-body" [class.collapsed]="!filtersPanelOpen()">
+          <!-- Read state (4.6.2) — radio decision using current catalogue values -->
+          <fieldset class="filter-group">
+            <legend>Read state</legend>
+            @for (opt of readStateOptions; track opt) {
+              <label class="radio-row">
+                <input type="radio" name="read-state" [value]="opt"
+                       [checked]="readStateFilter() === opt" (change)="readStateFilter.set(opt); savedFilter.set('all')" />
+                <span>{{ opt }}</span>
+              </label>
+            }
+          </fieldset>
+
+          <!-- Notification type (4.6.2) — searchable controlled choice -->
+          <fieldset class="filter-group">
+            <legend>Notification type</legend>
+            <div class="type-search">
+              <i class="ri-search-line" aria-hidden="true"></i>
+              <input type="search" class="control control-sm" placeholder="Search types…" aria-label="Search notification types"
+                     [ngModel]="typeQuery()" (ngModelChange)="typeQuery.set($event)" />
+            </div>
+            @for (t of typeResults(); track t) {
+              <label class="check-row">
+                <input type="checkbox" [checked]="typeFilter()[t]" (change)="toggleType(t)" />
+                <span class="tag" [ngClass]="typeClass(t)">{{ t }}</span>
+                <span class="check-count">{{ typeCount(t) }}</span>
+              </label>
+            }
+          </fieldset>
+
+          <!-- Date range (4.6.2) — date picker with time-zone label -->
+          <fieldset class="filter-group">
+            <legend>Date range</legend>
+            <label class="date-row">
+              <span>From</span>
+              <input type="date" class="control control-sm" [ngModel]="rangeStart()" (ngModelChange)="rangeStart.set($event)" />
+            </label>
+            <label class="date-row">
+              <span>To</span>
+              <input type="date" class="control control-sm" [ngModel]="rangeEnd()" (ngModelChange)="rangeEnd.set($event)" />
+            </label>
+            <p class="interpreted" [class.invalid]="rangeInvalid()">
+              @if (rangeInvalid()) { Review Date range. The end date is before the start date. }
+              @else { {{ interpretedRange() }} }
+            </p>
+          </fieldset>
+
+          <button type="button" class="btn btn-primary btn-block" (click)="applyFilter()" [disabled]="!filterAllowed()">
+            Apply filters
+          </button>
+        </div>
+      </section>
+
+      <!-- Notification summary — totals qualified by scope and last refresh (4.6.1) -->
+      <section class="card side-card">
+        <h2 class="panel-title">Notification summary</h2>
+        <div class="summary-grid">
+          <div class="summary-tile">
+            <span class="tile-ic ic-total" aria-hidden="true"><i class="ri-notification-3-line"></i></span>
+            <div><span class="tile-num">{{ totalInScope() }}</span><span class="tile-label">Total</span></div>
+          </div>
+          <div class="summary-tile">
+            <span class="tile-ic ic-unread" aria-hidden="true"><i class="ri-mail-unread-line"></i></span>
+            <div><span class="tile-num">{{ unreadCount() }}</span><span class="tile-label">Unread</span></div>
+          </div>
+          <div class="summary-tile">
+            <span class="tile-ic ic-action" aria-hidden="true"><i class="ri-error-warning-line"></i></span>
+            <div><span class="tile-num">{{ typeCount('Action Required') }}</span><span class="tile-label">Action Required</span></div>
+          </div>
+          <div class="summary-tile">
+            <span class="tile-ic ic-update" aria-hidden="true"><i class="ri-megaphone-line"></i></span>
+            <div><span class="tile-num">{{ typeCount('Update') }}</span><span class="tile-label">Updates</span></div>
+          </div>
+        </div>
+        <p class="summary-foot">Qualified by scope: {{ activeScope }} · Updated {{ lastRefresh() }}</p>
+      </section>
+
+      <!-- Decision / review (4.6.1 region 5) -->
+      <section class="card side-card">
+        <h2 class="panel-title">Decision / review</h2>
+        <p class="dr-lead">Risky decisions require review and explicit confirmation before they take effect.</p>
+        <dl class="dr-list">
+          <div><dt>Primary action</dt><dd>Read</dd></div>
+          <div><dt>Resulting state</dt><dd>Read</dd></div>
+        </dl>
+      </section>
+
+      <!-- Related and history (4.6.1 region 6) -->
+      <section class="card side-card">
+        <h2 class="panel-title">Related and history</h2>
+        <div class="rel-tabs" role="tablist" aria-label="Related and history">
+          @for (tab of visibleRelatedTabs(); track tab.key) {
+            <button type="button" class="rel-tab" role="tab" [class.active]="activeRelatedTab() === tab.key"
+                    [attr.aria-selected]="activeRelatedTab() === tab.key" (click)="selectRelatedTab(tab.key)">
+              {{ tab.label }}
+            </button>
+          }
+        </div>
+        <ul class="rel-list">
+          @for (row of activeRelatedRows(); track row.primary) {
+            <li class="rel-row">
+              <span class="rel-primary">{{ row.primary }}</span>
+              <span class="rel-secondary">{{ row.secondary }}</span>
+              <span class="rel-meta">{{ row.meta }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <!-- Persistent outcome (4.6.1 region 7) -->
+      <section class="card side-card">
+        <h2 class="panel-title">Persistent outcome</h2>
+        <dl class="outcome-list">
+          <div><dt>State</dt><dd>{{ persistentOutcome().state }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ persistentOutcome().effectiveTime }}</dd></div>
+          <div><dt>Downstream status</dt><dd>{{ persistentOutcome().downstreamStatus }}</dd></div>
+          <div><dt>Accountable owner</dt><dd>{{ persistentOutcome().owner }}</dd></div>
+          <div><dt>Next action</dt><dd>{{ persistentOutcome().nextAction }}</dd></div>
+        </dl>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ============ DECISION / REVIEW DIALOG — Read (4.6.1 region 5 + 4.6.6 high-risk) ============ -->
+  @if (readDialogOpen() && pendingReadReview()) {
+    <div class="nc-modal-scrim" (click)="cancelRead()"></div>
+    <div class="nc-modal" role="dialog" aria-modal="true" aria-labelledby="read-dialog-title">
+      <h2 id="read-dialog-title" class="nc-modal-title">Confirm Read</h2>
+      <p class="nc-modal-lead">Review the affected record, consequence, reason and effective time before continuing.</p>
+      <dl class="review-list">
+        <div><dt>Target</dt><dd>{{ pendingReadReview()!.target }}</dd></div>
+        <div><dt>Before</dt><dd>{{ pendingReadReview()!.before }}</dd></div>
+        <div><dt>After</dt><dd>{{ pendingReadReview()!.after }}</dd></div>
+        <div><dt>Effective permission</dt><dd>{{ pendingReadReview()!.permission }}</dd></div>
+        <div><dt>Evidence</dt><dd>{{ pendingReadReview()!.evidence }}</dd></div>
+        <div><dt>Reason</dt><dd>{{ pendingReadReview()!.reason }}</dd></div>
+        <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        <div><dt>Resulting state</dt><dd>{{ pendingReadReview()!.resultingState }}</dd></div>
+      </dl>
+      <div class="nc-modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="cancelRead()">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="confirmRead()">Confirm Read</button>
+      </div>
+    </div>
+  }
+
+  <!-- ============ MANAGE PREFERENCE DIALOG — Channel preference (4.6.2 + 4.6.3) ============ -->
+  @if (preferenceDialogOpen()) {
+    <div class="nc-modal-scrim" (click)="cancelPreference()"></div>
+    <div class="nc-modal" role="dialog" aria-modal="true" aria-labelledby="pref-dialog-title">
+      <h2 id="pref-dialog-title" class="nc-modal-title">Manage notification preference</h2>
+      <p class="nc-modal-lead">Choose the channels for your notifications. At least one channel must remain enabled.</p>
+      <div class="pref-body">
+        <label class="switch-row">
+          <input type="checkbox" [checked]="channelInApp()" (change)="channelInApp.set(!channelInApp())" />
+          <span>In-app</span>
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" [checked]="channelEmail()" (change)="channelEmail.set(!channelEmail())" />
+          <span>Email</span>
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" [checked]="channelSms()" (change)="channelSms.set(!channelSms())" />
+          <span>SMS</span>
+        </label>
+        <p class="pref-summary">Channel preference: {{ channelSummary() }}</p>
+        @if (!preferenceValid()) {
+          <p class="pref-error" role="alert">Enter Channel preference. Keep at least one channel enabled.</p>
+        }
+      </div>
+      <div class="nc-modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="cancelPreference()">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="confirmPreference()" [disabled]="!preferenceValid()">
+          Save preference
+        </button>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

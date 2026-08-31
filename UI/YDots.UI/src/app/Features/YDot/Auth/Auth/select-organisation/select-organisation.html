@@ -1,0 +1,125 @@
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-10 px-5 auth-bg">
+  <div class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
+
+    <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5">
+      <img alt="Choose an organisation" src="assets/images/auth/Login page.png" class="img-fluid" />
+    </div>
+
+    <div class="login-section bg-white rounded-4 p-6 px-xl-12">
+      <a routerLink="/app/dashboard"
+         class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-10">
+        <img class="logo-dark" alt="Dark Logo" src="assets/images/Outline ydot logo 2.svg"
+             style="width: 58px;">
+        <h3 class="mb-0 lh-base fw-semibold">YDot</h3>
+      </a>
+
+      <div class="mb-8">
+        <h5 class="mb-2">Where would you like to work?</h5>
+        <!--
+          A root user has no organisation of their own, so every organisation-scoped screen needs
+          to know which one they mean before it can show anything. Choosing here re-issues the
+          access token against that organisation; it does not change the account itself.
+        -->
+        <p class="text-muted mb-0">
+          Welcome back{{ displayName() ? ', ' + displayName() : '' }}. You administer the whole
+          platform, so choose the organisation you want to work inside. You can switch at any
+          time from the bar at the top.
+        </p>
+      </div>
+
+      @if (errorMessage()) {
+        <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert"
+             aria-live="assertive">
+          <i class="ri-error-warning-line mt-1"></i>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      @if (loading()) {
+        <p class="text-muted">Loading organisations…</p>
+      } @else if (loadFailed()) {
+        <div class="text-center py-6">
+          <i class="ri-cloud-off-line fs-1 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      } @else if (options().length === 0) {
+        <div class="text-center py-6">
+          <i class="ri-building-4-line fs-1 text-muted"></i>
+          <h6 class="mt-3">There are no organisations yet</h6>
+          <p class="text-muted">Create the first one to get started.</p>
+          <a routerLink="/app/administration/organisation/setup-wizard" class="btn btn-primary">
+            <i class="ri-add-line me-1"></i> Create an organisation
+          </a>
+        </div>
+      } @else {
+        @if (options().length > 6) {
+          <div class="mb-4">
+            <label class="form-label small" for="org-search">Find an organisation</label>
+            <input id="org-search" type="search" class="form-control"
+                   placeholder="Name, code or web address"
+                   [ngModel]="search()" (ngModelChange)="search.set($event)">
+          </div>
+        }
+
+        <div class="org-picker-list mb-4">
+          @for (option of filtered(); track option.tenantId) {
+            <button type="button" class="org-picker-item d-flex align-items-start gap-3"
+                    [disabled]="selecting() !== null"
+                    (click)="select(option)">
+              <i class="ri-building-4-line fs-5 mt-1"></i>
+
+              <span class="flex-grow-1">
+                <span class="org-picker-name">{{ option.name }}</span>
+                <span class="org-picker-meta d-block">
+                  {{ option.code }} · {{ option.subdomain }}
+                </span>
+                <!--
+                  An organisation still onboarding can be opened to review it, but there is
+                  nothing to work on inside it yet. Saying so before the click is kinder than
+                  letting somebody in and showing them empty screens.
+                -->
+                @if (!isOperable(option)) {
+                  <span class="org-picker-meta d-block text-warning">
+                    Still onboarding — you can review it, but not work in it yet.
+                  </span>
+                }
+              </span>
+
+              <span class="d-flex align-items-center gap-2">
+                <span class="org-picker-badge" [ngClass]="statusClass(option.status)">
+                  {{ option.status }}
+                </span>
+                @if (selecting() === option.tenantId) {
+                  <i class="ri-loader-4-line"></i>
+                } @else {
+                  <i class="ri-arrow-right-s-line"></i>
+                }
+              </span>
+            </button>
+          }
+
+          @if (filtered().length === 0) {
+            <p class="text-muted small mb-0">Nothing matches that search.</p>
+          }
+        </div>
+
+        <!--
+          The platform screens work perfectly well without choosing an organisation, so somebody
+          who came here to create one rather than enter one should not be trapped on this page.
+        -->
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-outline-secondary"
+                  (click)="continueAtPlatformLevel()">
+            <i class="ri-list-check me-1"></i> Manage organisations instead
+          </button>
+          <a routerLink="/app/administration/organisation/setup-wizard" class="btn btn-link">
+            <i class="ri-add-line me-1"></i> Create a new organisation
+          </a>
+        </div>
+      }
+    </div>
+  </div>
+</div>

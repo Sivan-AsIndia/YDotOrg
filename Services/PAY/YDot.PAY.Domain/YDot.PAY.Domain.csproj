@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    NO PACKAGE REFERENCES, and that is the point of the layer. The domain is entities, enums and
+    the rules that live on them; it knows nothing about EF Core, ASP.NET or a payment gateway.
+    The moment it needs one of those, the rule being expressed has strayed out of the domain.
+  -->
+
+</Project>

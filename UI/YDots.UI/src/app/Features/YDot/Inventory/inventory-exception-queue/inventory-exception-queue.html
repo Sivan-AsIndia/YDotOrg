@@ -1,0 +1,267 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <div class="page-header-gradient mb-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+          <div>
+            <h3 class="mb-1 fw-bold fs-24 inv-title">{{ data.screen.title }}</h3>
+            <p class="mb-0 fs-14 inv-subtitle">{{ data.screen.purpose }}</p>
+            <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+              <span class="text-muted small">Owner: {{ owner }}</span>
+              <span class="text-muted small">Data updated {{ lastRefresh() }}</span>
+              <span class="text-muted small">{{ operatingTimeZone }}</span>
+              <span class="inv-scope-chip">{{ data.screen.scope }}</span>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <span class="iam-status-pill">{{ lifecycleState }}</span>
+            <button class="btn btn-sm btn-outline-secondary" (click)="performAction('Assign')">
+              <i class="ri-user-add-line me-1"></i> Assign
+            </button>
+          </div>
+        </div>
+      </div>
+
+      @if (uiState() === 'success') {
+        <div class="alert alert-success d-flex align-items-center justify-content-between py-2 mb-3" role="status">
+          <span>Saved successfully. Reference {{ data.screen.viewId }}; state {{ lifecycleState }}; effective {{ lastRefresh() }}.</span>
+          <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+        </div>
+      }
+      @if (uiState() === 'empty') {
+        <div class="empty-state">
+          <div class="empty-state-icon"><i class="ri-file-search-line"></i></div>
+          <h5 class="fw-bold">No records found</h5>
+          <p class="text-muted mb-3">No records match the current scope and filters.</p>
+          <button class="btn btn-outline-primary" (click)="clearFilters()"><i class="ri-filter-off-line me-1"></i> Clear filters</button>
+        </div>
+      }
+      @else {
+        <div class="filter-bar-wrap mb-4">
+          <div class="filter-topbar">
+            <div class="filter-topbar-search">
+              <i class="ri-search-line"></i>
+              <input type="text" placeholder="Search by exception ref, item or owner…"
+                     [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)">
+            </div>
+            <select class="inv-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); currentPage.set(1)">
+              <option value="">All types</option>
+              @for (t of data.exceptionTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+            <button class="btn btn-primary btn-sm px-3" (click)="applyFilter()">
+              <i class="ri-equalizer-line"></i> Filter
+            </button>
+          </div>
+        </div>
+
+        @if (activeFilterSummary().length) {
+          <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+            <span class="fw-active-label">Active Filters:</span>
+            @for (chip of activeFilterSummary(); track chip.key) {
+              <span class="fw-chip">
+                {{ chip.label }}
+                <button type="button" class="fw-chip-x" (click)="removeFilterChip(chip.key)"><i class="ri-close-line"></i></button>
+              </span>
+            }
+            <button type="button" class="fw-link" (click)="clearFilters()">Clear All</button>
+          </div>
+        }
+
+        <div class="card border">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 inv-table">
+              <thead>
+                <tr>
+                  <th width="50"></th>
+                  <th>Exception ref</th>
+                  <th class="d-none d-sm-table-cell">Type</th>
+                  <th class="d-none d-md-table-cell">Warehouse</th>
+                  <th class="d-none d-md-table-cell">Age</th>
+                  <th class="d-none d-sm-table-cell">Severity</th>
+                  <th>Item / Batch</th>
+                  <th class="d-none d-md-table-cell">Detected risk</th>
+                  <th class="text-end d-none d-lg-table-cell">Expected</th>
+                  <th class="text-end d-none d-lg-table-cell">Observed</th>
+                  <th class="d-none d-xl-table-cell">Business record</th>
+                  <th class="d-none d-xl-table-cell">Owner</th>
+                  <th class="d-none d-xl-table-cell">Investigation</th>
+                  <th class="d-none d-sm-table-cell">Status</th>
+                  <th class="d-none d-lg-table-cell">Escalation</th>
+                  <th class="text-end d-none d-xxl-table-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of pagedRecords(); track r.exceptionReference) {
+                  <tr>
+                    <td>
+                      <button class="btn btn-sm btn-outline-primary inv-plus-btn" title="View details" (click)="openDetail(r)">
+                        <i class="ri-add-line"></i>
+                      </button>
+                    </td>
+                    <td class="small fw-mono">{{ r.exceptionReference }}</td>
+                    <td class="small d-none d-sm-table-cell">{{ r.exceptionType }}</td>
+                    <td class="small d-none d-md-table-cell">{{ r.warehouse }}</td>
+                    <td class="small d-none d-md-table-cell">{{ r.age }}</td>
+                    <td class="small fw-semibold d-none d-sm-table-cell" [class]="severityClass(r.severity)">{{ r.severity }}</td>
+                    <td class="small fw-mono">{{ r.itemAndBatch }}</td>
+                    <td class="d-none d-md-table-cell">
+                      <span class="badge" [class]="toneBadgeClass(r.detectedRisk.tone)">
+                        {{ r.detectedRisk.icon }} {{ r.detectedRisk.label }}
+                      </span>
+                    </td>
+                    <td class="text-end d-none d-lg-table-cell">{{ r.expectedValue }}</td>
+                    <td class="text-end fw-semibold inv-warn-text d-none d-lg-table-cell">{{ r.observedValue }}</td>
+                    <td class="small fw-mono d-none d-xl-table-cell">{{ r.affectedBusinessRecord }}</td>
+                    <td class="small d-none d-xl-table-cell">{{ r.owner }}</td>
+                    <td class="small inv-reason d-none d-xl-table-cell">{{ r.investigation }}</td>
+                    <td class="d-none d-sm-table-cell">
+                      <span class="badge" [class]="toneBadgeClass(r.status.tone)">
+                        {{ r.status.icon }} {{ r.status.label }}
+                      </span>
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                      <span class="badge" [class]="toneBadgeClass(r.escalationState.tone)">
+                        {{ r.escalationState.icon }} {{ r.escalationState.label }}
+                      </span>
+                    </td>
+                    <td class="text-end d-none d-xxl-table-cell">
+                      <button class="btn btn-sm btn-outline-primary" title="Assign" (click)="performAction('Assign')"><i class="ri-user-add-line"></i></button>
+                      <button class="btn btn-sm btn-outline-success" title="Resolve" (click)="performAction('Resolve')"><i class="ri-check-line"></i></button>
+                      <button class="btn btn-sm btn-outline-danger" title="Escalate" (click)="performAction('Escalate')"><i class="ri-arrow-up-line"></i></button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="16" class="text-center text-muted py-4">No records match this scope and filter.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small class="text-muted">Showing <strong>{{ pageStart() }}</strong> to <strong>{{ pageEnd() }}</strong> of <strong>{{ recordCount() }}</strong> records</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" [class.disabled]="currentPage() === 1">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() - 1)"><i class="ri-arrow-left-s-line"></i></a>
+                </li>
+                @for (p of pageNumbers(); track p) {
+                  <li class="page-item" [class.active]="currentPage() === p">
+                    <a class="page-link" href="javascript:void(0)" (click)="goToPage(p)">{{ p }}</a>
+                  </li>
+                }
+                <li class="page-item" [class.disabled]="currentPage() === totalPages()">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() + 1)"><i class="ri-arrow-right-s-line"></i></a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      }
+
+      <div class="row g-3 mt-2">
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-1">Decision / review</h6>
+              <p class="text-muted small mb-3">Exception resolution requires investigation evidence and explicit confirmation.</p>
+              <dl class="fw-kv mb-0">
+                <div><dt>Before → after</dt><dd>Expected vs Observed with risk assessment</dd></div>
+                <div><dt>Effective permission</dt><dd>inv.inventory-exception-queue.assign · resolve</dd></div>
+                <div><dt>Evidence</dt><dd>{{ recordCount() }} exceptions in scope</dd></div>
+                <div><dt>Reason</dt><dd>Investigation notes required for resolution</dd></div>
+                <div><dt>Resulting state</dt><dd>Status shown persistently</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Related and history</h6>
+              <ul class="fw-rel-list" role="list">
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">MOV-2025-1002</span>
+                  <span class="fw-rel-secondary">Negative stock · Reservation</span>
+                  <span class="fw-rel-meta">R. Kumar · 2 hours ago</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">TRF-2025-0042</span>
+                  <span class="fw-rel-secondary">Overdue transit · White Cane</span>
+                  <span class="fw-rel-meta">K. Ghosh · 3 days</span>
+                </li>
+                <li class="fw-rel-row">
+                  <span class="fw-rel-primary">CSC-2025-0202</span>
+                  <span class="fw-rel-secondary">Mismatch · Count session</span>
+                  <span class="fw-rel-meta">M. Das · 1 day</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Persistent outcome</h6>
+              <dl class="fw-kv mb-0">
+                <div><dt>Reference</dt><dd>{{ data.screen.viewId }}</dd></div>
+                <div><dt>State</dt><dd>{{ lifecycleState }}</dd></div>
+                <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+                <div><dt>Downstream status</dt><dd>{{ recordCount() }} exceptions in scope</dd></div>
+                <div><dt>Accountable owner</dt><dd>{{ owner }}</dd></div>
+                <div><dt>Next action</dt><dd>Assign open exceptions</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ROW DETAIL MODAL (responsive popup) ===== -->
+  @if (detailRow(); as r) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom">
+            <h5 class="modal-title fw-bold"><i class="ri-error-warning-line me-2" style="color: var(--dm-olive);"></i>{{ r.exceptionReference }}</h5>
+            <button type="button" class="btn-close" (click)="closeDetail()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2">
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Type</small><span class="fw-medium small">{{ r.exceptionType }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Warehouse</small><span class="fw-medium small">{{ r.warehouse }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Age</small><span class="fw-medium small">{{ r.age }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Severity</small><span class="fw-medium small">{{ r.severity }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Item / Batch</small><span class="fw-medium small">{{ r.itemAndBatch }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Detected risk</small><span class="fw-medium small">{{ r.detectedRisk.icon }} {{ r.detectedRisk.label }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Expected</small><span class="fw-medium small">{{ r.expectedValue }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Observed</small><span class="fw-medium small">{{ r.observedValue }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Business record</small><span class="fw-medium small">{{ r.affectedBusinessRecord }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Owner</small><span class="fw-medium small">{{ r.owner }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Investigation</small><span class="fw-medium small">{{ r.investigation }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Resolution action</small><span class="fw-medium small">{{ r.resolutionAction }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Evidence</small><span class="fw-medium small">{{ r.evidence }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Status</small><span class="fw-medium small">{{ r.status.icon }} {{ r.status.label }}</span></div></div>
+              <div class="col-6"><div class="p-2 rounded bg-light"><small class="text-muted d-block">Escalation</small><span class="fw-medium small">{{ r.escalationState.icon }} {{ r.escalationState.label }}</span></div></div>
+            </div>
+          </div>
+          <div class="modal-footer border-top">
+            <div class="d-flex gap-1 flex-wrap w-100 justify-content-end">
+              <button class="btn btn-sm btn-outline-primary" (click)="performAction('Assign'); closeDetail()">
+                <i class="ri-user-add-line me-1"></i> Assign
+              </button>
+              <button class="btn btn-sm btn-outline-success" (click)="performAction('Resolve'); closeDetail()">
+                <i class="ri-check-line me-1"></i> Resolve
+              </button>
+              <button class="btn btn-sm btn-outline-danger" (click)="performAction('Escalate'); closeDetail()">
+                <i class="ri-arrow-up-line me-1"></i> Escalate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+</main>

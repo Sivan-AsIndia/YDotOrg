@@ -1,0 +1,2 @@
+/*! For license information please see dependency-wheel.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/DependencyWheel/DependencyWheelSeries.js";export default Highcharts;

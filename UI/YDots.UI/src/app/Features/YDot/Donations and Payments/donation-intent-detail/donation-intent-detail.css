@@ -1,0 +1,1139 @@
+/* Fonts are self-hosted from assets/fonts/fonts.css, loaded once in index.html.
+   Do NOT re-add an @import to fonts.googleapis.com: it makes the Angular production
+   build reach the network at compile time, which fails the Docker image build. */
+/* =========================================================
+   Donation intent detail — "Ledger" direction
+   A back-office record surface for staff triaging donation
+   payments. Treated like a financial statement: warm paper,
+   deep teal ink, serif headings, tabular monospace figures
+   for money, and a perforated "stub" treatment on the amount
+   — because this record IS a financial document, not a
+   generic admin-panel row.
+
+   Drop-in: same selector names as the original stylesheet,
+   so it can replace it without touching the Angular template.
+   ========================================================= */
+
+:host {
+  /* Neutrals — warm ledger paper, not cool admin-panel grey */
+  --dit-paper: #f5f4ef;
+  --dit-card: #fffefb;
+  --dit-ink: #1b201d;
+  --dit-ink-2: #4a4f49;
+  --dit-muted: #767b73;
+  --dit-border: #e3e1d6;
+  --dit-border-2: #cfccbd;
+
+  /* Primary — deep ledger teal, restrained, not generic SaaS-indigo */
+  --dit-meadow: #146356;
+  --dit-meadow-700: #0e463d;
+  --dit-meadow-soft: #e7f0ed;
+
+  /* Signature accent — muted amber, used only on money + the one
+     signature element (the amount stub) */
+  --dit-stamp: #a8701f;
+  --dit-stamp-soft: #f6ecdc;
+
+  /* Semantic / status */
+  --dit-gold: #146356;
+  --dit-gold-soft: #e7f0ed;
+  --dit-blue: #35707a;
+  --dit-blue-soft: #e9f1f2;
+  --dit-plum: #6d5a8f;
+  --dit-good: #276a45;
+  --dit-good-soft: #e7f2ea;
+  --dit-error: #a3352a;
+  --dit-error-soft: #f8ece9;
+  --dit-warn: #a8701f;
+  --dit-warn-soft: #f6ecdc;
+
+  display: block;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--dit-paper);
+  color: var(--dit-ink);
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+.dit-page {
+  padding: 20px 17px 48px;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+/* Tabular, monospace figures everywhere money or reference codes
+   appear — the "ledger" register that separates this from a
+   generic sans-only admin UI. */
+.dit-amount-value,
+.dit-fact dd,
+.dit-timeline-time,
+.dit-identity-ref {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--dit-meadow);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Breadcrumb ---------- */
+.dit-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dit-muted);
+  margin-bottom: 14px;
+}
+.dit-breadcrumb a {
+  color: var(--dit-muted);
+  text-decoration: none;
+}
+.dit-breadcrumb a:hover {
+  color: var(--dit-meadow);
+}
+.dit-breadcrumb [aria-current='page'] {
+  color: var(--dit-ink-2);
+  font-weight: 600;
+}
+
+/* ---------- Buttons ---------- */
+.dit-btn,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  background: #fff;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.btn-primary {
+  background: var(--dit-meadow);
+  border-color: var(--dit-meadow);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--dit-meadow-700);
+  border-color: var(--dit-meadow-700);
+}
+.btn-danger {
+  background: var(--dit-error);
+  border-color: var(--dit-error);
+  color: #fff;
+}
+.btn-danger:hover {
+  background: #832a21;
+  border-color: #832a21;
+}
+.dit-btn-secondary-danger {
+  background: #fff;
+  color: var(--dit-error);
+  border-color: var(--dit-border-2);
+}
+.dit-btn-secondary-danger:hover {
+  background: var(--dit-error-soft);
+  border-color: var(--dit-error);
+}
+.dit-btn-secondary-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dit-btn-outline {
+  background: #fff;
+  color: var(--dit-meadow-700);
+  border-color: var(--dit-border-2);
+}
+.dit-btn-outline:hover {
+  background: var(--dit-meadow-soft);
+  border-color: var(--dit-meadow);
+}
+.dit-btn-sm,
+.btn-sm {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.dit-btn-icon {
+  min-height: 38px;
+  min-width: 38px;
+  padding: 0;
+  border-color: var(--dit-border-2);
+  color: var(--dit-ink-2);
+}
+.dit-btn-icon:hover {
+  background: var(--dit-paper);
+  border-color: var(--dit-muted);
+}
+.dit-ic {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.dit-ic-sm {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.dit-ic-xs {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+/* ---------- Task header ---------- */
+.dit-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--dit-border);
+  flex-wrap: wrap;
+}
+.dit-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dit-title {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  margin: 0;
+  color: var(--dit-ink);
+}
+.dit-subtitle {
+  font-size: 13.5px;
+  color: var(--dit-muted);
+  margin: 6px 0 0;
+}
+.dit-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--dit-muted);
+  margin-top: 8px;
+}
+.dit-meta-item strong {
+  color: var(--dit-ink-2);
+  font-weight: 600;
+}
+.dit-meta-dot {
+  color: var(--dit-border-2);
+}
+.dit-copy {
+  border: none;
+  background: none;
+  color: var(--dit-meadow);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  font-family: inherit;
+}
+.dit-copy:hover {
+  text-decoration: underline;
+}
+.dit-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* ---------- Menu ---------- */
+.dit-menu-wrap {
+  position: relative;
+}
+.dit-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.dit-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--dit-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(27, 32, 29, 0.12);
+  padding: 6px;
+  z-index: 50;
+}
+.dit-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 9px 11px;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--dit-ink);
+  min-height: 38px;
+}
+.dit-menu-item:hover:not(:disabled) {
+  background: var(--dit-paper);
+}
+.dit-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dit-menu-danger {
+  color: var(--dit-error);
+}
+
+/* ---------- Status badges ---------- */
+.dit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.dit-inline-badge {
+  padding: 2px 9px;
+}
+.dit-badge-good {
+  background: var(--dit-good-soft);
+  color: var(--dit-good);
+  border-color: rgba(39, 106, 69, 0.2);
+}
+.dit-badge-blue {
+  background: var(--dit-blue-soft);
+  color: var(--dit-blue);
+  border-color: rgba(53, 112, 122, 0.2);
+}
+.dit-badge-gold {
+  background: var(--dit-gold-soft);
+  color: var(--dit-meadow-700);
+  border-color: rgba(20, 99, 86, 0.2);
+}
+.dit-badge-warn {
+  background: var(--dit-warn-soft);
+  color: var(--dit-warn);
+  border-color: rgba(168, 112, 31, 0.22);
+}
+.dit-badge-danger {
+  background: var(--dit-error-soft);
+  color: var(--dit-error);
+  border-color: rgba(163, 53, 42, 0.2);
+}
+.dit-badge-muted {
+  background: #ecebe2;
+  color: var(--dit-muted);
+  border-color: var(--dit-border);
+}
+
+/* ---------- Context / filters ---------- */
+.dit-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--dit-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+.dit-context-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.dit-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dit-meadow-700);
+  font-weight: 600;
+  background: var(--dit-meadow-soft);
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+.dit-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--dit-border-2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 220px;
+  color: var(--dit-muted);
+}
+.dit-search-input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  flex: 1;
+  color: var(--dit-ink);
+  background: none;
+}
+.dit-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dit-muted);
+}
+.dit-saved-label {
+  font-weight: 600;
+}
+.dit-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.dit-select {
+  appearance: none;
+  border: 1px solid var(--dit-border-2);
+  border-radius: 6px;
+  padding: 8px 30px 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--dit-ink);
+  background: #fff;
+}
+.dit-chev {
+  position: absolute;
+  right: 8px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  color: var(--dit-muted);
+}
+.dit-totals {
+  font-size: 13px;
+  color: var(--dit-muted);
+}
+
+/* ---------- Active filters ---------- */
+.dit-active-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: var(--dit-meadow-soft);
+  border: 1px solid rgba(20, 99, 86, 0.16);
+  border-radius: 8px;
+}
+.dit-active-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dit-meadow-700);
+}
+.dit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--dit-border-2);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--dit-ink-2);
+  cursor: pointer;
+}
+.dit-clear-all {
+  border: none;
+  background: none;
+  color: var(--dit-meadow);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ---------- State panels ---------- */
+.dit-state-panel {
+  background: #fff;
+  border: 1px solid var(--dit-border);
+  border-radius: 8px;
+  padding: 28px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.dit-state-warn {
+  border-color: rgba(168, 112, 31, 0.32);
+  background: var(--dit-warn-soft);
+}
+.dit-state-danger {
+  border-color: rgba(163, 53, 42, 0.32);
+  background: var(--dit-error-soft);
+}
+.dit-state-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  font-family: 'Source Serif 4', Georgia, serif;
+}
+.dit-state-note {
+  font-size: 14px;
+  color: var(--dit-ink-2);
+  margin: 0 0 14px;
+}
+.dit-state-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.dit-skeleton-head,
+.dit-skeleton-body {
+  background: linear-gradient(90deg, #ece9dd 25%, #f5f4ee 37%, #ece9dd 63%);
+  background-size: 400% 100%;
+  animation: dit-shimmer 1.4s ease infinite;
+  border-radius: 5px;
+  margin: 0 auto 10px;
+}
+.dit-skeleton-head {
+  height: 24px;
+  width: 40%;
+}
+.dit-skeleton-body {
+  height: 90px;
+  width: 100%;
+}
+@keyframes dit-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* ---------- Success banner ---------- */
+.dit-success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--dit-good-soft);
+  border: 1px solid rgba(39, 106, 69, 0.26);
+  color: var(--dit-good);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.dit-success-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--dit-ink);
+}
+.dit-success-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--dit-ink-2);
+}
+.dit-banner-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 4px;
+}
+
+/* ---------- Inline confirmation ---------- */
+.dit-inline-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--dit-blue-soft);
+  color: var(--dit-blue);
+  border: 1px solid rgba(53, 112, 122, 0.22);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.dit-refreshed-note {
+  font-size: 12px;
+  color: var(--dit-muted);
+  margin: 0 0 10px;
+}
+
+/* ---------- Layout ---------- */
+.dit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 372px;
+  gap: 18px;
+  align-items: start;
+}
+.dit-work {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.dit-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+
+/* ---------- Cards ----------
+   Each card carries a thin top "ledger tab" in a rotating,
+   restrained set of the palette's own hues — a quiet nod to a
+   filed statement's section tabs, not a decorative rainbow. */
+.dit-card {
+  position: relative;
+  background: var(--dit-card);
+  border: 1px solid var(--dit-border);
+  border-top: none;
+  border-radius: 8px;
+  padding: 19px 20px 18px;
+  box-shadow: 0 1px 2px rgba(27, 32, 29, 0.05);
+}
+.dit-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 8px 8px 0 0;
+  background: var(--dit-meadow);
+}
+.dit-work section.dit-card:nth-of-type(2)::before {
+  background: var(--dit-blue);
+}
+.dit-work section.dit-card:nth-of-type(3)::before {
+  background: var(--dit-plum);
+}
+.dit-work section.dit-card:nth-of-type(4)::before {
+  background: var(--dit-stamp);
+}
+.dit-side section.dit-card:nth-of-type(2)::before {
+  background: var(--dit-plum);
+}
+.dit-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dit-border);
+}
+.dit-card-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0;
+  color: var(--dit-ink-2);
+}
+
+/* ---------- Overview grid ---------- */
+.dit-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.dit-fact-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dit-muted);
+  margin-bottom: 7px;
+}
+
+/* Signature element: the requested amount reads like a torn
+   cheque stub — dashed perforation, serif label, mono figure. */
+.dit-amount-block {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px 12px;
+  border: 1px dashed var(--dit-border-2);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--dit-stamp-soft) 0%, rgba(246, 236, 220, 0) 65%);
+}
+.dit-amount-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--dit-ink);
+  letter-spacing: -0.2px;
+}
+.dit-currency-chip {
+  margin-top: 8px;
+  display: inline-flex;
+  width: fit-content;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--dit-stamp);
+  background: #fff;
+  border: 1px solid var(--dit-border-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.dit-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+}
+.dit-identity-name {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dit-ink);
+}
+.dit-identity-ref {
+  font-size: 12px;
+  color: var(--dit-meadow);
+  font-weight: 600;
+}
+.dit-identity-context {
+  font-size: 12px;
+  color: var(--dit-muted);
+}
+
+/* ---------- Facts (dl) ---------- */
+.dit-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 20px;
+  margin: 0;
+}
+.dit-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dit-fact dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dit-muted);
+  font-family: 'Inter', sans-serif;
+}
+.dit-fact dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--dit-ink);
+  word-break: break-word;
+}
+.dit-fact-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--dit-muted);
+}
+
+/* ---------- Timeline (Lifecycle history) ---------- */
+.dit-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dit-timeline-row {
+  display: flex;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 20px;
+}
+.dit-timeline-row::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: 0;
+  width: 1px;
+  background: var(--dit-border);
+}
+.dit-timeline-row:last-child::before {
+  display: none;
+}
+.dit-timeline-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 4px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--dit-border);
+}
+.dit-tone-good {
+  background: var(--dit-good);
+}
+.dit-tone-blue {
+  background: var(--dit-blue);
+}
+.dit-tone-gold {
+  background: var(--dit-meadow);
+}
+.dit-tone-plum {
+  background: var(--dit-plum);
+}
+.dit-tone-muted {
+  background: var(--dit-muted);
+}
+.dit-timeline-body {
+  flex: 1;
+  min-width: 0;
+}
+.dit-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dit-timeline-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--dit-ink);
+}
+.dit-inspect-link {
+  border: none;
+  background: none;
+  color: var(--dit-meadow);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dit-timeline-detail {
+  display: block;
+  font-size: 13px;
+  color: var(--dit-ink-2);
+  margin-top: 2px;
+  font-family: 'Inter', sans-serif;
+}
+.dit-timeline-time {
+  display: block;
+  font-size: 11.5px;
+  color: var(--dit-muted);
+  margin-top: 3px;
+}
+.dit-timeline-empty {
+  font-size: 13px;
+  color: var(--dit-muted);
+  padding: 6px 0;
+}
+.dit-inspect-detail {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--dit-ink-2);
+  background: var(--dit-paper);
+  border: 1px solid var(--dit-border);
+  border-radius: 5px;
+  padding: 8px 10px;
+}
+
+/* ---------- Decision / review ---------- */
+.dit-warn-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dit-warn);
+  background: var(--dit-warn-soft);
+  border: 1px solid rgba(168, 112, 31, 0.24);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.dit-decision {
+  display: grid;
+  grid-template-columns: auto auto 1fr 1fr;
+  align-items: center;
+  gap: 16px;
+}
+.dit-decision-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dit-decision-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dit-muted);
+}
+.dit-decision-value {
+  font-size: 13px;
+  color: var(--dit-ink);
+}
+.dit-decision-arrow {
+  width: 18px;
+  height: 18px;
+  color: var(--dit-muted);
+}
+.dit-decision-foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dit-border);
+}
+.dit-evidence {
+  font-size: 12px;
+  color: var(--dit-muted);
+}
+
+/* ---------- Related & history (side) ---------- */
+.dit-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.dit-subtab {
+  border: 1px solid var(--dit-border-2);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dit-ink-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+.dit-subtab-active {
+  background: var(--dit-meadow-700);
+  border-color: var(--dit-meadow-700);
+  color: #fff;
+}
+.dit-side-body {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.dit-confidential {
+  font-size: 12px;
+  color: var(--dit-warn);
+  background: var(--dit-warn-soft);
+  border: 1px solid rgba(168, 112, 31, 0.24);
+  border-radius: 5px;
+  padding: 6px 10px;
+  margin: 0 0 10px;
+}
+.dit-empty-note {
+  font-size: 13px;
+  color: var(--dit-muted);
+}
+.dit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dit-list-row {
+  border-bottom: 1px solid var(--dit-border);
+  padding-bottom: 10px;
+}
+.dit-list-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.dit-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dit-list-primary {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dit-ink);
+}
+.dit-list-secondary {
+  font-size: 12px;
+  color: var(--dit-ink-2);
+}
+.dit-list-meta {
+  font-size: 12px;
+  color: var(--dit-muted);
+}
+
+/* ---------- High-risk modal ---------- */
+.dit-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 32, 29, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.dit-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 520px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 48px rgba(27, 32, 29, 0.24);
+}
+.dit-modal-title {
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.dit-modal-lead {
+  font-size: 13px;
+  color: var(--dit-ink-2);
+  margin: 0 0 16px;
+}
+.dit-mode-choice {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.dit-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dit-ink);
+  cursor: pointer;
+}
+.dit-modal-facts {
+  background: var(--dit-paper);
+  border: 1px solid var(--dit-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.dit-modal-field {
+  display: block;
+  margin-bottom: 18px;
+}
+.dit-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--dit-ink);
+}
+.dit-req {
+  color: var(--dit-error);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.dit-textarea {
+  width: 100%;
+  border: 1px solid var(--dit-border-2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.dit-textarea[aria-invalid='true'] {
+  border-color: var(--dit-error);
+}
+.dit-field-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.dit-count {
+  font-size: 11px;
+  color: var(--dit-muted);
+}
+.dit-count-bad {
+  color: var(--dit-error);
+}
+.dit-field-error {
+  display: block;
+  color: var(--dit-error);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.dit-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .dit-layout {
+    grid-template-columns: 1fr;
+  }
+  .dit-side {
+    position: static;
+  }
+}
+@media (max-width: 720px) {
+  .dit-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .dit-facts {
+    grid-template-columns: 1fr;
+  }
+  .dit-decision {
+    grid-template-columns: 1fr;
+  }
+  .dit-decision-arrow {
+    transform: rotate(90deg);
+  }
+  .dit-task-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dit-header-actions {
+    flex-wrap: wrap;
+  }
+  .dit-context {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 400px) {
+  .dit-page {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

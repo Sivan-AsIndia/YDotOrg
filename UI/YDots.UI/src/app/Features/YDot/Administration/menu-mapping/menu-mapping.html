@@ -1,0 +1,267 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid py-6">
+
+    <div class="mb-6">
+      <h4 class="mb-1"><i class="ri-menu-search-line me-2"></i>Menu and navigation</h4>
+      <p class="text-muted mb-0">
+        Decide what appears in the menu, and which roles see it.
+      </p>
+    </div>
+
+    <!--
+      Worth stating plainly on the screen, because people reasonably assume a hidden menu item is
+      a locked door. It is not: the lock is on the endpoint, and this decides tidiness.
+    -->
+    <div class="alert alert-light border d-flex align-items-start gap-2 mb-6">
+      <i class="ri-information-line mt-1"></i>
+      <span class="small">
+        What somebody actually sees is the overlap of four things: what the product has, what you
+        enable here, what their role is given, and what their permissions allow. Hiding a menu
+        item tidies the navigation — it does not grant or remove access, which is checked on
+        every request regardless.
+      </span>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
+        <i class="ri-error-warning-line mt-1"></i>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <ul class="nav nav-tabs mb-6">
+      <li class="nav-item">
+        <button type="button" class="nav-link" [class.active]="tab() === 'organisation'"
+                (click)="tab.set('organisation')">
+          <i class="ri-toggle-line me-1"></i> What this organisation uses
+          <span class="badge bg-secondary-subtle text-secondary ms-1">{{ enabledCount() }}</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="nav-link" [class.active]="tab() === 'roles'"
+                (click)="tab.set('roles')">
+          <i class="ri-shield-user-line me-1"></i> What each role sees
+        </button>
+      </li>
+    </ul>
+
+    @if (loading()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-loader-4-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3 mb-0">Loading…</p>
+        </div>
+      </div>
+    } @else if (loadFailed()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-cloud-off-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ================================================== What this organisation uses -->
+    @if (!loading() && !loadFailed() && tab() === 'organisation') {
+      <div class="card border-0 shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0">Navigation for this organisation</h6>
+
+          @if (hasConfigurationChanges()) {
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      (click)="cancelConfiguration()">
+                Cancel
+              </button>
+              <button type="button" class="btn btn-sm btn-primary"
+                      [disabled]="saving()" (click)="saveConfiguration()">
+                @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
+                @else { <i class="ri-save-line me-1"></i> Save changes }
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="list-group list-group-flush">
+          @for (node of configuredNodes(); track node.menuDefinitionId) {
+            <ng-container
+              *ngTemplateOutlet="configRow; context: { $implicit: node }"></ng-container>
+
+            @for (child of node.children ?? []; track child.menuDefinitionId) {
+              <ng-container
+                *ngTemplateOutlet="configRow; context: { $implicit: child }"></ng-container>
+
+              @for (grandchild of child.children ?? []; track grandchild.menuDefinitionId) {
+                <ng-container
+                  *ngTemplateOutlet="configRow; context: { $implicit: grandchild }"></ng-container>
+              }
+            }
+          }
+        </div>
+      </div>
+
+      <!-- One row shape, used at all three levels, indented by depth. -->
+      <ng-template #configRow let-node>
+        <div class="list-group-item d-flex align-items-center gap-3"
+             [style.padding-left]="'calc(1.25rem + ' + indent(node.level) + ')'">
+          <i [class]="iconClass(node.resolvedIcon)"></i>
+
+          <div class="flex-grow-1">
+            <span class="d-block">{{ configuredName(node) }}</span>
+            <small class="text-muted">
+              {{ levelLabel(node.level) }}
+              @if (node.route) { · <code>{{ node.route }}</code> }
+              @if (node.requiredPermissionCode) {
+                · needs <code>{{ node.requiredPermissionCode }}</code>
+              }
+            </small>
+          </div>
+
+          @if (node.isMandatory) {
+            <!--
+              Some navigation is part of the product rather than a preference — the dashboard,
+              the person's own security page. Turning those off would leave people with no way to
+              reach their own account.
+            -->
+            <span class="badge bg-secondary-subtle text-secondary">Always on</span>
+          } @else {
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox"
+                     [checked]="isEnabled(node)" (change)="toggleNode(node)"
+                     [attr.aria-label]="'Show ' + configuredName(node)">
+            </div>
+          }
+        </div>
+      </ng-template>
+    }
+
+    <!-- ================================================== What each role sees -->
+    @if (!loading() && !loadFailed() && tab() === 'roles') {
+      <div class="card border-0 shadow-sm mb-6">
+        <div class="card-body">
+          <label class="form-label small" for="mm-role">Role</label>
+          <select id="mm-role" class="form-select"
+                  [ngModel]="selectedRoleId()" (ngModelChange)="onRoleSelected($event)">
+            <option value="">Choose a role…</option>
+            @for (role of roles(); track role.id) {
+              <option [value]="role.id">{{ role.name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      @if (selectedRoleId()) {
+        @if (loadingRoleMapping()) {
+          <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-8">
+              <i class="ri-loader-4-line fs-2 text-muted"></i>
+              <p class="text-muted mt-3 mb-0">Loading…</p>
+            </div>
+          </div>
+        } @else {
+          <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">
+                Visible to this role
+                <span class="badge bg-secondary-subtle text-secondary ms-1">
+                  {{ mappedCount() }}
+                </span>
+              </h6>
+
+              @if (hasMappingChanges()) {
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary"
+                          (click)="cancelMapping()">
+                    Cancel
+                  </button>
+                  <button type="button" class="btn btn-sm btn-primary"
+                          [disabled]="saving()" (click)="saveMapping()">
+                    @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
+                    @else { <i class="ri-save-line me-1"></i> Save mapping }
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="list-group list-group-flush">
+              @for (node of roleNodes(); track node.menuDefinitionId) {
+                <ng-container
+                  *ngTemplateOutlet="mapRow; context: { $implicit: node }"></ng-container>
+
+                @for (child of node.children ?? []; track child.menuDefinitionId) {
+                  <ng-container
+                    *ngTemplateOutlet="mapRow; context: { $implicit: child }"></ng-container>
+
+                  @for (grandchild of child.children ?? []; track grandchild.menuDefinitionId) {
+                    <ng-container
+                      *ngTemplateOutlet="mapRow; context: { $implicit: grandchild }"></ng-container>
+                  }
+                }
+              }
+            </div>
+          </div>
+
+          <ng-template #mapRow let-node>
+            <div class="list-group-item d-flex align-items-center gap-3"
+                 [class.opacity-50]="!isAvailable(node)"
+                 [style.padding-left]="'calc(1.25rem + ' + indent(node.level) + ')'">
+              <div class="flex-grow-1">
+                <span class="d-block">{{ node.name }}</span>
+                <small class="text-muted">
+                  {{ levelLabel(node.level) }}
+                  @if (node.route) { · <code>{{ node.route }}</code> }
+                  @if (node.requiredPermissionCode) {
+                    <!--
+                      Shown because mapping alone is not enough: a role that cannot do the thing
+                      never sees the link however it is mapped. Naming the permission is what
+                      makes that visible rather than mysterious.
+                    -->
+                    · needs <code>{{ node.requiredPermissionCode }}</code>
+                  }
+                </small>
+              </div>
+
+              @if (!isAvailable(node)) {
+                <!--
+                  THE ROLE, NOT THE ORGANISATION. This used to read "Not enabled for this
+                  organisation", which named the wrong thing entirely: isPermitted says whether
+                  THIS ROLE holds the permission the node needs. An administrator reading the old
+                  wording went looking for an organisation-level switch that does not exist, when
+                  the fix is to grant the role the permission - or to accept that the role is not
+                  meant to have it. The permission is named so the next step is obvious.
+                -->
+                <span class="badge bg-secondary-subtle text-secondary"
+                      [title]="'This role does not hold ' + (node.requiredPermissionCode ?? 'the permission this screen needs')">
+                  @if (node.requiredPermissionCode) {
+                    Role lacks {{ node.requiredPermissionCode }}
+                  } @else {
+                    Not available to this role
+                  }
+                </span>
+              } @else {
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox"
+                         [checked]="isMapped(node)" (change)="toggleMapping(node)"
+                         [attr.aria-label]="'Show ' + node.name + ' to this role'">
+                </div>
+              }
+            </div>
+          </ng-template>
+        }
+      } @else {
+        <div class="card border-0 shadow-sm">
+          <div class="card-body text-center py-8">
+            <i class="ri-shield-user-line fs-2 text-muted"></i>
+            <p class="text-muted mt-3 mb-0">Choose a role to see and change what it can reach.</p>
+          </div>
+        </div>
+      }
+    }
+
+  </div>
+</div>
+</main>

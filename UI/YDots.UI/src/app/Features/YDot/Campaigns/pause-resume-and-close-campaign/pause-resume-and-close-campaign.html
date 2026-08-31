@@ -1,0 +1,299 @@
+<!-- Embedded in Campaign detail's lifecycle popup (no separate page chrome — the
+     host's modal shell provides the surrounding surface). The close (✕) button
+     lives on the host's modal itself; this component only closes ITS OWN
+     internal panels via closeActionPanel/cancelConfirm. -->
+<div class="prc-embed">
+
+    <!-- ===================== GLOBAL VIEW STATES ===================== -->
+    @if (viewState() === 'no-access') {
+      <section class="text-center py-5">
+        <div class="empty-state-icon mb-3">🔒</div>
+        <h5 class="fw-bold">You don't have access to this record</h5>
+        <p class="text-muted small mb-3">Restricted menu items, fields, counts, actions and search suggestions have been hidden.</p>
+      </section>
+    } @else if (viewState() === 'loading') {
+      <section class="py-5">
+        <p class="text-muted text-center small">Loading Pause, resume and close campaign…</p>
+        <div class="d-flex justify-content-center gap-2 mt-2">
+          <div class="skeleton-box" style="width: 60px; height: 12px;"></div>
+          <div class="skeleton-box" style="width: 80px; height: 12px;"></div>
+          <div class="skeleton-box" style="width: 40px; height: 12px;"></div>
+        </div>
+      </section>
+    } @else if (viewState() === 'empty') {
+      <section class="text-center py-5">
+        <div class="empty-state-icon mb-3">🗂️</div>
+        <h5 class="fw-bold">No lifecycle actions available</h5>
+        <p class="text-muted small mb-3">No campaign matches reference <strong>{{ campaignRef }}</strong> inside your effective scope.</p>
+      </section>
+    } @else if (campaign(); as c) {
+
+      <!-- Main lifecycle-actions surface — hidden while an action off-canvas is open so only
+           one off-canvas shows at a time; restored when the action panel closes. -->
+      <div class="prc-main" [class.prc-main-hidden]="activeAction()">
+
+      <!-- ===================== HEADER — centred summary ===================== -->
+      <div class="prc-record-head mb-3">
+        <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+          <h5 class="record-title mb-0">Pause, resume and close campaign</h5>
+          <span class="status-badge" [class]="statusClass(currentState())">{{ currentState() }}</span>
+        </div>
+        <p class="text-muted small mb-2 prc-record-purpose">{{ c.purpose }}</p>
+        <div class="record-meta d-flex align-items-center justify-content-center gap-2 flex-wrap mb-1">
+          <span class="fw-semibold">{{ c.code }}</span>
+          <span class="dot">·</span>
+          <span>{{ ownerName(c.ownerReference) }}</span>
+          <span class="dot">·</span>
+          <span>{{ c.startDate }} – {{ c.endDate }}</span>
+          <span class="dot">·</span>
+          <span>Last refreshed {{ lastRefreshed() }}</span>
+        </div>
+        <div class="prc-amount-block">
+          <div class="amount-figure">{{ formatCurrency(c.reconciledAmount) }}</div>
+          <div class="amount-sub">raised of {{ formatCurrency(c.targetAmount) }} ({{ c.progress }}%)</div>
+          <div class="progress-track mx-auto">
+            <div class="progress-fill" [style.width.%]="c.progress"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== BANNERS ===== -->
+      @if (viewState() === 'conflict') {
+        <div class="banner banner-warning d-flex justify-content-between align-items-center mb-2" role="alert">
+          <span><i class="ri-alert-line me-1"></i><strong>Record changed.</strong> Review the latest version.</span>
+          <div class="d-flex gap-1">
+            <button class="banner-btn" type="button" (click)="reviewLatest()">Reapply</button>
+            <button class="banner-btn" type="button" (click)="simulateView('ready')">Cancel</button>
+          </div>
+        </div>
+      }
+      @if (viewState() === 'dependency-failure') {
+        <div class="banner banner-danger d-flex justify-content-between align-items-center mb-2" role="alert">
+          <span><i class="ri-error-warning-line me-1"></i><strong>Dependency failed.</strong> Local result unchanged.</span>
+          <div class="d-flex gap-1">
+            <button class="banner-btn" type="button" (click)="retryDependency()">Retry</button>
+          </div>
+        </div>
+      }
+      @if (viewState() === 'duplicate') {
+        <div class="banner banner-info d-flex justify-content-between align-items-center mb-2" role="alert">
+          <span><i class="ri-information-line me-1"></i><strong>Duplicate close request pending.</strong> Requested by {{ closeRequest()?.requestedByName ?? '—' }}.</span>
+          <div class="d-flex gap-1">
+            <button class="banner-btn" type="button" (click)="setTab('activity'); simulateView('ready')">View</button>
+            <button class="banner-btn" type="button" (click)="simulateView('ready')">Dismiss</button>
+          </div>
+        </div>
+      }
+
+      <!-- ===== PERSISTENT OUTCOME ===== -->
+      @if (viewState() === 'success' && outcome(); as o) {
+        <div class="banner banner-success d-flex align-items-center gap-2 mb-2" role="alert">
+          <span class="fw-bold">✓</span>
+          <div class="flex-grow-1">
+            <strong>Saved successfully.</strong> Reference {{ o.reference }}; state {{ o.state }}; effective {{ o.effectiveTime }}.
+            <span class="text-muted">Next: {{ o.nextAction }} · {{ o.accountableOwner }} · {{ o.remainingDependency }}</span>
+          </div>
+          <button class="banner-btn" type="button" (click)="dismissOutcome()">Continue</button>
+        </div>
+      }
+
+      <!-- ===================== MAIN WORK AREA ===================== -->
+      <div class="row g-3 mb-3">
+        <!-- Lifecycle Actions -->
+        <div class="col-12">
+          <h6 class="section-label mb-2">Lifecycle actions</h6>
+          <div class="row g-2">
+            @for (action of visibleActions(); track action.id) {
+              <div class="col-sm-6">
+                <div class="action-card-minimal" [class.action-card-disabled]="!actionIsEligible(action)">
+                  <div class="d-flex gap-2 mb-2">
+                    <span class="action-icon" [class.action-icon-safe]="action.placement === 'primary'"
+                          [class.action-icon-danger]="action.placement === 'danger'">
+                      @if (action.id === 'activate') { <i class="ri-rocket-2-line"></i> }
+                      @else if (action.id === 'pause') { <i class="ri-pause-circle-line"></i> }
+                      @else if (action.id === 'resume') { <i class="ri-play-circle-line"></i> }
+                      @else if (action.id === 'request_close') { <i class="ri-close-circle-line"></i> }
+                      @else if (action.id === 'approve_close') { <i class="ri-check-double-line"></i> }
+                      @else if (action.id === 'cancel_draft') { <i class="ri-delete-bin-line"></i> }
+                    </span>
+                    <div class="flex-grow-1 min-w-0">
+                      <div class="action-title">{{ action.label }}</div>
+                      <div class="action-desc">{{ action.description }}</div>
+                      @if (!actionIsEligible(action)) {
+                        <div class="action-ineligible mt-1">{{ ineligibleReason(action) }}</div>
+                      }
+                    </div>
+                  </div>
+                  <button class="btn action-btn w-100"
+                    [class.btn-primary]="action.placement === 'primary'"
+                    [class.btn-danger]="action.placement === 'danger'"
+                    [disabled]="!actionIsEligible(action)"
+                    type="button"
+                    (click)="openActionPanel(action)">
+                    {{ action.label }}
+                  </button>
+                </div>
+              </div>
+            }
+            @if (visibleActions().length === 0) {
+              <div class="col-12"><p class="text-muted small mb-0">{{ currentUserName() }} has no permission for lifecycle actions.</p></div>
+            }
+          </div>
+        </div>
+
+      </div>
+      </div><!-- /.prc-main -->
+
+      <!-- ===== ACTION PANEL ===== -->
+      @if (activeAction(); as action) {
+        <div class="panel-overlay" (click)="closeActionPanel()"></div>
+        <aside class="action-panel" role="dialog" aria-modal="true" [attr.aria-label]="action.label">
+          <header class="action-panel-header">
+            <div>
+              <h6 class="mb-0">{{ action.label }}</h6>
+              <small>{{ c.code }} · {{ c.name }}</small>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary border-0" type="button" (click)="closeActionPanel()" aria-label="Close">✕</button>
+          </header>
+          @if (errorOrder().length > 0) {
+            <div class="banner banner-danger mx-3 mt-2" role="alert">
+              <strong>Please fix {{ errorOrder().length }} field(s):</strong>
+              <ul class="mb-0 ps-3">
+                @for (key of errorOrder(); track key) {
+                  <li><a [href]="'#field-' + key" class="text-danger">{{ errors()[key] }}</a></li>
+                }
+              </ul>
+            </div>
+          }
+          <div class="action-panel-body">
+            <p class="small text-muted mb-3">{{ action.description }}</p>
+            <div class="mb-3">
+              <label class="form-label" for="field-effectiveDate">Effective time</label>
+              <div class="d-flex gap-2">
+                <input id="field-effectiveDate" type="date" class="form-control form-control-sm"
+                  [ngModel]="effectiveDate()" (ngModelChange)="effectiveDate.set($event)" />
+                <input type="time" class="form-control form-control-sm"
+                  [ngModel]="effectiveTime()" (ngModelChange)="effectiveTime.set($event)" />
+              </div>
+              <small class="field-hint">Interpreted as {{ effectiveDateTimeLabel() }}</small>
+              @if (errors()['effectiveDate']) { <div class="field-error mt-1">{{ errors()['effectiveDate'] }}</div> }
+            </div>
+            @if (action.requiresReasonCategory) {
+              <div class="mb-3">
+                <label class="form-label" for="field-reasonCategory">Reason category</label>
+                <textarea id="field-reasonCategory" class="form-control form-control-sm" rows="2" maxlength="2000"
+                  placeholder="Explain why this change is needed…"
+                  [ngModel]="reasonCategory()" (ngModelChange)="reasonCategory.set($event)"></textarea>
+                <small class="field-hint">{{ reasonCategory().length }} / 2,000</small>
+                @if (errors()['reasonCategory']) { <div class="field-error mt-1">{{ errors()['reasonCategory'] }}</div> }
+              </div>
+            }
+            @if (action.requiresDetailedReason) {
+              <div class="mb-3">
+                <label class="form-label" for="field-detailedReason">Detailed reason</label>
+                <textarea id="field-detailedReason" class="form-control form-control-sm" rows="3" maxlength="2000"
+                  placeholder="Provide full supporting detail…"
+                  [ngModel]="detailedReason()" (ngModelChange)="detailedReason.set($event)"></textarea>
+                <small class="field-hint">{{ detailedReason().length }} / 2,000</small>
+                @if (errors()['detailedReason']) { <div class="field-error mt-1">{{ errors()['detailedReason'] }}</div> }
+              </div>
+            }
+            @if (action.requiresCommunicationImpact) {
+              <div class="mb-3">
+                <label class="form-label" for="field-communicationImpact">Communication impact</label>
+                <textarea id="field-communicationImpact" class="form-control form-control-sm" rows="2" maxlength="2000"
+                  placeholder="Describe the impact on donor/communications…"
+                  [ngModel]="communicationImpact()" (ngModelChange)="communicationImpact.set($event)"></textarea>
+                <small class="field-hint">{{ communicationImpact().length }} / 2,000</small>
+                @if (errors()['communicationImpact']) { <div class="field-error mt-1">{{ errors()['communicationImpact'] }}</div> }
+              </div>
+            }
+            @if (action.requiresClosureSummary) {
+              <div class="mb-3">
+                <label class="form-label" for="field-closureSummary">Closure summary</label>
+                <textarea id="field-closureSummary" class="form-control form-control-sm" rows="3" maxlength="2000"
+                  placeholder="Summarise outcome…"
+                  [ngModel]="closureSummary()" (ngModelChange)="closureSummary.set($event)"></textarea>
+                <small class="field-hint">{{ closureSummary().length }} / 2,000</small>
+                @if (errors()['closureSummary']) { <div class="field-error mt-1">{{ errors()['closureSummary'] }}</div> }
+              </div>
+            }
+            @if (action.id === 'request_close' || action.id === 'approve_close') {
+              <div class="consequence-list mb-2">
+                <div class="consequence-row">
+                  <span class="consequence-label">Open donation intents</span>
+                  <span class="consequence-value">{{ settlementUnavailable() ? 'Unavailable' : openDonationIntentsCount() }}</span>
+                </div>
+                <div class="consequence-row">
+                  <span class="consequence-label">Active tracking assets</span>
+                  <span class="consequence-value">{{ activeTrackingAssetsCount() }}</span>
+                </div>
+              </div>
+            }
+          </div>
+          <footer class="d-flex justify-content-end gap-2 p-3 border-top">
+            <button class="btn btn-sm btn-outline-secondary" type="button" (click)="closeActionPanel()">Cancel</button>
+            <button class="btn btn-sm action-btn" [class.btn-primary]="action.placement === 'primary'" [class.btn-danger]="action.placement === 'danger'"
+              type="button" (click)="reviewAction()">Continue to review</button>
+          </footer>
+        </aside>
+      }
+
+      <!-- ===== CONFIRMATION DIALOG ===== -->
+      @if (showConfirmDialog() && activeAction(); as action) {
+        <div class="prc-modal-overlay" (click)="cancelConfirm()"></div>
+        <div class="prc-modal" role="alertdialog" aria-modal="true" [attr.aria-label]="action.confirmVerb">
+          <h6 class="mb-1">{{ action.confirmVerb }}</h6>
+          <p class="small text-muted">Review before committing.</p>
+          <div class="confirm-summary mb-2">
+            <div class="confirm-row"><span class="label">Record</span><span class="value">{{ c.code }} — {{ c.name }}</span></div>
+            <div class="confirm-row"><span class="label">Before</span><span class="status-badge" [class]="statusClass(currentState())">{{ currentState() }}</span></div>
+            <div class="confirm-row">
+              <span class="label">After</span>
+              @switch (action.id) {
+                @case ('activate') { <span class="status-badge" [class]="statusClass('Active')">Active</span> }
+                @case ('pause') { <span class="status-badge" [class]="statusClass('Paused')">Paused</span> }
+                @case ('resume') { <span class="status-badge" [class]="statusClass('Active')">Active</span> }
+                @case ('cancel_draft') { <span class="status-badge" [class]="statusClass('Cancelled')">Cancelled</span> }
+                @case ('request_close') { <span class="value">{{ currentState() }} · close requested</span> }
+                @case ('approve_close') {
+                  @if ((openDonationIntentsCount() ?? 0) > 0 || activeTrackingAssetsCount() > 0) {
+                    <span class="status-badge" [class]="statusClass('Closing')">Closing</span>
+                  } @else {
+                    <span class="status-badge" [class]="statusClass('Closed')">Closed</span>
+                  }
+                }
+              }
+            </div>
+            <div class="confirm-row"><span class="label">Time</span><span class="value">{{ effectiveDateTimeLabel() }}</span></div>
+          </div>
+          @if (action.typedConfirm) {
+            <div class="mb-2">
+              <label class="form-label" for="typed-confirm">Type <strong>{{ confirmToken() }}</strong></label>
+              <input id="typed-confirm" class="form-control form-control-sm" type="text" autocomplete="off"
+                [ngModel]="typedConfirmValue()" (ngModelChange)="typedConfirmValue.set($event)" />
+            </div>
+          }
+          <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" (click)="cancelConfirm()">Cancel</button>
+            <button class="btn btn-sm action-btn" [class.btn-primary]="action.placement === 'primary'" [class.btn-danger]="action.placement === 'danger'"
+              type="button" [disabled]="!typedConfirmSatisfied() || submitting()" (click)="confirmAndSubmit()">
+              {{ submitting() ? 'Submitting…' : action.confirmVerb }}
+            </button>
+          </div>
+        </div>
+      }
+
+    } @else {
+      <section class="text-center py-5">
+        <div class="empty-state-icon mb-3">🗂️</div>
+        <h5 class="fw-bold">No campaign selected</h5>
+        <p class="text-muted small mb-3">No campaign matches reference <strong>{{ campaignRef }}</strong>.</p>
+      </section>
+    }
+
+    <!-- ===== TOAST ===== -->
+    @if (toastVisible()) {
+      <div class="toast-minimal" role="status" aria-live="polite">{{ toastMessage() }}</div>
+    }
+</div>

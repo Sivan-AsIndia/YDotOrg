@@ -1,0 +1,765 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid">
+      <div class="state-module">
+        <div class="toast-stack" role="region" aria-label="Notifications" aria-live="polite">
+          @for (t of toasts; track t.id) {
+            <div class="toast-item toast-{{ t.kind }}" role="status">
+              <div class="toast-copy">
+                <strong>{{ t.title }}</strong>
+                <span>{{ t.message }}</span>
+              </div>
+              <button type="button" class="toast-close" [attr.aria-label]="'Dismiss: ' + t.title" (click)="dismissToast(t.id)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (!isInitialized) {
+          <div class="page-loading-overlay" role="status" aria-live="polite" aria-label="Loading"><div class="whirly-loader"></div></div>
+        } @else {
+          @if (isLoading) {
+            <div class="page-loading-overlay" role="status" aria-live="polite" aria-label="Loading"><div class="whirly-loader"></div></div>
+          }
+
+          <!-- ================= LIST VIEW ================= -->
+          @if (viewMode === 'list') {
+            <div class="content list-view">
+              <header class="list-header-card">
+                <div class="list-header-copy">
+                  <div class="header-icon" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="8.5"/>
+                      <path d="M3.8 9.5h16.4M3.8 14.5h16.4M12 3.5c2.1 2.3 3.2 5.1 3.2 8.5S14.1 18.2 12 20.5c-2.1-2.3-3.2-5.1-3.2-8.5S9.9 5.8 12 3.5Z"/>
+                    </svg>
+                  </div>
+                  <div class="page-title">
+                    <div class="eyebrow">GLOBAL MASTERS / GEOGRAPHY</div>
+                    <h1>State &amp; Province List</h1>
+                    <p>Manage jurisdictions, tax codes and regional settings.</p>
+                  </div>
+                </div>
+
+                <div class="header-actions">
+                  <button type="button" class="icon-btn" [class.is-spinning]="isLoading" title="Refresh" aria-label="Refresh list" (click)="onRefresh()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 11a8.1 8.1 0 0 0-15.5-2"/>
+                      <path d="M4 5v4h4"/>
+                      <path d="M4 13a8.1 8.1 0 0 0 15.5 2"/>
+                      <path d="M20 19v-4h-4"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-primary" (click)="openCreateForm()">
+                    <span class="btn-plus">+</span>
+                    Create State
+                  </button>
+                </div>
+
+                <div class="header-map-mark" aria-hidden="true">
+                  <svg viewBox="0 0 260 100" fill="none">
+                    <path d="M8 62c20-18 30-12 45-26 11-10 24-8 34-4 12 5 19-9 34-7 17 2 21 14 35 11 16-3 26-18 43-14 17 4 24 19 52 13" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 5"/>
+                    <path d="M35 30c12 4 18 15 30 17m60-27c8 10 9 18 6 29m42-16c5 8 9 17 7 28" stroke="currentColor" stroke-width="1" stroke-dasharray="2 4"/>
+                    <circle cx="69" cy="49" r="3.2" fill="currentColor"/>
+                    <circle cx="139" cy="33" r="3.2" fill="currentColor"/>
+                    <circle cx="191" cy="58" r="3.2" fill="currentColor"/>
+                  </svg>
+                </div>
+              </header>
+
+              <div class="stats-row">
+                <div class="stat-card">
+                  <div class="stat-icon stat-icon-neutral" aria-hidden="true">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.2 2.5 3.3 5.3 3.3 8.5s-1.1 6-3.3 8.5c-2.2-2.5-3.3-5.3-3.3-8.5s1.1-6 3.3-8.5Z"/>
+                    </svg>
+                  </div>
+                  <div><span class="stat-value">{{ scopedCount }}</span><span class="stat-label">Scoped states</span></div>
+                  <span class="stat-note">Total configured</span>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon stat-icon-success" aria-hidden="true">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="8.5"/><path d="m8.2 12 2.5 2.5 5.2-5.4"/>
+                    </svg>
+                  </div>
+                  <div><span class="stat-value">{{ activeCount }}</span><span class="stat-label">Active</span></div>
+                  <span class="stat-note">Currently enabled</span>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon stat-icon-muted" aria-hidden="true">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6m0-6-6 6"/>
+                    </svg>
+                  </div>
+                  <div><span class="stat-value">{{ inactiveCount }}</span><span class="stat-label">Inactive</span></div>
+                  <span class="stat-note">Not in use</span>
+                </div>
+              </div>
+
+              <div class="toolbar-row">
+                <div class="search-input">
+                  <svg class="search-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7.5"/>
+                    <path d="m20 20-3.7-3.7"/>
+                  </svg>
+                  <label class="visually-hidden" for="stateSearch">Search state or province</label>
+                  <input id="stateSearch" type="search" class="form-control" placeholder="Search by code, name or GST code..." [ngModel]="searchText" (ngModelChange)="onSearch($event)" />
+                </div>
+
+                <div class="filter-row">
+                  <label class="visually-hidden" for="filterCountry">Filter by country</label>
+                  <select id="filterCountry" class="form-select pill-select" [ngModel]="selectedCountryId" (ngModelChange)="onCountryFilterChange($event)">
+                    <option value="">All Countries</option>
+                    @for (country of tableCountries; track country.id) {
+                      <option [value]="country.id">{{ country.countryName }}</option>
+                    }
+                  </select>
+
+                  <label class="visually-hidden" for="filterJurisdiction">Filter by jurisdiction</label>
+                  <select id="filterJurisdiction" class="form-select pill-select" [ngModel]="selectedJurisdictionType" (ngModelChange)="onJurisdictionFilterChange($event)">
+                    <option value="">All Jurisdictions</option>
+                    @for (type of tableJurisdictionTypes; track type) {
+                      <option [value]="type">{{ type }}</option>
+                    }
+                  </select>
+
+                  <label class="visually-hidden" for="filterStatus">Filter by status</label>
+                  <select id="filterStatus" class="form-select pill-select" [ngModel]="selectedStatus" (ngModelChange)="onStatusFilterChange($event)">
+                    <option value="">All Status</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <section class="workspace-shell" [class.has-details]="detailsOpen()">
+                <article class="table-pane card">
+                  <div class="table-pane-header">
+                    <div>
+                      <h2>States &amp; Provinces</h2>
+                      <p>{{ filteredStates.length }} results in current scope</p>
+                    </div>
+                    @if (selectedState && detailsOpen()) {
+                      <span class="selection-label">
+                        <span class="selection-dot"></span>
+                        {{ selectedState.stateProvinceCode }} selected
+                      </span>
+                    }
+                  </div>
+
+                  <div class="table-scroll">
+                    <table class="data-table">
+                      <caption class="visually-hidden">States and provinces</caption>
+                      <colgroup>
+                        <col class="col-toggle" />
+                        <col class="col-code" />
+                        <col class="col-name" />
+                        <col class="col-country" />
+                        <col class="col-jurisdiction" />
+                        <col class="col-gst" />
+                        <col class="col-status" />
+                        <col class="col-action" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th class="col-toggle" scope="col" aria-hidden="true"></th>
+                          <th class="col-code" scope="col">Code</th>
+                          <th class="col-name" scope="col">State / Province</th>
+                          <th class="col-country" scope="col">Country</th>
+                          <th class="col-jurisdiction" scope="col">Jurisdiction</th>
+                          <th class="col-gst" scope="col">GST</th>
+                          <th class="col-status" scope="col">Status</th>
+                          <th class="col-action" scope="col">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @if (pagedStates.length > 0) {
+                          @for (s of pagedStates; track s.id) {
+                            <tr [class.row-selected]="detailsOpen() && selectedState?.id === s.id" (click)="viewState(s)" tabindex="0" (keydown.enter)="viewState(s)" [attr.aria-selected]="detailsOpen() && selectedState?.id === s.id">
+                              <td class="col-toggle td-toggle">
+                                <button type="button" class="mobile-open-btn" [attr.aria-label]="'View more details for ' + s.stateProvinceName" (click)="$event.stopPropagation(); viewState(s)">+</button>
+                              </td>
+                              <td class="col-code">
+                                <button type="button" class="code-button" [attr.aria-label]="s.stateProvinceCode + ' details'" (click)="$event.stopPropagation(); viewState(s)">{{ s.stateProvinceCode }}</button>
+                              </td>
+                              <td class="col-name">
+                                <div class="name-cell">
+                                  <span class="name-primary">{{ s.stateProvinceName }}</span>
+                                  @if (s.displayName) {
+                                    <span class="name-secondary">{{ s.displayName }}</span>
+                                  }
+                                </div>
+                              </td>
+                              <td class="col-country">{{ s.countryName || '—' }}</td>
+                              <td class="col-jurisdiction">
+                                <span class="badge badge-neutral">{{ s.jurisdictionType }}</span>
+                              </td>
+                              <td class="col-gst">{{ s.gstStateCode || '—' }}</td>
+                              <td class="col-status">
+                                <span class="status-pill" [class.active]="s.status === 'Active'" [class.inactive]="s.status === 'Inactive'" [class.draft]="s.status === 'Draft'">
+                                  <span class="status-dot" aria-hidden="true"></span>{{ s.status }}
+                                </span>
+                              </td>
+                              <td class="col-action">
+                                <div class="row-actions">
+                                  <button type="button" class="row-icon" title="View" [attr.aria-label]="'View ' + s.stateProvinceName" (click)="$event.stopPropagation(); viewState(s)">
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/>
+                                    </svg>
+                                  </button>
+                                  <button type="button" class="row-icon" title="Edit" [attr.aria-label]="'Edit ' + s.stateProvinceName" (click)="$event.stopPropagation(); openEditForm(s)">
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                      <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                                    </svg>
+                                  </button>
+                                  @if (s.isActive) {
+                                    <button type="button" class="row-icon" title="Deactivate" [attr.aria-label]="'Deactivate ' + s.stateProvinceName" (click)="$event.stopPropagation(); confirmDeactivate(s)">
+                                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="6.5" width="18" height="11" rx="5.5"/><circle cx="16.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+                                      </svg>
+                                    </button>
+                                  } @else {
+                                    <button type="button" class="row-icon" title="Activate" [attr.aria-label]="'Activate ' + s.stateProvinceName" (click)="$event.stopPropagation(); confirmActivate(s)">
+                                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="6.5" width="18" height="11" rx="5.5"/><circle cx="7.5" cy="12" r="3" fill="currentColor" stroke="none"/>
+                                      </svg>
+                                    </button>
+                                  }
+                                  <button type="button" class="row-icon delete" title="Delete" [attr.aria-label]="'Delete ' + s.stateProvinceName" (click)="$event.stopPropagation(); confirmDelete(s)">
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                      <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          }
+                        } @else {
+                          <tr><td colspan="8" class="empty-row">No states/provinces found</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+
+                  @if (filteredStates.length > 0) {
+                    <div class="table-footer">
+                      <div class="page-size">
+                        <label for="pageSizeSelect">Rows per page</label>
+                        <select id="pageSizeSelect" class="form-select" [ngModel]="pageSize" (ngModelChange)="onPageSizeChange($event)">
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="25">25</option>
+                          <option value="50">50</option>
+                        </select>
+                      </div>
+                      <span class="footer-count">Showing {{ ((currentPage - 1) * pageSize) + 1 }}–{{ pageEndItem }} of {{ filteredStates.length }}</span>
+                      <nav class="pagination" aria-label="Table pagination">
+                        <button type="button" class="page-btn" [disabled]="currentPage === 1" aria-label="Previous page" (click)="previousPage()">‹</button>
+                        @for (p of pageNumbers(); track p) {
+                          <button type="button" class="page-btn" [class.active]="currentPage === p" [attr.aria-current]="currentPage === p ? 'page' : null" [attr.aria-label]="'Page ' + p" (click)="goToPage(p)">{{ p }}</button>
+                        }
+                        <button type="button" class="page-btn" [disabled]="currentPage === totalPages" aria-label="Next page" (click)="nextPage()">›</button>
+                      </nav>
+                    </div>
+                  }
+                </article>
+
+                @if (detailsOpen() && selectedState) {
+                  <aside class="details-pane" aria-label="State details">
+                    <div class="details-header">
+                      <div class="details-identity">
+                        <div class="details-code">{{ selectedState.stateProvinceCode }}</div>
+                        <div class="details-title-block">
+                          <div class="details-kicker">STATE / PROVINCE</div>
+                          <h2>{{ selectedState.stateProvinceName }}</h2>
+                          <p>{{ selectedState.displayName || selectedState.stateProvinceName }}</p>
+                        </div>
+                      </div>
+                      <button type="button" class="icon-btn details-close" aria-label="Close details" title="Close details" (click)="closeViewOffcanvas()">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                      </button>
+                    </div>
+
+                    <div class="details-toolbar">
+                      <span class="status-pill" [class.active]="selectedState.status === 'Active'" [class.inactive]="selectedState.status === 'Inactive'" [class.draft]="selectedState.status === 'Draft'">
+                        <span class="status-dot" aria-hidden="true"></span>{{ selectedState.status }}
+                      </span>
+                      <div class="details-actions">
+                        <button type="button" class="mini-action" title="Edit" (click)="openEditForm(selectedState)">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          Edit
+                        </button>
+                        @if (selectedState.isActive) {
+                          <button type="button" class="mini-action" title="Deactivate" (click)="confirmDeactivate(selectedState)">
+                            Deactivate
+                          </button>
+                        } @else {
+                          <button type="button" class="mini-action primary-soft" title="Activate" (click)="confirmActivate(selectedState)">
+                            Activate
+                          </button>
+                        }
+                        <button type="button" class="mini-action danger-soft" title="Delete" (click)="confirmDelete(selectedState)">Delete</button>
+                      </div>
+                    </div>
+
+                    <div class="details-scroll">
+                      <section class="detail-section">
+                        <div class="detail-section-title"><span class="detail-section-icon">01</span><span>State / Province Identity</span></div>
+                        <div class="detail-grid">
+                          <div><span>Code</span><strong>{{ selectedState.stateProvinceCode }}</strong></div>
+                          <div><span>Name</span><strong>{{ selectedState.stateProvinceName }}</strong></div>
+                          <div class="wide"><span>Display Name</span><strong>{{ selectedState.displayName || '—' }}</strong></div>
+                        </div>
+                      </section>
+
+                      <section class="detail-section">
+                        <div class="detail-section-title"><span class="detail-section-icon">02</span><span>Country &amp; Jurisdiction</span></div>
+                        <div class="detail-grid">
+                          <div><span>Country</span><strong>{{ selectedState.countryName || '—' }}</strong></div>
+                          <div><span>Jurisdiction Type</span><strong><span class="badge badge-neutral">{{ selectedState.jurisdictionType || '—' }}</span></strong></div>
+                          <div><span>Federal Jurisdiction</span><strong>{{ selectedState.isFederalJurisdiction ? 'Yes' : 'No' }}</strong></div>
+                        </div>
+                      </section>
+
+                      <section class="detail-section">
+                        <div class="detail-section-title"><span class="detail-section-icon">03</span><span>Compliance &amp; Tax Codes</span></div>
+                        <div class="detail-grid">
+                          <div><span>GST State Code</span><strong>{{ selectedState.gstStateCode || '—' }}</strong></div>
+                          <div><span>State Tax Jurisdiction Code</span><strong>{{ selectedState.stateTaxJurisdictionCode || '—' }}</strong></div>
+                          <div class="wide"><span>Default Time Zone</span><strong>{{ getTimeZoneName(selectedState.defaultTimeZoneId) || '—' }}</strong></div>
+                        </div>
+                      </section>
+
+                      <section class="detail-section">
+                        <div class="detail-section-title"><span class="detail-section-icon">04</span><span>Address &amp; Postal Rules</span></div>
+                        <div class="detail-grid">
+                          <div class="wide"><span>Postal Code Pattern</span><strong><code>{{ selectedState.postalCodePattern || '—' }}</code></strong></div>
+                          <div class="wide"><span>Address Format Hint</span><strong>{{ selectedState.addressFormatHint || '—' }}</strong></div>
+                        </div>
+                      </section>
+
+                      <section class="detail-section">
+                        <div class="detail-section-title"><span class="detail-section-icon">05</span><span>Status &amp; Governance</span></div>
+                        <div class="detail-grid">
+                          <div><span>Status</span><strong>{{ selectedState.status || '—' }}</strong></div>
+                          <div><span>Sort Order</span><strong>{{ selectedState.sortOrder }}</strong></div>
+                          <div><span>Created</span><strong>{{ selectedState.createdAt | date:'dd-MMM-yyyy' }}</strong></div>
+                          <div><span>Created By</span><strong>{{ selectedState.createdBy || '—' }}</strong></div>
+                          <div><span>Updated</span><strong>{{ selectedState.updatedAt ? (selectedState.updatedAt | date:'dd-MMM-yyyy') : '—' }}</strong></div>
+                          <div><span>Updated By</span><strong>{{ selectedState.updatedBy || '—' }}</strong></div>
+                          <div class="wide"><span>Notes</span><strong class="detail-note">{{ selectedState.notes || '—' }}</strong></div>
+                        </div>
+                      </section>
+                    </div>
+                  </aside>
+                }
+              </section>
+            </div>
+          }
+
+          <!-- ================= ADD / EDIT FORM ================= -->
+          @if (viewMode === 'form') {
+            <div class="content accordion-form">
+              <div class="page-header">
+                <div class="page-title">
+                  <h4>{{ pageTitle }}</h4>
+                  <h6>{{ pageSubTitle }}</h6>
+                </div>
+                <button type="button" class="btn btn-outline" (click)="cancelForm()">
+                  ← Back
+                </button>
+              </div>
+              <form (ngSubmit)="handleSubmit()">
+                <div class="tl-accordion">
+                  <!-- Left rail (desktop) -->
+                  <div class="tl-left-panel" aria-hidden="true">
+                    <div class="tl-label" [class.active]="showIdentity" (click)="toggleAccordion('stateIdentity')">
+                      <div class="tl-label-icon ico-neutral">01</div>
+                      <div class="tl-label-text">
+                        <div class="tl-label-title">State / Province Identity</div>
+                        <div class="tl-label-sub">Basic state/province information</div>
+                      </div>
+                    </div>
+                    <div class="tl-label" [class.active]="showCountry" (click)="toggleAccordion('countryLinkage')">
+                      <div class="tl-label-icon ico-neutral">02</div>
+                      <div class="tl-label-text">
+                        <div class="tl-label-title">Country & Jurisdiction</div>
+                        <div class="tl-label-sub">Country linkage settings</div>
+                      </div>
+                    </div>
+                    <div class="tl-label" [class.active]="showCompliance" (click)="toggleAccordion('compliance')">
+                      <div class="tl-label-icon ico-neutral">03</div>
+                      <div class="tl-label-text">
+                        <div class="tl-label-title">Compliance & Tax Codes</div>
+                        <div class="tl-label-sub">Tax jurisdiction settings</div>
+                      </div>
+                    </div>
+                    <div class="tl-label" [class.active]="showAddressRules" (click)="toggleAccordion('addressRules')">
+                      <div class="tl-label-icon ico-neutral">04</div>
+                      <div class="tl-label-text">
+                        <div class="tl-label-title">Address & Postal Rules</div>
+                        <div class="tl-label-sub">Postal & format settings</div>
+                      </div>
+                    </div>
+                    <div class="tl-label" [class.active]="showStatus" (click)="toggleAccordion('statusGovernance')">
+                      <div class="tl-label-icon ico-neutral">05</div>
+                      <div class="tl-label-text">
+                        <div class="tl-label-title">Status & Governance</div>
+                        <div class="tl-label-sub">Status and settings</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Right cards -->
+                  <div class="tl-right-area">
+                    <!-- Identity -->
+                    <div class="tl-card" [class.card-active]="showIdentity">
+                      <h3 class="tl-card-header" role="button" tabindex="0" id="sec-identity-btn" [attr.aria-expanded]="showIdentity" aria-controls="sec-identity-body" (click)="toggleAccordion('stateIdentity')" (keydown.enter)="toggleAccordion('stateIdentity')" (keydown.space)="toggleAccordion('stateIdentity')">
+                        <span class="tl-card-header-title"><span class="tl-step step-neutral" aria-hidden="true">01</span> State / Province Identity</span>
+                      </h3>
+                      @if (showIdentity) {
+                        <div class="tl-card-body" id="sec-identity-body" role="region" aria-labelledby="sec-identity-btn">
+                          <div class="form-row">
+                            <div class="form-col col-3">
+                              <label for="stateProvinceCode">Code <span class="req" aria-hidden="true">*</span></label>
+                              <input
+                                id="stateProvinceCode"
+                                type="text"
+                                class="form-control uppercase"
+                                [class.is-invalid]="stateProvinceCodeValidationError"
+                                [attr.aria-invalid]="!!stateProvinceCodeValidationError"
+                                [attr.aria-describedby]="stateProvinceCodeValidationError ? 'stateProvinceCode-error' : null"
+                                [(ngModel)]="stateProvince.stateProvinceCode"
+                                name="stateProvinceCode"
+                                (input)="onStateProvinceCodeChanged()"
+                                [disabled]="isEdit"
+                                placeholder="e.g., TN, KA"
+                                maxlength="10" />
+                              @if (stateProvinceCodeValidationError) {
+                                <span class="field-error" id="stateProvinceCode-error">{{ stateProvinceCodeValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-5">
+                              <label for="stateProvinceName">Name <span class="req" aria-hidden="true">*</span></label>
+                              <input
+                                id="stateProvinceName"
+                                type="text"
+                                class="form-control"
+                                [class.is-invalid]="stateProvinceNameValidationError"
+                                [attr.aria-invalid]="!!stateProvinceNameValidationError"
+                                [attr.aria-describedby]="stateProvinceNameValidationError ? 'stateProvinceName-error' : null"
+                                [(ngModel)]="stateProvince.stateProvinceName"
+                                name="stateProvinceName"
+                                (input)="onStateProvinceNameChanged()"
+                                (blur)="onStateNameChangedTrim()"
+                                placeholder="e.g., Tamil Nadu"
+                                maxlength="150" />
+                              @if (stateProvinceNameValidationError) {
+                                <span class="field-error" id="stateProvinceName-error">{{ stateProvinceNameValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-4">
+                              <label for="displayName">Display Name</label>
+                              <input
+                                id="displayName"
+                                type="text"
+                                class="form-control"
+                                [(ngModel)]="stateProvince.displayName"
+                                name="displayName"
+                                (blur)="onDisplayNameChanged()"
+                                (input)="touchState()"
+                                placeholder="e.g., Tamil Nadu (TN)"
+                                maxlength="200" />
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Country & Jurisdiction -->
+                    <div class="tl-card" [class.card-active]="showCountry">
+                      <h3 class="tl-card-header" role="button" tabindex="0" id="sec-country-btn" [attr.aria-expanded]="showCountry" aria-controls="sec-country-body" (click)="toggleAccordion('countryLinkage')" (keydown.enter)="toggleAccordion('countryLinkage')" (keydown.space)="toggleAccordion('countryLinkage')">
+                        <span class="tl-card-header-title"><span class="tl-step step-neutral" aria-hidden="true">02</span> Country & Jurisdiction</span>
+                      </h3>
+                      @if (showCountry) {
+                        <div class="tl-card-body" id="sec-country-body" role="region" aria-labelledby="sec-country-btn">
+                          <div class="form-row">
+                            <div class="form-col col-4">
+                              <label for="countryId">Country <span class="req" aria-hidden="true">*</span></label>
+                              <select
+                                id="countryId"
+                                class="form-select"
+                                [class.is-invalid]="countryValidationError"
+                                [attr.aria-invalid]="!!countryValidationError"
+                                [(ngModel)]="stateProvince.countryId"
+                                name="countryId"
+                                (ngModelChange)="onCountryChanged()"
+                                [disabled]="isEdit">
+                                <option [ngValue]="null">--Select Country--</option>
+                                @for (country of formCountries; track country.id) {
+                                  <option [ngValue]="country.id">{{ country.countryName }} ({{ country.countryCode }})</option>
+                                }
+                              </select>
+                              @if (countryValidationError) {
+                                <span class="field-error">{{ countryValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-4">
+                              <label for="jurisdictionType">Jurisdiction Type <span class="req" aria-hidden="true">*</span></label>
+                              <select
+                                id="jurisdictionType"
+                                class="form-select"
+                                [class.is-invalid]="jurisdictionTypeValidationError"
+                                [attr.aria-invalid]="!!jurisdictionTypeValidationError"
+                                [(ngModel)]="stateProvince.jurisdictionType"
+                                name="jurisdictionType"
+                                (ngModelChange)="onJurisdictionTypeChanged()">
+                                <option [ngValue]="null">--Select Jurisdiction Type--</option>
+                                @for (type of jurisdictionTypeOptions; track type) {
+                                  <option [ngValue]="type">{{ type }}</option>
+                                }
+                              </select>
+                              @if (jurisdictionTypeValidationError) {
+                                <span class="field-error">{{ jurisdictionTypeValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-4 checkbox-col">
+                              <label class="checkbox-label" for="isFederalJurisdiction">
+                                <input
+                                  id="isFederalJurisdiction"
+                                  type="checkbox"
+                                  [(ngModel)]="stateProvince.isFederalJurisdiction"
+                                  name="isFederalJurisdiction"
+                                  (change)="touchAddress()" />
+                                Federal Jurisdiction
+                              </label>
+                              <small class="muted">Informational – reporting/compliance</small>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Compliance -->
+                    <div class="tl-card" [class.card-active]="showCompliance">
+                      <h3 class="tl-card-header" role="button" tabindex="0" id="sec-compliance-btn" [attr.aria-expanded]="showCompliance" aria-controls="sec-compliance-body" (click)="toggleAccordion('compliance')" (keydown.enter)="toggleAccordion('compliance')" (keydown.space)="toggleAccordion('compliance')">
+                        <span class="tl-card-header-title"><span class="tl-step step-neutral" aria-hidden="true">03</span> Compliance & Tax Codes</span>
+                      </h3>
+                      @if (showCompliance) {
+                        <div class="tl-card-body" id="sec-compliance-body" role="region" aria-labelledby="sec-compliance-btn">
+                          <div class="form-row">
+                            <div class="form-col col-3">
+                              <label for="gstStateCode">GST State Code @if (isIndiaSelected) { <span class="req" aria-hidden="true">*</span> }</label>
+                              <input
+                                id="gstStateCode"
+                                type="text"
+                                class="form-control"
+                                [class.is-invalid]="gstStateCodeValidationError"
+                                [attr.aria-invalid]="!!gstStateCodeValidationError"
+                                [(ngModel)]="stateProvince.gstStateCode"
+                                name="gstStateCode"
+                                (input)="onGstInput()"
+                                placeholder="e.g., 33"
+                                maxlength="2" />
+                              @if (gstStateCodeValidationError) {
+                                <span class="field-error">{{ gstStateCodeValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-4">
+                              <label for="stateTaxJurisdictionCode">State Tax Jurisdiction Code</label>
+                              <input
+                                id="stateTaxJurisdictionCode"
+                                type="text"
+                                class="form-control"
+                                [(ngModel)]="stateProvince.stateTaxJurisdictionCode"
+                                name="stateTaxJurisdictionCode"
+                                (input)="touchContact()"
+                                placeholder="For countries with state tax systems"
+                                maxlength="30" />
+                            </div>
+                            <div class="form-col col-5">
+                              <label for="defaultTimeZoneId">Default Time Zone</label>
+                              <select id="defaultTimeZoneId" class="form-select" [(ngModel)]="stateProvince.defaultTimeZoneId" name="defaultTimeZoneId">
+                                <option [ngValue]="null">--Select Time Zone--</option>
+                                @for (tz of formTimeZones; track tz.id) {
+                                  <option [ngValue]="tz.id">{{ tz.displayName }}</option>
+                                }
+                              </select>
+                              <!-- Said plainly rather than left to be inferred. When the country
+                                   has no zones mapped the full catalogue is shown, and the person
+                                   deserves to know the list is not specific to it. -->
+                              @if (stateProvince.countryId && !timeZonesAreCountryFiltered) {
+                                <small class="text-muted">
+                                  Showing all time zones — none are mapped to this country yet.
+                                </small>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Address Rules -->
+                    <div class="tl-card" [class.card-active]="showAddressRules">
+                      <h3 class="tl-card-header" role="button" tabindex="0" id="sec-address-btn" [attr.aria-expanded]="showAddressRules" aria-controls="sec-address-body" (click)="toggleAccordion('addressRules')" (keydown.enter)="toggleAccordion('addressRules')" (keydown.space)="toggleAccordion('addressRules')">
+                        <span class="tl-card-header-title"><span class="tl-step step-neutral" aria-hidden="true">04</span> Address & Postal Rules</span>
+                      </h3>
+                      @if (showAddressRules) {
+                        <div class="tl-card-body" id="sec-address-body" role="region" aria-labelledby="sec-address-btn">
+                          <div class="form-row">
+                            <div class="form-col col-5">
+                              <label for="postalCodePattern">Postal Code Validation Pattern</label>
+                              <input
+                                id="postalCodePattern"
+                                type="text"
+                                class="form-control"
+                                [(ngModel)]="stateProvince.postalCodePattern"
+                                name="postalCodePattern"
+                                (input)="touchFinance()"
+                                placeholder="e.g., 600001"
+                                maxlength="100" />
+                            </div>
+                            <div class="form-col col-7">
+                              <label for="addressFormatHint">Address Format Hint</label>
+                              <input
+                                id="addressFormatHint"
+                                type="text"
+                                class="form-control"
+                                [(ngModel)]="stateProvince.addressFormatHint"
+                                name="addressFormatHint"
+                                (input)="touchFinance()"
+                                placeholder="Country/state-specific address patterns"
+                                maxlength="200" />
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Status & Governance -->
+                    <div class="tl-card" [class.card-active]="showStatus">
+                      <h3 class="tl-card-header" role="button" tabindex="0" id="sec-status-btn" [attr.aria-expanded]="showStatus" aria-controls="sec-status-body" (click)="toggleAccordion('statusGovernance')" (keydown.enter)="toggleAccordion('statusGovernance')" (keydown.space)="toggleAccordion('statusGovernance')">
+                        <span class="tl-card-header-title"><span class="tl-step step-neutral" aria-hidden="true">05</span> Status & Governance</span>
+                      </h3>
+                      @if (showStatus) {
+                        <div class="tl-card-body" id="sec-status-body" role="region" aria-labelledby="sec-status-btn">
+                          <div class="form-row">
+                            <div class="form-col col-3">
+                              <label for="status">Status <span class="req" aria-hidden="true">*</span></label>
+                              <select
+                                id="status"
+                                class="form-select"
+                                [class.is-invalid]="statusValidationError"
+                                [attr.aria-invalid]="!!statusValidationError"
+                                [(ngModel)]="stateProvince.status"
+                                name="status"
+                                (ngModelChange)="onStatusChanged()">
+                                <option [ngValue]="null">--Select Status--</option>
+                                @for (status of statusOptions; track status) {
+                                  <option [ngValue]="status">{{ status }}</option>
+                                }
+                              </select>
+                              @if (statusValidationError) {
+                                <span class="field-error">{{ statusValidationError }}</span>
+                              }
+                            </div>
+                            <div class="form-col col-3">
+                              <label for="sortOrder">Sort Order</label>
+                              <input
+                                id="sortOrder"
+                                type="number"
+                                class="form-control"
+                                [(ngModel)]="stateProvince.sortOrder"
+                                name="sortOrder"
+                                min="0"
+                                (input)="touchReport()" />
+                            </div>
+                            <div class="form-col col-6">
+                              <label for="notes">Notes</label>
+                              <textarea
+                                id="notes"
+                                class="form-control"
+                                rows="3"
+                                [(ngModel)]="stateProvince.notes"
+                                name="notes"
+                                placeholder="Additional notes..."
+                                (input)="touchReport()"></textarea>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-footer">
+                  <button type="button" class="btn btn-outline" (click)="cancelForm()">Cancel</button>
+                  <button type="submit" class="btn btn-primary">
+                    {{ isEdit ? 'Update' : 'Save' }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          }
+
+
+          <!-- ================= CONFIRMATION MODALS ================= -->
+          @if (showActivateModal) {
+            <div class="modal-backdrop" (click)="closeModals()"></div>
+            <div class="modal-box confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="activate-title" (keydown.escape)="closeModals()">
+              <div class="confirm-icon confirm-success">✓</div>
+              <h4 id="activate-title">Activate State/Province</h4>
+              <p>Are you sure you want to activate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
+              <div class="confirm-actions">
+                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
+                <button type="button" class="btn btn-success" (click)="activateConfirmed()">Yes, Activate</button>
+              </div>
+            </div>
+          }
+
+          @if (showDeactivateModal) {
+            <div class="modal-backdrop" (click)="closeModals()"></div>
+            <div class="modal-box confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="deactivate-title" (keydown.escape)="closeModals()">
+              <div class="confirm-icon confirm-warning">!</div>
+              <h4 id="deactivate-title">Deactivate State/Province</h4>
+              @if (!canDeactivate) {
+                <p class="text-danger">Cannot deactivate! Please deactivate all cities under this state first.</p>
+              } @else {
+                <p>Are you sure you want to deactivate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
+              }
+              <div class="confirm-actions">
+                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
+                @if (canDeactivate) {
+                  <button type="button" class="btn btn-warning" (click)="deactivateConfirmed()">Yes, Deactivate</button>
+                }
+              </div>
+            </div>
+          }
+
+          @if (showDeleteModal) {
+            <div class="modal-backdrop" (click)="closeModals()"></div>
+            <div class="modal-box confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" (keydown.escape)="closeModals()">
+              <div class="confirm-icon confirm-danger">×</div>
+              <h4 id="delete-title">Delete State/Province</h4>
+              @if (!canDelete) {
+                <p class="text-danger">Cannot delete! Please delete all cities under this state first.</p>
+              } @else {
+                <p>Are you sure you want to delete <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
+                <div class="alert-danger-box">This action cannot be undone.</div>
+              }
+              <div class="confirm-actions">
+                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
+                @if (canDelete) {
+                  <button type="button" class="btn btn-danger" (click)="deleteConfirmed()">Yes, Delete</button>
+                }
+              </div>
+            </div>
+          }
+
+        }
+      </div>
+    </div>
+  </div>
+</main>

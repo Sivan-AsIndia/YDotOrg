@@ -1,0 +1,421 @@
+<main class="app-wrapper">
+<div class="page">
+
+  <!-- Live region for status announcements -->
+  <div class="sr-only" aria-live="polite">{{ liveMessage() }}</div>
+
+  <!-- ============================================================= -->
+  <!-- Simulator strip — compact, collapsible, demo-only               -->
+  <!-- ============================================================= -->
+  <!-- <section class="sim-strip" aria-label="Access and state simulator">
+    <button type="button" class="sim-toggle" (click)="toggleSimulator()" [attr.aria-expanded]="simulatorOpen()">
+      <svg class="chevron" [class.is-open]="simulatorOpen()" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Simulator controls
+    </button>
+
+    <div class="sim-body" *ngIf="simulatorOpen()">
+      <div class="sim-block">
+        <span class="sim-label">Role</span>
+        <select class="control select control-sm" [ngModel]="effectiveRoleId()" (ngModelChange)="setRole($event)">
+          <option *ngFor="let r of roles" [value]="r.id">{{ r.label }}</option>
+        </select>
+      </div>
+
+      <div class="sim-block">
+        <span class="sim-label">Scope</span>
+        <div class="pill-row">
+          <button type="button" *ngFor="let u of scopeUnits()" class="scope-pill"
+                  [class.is-active]="u.active" [class.is-disabled]="!u.assigned"
+                  [disabled]="!u.assigned" (click)="toggleScope(u)" [attr.aria-pressed]="u.active">
+            {{ u.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="sim-block">
+        <span class="sim-label">Preview state</span>
+        <div class="pill-row">
+          <button type="button" *ngFor="let s of previewStates" class="state-pill"
+                  [class.is-active]="previewState() === s.id" (click)="setPreviewState(s.id)">
+            {{ s.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </section> -->
+
+  <!-- ============================================================= -->
+  <!-- No access — replaces the entire task surface                   -->
+  <!-- ============================================================= -->
+  <section *ngIf="previewState() === 'no-access' || !effectiveRole().canView" class="card empty-card" role="alert">
+    <svg class="empty-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z" fill="currentColor"/></svg>
+    <h2>You don't have access to Duplicate review</h2>
+    <p>This task requires the Data Steward duplicate-review permission for your assigned scope. Ask a workspace admin
+      to grant access, or return to a page you're permitted to use.</p>
+    <div class="button-row center">
+      <button type="button" class="btn btn-primary">Return to dashboard</button>
+      <button type="button" class="btn btn-ghost">Request access</button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="previewState() !== 'no-access' && effectiveRole().canView">
+
+    <!-- ============================================================= -->
+    <!-- Task header                                                    -->
+    <!-- ============================================================= -->
+    <header class="task-header">
+      <div class="task-header-main">
+        <h1>Duplicate review</h1>
+        <ng-container *ngIf="selected() as p">
+          <span class="badge tone-brand">{{ p.reference }}</span>
+          <span class="badge" [ngClass]="statusTone(p.status)">{{ p.status }}</span>
+          <span class="task-meta">{{ p.owner }} · {{ p.lastActivity }}</span>
+        </ng-container><br>
+        <span class="task-meta" *ngIf="!selected()">Select a duplicate pair from the queue to begin</span>
+      </div>
+      <button type="button" class="btn btn-primary" [disabled]="!selected()" (click)="reviewEvidence()">
+        Review evidence
+      </button>
+    </header>
+
+    <!-- ============================================================= -->
+    <!-- Persistent outcome (kept visible; not a toast)                 -->
+    <!-- ============================================================= -->
+    <section *ngIf="outcome() as o" class="card outcome-card"
+              [class.outcome-warning]="o.kind === 'dependency-failure'" role="status">
+      <div class="outcome-head">
+        <svg *ngIf="o.kind === 'success'" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm4.7-11.7-5.5 5.5-2.9-2.9 1.4-1.4 1.5 1.5 4.1-4.1 1.4 1.4Z" fill="currentColor"/>
+        </svg>
+        <svg *ngIf="o.kind === 'dependency-failure'" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-7h-2v5h2v-5Z" fill="currentColor"/>
+        </svg>
+        <h2 *ngIf="o.kind === 'success'">Saved successfully</h2>
+        <h2 *ngIf="o.kind === 'dependency-failure'">Dependent step failed</h2>
+        <button type="button" class="btn-text outcome-dismiss" (click)="dismissOutcome()" aria-label="Dismiss">✕</button>
+      </div>
+
+      <p *ngIf="o.kind === 'success'">Reference <strong>{{ o.reference }}</strong> · state <strong>{{ o.state }}</strong> · effective <strong>{{ o.effectiveTime }}</strong></p>
+      <p *ngIf="o.kind === 'dependency-failure'">Your confirmed local result is unchanged. Reference <strong>{{ o.reference }}</strong> · state <strong>{{ o.state }}</strong></p>
+
+      <div class="outcome-grid">
+        <span><b>Downstream:</b> {{ o.downstream }}</span>
+        <span><b>Owner:</b> {{ o.owner }}</span>
+        <span *ngIf="o.correlationRef"><b>Correlation:</b> {{ o.correlationRef }}</span>
+        <span><b>Next:</b> {{ o.nextAction }}</span>
+      </div>
+
+      <div class="button-row" *ngIf="o.kind === 'dependency-failure'">
+        <button type="button" class="btn btn-primary btn-sm" (click)="retryDependency()">Retry dependent step</button>
+        <button type="button" class="btn btn-ghost btn-sm">Contact support</button>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- Conflict banner                                                -->
+    <!-- ============================================================= -->
+    <section *ngIf="previewState() === 'conflict'" class="card conflict-card" role="alert">
+      <div class="conflict-text">
+        <h2>This record changed after you opened it</h2>
+        <p>Review the latest version before continuing. Your proposed decision has been kept.</p>
+      </div>
+      <div class="button-row">
+        <button type="button" class="btn btn-primary btn-sm" (click)="reapplyChanges()">Compare &amp; reapply</button>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="discardConflict()">Cancel</button>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- Context and filters — single compact row                       -->
+    <!-- ============================================================= -->
+    <section class="card filters-card" aria-label="Context and filters">
+      <div class="filters-row">
+        <div class="search-input grow">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 21l-4.35-4.35m1.35-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="Search reference or candidate name…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); onFilterChange()" />
+        </div>
+        <select class="control select control-sm" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); onFilterChange()">
+          <option value="all">All statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="In review">In review</option>
+          <option value="Escalated">Escalated</option>
+          <option value="On hold">On hold</option>
+          <option value="Merged">Merged</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <select class="control select control-sm" [ngModel]="savedFilter()" (ngModelChange)="savedFilter.set($event); onFilterChange()">
+          <option value="all">All candidates</option>
+          <option value="mine">My queue</option>
+          <option value="high-confidence">High confidence</option>
+        </select>
+        <button type="button" class="btn-text" (click)="clearFilters()" [disabled]="!filtersActive()">Clear</button>
+        <span class="totals">{{ filteredQueue().length }} in scope · {{ lastRefreshed() }}</span>
+        <button type="button" class="btn-text" (click)="refresh()">{{ refreshing() ? '…' : 'Refresh' }}</button>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- Main layout: queue + workspace                                 -->
+    <!-- ============================================================= -->
+    <div class="layout">
+
+      <!-- ---------------- Queue panel ---------------- -->
+      <section class="card queue-panel" aria-label="Duplicate candidate queue">
+
+        <div *ngIf="previewState() === 'loading'" class="skeleton-list" aria-busy="true">
+          <span class="sr-only">Loading duplicate review queue…</span>
+          <div class="skeleton-row" *ngFor="let i of [1,2,3,4,5,6]"></div>
+        </div>
+
+        <div *ngIf="previewState() === 'empty'" class="empty-inline">
+          <p *ngIf="filtersActive()">No pairs match your current scope and filters.</p>
+          <p *ngIf="!filtersActive()">No pairs are queued for your assigned scope.</p>
+          <button *ngIf="filtersActive()" type="button" class="btn btn-ghost btn-sm" (click)="clearFilters()">Clear filters</button>
+        </div>
+
+        <ng-container *ngIf="previewState() !== 'loading' && previewState() !== 'empty'">
+          <ul class="queue-list" role="list">
+            <li *ngFor="let p of pagedQueue()">
+              <button type="button" class="queue-row" [class.is-selected]="selectedId() === p.id"
+                      (click)="selectItem(p)" [attr.aria-current]="selectedId() === p.id">
+                <span class="queue-top">
+                  <span class="queue-ref">{{ p.reference }}</span>
+                  <span class="badge sm" [ngClass]="confidenceTone(p.confidence)">{{ p.confidence }}</span>
+                </span>
+                <span class="queue-names">{{ p.candidateAName }} <span class="vs">/</span> {{ p.candidateBName }}</span>
+                <span class="badge sm" [ngClass]="statusTone(p.status)">{{ p.status }}</span>
+              </button>
+            </li>
+          </ul>
+
+          <div class="empty-inline" *ngIf="pagedQueue().length === 0">
+            <p *ngIf="filtersActive()">No pairs match your current scope and filters.</p>
+            <p *ngIf="!filtersActive()">No pairs are queued for your assigned scope.</p>
+            <button *ngIf="filtersActive()" type="button" class="btn btn-ghost btn-sm" (click)="clearFilters()">Clear filters</button>
+          </div>
+
+          <nav class="pagination" *ngIf="totalPages() > 1" aria-label="Queue pagination">
+            <button type="button" class="page-btn" (click)="setPage(currentPage() - 1)" [disabled]="currentPage() === 1">‹</button>
+            <button type="button" class="page-btn" *ngFor="let n of pageNumbers()" [class.is-active]="n === currentPage()"
+                    (click)="setPage(n)" [attr.aria-current]="n === currentPage() ? 'page' : null">{{ n }}</button>
+            <button type="button" class="page-btn" (click)="setPage(currentPage() + 1)" [disabled]="currentPage() === totalPages()">›</button>
+          </nav>
+        </ng-container>
+      </section>
+
+      <!-- ---------------- Workspace panel ---------------- -->
+      <section class="workspace" aria-label="Compare candidates and decide">
+
+        <div *ngIf="!selected()" class="card empty-card compact">
+          <p>Select a duplicate pair from the queue to compare candidates and record a decision.</p>
+        </div>
+
+        <ng-container *ngIf="selected() as p">
+
+          <div class="notice-card" *ngIf="previewState() === 'duplicate'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-7h-2v5h2v-5Z" fill="currentColor"/></svg>
+            <span>Privacy-safe comparison — protected details stay masked until explicitly revealed.</span>
+          </div>
+
+          <!-- Compare card: candidate names + unified table -->
+          <div class="card compare-card">
+            <div class="compare-head">
+              <div class="candidate-name">
+                <span class="candidate-label">A</span>
+                <strong>{{ p.candidateAName }}</strong>
+                <button type="button" class="copy-btn" (click)="copyValue(p.candidateAId)" [title]="p.candidateAId">{{ p.candidateAId }}</button>
+              </div>
+              <span class="badge" [ngClass]="confidenceTone(p.confidence)">{{ p.confidence }} · {{ p.confidenceScore }}%</span>
+              <div class="candidate-name align-right">
+                <button type="button" class="copy-btn" (click)="copyValue(p.candidateBId)" [title]="p.candidateBId">{{ p.candidateBId }}</button>
+                <strong>{{ p.candidateBName }}</strong>
+                <span class="candidate-label">B</span>
+              </div>
+            </div>
+
+            <table class="compare-table">
+              <thead>
+                <tr><th scope="col" class="col-field">Field</th><th scope="col">Candidate A</th><th scope="col">Candidate B</th></tr>
+              </thead>
+              <tbody *ngFor="let g of compareGroups()">
+                <tr class="group-row">
+                  <th scope="colgroup" colspan="3">
+                    {{ g }}
+                    <span class="badge tiny tone-neutral" *ngIf="g === 'Contact'">Restricted</span>
+                  </th>
+                </tr>
+                <tr *ngFor="let row of rowsForGroup(g)" [class.is-conflict]="row.conflicting">
+                  <th scope="row">{{ row.field }}</th>
+                  <td [class.is-masked]="row.restricted">{{ row.valueA }}</td>
+                  <td [class.is-masked]="row.restricted">{{ row.valueB }}</td>
+                </tr>
+                <tr class="reveal-row" *ngIf="g === 'Contact' && !contactRevealed()">
+                  <td colspan="3">
+                    <span class="restricted-notice">This value cannot be displayed with your current access.</span>
+                    <button type="button" class="link-btn small" *ngIf="effectiveRole().canReveal" (click)="revealContact()">Reveal for this record</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <button type="button" class="evidence-toggle" (click)="toggleEvidence()" [attr.aria-expanded]="evidenceOpen()">
+              <svg class="chevron" [class.is-open]="evidenceOpen()" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Matching evidence ({{ p.evidence.length }})
+              <span class="badge tiny tone-neutral">Confidential</span>
+            </button>
+            <ul class="evidence-list" *ngIf="evidenceOpen()">
+              <li *ngFor="let e of p.evidence">{{ e }}</li>
+            </ul>
+          </div>
+
+          <!-- Decision card -->
+          <div class="card decision-card">
+            <div class="error-summary" *ngIf="errors().decision || errors().reason || errors().surviving" role="alert">
+              <strong>Review the highlighted fields.</strong>
+              <ul>
+                <li *ngIf="errors().decision"><a href="#field-decision">{{ errors().decision }}</a></li>
+                <li *ngIf="errors().reason"><a href="#field-reason">{{ errors().reason }}</a></li>
+                <li *ngIf="errors().surviving"><a href="#field-surviving">{{ errors().surviving }}</a></li>
+              </ul>
+            </div>
+
+            <div class="decision-row">
+              <div class="field-group">
+                <label class="field-label" for="field-decision">Decision</label>
+                <select id="field-decision" class="control select" [class.has-error]="errors().decision"
+                        [ngModel]="decision()" (ngModelChange)="decision.set($event); onDecisionChange()"
+                        [attr.aria-invalid]="!!errors().decision">
+                  <option *ngFor="let d of decisionOptions" [value]="d.value">{{ d.label }}</option>
+                </select>
+                <p class="field-error" *ngIf="errors().decision">{{ errors().decision }}</p>
+              </div>
+
+              <div class="field-group" *ngIf="decision() === 'merge'">
+                <label class="field-label" for="field-surviving">Surviving record</label>
+                <input id="field-surviving" type="text" class="control" autocomplete="off"
+                       [class.has-error]="errors().surviving || (mergePreview()?.unrecognised)"
+                       [ngModel]="surviving()" (ngModelChange)="surviving.set($event)"
+                       [attr.aria-invalid]="!!errors().surviving"
+                       placeholder="Enter the surviving reference, e.g. {{ p.candidateAId }}" />
+                <p class="field-error" *ngIf="errors().surviving">{{ errors().surviving }}</p>
+                <p class="field-error" *ngIf="!errors().surviving && mergePreview()?.unrecognised">
+                  Review Surviving record. Enter a candidate reference shown in this review.
+                </p>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="field-reason">Decision reason</label>
+              <textarea id="field-reason" class="control textarea" rows="3" maxlength="2000"
+                        [class.has-error]="errors().reason"
+                        [ngModel]="reason()" (ngModelChange)="reason.set($event)"
+                        [attr.aria-invalid]="!!errors().reason"
+                        placeholder="Explain the evidence and rationale for this decision (10–2,000 characters)…"></textarea>
+              <div class="field-footer">
+                <p class="field-error" *ngIf="errors().reason">{{ errors().reason }}</p>
+                <span class="char-counter">{{ reasonLength() }} / {{ reasonMax }}</span>
+              </div>
+            </div>
+
+            <ng-container *ngIf="mergePreview() as mp">
+              <div class="merge-preview" *ngIf="!mp.unrecognised">
+                <span><b>Keeps:</b> {{ mp.survivorName }}</span>
+                <span><b>Retires:</b> {{ mp.retiredName }}</span>
+                <span><b>Combined gifts:</b> {{ mp.combinedGifts }}</span>
+              </div>
+            </ng-container>
+
+            <div class="decision-actions">
+              <button type="button" class="btn btn-primary" [disabled]="!effectiveRole().canMerge && decision() === 'merge'"
+                      (click)="saveDecision()">
+                {{ decision() === 'merge' ? 'Continue to merge' : 'Save decision' }}
+              </button>
+              <button type="button" class="btn btn-danger-ghost" [disabled]="!effectiveRole().canReject" (click)="openRejectModal()">
+                Reject candidate
+              </button>
+              <span class="permission-hint" *ngIf="!effectiveRole().canMerge || !effectiveRole().canReject">
+                Read-only access to some actions with this role.
+              </span>
+            </div>
+          </div>
+
+          <!-- Related & history — collapsed by default -->
+          <button type="button" class="related-toggle" (click)="toggleRelated()" [attr.aria-expanded]="relatedOpen()">
+            <svg class="chevron" [class.is-open]="relatedOpen()" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Related records &amp; history
+          </button>
+
+          <div class="card related-card" *ngIf="relatedOpen()">
+            <div class="tabs" role="tablist">
+              <button type="button" role="tab" class="tab" [class.is-active]="activeTab() === 'linked'" (click)="setTab('linked')">Linked</button>
+              <button type="button" role="tab" class="tab" [class.is-active]="activeTab() === 'documents'" (click)="setTab('documents')">Documents</button>
+              <button type="button" role="tab" class="tab" [class.is-active]="activeTab() === 'activity'" (click)="setTab('activity')">Activity</button>
+              <button type="button" role="tab" class="tab" [class.is-active]="activeTab() === 'integration'" (click)="setTab('integration')">Integration</button>
+            </div>
+            <div class="tab-panel" role="tabpanel">
+              <p *ngIf="activeTab() === 'linked'">Household record HH-{{ p.candidateAId }} links both candidates through a shared mailing address.</p>
+              <p *ngIf="activeTab() === 'documents'">No supporting documents attached to this comparison yet.</p>
+              <p *ngIf="activeTab() === 'activity'">Queued for review on {{ p.lastActivity }} by matching engine v3.2.</p>
+              <p *ngIf="activeTab() === 'integration'">CRM synchronisation: up to date. Email platform: pending next sync window.</p>
+            </div>
+          </div>
+        </ng-container>
+      </section>
+    </div>
+  </ng-container>
+
+  <!-- ============================================================= -->
+  <!-- High-risk confirmation modal (Merge)                           -->
+  <!-- ============================================================= -->
+  <div class="modal-overlay" *ngIf="showConfirmModal()" (click)="cancelConfirm()">
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" (click)="$event.stopPropagation()">
+      <h2 id="confirm-title">Confirm merge</h2>
+      <p>Review the affected record, consequence, reason and effective time. This action is irreversible.</p>
+
+      <div class="outcome-grid" *ngIf="selected() as p">
+        <span><b>Reference:</b> {{ p.reference }}</span>
+        <span><b>Keeps:</b> {{ mergePreview()?.survivorName || 'Enter a surviving record' }}</span>
+        <span><b>Retires:</b> {{ mergePreview()?.retiredName || '—' }}</span>
+        <span><b>Effective:</b> Immediately on confirmation</span>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="confirm-input">Type <strong>MERGE</strong> to confirm</label>
+        <input id="confirm-input" type="text" class="control" autocomplete="off"
+               [ngModel]="confirmText()" (ngModelChange)="confirmText.set($event)" />
+        <p class="field-error" *ngIf="confirmError()">{{ confirmError() }}</p>
+      </div>
+
+      <div class="button-row">
+        <button type="button" class="btn btn-danger" (click)="confirmMerge()">Confirm merge</button>
+        <button type="button" class="btn btn-ghost" (click)="cancelConfirm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- Reject candidate modal                                         -->
+  <!-- ============================================================= -->
+  <div class="modal-overlay" *ngIf="showRejectModal()" (click)="cancelReject()">
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="reject-title" (click)="$event.stopPropagation()">
+      <h2 id="reject-title">Reject candidate</h2>
+      <p>Record an independent decision that these are not duplicates. Both records stay separate.</p>
+
+      <div class="field-group">
+        <label class="field-label" for="reject-reason">Decision reason</label>
+        <textarea id="reject-reason" class="control textarea" rows="3" maxlength="2000"
+                  [ngModel]="rejectReason()" (ngModelChange)="rejectReason.set($event)"
+                  placeholder="Explain why these records are not duplicates (10–2,000 characters)…"></textarea>
+        <p class="field-error" *ngIf="rejectError()">{{ rejectError() }}</p>
+      </div>
+
+      <div class="button-row">
+        <button type="button" class="btn btn-danger" (click)="confirmReject()">Confirm rejection</button>
+        <button type="button" class="btn btn-ghost" (click)="cancelReject()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>

@@ -1,0 +1,446 @@
+<main class="mfa-page">
+  <div class="mfa-backdrop"></div>
+
+  <!-- ==================== STEP 1: CHOOSE METHOD ==================== -->
+  @if (step() === 'method') {
+  <div class="mfa-container">
+    <div class="mfa-card mfa-anim">
+      <!-- Header -->
+      <div class="mfa-header">
+        <div class="mfa-header__icon"><i class="ri-shield-keyhole-line"></i></div>
+        <div>
+          <h2>Set up Multi-Factor Authentication</h2>
+          <p>Choose how you'd like to add a second layer of security to your account.</p>
+        </div>
+        <button class="mfa-close" type="button" aria-label="Close" (click)="cancel()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+
+      <!-- Stepper -->
+      <div class="mfa-steps">
+        <div class="mfa-step is-active">
+          <span class="mfa-step__num"><i class="ri-check-line"></i></span>
+          <span class="mfa-step__label">Choose Method</span>
+        </div>
+        <div class="mfa-step">
+          <span class="mfa-step__num">2</span>
+          <span class="mfa-step__label">Setup</span>
+        </div>
+        <div class="mfa-step">
+          <span class="mfa-step__num">3</span>
+          <span class="mfa-step__label">Confirm</span>
+        </div>
+      </div>
+
+      <!-- Method grid -->
+      <div class="mfa-methods">
+        @for (m of methods; track m.id; let i = $index) {
+        <button class="mfa-method" type="button" [style.animation-delay]="(i*0.05)+'s'"
+                [disabled]="!!m.unavailableReason || starting()"
+                [class.is-unavailable]="!!m.unavailableReason"
+                (click)="selectMethod(m)">
+          <span class="mfa-method__icon"><i class="{{ m.icon }}"></i></span>
+          <span class="mfa-method__info">
+            <strong>
+              {{ m.name }}
+              @if (m.recommended) {
+              <em class="mfa-recommended">Recommended</em>
+              }
+            </strong>
+            <!-- An unavailable method says WHY, rather than vanishing from the list and
+                 leaving somebody looking for an option that appears not to exist. -->
+            <span>{{ m.unavailableReason || m.description }}</span>
+          </span>
+          @if (!m.unavailableReason) {
+          <i class="ri-arrow-right-s-line mfa-method__chevron"></i>
+          }
+        </button>
+        }
+      </div>
+
+      <div class="mfa-footer">
+        <button class="btn btn-sm mfa-btn-ghost" type="button" (click)="cancel()">Cancel</button>
+      </div>
+    </div>
+  </div>
+  }
+
+  <!-- ==================== STEP 2: SETUP / VERIFY ==================== -->
+  @if (step() === 'setup' && selectedMethod(); as method) {
+  <div class="mfa-container">
+    <div class="mfa-card mfa-anim">
+      <!-- Header -->
+      <div class="mfa-header">
+        <div class="mfa-header__icon" [class.is-back]="true" (click)="goBack()">
+          <i class="ri-arrow-left-line"></i>
+        </div>
+        <div>
+          <h2>Enrol {{ method.name }}</h2>
+          <p class="mb-0">Follow the steps below to complete setup.</p>
+        </div>
+        <button class="mfa-close" type="button" aria-label="Close" (click)="cancel()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+
+      <!-- Stepper -->
+      <div class="mfa-steps">
+        <div class="mfa-step is-active">
+          <span class="mfa-step__num"><i class="ri-check-line"></i></span>
+          <span class="mfa-step__label">Choose Method</span>
+        </div>
+        <div class="mfa-step is-active">
+          <span class="mfa-step__num"><i class="ri-check-line"></i></span>
+          <span class="mfa-step__label">Setup</span>
+        </div>
+        <div class="mfa-step">
+          <span class="mfa-step__num">3</span>
+          <span class="mfa-step__label">Confirm</span>
+        </div>
+      </div>
+
+      <div class="mfa-setup-body">
+
+        <!-- ========== AUTHENTICATOR APP QR ========== -->
+        @if (method.id === 'authenticator') {
+        <div class="mfa-setup-scroll">
+          <div class="mfa-qr-layout">
+            <div class="mfa-qr-box">
+              <!-- Real scannable QR code (scan with your Authenticator app) -->
+              <div class="mfa-scanner-frame" [class.is-scanned]="qrScanned()">
+                <!-- Real QR code rendered via qrcode library -->
+                <div class="mfa-scanner-qr">
+                  <canvas #qrCanvas class="mfa-qr-canvas"></canvas>
+                  @if (!qrReady()) {
+                  <div class="mfa-qr-loading"><div class="mfa-scanner-spinner"></div><span>Generating QR…</span></div>
+                  }
+                </div>
+
+                <!-- Scanner overlay -->
+                <div class="mfa-scanner-overlay">
+                  <div class="mfa-scanner-corner mfa-scanner-corner--tl"></div>
+                  <div class="mfa-scanner-corner mfa-scanner-corner--tr"></div>
+                  <div class="mfa-scanner-corner mfa-scanner-corner--bl"></div>
+                  <div class="mfa-scanner-corner mfa-scanner-corner--br"></div>
+                  <div class="mfa-scanner-line" [class.is-scanning]="isScanning()"></div>
+                </div>
+
+                <!-- Scanning status -->
+                @if (isScanning()) {
+                <div class="mfa-scanner-status">
+                  <div class="mfa-scanner-spinner"></div>
+                  <span>Scanning QR code…</span>
+                </div>
+                }
+
+                <!-- QR detected -->
+                <!-- @if (qrScanned()) {
+                <div class="mfa-scanner-success">
+                  <span class="mfa-check-badge"><i class="ri-check-line"></i></span>
+                  <strong>QR Code Scanned!</strong>
+                  <span class="mono">{{ scannedSecret() }}</span>
+                </div>
+                } -->
+              </div>
+              <p class="mfa-qr-tip">
+                @if (qrScanned()) {
+                <i class="ri-checkbox-circle-line"></i> QR code captured successfully
+                } @else {
+                <i class="ri-qr-scan-line"></i> Scan this QR code with your Authenticator app
+                }
+              </p>
+            </div>
+            <div class="mfa-key-info">
+              <h6><i class="ri-smartphone-line"></i> Manual setup</h6>
+              <p>If you can't scan the QR code, enter this key manually in your authenticator app:</p>
+              <div class="mfa-secret">
+                <code>{{ qrSecret }}</code>
+                <button class="mfa-copy" type="button" title="Copy secret">
+                  <i class="ri-file-copy-line"></i>
+                </button>
+              </div>
+              <p class="mfa-recovery-note">
+                <i class="ri-information-line"></i> Your app will generate 6-digit codes that refresh every 30 seconds.
+              </p>
+            </div>
+          </div>
+
+          <div class="mfa-form-grid">
+            <div class="mfa-form-field">
+              <label>Device Name</label>
+              <input type="text" class="mfa-input" placeholder="e.g. Office Laptop" [ngModel]="deviceName()" (ngModelChange)="deviceName.set($event)">
+            </div>
+            <div class="mfa-form-field mfa-otp-field">
+              <label>
+                @if (qrScanned()) {
+                <i class="ri-smartphone-line"></i> Enter the 6-digit code shown in your Authenticator app
+                } @else {
+                Enter 6-digit code from your app
+                }
+              </label>
+              <div class="mfa-otp-row">
+                @for (d of otpDigits(); track $index; let i = $index) {
+                <input
+                  type="text"
+                  class="mfa-otp-input"
+                  [id]="'mfa-otp-' + i"
+                  inputmode="numeric"
+                  maxlength="1"
+                  [ngModel]="otpDigits()[i]"
+                  (ngModelChange)="onOtpInput(i, $event)"
+                  (keydown)="onOtpKeydown(i, $event)"
+                  (paste)="onOtpPaste($event)"
+                >
+                }
+              </div>
+              <span class="mfa-otp-timer"><i class="ri-time-line"></i> Code expires in {{ formattedOtpTimer }}</span>
+            </div>
+          </div>
+        </div>
+        }
+
+        <!-- ========== SMS OTP ========== -->
+        @if (method.id === 'sms') {
+        <div class="mfa-setup-scroll">
+          <div class="mfa-channel-banner">
+            <span class="mfa-channel-banner__icon"><i class="ri-message-3-line"></i></span>
+            <div>
+              <strong>SMS verification</strong>
+              <p class="mb-0">We'll send a one-time code to {{ maskedPhone }}. Standard messaging rates apply.</p>
+            </div>
+          </div>
+
+          @if (resendMessage()) {
+          <div class="mfa-info-box"><i class="ri-checkbox-circle-line"></i> {{ resendMessage() }}</div>
+          }
+
+          <div class="mfa-form-grid mfa-form-grid--single">
+            <div class="mfa-form-field">
+              <label>Device Name</label>
+              <input type="text" class="mfa-input" placeholder="e.g. Office Laptop" [ngModel]="deviceName()" (ngModelChange)="deviceName.set($event)">
+            </div>
+            <div class="mfa-form-field mfa-otp-field">
+              <label>Enter the 6-digit code sent via SMS</label>
+              <div class="mfa-otp-row">
+                @for (d of otpDigits(); track $index; let i = $index) {
+                <input
+                  type="text"
+                  class="mfa-otp-input"
+                  [id]="'mfa-otp-' + i"
+                  inputmode="numeric"
+                  maxlength="1"
+                  [ngModel]="otpDigits()[i]"
+                  (ngModelChange)="onOtpInput(i, $event)"
+                  (keydown)="onOtpKeydown(i, $event)"
+                  (paste)="onOtpPaste($event)"
+                >
+                }
+              </div>
+              <span class="mfa-otp-timer"><i class="ri-time-line"></i> Code expires in {{ formattedOtpTimer }}</span>
+            </div>
+          </div>
+
+          <div class="mfa-resend-row">
+            <span>Didn't receive the code?</span>
+            <button class="mfa-link" type="button" (click)="resendCode()" [disabled]="isResending()">
+              @if (isResending()) { <span class="mfa-spinner-sm"></span> Sending... } @else { Resend code }
+            </button>
+          </div>
+        </div>
+        }
+
+        <!-- ========== EMAIL OTP ========== -->
+        @if (method.id === 'email') {
+        <div class="mfa-setup-scroll">
+          <div class="mfa-channel-banner mfa-channel-banner--email">
+            <span class="mfa-channel-banner__icon"><i class="ri-mail-line"></i></span>
+            <div>
+              <strong>Email verification</strong>
+              <p class="mb-0">We've sent a one-time code to {{ maskedEmail }}.</p>
+            </div>
+          </div>
+
+          @if (resendMessage()) {
+          <div class="mfa-info-box"><i class="ri-checkbox-circle-line"></i> {{ resendMessage() }}</div>
+          }
+
+          <div class="mfa-form-grid mfa-form-grid--single">
+            <div class="mfa-form-field">
+              <label>Device Name</label>
+              <input type="text" class="mfa-input" placeholder="e.g. Office Laptop" [ngModel]="deviceName()" (ngModelChange)="deviceName.set($event)">
+            </div>
+            <div class="mfa-form-field mfa-otp-field">
+              <label>Enter the 6-digit code from your email</label>
+              <div class="mfa-otp-row">
+                @for (d of otpDigits(); track $index; let i = $index) {
+                <input
+                  type="text"
+                  class="mfa-otp-input"
+                  [id]="'mfa-otp-' + i"
+                  inputmode="numeric"
+                  maxlength="1"
+                  [ngModel]="otpDigits()[i]"
+                  (ngModelChange)="onOtpInput(i, $event)"
+                  (keydown)="onOtpKeydown(i, $event)"
+                  (paste)="onOtpPaste($event)"
+                >
+                }
+              </div>
+              <span class="mfa-otp-timer"><i class="ri-time-line"></i> Code expires in {{ formattedOtpTimer }}</span>
+            </div>
+          </div>
+
+          <div class="mfa-resend-row">
+            <span>Didn't receive the email?</span>
+            <button class="mfa-link" type="button" (click)="resendCode()" [disabled]="isResending()">
+              @if (isResending()) { <span class="mfa-spinner-sm"></span> Sending... } @else { Resend code }
+            </button>
+          </div>
+        </div>
+        }
+
+        <!-- ========== SECURITY KEY ========== -->
+        @if (method.id === 'security-key') {
+        <div class="mfa-setup-scroll mfa-setup-center">
+          <div class="mfa-hardware-stage" [class.is-detected]="detectionComplete()">
+            <div class="mfa-hardware-visual">
+              <span class="mfa-key-shape"><i class="ri-key-2-line"></i></span>
+              <span class="mfa-ripple" [class.is-on]="isDetecting()"></span>
+            </div>
+
+            @if (!isDetecting() && !detectionComplete()) {
+            <h4>Insert your Security Key</h4>
+            <p>Plug in your FIDO2 security key (YubiKey, Google Titan, etc.) and touch it to authenticate.</p>
+            <p class="text-muted small mb-0">
+              This method is not available yet. Go back and choose an authenticator app,
+              a text message or an e-mail code.
+            </p>
+            }
+
+            @if (isDetecting()) {
+            <div class="mfa-detecting">
+              <div class="mfa-pulse-ring"><span></span></div>
+              <h4>Detecting your security key…</h4>
+              <p>Keep your key connected and touch the gold contact.</p>
+            </div>
+            }
+
+            @if (detectionComplete()) {
+            <div class="mfa-detected">
+              <span class="mfa-check-badge"><i class="ri-check-line"></i></span>
+              <h4>Security Key Detected!</h4>
+              <p>Key name: <strong class="mono">YDOT YubiKey 5C NFC</strong></p>
+            </div>
+            }
+          </div>
+
+          <div class="mfa-form-field">
+            <label>Device Name</label>
+            <input type="text" class="mfa-input" placeholder="e.g. Office Laptop" [ngModel]="deviceName()" (ngModelChange)="deviceName.set($event)">
+          </div>
+        </div>
+        }
+
+        <!-- ========== BIOMETRIC ========== -->
+        @if (method.id === 'biometric') {
+        <div class="mfa-setup-scroll mfa-setup-center">
+          <div class="mfa-hardware-stage" [class.is-detected]="detectionComplete()">
+            <div class="mfa-hardware-visual">
+              <span class="mfa-biometric-shape"><i class="ri-fingerprint-line"></i></span>
+              <span class="mfa-ripple" [class.is-on]="isDetecting()"></span>
+            </div>
+
+            @if (!isDetecting() && !detectionComplete()) {
+            <h4>Scan your fingerprint</h4>
+            <p>Use the biometric scanner on your device to verify your identity.</p>
+            <p class="text-muted small mb-0">
+              This method is not available yet. Go back and choose an authenticator app,
+              a text message or an e-mail code.
+            </p>
+            }
+
+            @if (isDetecting()) {
+            <div class="mfa-detecting">
+              <div class="mfa-pulse-ring"><span></span></div>
+              <h4>Scanning fingerprint…</h4>
+              <p>Keep your finger on the scanner until verification completes.</p>
+            </div>
+            }
+
+            @if (detectionComplete()) {
+            <div class="mfa-detected">
+              <span class="mfa-check-badge"><i class="ri-check-line"></i></span>
+              <h4>Biometric Verified!</h4>
+              <p>Fingerprint matched on this device.</p>
+            </div>
+            }
+          </div>
+
+          <div class="mfa-form-field">
+            <label>Device Name</label>
+            <input type="text" class="mfa-input" placeholder="e.g. Office Laptop" [ngModel]="deviceName()" (ngModelChange)="deviceName.set($event)">
+          </div>
+        </div>
+        }
+
+        <!-- Error / info messages -->
+        @if (errorMessage()) {
+        <div class="mfa-error-box"><i class="ri-error-warning-line"></i> {{ errorMessage() }}</div>
+        }
+      </div>
+
+      <!-- Footer actions -->
+      <div class="mfa-footer">
+        <button class="btn btn-sm mfa-btn-ghost" type="button" (click)="goBack()">Back</button>
+        <button class="btn btn-sm mfa-primary-btn" type="button" (click)="verifyIdentity()" [disabled]="isVerifying()">
+          @if (isVerifying()) { <span class="mfa-spinner-sm"></span> Verifying... } @else {
+          <i class="ri-shield-check-line"></i> Verify & Enrol
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+
+  <!-- ==================== STEP 3: SUCCESS / CONFIRM ==================== -->
+  @if (step() === 'success') {
+  <div class="mfa-container">
+    <div class="mfa-card mfa-anim mfa-success-card">
+      <div class="mfa-success-hero">
+        <span class="mfa-success-badge"><i class="ri-shield-check-line"></i></span>
+        <h2>MFA Enrolled Successfully!</h2>
+        <p>
+          <strong>{{ selectedMethod()?.name }}</strong> has been added to your account and is now active.
+          You'll be asked to verify with this method at your next sign-in.
+        </p>
+      </div>
+
+      <!-- Backup codes -->
+      <div class="mfa-backup-section">
+        <div class="mfa-backup-header">
+          <div>
+            <h6><i class="ri-file-lock-line"></i> Save your backup codes</h6>
+            <p>Store these single-use codes in a safe place. You'll need them if you lose your device.</p>
+          </div>
+        </div>
+        <div class="mfa-codes-grid">
+          @for (code of backupCodes(); track code; let i = $index) {
+          <div class="mfa-code-chip">
+            <code>{{ code }}</code>
+            <button class="mfa-copy" type="button" title="Copy code"><i class="ri-file-copy-line"></i></button>
+          </div>
+          }
+        </div>
+        <p class="mfa-warning-note"><i class="ri-alert-line"></i> Each code can only be used once. Generate new codes if you run out.</p>
+      </div>
+
+      <div class="mfa-footer">
+        <button class="btn btn-sm mfa-primary-btn" type="button" (click)="finish()">
+          <i class="ri-check-line"></i> Done — Back to My Security
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+</main>

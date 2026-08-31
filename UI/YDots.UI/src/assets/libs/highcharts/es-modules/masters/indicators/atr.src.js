@@ -1,0 +1,2 @@
+/*! For license information please see atr.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/ATR/ATRIndicator.js";export default Highcharts;

@@ -1,0 +1,506 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index:1;">
+        <div>
+          <h3 class="mb-1 fw-bold fs-24">Access Request and Approval</h3>
+          <p class="mb-0 fs-14">Request and independently approve scoped authority</p>
+        </div>
+        <button class="btn btn-primary btn-sm px-3 shadow-sm" (click)="openNewRequest()">
+          <i class="ri-add-line me-1"></i> New Request
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    @if (loading()) {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading access requests...</p>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (loadError() && !loading()) {
+      <div class="text-center py-5">
+        <i class="ri-error-warning-line fs-1 text-muted mb-3 d-block"></i>
+        <h5>Failed to load</h5>
+        <p class="text-muted mb-3">The access request queue couldn't be retrieved. Try again.</p>
+        <button class="btn btn-outline-primary" (click)="retry()">
+          <i class="ri-refresh-line me-1"></i> Retry
+        </button>
+      </div>
+    }
+
+    <!-- Main Content -->
+    @if (!loading() && !loadError()) {
+      <!-- Filter Section -->
+      <div class="filter-bar-wrap mb-4">
+        <input type="checkbox" id="filterPanelToggle" class="filter-panel-toggle-input" hidden>
+
+        <div class="filter-topbar">
+          <div class="filter-topbar-search">
+            <i class="ri-search-line"></i>
+            <input type="text" placeholder="Search by reference or user..."
+                   [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+          </div>
+          <label for="filterPanelToggle" class="btn btn-primary btn-sm px-3">
+            <i class="ri-equalizer-line"></i> Filter
+            @if (filterState()) { <span class="filter-topbar-dot"></span> }
+          </label>
+        </div>
+
+        <div class="filter-dropdown-panel">
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Filter by state</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="stateRadio" [checked]="filterState() === ''" (change)="filterState.set('')">
+                <span class="check-box"><i class="ri-check-line"></i></span> All states
+              </label>
+              @for (s of data()?.statusOptions ?? []; track s.id) {
+                <label class="check-pill">
+                  <input type="radio" name="stateRadio" [checked]="filterState() === s.id" (change)="filterState.set(s.id ?? '')">
+                  <span class="check-box"><i class="ri-check-line"></i></span> {{ s.name }}
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="filter-panel-footer">
+            <button type="button" class="filter-reset-link" (click)="clearFilters()">
+              <i class="ri-refresh-line me-1"></i> Reset all filters
+            </button>
+            <div class="d-flex align-items-center gap-3">
+              <label for="filterPanelToggle" class="filter-cancel-link">Cancel</label>
+              <label for="filterPanelToggle" class="btn btn-primary btn-sm px-4 mb-0">Apply Filters</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      @if (filteredRequests().length === 0) {
+        <div class="text-center py-5">
+          <i class="ri-file-list-line fs-1 text-muted mb-3 d-block"></i>
+          <h5>No Requests Found</h5>
+          <p class="text-muted">No access requests match the current filters.</p>
+        </div>
+      }
+
+      <!-- Table -->
+      @if (filteredRequests().length > 0) {
+        <div class="card border">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Reference</th>
+                  <th>User</th>
+                  <th>Request Type</th>
+                  <th>Requested Role</th>
+                  <th>Scope Type</th>
+                  <th>Scope Value</th>
+                  <th>Effective</th>
+                  <th>State</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (req of filteredRequests(); track req.reference; let i = $index) {
+                  <tr class="animate-row">
+                    <td><code>{{ req.reference }}</code></td>
+                    <td class="fw-medium">{{ req.user }}</td>
+                    <td class="small">
+                      <span class="badge bg-primary bg-opacity-10 text-primary">{{ req.requestType }}</span>
+                    </td>
+                    <td class="small">{{ req.requestedRole }}</td>
+                    <td class="small">{{ req.scopeType }}</td>
+                    <td class="small text-muted">{{ req.scopeValue }}</td>
+                    <td class="small">
+                      {{ req.effectiveFrom }}
+                      @if (req.effectiveTo && req.effectiveTo !== '—') {
+                        <span class="text-muted"> → {{ req.effectiveTo }}</span>
+                      }
+                    </td>
+                    <td>
+                      <span class="badge status-badge"
+                            [class.status-submitted]="req.approvalState === 'Submitted'"
+                            [class.status-approved]="req.approvalState === 'Approved'"
+                            [class.status-rejected]="req.approvalState === 'Rejected'"
+                            [class.status-draft]="req.approvalState === 'Draft'"
+                            [class.status-withdrawn]="req.approvalState === 'Withdrawn'"
+                            [class.status-expired]="req.approvalState === 'Expired'"
+                            [class.status-pending]="req.approvalState === 'PendingReview' || req.approvalState === 'Returned'">
+                        {{ req.approvalState }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="d-flex gap-1 justify-content-end">
+                        @if (req.approvalState === 'Draft') {
+                          <button class="btn btn-sm btn-outline-primary" (click)="submitRequest(req)" title="Submit">
+                            <i class="ri-send-plane-line"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger" (click)="openDeleteModal(req)" title="Delete draft">
+                            <i class="ri-delete-bin-line"></i>
+                          </button>
+                        }
+                        @if (req.approvalState === 'Submitted' || req.approvalState === 'PendingReview') {
+                          <button class="btn btn-sm btn-success" (click)="openApproveModal(req)" title="Approve">
+                            <i class="ri-check-line"></i>
+                          </button>
+                          <button class="btn btn-sm btn-danger" (click)="openRejectModal(req)" title="Reject">
+                            <i class="ri-close-line"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-warning" (click)="openReturnModal(req)" title="Return for correction">
+                            <i class="ri-arrow-go-back-line"></i>
+                          </button>
+                        }
+                        @if (req.approvalState === 'Submitted' || req.approvalState === 'PendingReview' || req.approvalState === 'Draft') {
+                          <button class="btn btn-sm btn-outline-secondary" (click)="openCancelModal(req)" title="Cancel">
+                            <i class="ri-close-circle-line"></i>
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>
+</main>
+
+<!-- ===== NEW REQUEST MODAL ===== -->
+@if (showNewRequestModal()) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-file-add-line me-2 text-primary"></i>New Access Request</h5>
+          <button type="button" class="btn-close" (click)="closeNewRequest()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Request Type</label>
+              <select class="form-select" [ngModel]="newRequestForm().requestType" (ngModelChange)="newRequestForm.set({...newRequestForm(), requestType: $event})">
+                @for (type of data()?.requestTypeOptions ?? []; track type.id) {
+                  <option [value]="type.id">{{ type.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">User <span class="text-danger">*</span></label>
+              <select class="form-select" [ngModel]="newRequestForm().userId" (ngModelChange)="newRequestForm.set({...newRequestForm(), userId: $event})">
+                <option value="">Select user from directory</option>
+                @for (u of userOptions(); track u.id) {
+                  <option [value]="u.id">{{ u.displayName }} ({{ u.reference }})</option>
+                }
+              </select>
+              @if (newRequestForm().userId) {
+                <div class="mt-2">
+                  <span class="badge bg-primary bg-opacity-10 text-primary">
+                    <i class="ri-user-line me-1"></i>{{ getSelectedUserName() }} · {{ userOptions().find(u => u.id === newRequestForm().userId)?.orgUnit }}
+                  </span>
+                </div>
+              }
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Requested Role <span class="text-danger">*</span></label>
+              <select class="form-select" [ngModel]="newRequestForm().requestedRole" (ngModelChange)="newRequestForm.set({...newRequestForm(), requestedRole: $event})">
+                <option value="">Select role from catalogue</option>
+                @for (r of data()?.roleOptions ?? []; track r.id) {
+                  <option [value]="r.id">{{ r.name }} ({{ r.description }})</option>
+                }
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Scope Type</label>
+              <select class="form-select" [ngModel]="newRequestForm().scopeType" (ngModelChange)="newRequestForm.set({...newRequestForm(), scopeType: $event})">
+                @for (scope of data()?.scopeTypeOptions ?? []; track scope.id) {
+                  <option [value]="scope.id">{{ scope.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Scope Value</label>
+              <input type="text" class="form-control" placeholder="e.g. Global - Donations"
+                     [ngModel]="newRequestForm().scopeValue" (ngModelChange)="newRequestForm.set({...newRequestForm(), scopeValue: $event})">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Effective From</label>
+              <input type="date" class="form-control" [ngModel]="newRequestForm().effectiveFrom" (ngModelChange)="newRequestForm.set({...newRequestForm(), effectiveFrom: $event})">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Effective To</label>
+              <input type="date" class="form-control" [ngModel]="newRequestForm().effectiveTo" (ngModelChange)="newRequestForm.set({...newRequestForm(), effectiveTo: $event})">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Review Date</label>
+              <input type="date" class="form-control" [ngModel]="newRequestForm().reviewDate" (ngModelChange)="newRequestForm.set({...newRequestForm(), reviewDate: $event})">
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Business Justification <span class="text-danger">*</span></label>
+              <textarea class="form-control" rows="3" placeholder="Provide a detailed justification (10-1000 characters)"
+                        [ngModel]="newRequestForm().businessJustification" (ngModelChange)="newRequestForm.set({...newRequestForm(), businessJustification: $event})"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeNewRequest()">Cancel</button>
+          <button class="btn btn-primary" (click)="submitNewRequest()" [disabled]="submitting()">
+            @if (submitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <i class="ri-send-plane-line me-1"></i> Submit Request
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== RETURN MODAL (secondary/danger) ===== -->
+@if (showReturnModal() && actionTarget(); as target) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-arrow-go-back-line me-2 text-warning"></i>Return Access Request</h5>
+          <button type="button" class="btn-close" (click)="closeReturnModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning small mb-3">
+            <i class="ri-alert-line me-1"></i>
+            This returns the request to the requester for correction. The request history is preserved.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Request</div>
+            <code>{{ target.reference }}</code> — {{ target.user }} → <strong>{{ target.requestedRole }}</strong>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Return Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters.</div>
+            @if (decisionError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ decisionError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeReturnModal()">Cancel</button>
+          <button class="btn btn-warning" (click)="confirmReturn()">
+            <i class="ri-arrow-go-back-line me-1"></i> Confirm Return
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== CANCEL MODAL (preserve history) ===== -->
+@if (showCancelModal() && actionTarget(); as target) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-close-circle-line me-2 text-secondary"></i>Cancel Access Request</h5>
+          <button type="button" class="btn-close" (click)="closeCancelModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-secondary small mb-3">
+            <i class="ri-information-line me-1"></i>
+            This will cancel the request. The history is retained permanently.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Request</div>
+            <code>{{ target.reference }}</code> — {{ target.user }} → <strong>{{ target.requestedRole }}</strong>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Cancellation Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters.</div>
+            @if (decisionError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ decisionError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeCancelModal()">Cancel</button>
+          <button class="btn btn-secondary" (click)="confirmCancel()">
+            <i class="ri-close-circle-line me-1"></i> Confirm Cancellation
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== DELETE UNUSED DRAFT MODAL ===== -->
+@if (showDeleteModal() && actionTarget(); as target) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-delete-bin-line me-2 text-danger"></i>Delete Unused Draft</h5>
+          <button type="button" class="btn-close" (click)="closeDeleteModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger small mb-3">
+            <i class="ri-alert-line me-1"></i>
+            This permanently deletes the draft request. This action <strong>cannot be undone</strong>.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Request</div>
+            <code>{{ target.reference }}</code> — {{ target.user }} → <strong>{{ target.requestedRole }}</strong>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Deletion Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters.</div>
+            @if (decisionError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ decisionError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeDeleteModal()">Cancel</button>
+          <button class="btn btn-danger" (click)="confirmDelete()">
+            <i class="ri-delete-bin-line me-1"></i> Permanently Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== APPROVE MODAL (primary decision) ===== -->
+@if (showApproveModal() && decisionTarget(); as target) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-check-double-line me-2 text-success"></i>Approve Access Request</h5>
+          <button type="button" class="btn-close" (click)="closeApproveModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small mb-3">
+            <i class="ri-information-line me-1"></i>
+            This is a <strong>primary decision</strong>. The role/scope will become active from the effective date.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Request</div>
+            <code>{{ target.reference }}</code> — {{ target.user }} → <strong>{{ target.requestedRole }}</strong>
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Scope</div>
+            <span class="badge bg-primary bg-opacity-10 text-primary">{{ target.scopeType }} · {{ target.scopeValue }}</span>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Decision Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters. This is recorded permanently.</div>
+            @if (decisionError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ decisionError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeApproveModal()">Cancel</button>
+          <button class="btn btn-success" (click)="confirmApprove()">
+            <i class="ri-check-line me-1"></i> Confirm Approval
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== REJECT MODAL (secondary/danger) ===== -->
+@if (showRejectModal() && decisionTarget(); as target) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="ri-close-circle-line me-2 text-danger"></i>Reject Access Request</h5>
+          <button type="button" class="btn-close" (click)="closeRejectModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger small mb-3">
+            <i class="ri-alert-line me-1"></i>
+            This is a <strong>danger action</strong>. Access will <strong>not</strong> be granted. The decision is recorded permanently.
+          </div>
+          <div class="mb-3">
+            <div class="small text-muted mb-1">Request</div>
+            <code>{{ target.reference }}</code> — {{ target.user }} → <strong>{{ target.requestedRole }}</strong>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Rejection Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason (10-1000 characters)"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"></textarea>
+            <div class="form-text">Required — 10 to 1000 characters. This is recorded permanently.</div>
+            @if (decisionError()) {
+              <div class="text-danger small mt-1"><i class="ri-error-warning-line me-1"></i>{{ decisionError() }}</div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button class="btn btn-light" (click)="closeRejectModal()">Cancel</button>
+          <button class="btn btn-danger" (click)="confirmReject()">
+            <i class="ri-close-line me-1"></i> Confirm Rejection
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
+<!-- ===== DECISION RESULT MODAL (persistent confirmation) ===== -->
+@if (showDecisionResultModal() && decisionResult(); as result) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center p-4">
+          <div class="mb-3">
+            @if (result.state === 'Approved') {
+              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success text-white" style="width:64px;height:64px;font-size:1.6rem;">
+                <i class="ri-check-line"></i>
+              </span>
+            } @else {
+              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger text-white" style="width:64px;height:64px;font-size:1.6rem;">
+                <i class="ri-close-line"></i>
+              </span>
+            }
+          </div>
+          <h5 class="fw-bold mb-1">Request {{ result.reference }} — {{ result.state }}</h5>
+          <p class="text-muted small mb-3">Effective time: {{ result.effectiveTime }}</p>
+          <div class="alert alert-light border small text-start mb-3">
+            <i class="ri-arrow-right-circle-line me-1 text-primary"></i>
+            <strong>Next action:</strong> {{ result.nextAction }}
+          </div>
+          <button class="btn btn-primary w-100" (click)="closeDecisionResultModal()">
+            <i class="ri-check-line me-1"></i> Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}

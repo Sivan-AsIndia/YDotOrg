@@ -1,0 +1,488 @@
+<main class = "app-wrapper">
+<div class="tc-page" role="main" aria-label="Template catalogue">
+
+  <!-- ============================= DEMO / PREVIEW STATE STRIP ============================= -->
+  <div class="demo-strip" aria-label="Preview UI states (demonstration control)">
+    <span class="demo-strip__label">Preview state</span>
+    <select class="demo-select" [(ngModel)]="previewState" (ngModelChange)="setPreviewState($event)" aria-label="Preview UI state">
+      <option value="live">Live</option>
+      <option value="loading">Loading</option>
+      <option value="empty">Empty</option>
+      <option value="no-access">No access</option>
+      <option value="conflict">Conflict (open a record)</option>
+      <option value="dependency-failure">Dependency failure (submit a draft)</option>
+    </select>
+  </div>
+
+  <!-- ============================= NO ACCESS STATE ============================= -->
+  <div class="state-panel state-panel--noaccess" *ngIf="previewState === 'no-access'" role="alert">
+    <div class="state-panel__icon" aria-hidden="true">🔒</div>
+    <h2>You don't have access to this page</h2>
+    <p>The Template catalogue requires the <strong>com.template-catalogue.view</strong> permission. Restricted menus, records, fields and actions are hidden rather than shown as disabled.</p>
+    <button type="button" class="btn btn--primary" (click)="setPreviewState('live')">Return to permitted landing page</button>
+  </div>
+
+  <ng-container *ngIf="previewState !== 'no-access'">
+
+    <!-- ============================= ACCESS SIMULATOR ============================= -->
+    <section class="card access-sim" aria-label="Access simulator">
+      <div class="access-sim__row">
+        <div class="access-sim__field">
+          <label class="eyebrow" for="role-select">Effective role</label>
+          <select id="role-select" class="select" [(ngModel)]="effectiveRole" (ngModelChange)="setRole($event)">
+            <option>Template Stakeholder</option>
+            <option>Independent Approver</option>
+            <option>Read-only Viewer</option>
+          </select>
+        </div>
+        <div class="access-sim__field access-sim__field--scopes">
+          <span class="eyebrow">Effective data scope (assigned units only)</span>
+          <div class="chip-row">
+            <span class="chip" *ngFor="let scope of allScopes" [class.chip--active]="isScopeActive(scope)" [class.chip--disabled]="!isScopeActive(scope)">
+              {{ scope }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= TASK HEADER ============================= -->
+    <header class="task-header">
+      <div>
+        <h1>Template catalogue</h1>
+        <p class="task-header__meta">
+          <span>{{ scopedTemplates.length }} template{{ scopedTemplates.length === 1 ? '' : 's' }} in scope</span>
+          <span class="dot" aria-hidden="true">·</span>
+          <span>Last refreshed {{ lastRefreshed }}</span>
+          <button type="button" class="link-btn" (click)="refresh()">Refresh</button>
+        </p>
+      </div>
+      <button
+        type="button"
+        class="btn btn--primary"
+        *ngIf="permissions.draft"
+        (click)="openCreate()"
+      >+ New template</button>
+    </header>
+
+    <!-- ============================= LOADING STATE ============================= -->
+    <div class="skeleton-list" *ngIf="isLoading" aria-live="polite" aria-busy="true">
+      <span class="sr-only">Loading Template catalogue…</span>
+      <div class="skeleton-card" *ngFor="let s of [1,2,3,4]">
+        <div class="skeleton-line skeleton-line--title"></div>
+        <div class="skeleton-line skeleton-line--sub"></div>
+        <div class="skeleton-line skeleton-line--sub short"></div>
+      </div>
+    </div>
+
+    <ng-container *ngIf="!isLoading">
+
+      <!-- ============================= CONTEXT AND FILTERS ============================= -->
+      <section class="card filter-bar" aria-label="Context and filters">
+        <div class="filter-row">
+          <div class="field field--grow">
+            <label class="eyebrow" for="search-input">Template name or reference</label>
+            <input
+              id="search-input"
+              class="input"
+              type="search"
+              placeholder="Search within your effective scope…"
+              [(ngModel)]="searchText"
+            />
+          </div>
+          <div class="field">
+            <label class="eyebrow" for="channel-select">Channel</label>
+            <select id="channel-select" class="select" [(ngModel)]="channelFilter">
+              <option value="">All channels</option>
+              <option *ngFor="let c of channelOptions" [value]="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="eyebrow" for="language-select">Language</label>
+            <select id="language-select" class="select" [(ngModel)]="languageFilter">
+              <option value="">All languages</option>
+              <option *ngFor="let l of languageOptions" [value]="l">{{ l }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="eyebrow" for="status-select">Status</label>
+            <select id="status-select" class="select" [(ngModel)]="statusFilter">
+              <option value="">All statuses</option>
+              <option value="Draft">Draft</option>
+              <option value="Pending review">Pending review</option>
+              <option value="Approved">Approved</option>
+              <option value="Retired">Retired</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="eyebrow" for="saved-filter">Saved filter</label>
+            <select id="saved-filter" class="select" [(ngModel)]="selectedSavedFilter">
+              <option value="">None applied</option>
+              <option *ngFor="let f of savedFilters" [value]="f">{{ f }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-row filter-row--tabs">
+          <div class="segmented" role="tablist" aria-label="Scope tabs">
+            <button type="button" role="tab" [attr.aria-selected]="activeTab === 'all'" class="segmented__btn" [class.segmented__btn--active]="activeTab === 'all'" (click)="activeTab = 'all'">All templates</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab === 'mine'" class="segmented__btn" [class.segmented__btn--active]="activeTab === 'mine'" (click)="activeTab = 'mine'">My templates</button>
+            <button type="button" role="tab" [attr.aria-selected]="activeTab === 'review'" class="segmented__btn" [class.segmented__btn--active]="activeTab === 'review'" (click)="activeTab = 'review'">Needs review</button>
+          </div>
+          <button type="button" class="link-btn" *ngIf="hasAnyFilterActive" (click)="clearFilters()">Clear filters</button>
+        </div>
+
+        <p class="filter-summary">
+          <strong>{{ filteredTemplates.length }}</strong> matching · scope-qualified totals as of {{ lastRefreshed }}
+        </p>
+      </section>
+
+      <!-- ============================= EMPTY STATE ============================= -->
+      <div class="state-panel state-panel--empty" *ngIf="previewState === 'empty' || filteredTemplates.length === 0">
+        <div class="state-panel__icon" aria-hidden="true">🗂️</div>
+        <ng-container [ngSwitch]="previewState === 'empty' ? 'filters' : emptyReason">
+          <h2 *ngSwitchCase="'scope'">No templates in your effective scope</h2>
+          <h2 *ngSwitchCase="'filters'">No templates match your filters</h2>
+          <h2 *ngSwitchDefault>No templates have been created yet</h2>
+          <p *ngSwitchCase="'scope'">Your assigned organisation, campaign or geography scope does not currently include any template records. This is not a global zero — other scopes may have records.</p>
+          <p *ngSwitchCase="'filters'">Try widening the search, channel, language or status filters, or clear them entirely.</p>
+          <p *ngSwitchDefault>Get started by drafting the first approved-content template for your scope.</p>
+        </ng-container>
+        <div class="state-panel__actions">
+          <button type="button" class="btn btn--secondary" *ngIf="hasAnyFilterActive" (click)="clearFilters()">Reset filters</button>
+          <button type="button" class="btn btn--primary" *ngIf="permissions.draft" (click)="openCreate()">+ New template</button>
+        </div>
+      </div>
+
+      <!-- ============================= MAIN WORK: GROUPED LIST ============================= -->
+      <section class="template-groups" *ngIf="previewState !== 'empty' && filteredTemplates.length > 0" aria-label="Templates by lifecycle state">
+        <details class="group" *ngFor="let group of groupedTemplates" open>
+          <summary class="group__summary">
+            <span class="status-badge" [ngClass]="'status-badge--' + group.state.toLowerCase().replace(' ', '-')">{{ group.label }}</span>
+            <span class="group__count">{{ group.items.length }}</span>
+          </summary>
+
+          <ul class="template-list" role="list">
+            <li class="template-row" *ngFor="let t of group.items; trackBy: trackByTemplateId">
+              <div class="template-row__main">
+                <div class="template-row__title-line">
+                  <span class="template-row__ref">{{ t.reference }}</span>
+                  <h3 class="template-row__name">{{ t.name }}</h3>
+                  <span class="status-badge" [ngClass]="'status-badge--' + t.lifecycleState.toLowerCase().replace(' ', '-')">{{ t.lifecycleState }}</span>
+                </div>
+                <p class="template-row__subject">{{ t.subject }}</p>
+                <p class="template-row__meta">
+                  <span class="pill pill--muted">{{ t.channel }}</span>
+                  <span class="pill pill--muted">{{ t.language }}</span>
+                  <span>Owner {{ t.owner }}</span>
+                  <span class="dot" aria-hidden="true">·</span>
+                  <span>Updated {{ t.updatedAt }}</span>
+                  <span class="dot" aria-hidden="true">·</span>
+                  <span>{{ t.usageCount.toLocaleString('en-IN') }} sends</span>
+                </p>
+              </div>
+              <div class="template-row__actions">
+                <button type="button" class="btn btn--icon" title="Preview" [attr.aria-label]="'Preview ' + t.name" (click)="preview(t)">👁</button>
+                <button type="button" class="btn btn--secondary" (click)="openRecord(t)">Open</button>
+              </div>
+            </li>
+          </ul>
+        </details>
+      </section>
+    </ng-container>
+  </ng-container>
+
+  <!-- ============================= DECISION / REVIEW DRAWER ============================= -->
+  <div class="drawer-overlay" *ngIf="panelOpen" (click)="closePanel()"></div>
+
+  <aside
+    class="drawer"
+    *ngIf="panelOpen && working"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="panelMode === 'create' ? 'Create template' : working.name"
+  >
+    <header class="drawer__header">
+      <div>
+        <p class="eyebrow" *ngIf="working.reference">{{ working.reference }}</p>
+        <p class="eyebrow" *ngIf="!working.reference">New draft</p>
+        <h2>{{ panelMode === 'create' ? 'New template' : working.name || 'Untitled draft' }}</h2>
+        <span class="status-badge" *ngIf="working.lifecycleState" [ngClass]="'status-badge--' + working.lifecycleState.toLowerCase().replace(' ', '-')">
+          {{ working.lifecycleState }}
+        </span>
+      </div>
+      <button type="button" class="btn btn--icon" aria-label="Close panel" (click)="closePanel()">✕</button>
+    </header>
+
+    <!-- Persistent success confirmation -->
+    <div class="banner banner--success" *ngIf="successInfo" role="status">
+      <p><strong>Saved successfully.</strong> Reference {{ successInfo.reference }}; state {{ successInfo.state }}; effective {{ successInfo.effectiveTime }}.</p>
+      <p *ngIf="successInfo.pendingDependency">{{ successInfo.pendingDependency }}</p>
+      <p class="banner__next">Next: {{ successInfo.nextAction }}</p>
+    </div>
+
+    <!-- Dependency failure -->
+    <div class="banner banner--warning" *ngIf="dependencyFailure" role="alert">
+      <p><strong>We could not complete the dependent service step.</strong> Your confirmed local result is unchanged.</p>
+      <p>{{ dependencyFailure.message }} Correlation reference {{ dependencyFailure.correlationRef }}.</p>
+      <button type="button" class="btn btn--secondary btn--small" (click)="retryDependency()">Retry dependency</button>
+    </div>
+
+    <!-- Conflict -->
+    <div class="banner banner--warning" *ngIf="conflictActive || previewState === 'conflict'" role="alert">
+      <p><strong>This record changed after you opened it.</strong> Review the latest version before continuing.</p>
+      <div class="banner__actions">
+        <button type="button" class="btn btn--secondary btn--small" (click)="compareVersions()">Compare</button>
+        <button type="button" class="btn btn--secondary btn--small" (click)="reapplyLatest()">Reapply eligible changes</button>
+        <button type="button" class="btn btn--text btn--small" (click)="closePanel()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Duplicate -->
+    <div class="banner banner--info" *ngIf="duplicateWarning" role="alert">
+      <p><strong>A similar approved-content template may already exist.</strong></p>
+      <p>{{ duplicateWarning.reference }} — {{ duplicateWarning.name }} uses the same channel, language and purpose.</p>
+      <div class="banner__actions">
+        <button type="button" class="btn btn--secondary btn--small" (click)="dismissDuplicate('view')">View existing</button>
+        <button type="button" class="btn btn--secondary btn--small" (click)="dismissDuplicate('continue')">Continue anyway</button>
+        <button type="button" class="btn btn--text btn--small" (click)="dismissDuplicate('cancel')">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Validation error summary -->
+    <div class="banner banner--error" *ngIf="errorSummary.length" role="alert" aria-live="assertive">
+      <p><strong>Review the highlighted fields before continuing.</strong></p>
+      <ul>
+        <li *ngFor="let e of errorSummary">
+          <a href="javascript:void(0)" (click)="focusField(e.field)">{{ e.label }}</a>: {{ e.message }}
+        </li>
+      </ul>
+    </div>
+
+    <div class="drawer__body">
+      <!-- Read-only identity strip -->
+      <div class="kv-grid" *ngIf="working.reference">
+        <div class="kv">
+          <span class="kv__label">Template reference</span>
+          <span class="kv__value">{{ working.reference }}</span>
+        </div>
+        <div class="kv">
+          <span class="kv__label">Version</span>
+          <span class="kv__value">{{ working.version || '—' }}</span>
+        </div>
+        <div class="kv">
+          <span class="kv__label">Approval state</span>
+          <span class="status-badge" [ngClass]="'status-badge--' + working.approvalState.toLowerCase().replace(' ', '-')">{{ working.approvalState }}</span>
+        </div>
+        <div class="kv">
+          <span class="kv__label">Usage count</span>
+          <span class="kv__value">{{ working.usageCount.toLocaleString('en-IN') }} sends</span>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="field-channel">Channel</label>
+          <select id="field-channel" class="select" [(ngModel)]="working.channel" (ngModelChange)="checkDuplicate()" [disabled]="panelMode === 'view'">
+            <option value="">Select a channel…</option>
+            <option *ngFor="let c of channelOptions" [value]="c">{{ c }}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="field-language">Language</label>
+          <select id="field-language" class="select" [(ngModel)]="working.language" (ngModelChange)="checkDuplicate()" [disabled]="panelMode === 'view'">
+            <option value="">Select a language…</option>
+            <option *ngFor="let l of languageOptions" [value]="l">{{ l }}</option>
+          </select>
+        </div>
+
+        <div class="field field--full">
+          <label class="field-label" for="field-purpose">Purpose</label>
+          <textarea
+            id="field-purpose"
+            class="textarea"
+            rows="2"
+            maxlength="2000"
+            [(ngModel)]="working.purpose"
+            (ngModelChange)="checkDuplicate()"
+            [disabled]="panelMode === 'view'"
+            [class.input--error]="errors['purpose']"
+          ></textarea>
+          <div class="field-footer">
+            <span class="field-error" *ngIf="errors['purpose']">{{ errors['purpose'] }}</span>
+            <span class="char-counter">{{ working.purpose.length }} / 2,000</span>
+          </div>
+        </div>
+
+        <div class="field field--full">
+          <label class="field-label" for="field-name">Template name <span class="req" aria-hidden="true">*</span></label>
+          <input
+            id="field-name"
+            class="input"
+            type="text"
+            [(ngModel)]="working.name"
+            [disabled]="panelMode === 'view'"
+            [class.input--error]="errors['name']"
+          />
+          <span class="field-error" *ngIf="errors['name']">{{ errors['name'] }}</span>
+        </div>
+
+        <div class="field field--full">
+          <label class="field-label" for="field-subject">Subject or header <span class="req" aria-hidden="true">*</span></label>
+          <input
+            id="field-subject"
+            class="input"
+            type="text"
+            [(ngModel)]="working.subject"
+            [disabled]="panelMode === 'view'"
+            [class.input--error]="errors['subject']"
+          />
+          <span class="field-error" *ngIf="errors['subject']">{{ errors['subject'] }}</span>
+        </div>
+
+        <div class="field field--full">
+          <label class="field-label" for="field-body">Message body <span class="req" aria-hidden="true">*</span></label>
+          <textarea
+            id="field-body"
+            class="textarea"
+            rows="4"
+            [(ngModel)]="working.messageBody"
+            [disabled]="panelMode === 'view'"
+            [class.input--error]="errors['messageBody']"
+          ></textarea>
+          <span class="field-error" *ngIf="errors['messageBody']">{{ errors['messageBody'] }}</span>
+          <p class="hint">Use double-brace merge tags, for example a first-name tag, to insert personalised values.</p>
+        </div>
+
+        <div class="field field--full" *ngIf="requiresPlaceholders || working.placeholders">
+          <label class="field-label" for="field-placeholders">Placeholders <span class="req" aria-hidden="true">*</span></label>
+          <input
+            id="field-placeholders"
+            class="input"
+            type="text"
+            [(ngModel)]="working.placeholders"
+            [disabled]="panelMode === 'view'"
+            [class.input--error]="errors['placeholders']"
+          />
+          <span class="field-error" *ngIf="errors['placeholders']">{{ errors['placeholders'] }}</span>
+          <p class="hint">Detected merge tags in the message body require matching placeholder definitions.</p>
+        </div>
+
+        <div class="field field--full" *ngIf="requiresProviderId || working.providerTemplateId">
+          <label class="field-label" for="field-provider">Provider template ID <span class="req" aria-hidden="true">*</span></label>
+          <div class="lookup-row">
+            <input
+              id="field-provider"
+              class="input"
+              type="text"
+              [(ngModel)]="working.providerTemplateId"
+              [disabled]="panelMode === 'view'"
+              [class.input--error]="errors['providerTemplateId']"
+            />
+            <button type="button" class="btn btn--secondary btn--small" [disabled]="panelMode === 'view'">Look up</button>
+          </div>
+          <span class="field-error" *ngIf="errors['providerTemplateId']">{{ errors['providerTemplateId'] }}</span>
+          <p class="hint">Required for provider-managed channels such as WhatsApp.</p>
+        </div>
+
+        <div class="field field--full consent-field">
+          <label class="checkbox-row" [class.checkbox-row--disabled]="panelMode === 'view'">
+            <input
+              id="field-consentConfirmed"
+              type="checkbox"
+              [(ngModel)]="working.consentConfirmed"
+              [disabled]="panelMode === 'view'"
+            />
+            <span>I confirm this content has been reviewed against consent and legal policy v2.1.</span>
+          </label>
+          <span class="field-error" *ngIf="errors['consentConfirmed']">{{ errors['consentConfirmed'] }}</span>
+          <p class="hint" *ngIf="working.consentConfirmed && working.consentActor">
+            Recorded by {{ working.consentActor }} on {{ working.consentTime }}.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action footer -->
+    <footer class="drawer__footer">
+      <div class="drawer__footer-secondary">
+        <button
+          type="button"
+          class="btn btn--danger-outline"
+          *ngIf="permissions.retire && working.lifecycleState === 'Approved'"
+          (click)="openRetire()"
+        >Retire</button>
+        <button
+          type="button"
+          class="btn btn--danger-outline"
+          *ngIf="permissions.deleteDraft && working.lifecycleState === 'Draft' && working.downstreamReferenceCount === 0"
+          (click)="openDelete()"
+        >Delete draft</button>
+      </div>
+      <div class="drawer__footer-primary">
+        <button type="button" class="btn btn--text" (click)="closePanel()">Close</button>
+
+        <button
+          type="button"
+          class="btn btn--secondary"
+          *ngIf="panelMode === 'view' && working.lifecycleState === 'Draft' && permissions.draft"
+          (click)="switchToEdit()"
+        >Edit draft</button>
+
+        <button
+          type="button"
+          class="btn btn--secondary"
+          *ngIf="(panelMode === 'create' || panelMode === 'edit') && permissions.draft"
+          [disabled]="submitting"
+          (click)="saveDraft()"
+        >{{ submitting ? 'Saving…' : 'Save draft' }}</button>
+
+        <button
+          type="button"
+          class="btn btn--primary"
+          *ngIf="(panelMode === 'create' || panelMode === 'edit') && working.lifecycleState === 'Draft' && permissions.submit"
+          [disabled]="submitting"
+          (click)="submit()"
+        >{{ submitting ? 'Submitting…' : 'Submit for review' }}</button>
+
+        <button
+          type="button"
+          class="btn btn--primary"
+          *ngIf="panelMode === 'view' && working.lifecycleState === 'Pending review' && permissions.approve"
+          (click)="openApprove()"
+        >Approve</button>
+      </div>
+    </footer>
+  </aside>
+
+  <!-- ============================= CONFIRMATION MODAL ============================= -->
+  <div class="modal-overlay" *ngIf="confirmDialog.open" (click)="cancelConfirm()"></div>
+  <div class="modal" *ngIf="confirmDialog.open" role="alertdialog" aria-modal="true" [attr.aria-label]="confirmDialog.title">
+    <h2>{{ confirmDialog.title }}</h2>
+    <p class="modal__consequence">{{ confirmDialog.consequence }}</p>
+
+    <div class="field field--full">
+      <label class="field-label" for="confirm-reason">Reason <span class="req" aria-hidden="true">*</span></label>
+      <textarea id="confirm-reason" class="textarea" rows="2" [(ngModel)]="confirmDialog.reason" placeholder="Explain why this action is being taken…"></textarea>
+    </div>
+
+    <div class="field field--full" *ngIf="confirmDialog.requiresTypedWord">
+      <label class="field-label" for="confirm-typed">Type {{ confirmDialog.requiresTypedWord }} to confirm this irreversible action</label>
+      <input id="confirm-typed" class="input" type="text" [(ngModel)]="confirmDialog.typedValue" [attr.placeholder]="confirmDialog.requiresTypedWord" />
+    </div>
+
+    <div class="modal__actions">
+      <button type="button" class="btn btn--text" (click)="cancelConfirm()">Cancel</button>
+      <button
+        type="button"
+        class="btn"
+        [class.btn--danger]="confirmDialog.type === 'retire' || confirmDialog.type === 'delete'"
+        [class.btn--primary]="confirmDialog.type === 'approve'"
+        [disabled]="confirmDisabled || confirmDialog.busy"
+        (click)="runConfirmedAction()"
+      >{{ confirmDialog.busy ? 'Working…' : confirmDialog.title.replace('Confirm ', '') }}</button>
+    </div>
+  </div>
+</div>
+</main>

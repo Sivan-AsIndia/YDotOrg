@@ -1,0 +1,25 @@
+# Local development overrides. Compose merges this on top of docker-compose.yml automatically, so
+# keep it to things that are safe on every machine.
+#
+# The Visual Studio generated version of this file used to set ASPNETCORE_HTTPS_PORTS and mount
+# %APPDATA% developer certificates. Both were removed: the stack runs HTTP only behind nginx, and
+# an HTTPS port here makes UseHttpsRedirection() answer 307 to every proxied API call, pointing at
+# an address nginx cannot reach.
+#
+# THE SERVICE NAMES CHANGED with the 8.8.9 image rename - ydots-iam-api became ydot-iam and so on.
+# A stale name here is not ignored: compose treats it as a new service with no image and no build
+# context, and refuses to start the whole project.
+
+services:
+
+  ydot-iam:
+    environment:
+      # The SQL behind the first-boot migration and seed. Easier to confirm the Organisations were
+      # created from the log than from a psql session.
+      Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore.Database.Command: Information
+
+  ydot-don:
+    environment:
+      # Same reason: the first boot creates the don_* tables and seeds the demonstration donors
+      # and leads.
+      Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore.Database.Command: Information

@@ -1,0 +1,2 @@
+/*! For license information please see trendline.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/TrendLine/TrendLineIndicator.js";export default Highcharts;

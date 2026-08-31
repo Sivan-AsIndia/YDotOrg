@@ -1,0 +1,441 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div [attr.data-ui-state]="uiState()">
+
+
+
+  <!-- ============ TASK HEADER (4.4.1 Task header) ============
+       Primary action (Inspect) is placed at page/row, not the header, so no
+       header CTA is shown; only the Filters toggle appears here. -->
+  <header class="peq-task-header" aria-labelledby="peq-title">
+    <div class="peq-header-text">
+      <h1 class="peq-title" id="peq-title">
+        {{ pageTitle }}
+     
+      </h1>
+      <p class="peq-subtitle">{{ pageSubtitle }}</p>
+ 
+    </div>
+
+    <div class="peq-header-actions">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFiltersVisible()"
+              [attr.aria-expanded]="filtersVisible()">
+        <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
+        @if (activeFilterSummary().length) { <span class="peq-count">{{ activeFilterSummary().length }}</span> }
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ CONTEXT AND FILTERS — shown only when the Filters button is used ============ -->
+  @if (filtersVisible()) {
+  <section class="peq-filters-card" aria-label="Search and filters">
+  
+    <div class="peq-filter-grid">
+      <!-- Search — by event reference, donor name, email or campaign -->
+      <label class="peq-field peq-field-search">
+        <span class="peq-field-label">Search</span>
+        <span class="peq-input-wrap">
+          <input type="search" class="peq-input" placeholder="Search by event reference, donor name, email or campaign…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)"
+                 aria-label="Search payment events" />
+          <svg class="peq-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+
+      <!-- Payment status — filter by Pending / Success / Fail -->
+      <label class="peq-field">
+        <span class="peq-field-label">Payment status</span>
+        <span class="peq-select-wrap">
+          <select class="peq-select" [ngModel]="paymentStatusFilter()" (ngModelChange)="paymentStatusFilter.set($event)" aria-label="Payment status">
+            <option value="">All statuses</option>
+            @for (s of paymentStatusOptions; track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <svg class="peq-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+    </div>
+
+    <!-- Active-filter summary -->
+    <div class="peq-active-row">
+      <span class="peq-active-label">Active filters:</span>
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="peq-chip">
+          {{ chip.label }}
+          <button type="button" class="peq-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      } @empty {
+        <span class="peq-active-none">None applied</span>
+      }
+      @if (activeFilterSummary().length) {
+        <button type="button" class="peq-link" (click)="clearFilters()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+          Clear all
+        </button>
+      }
+    </div>
+  </section>
+  }
+
+  <!-- ============ SITUATIONAL BANNERS (4.4.4 / 4.4.6) ============ -->
+  @if (uiState() === 'validation') {
+    <div class="peq-banner peq-banner-error" role="alert">
+      <strong>Review the highlighted fields.</strong>
+      A value does not meet the stated format or range. Correct it to continue; entered values are kept.
+      <button type="button" class="peq-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+  @if (uiState() === 'duplicate') {
+    <div class="peq-banner peq-banner-warn" role="alert">
+      A similar gateway event already exists in this queue. Link, merge, change the value, request review or cancel —
+      nothing is overwritten silently.
+      <button type="button" class="peq-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+  @if (uiState() === 'conflict') {
+    <div class="peq-banner peq-banner-warn" role="alert">
+      This record changed after you opened it. Review the latest version before continuing.
+      <span class="peq-banner-actions">
+        <a href="javascript:void(0)" (click)="dismissBanner()">Compare</a>
+        <a href="javascript:void(0)" (click)="dismissBanner()">Reapply eligible changes</a>
+        <a href="javascript:void(0)" (click)="dismissBanner()">Cancel</a>
+      </span>
+    </div>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <div class="peq-banner peq-banner-warn" role="alert">
+      We could not complete the dependent service step. Your confirmed local result is unchanged.
+      <span class="peq-banner-actions">
+        <span class="peq-corr">Correlation INT-88421</span>
+        <a href="javascript:void(0)" (click)="dismissBanner()">Retry dependency</a>
+      </span>
+    </div>
+  }
+  @if (uiState() === 'success') {
+    <div class="peq-banner peq-banner-success" role="status">
+      Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }};
+      effective {{ persistentOutcome().effectiveTime }}. Pending dependencies and the next permitted route are shown in
+      Persistent outcome.
+      <button type="button" class="peq-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </div>
+  }
+
+  <!-- ============ WORK AREA: index + overlay detail drawer (4.4.5) ============ -->
+  <div class="peq-work">
+
+    <!-- ---------- MAIN WORK: gateway event index (4.4.1 Main work) ---------- -->
+    <section class="peq-main" aria-labelledby="peq-records-heading">
+      <h2 id="peq-records-heading" class="peq-visually-hidden">Gateway events</h2>
+
+      <!-- LOADING (4.4.4) -->
+      @if (uiState() === 'loading') {
+        <div class="peq-state-block" role="status" aria-live="polite">
+          <p class="peq-state-title">Loading Payment event queue…</p>
+          <div class="peq-skeleton" aria-hidden="true">
+            @for (n of [1,2,3,4,5]; track n) { <div class="peq-skeleton-row"></div> }
+          </div>
+          <button type="button" class="peq-btn peq-btn-outline peq-btn-sm" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      }
+
+      <!-- EMPTY (4.4.4) -->
+      @else if (uiState() === 'empty') {
+        <div class="peq-state-block">
+          <p class="peq-state-title">No payment events match this scope and filter.</p>
+          <p class="peq-state-body">Zero results come from the current filters, not a global zero. Adjust the search,
+            failure type, gateway event ID, date, state or scope, or reset filters to continue.</p>
+          <div class="peq-state-actions">
+            <button type="button" class="peq-btn peq-btn-outline peq-btn-sm" (click)="clearFilters()">Reset filters</button>
+          </div>
+        </div>
+      }
+
+      <!-- NO ACCESS (4.4.4 / 4.4.6 restricted value) -->
+      @else if (uiState() === 'no-access') {
+        <div class="peq-state-block">
+          <p class="peq-state-title">This value cannot be displayed with your current access.</p>
+          <p class="peq-state-body">Restricted records, fields, counts, actions and search suggestions are hidden.
+            Return to your permitted landing page to continue.</p>
+          <a class="peq-btn peq-btn-outline peq-btn-sm" href="javascript:void(0)" (click)="setUiState('ready')">Back to Payments</a>
+        </div>
+      }
+
+      <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the index visible -->
+      @else {
+        <div class="peq-table-scroll">
+          <table class="peq-table">
+            <thead>
+              <tr>
+                <th scope="col">Event reference</th>
+                <th scope="col">Donor name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Campaign</th>
+                <th scope="col" class="peq-col-num">Amount</th>
+                <th scope="col">Payment status</th>
+                <th scope="col">Received at</th>
+                <th scope="col" class="peq-col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of pagedRecords(); track r.eventReference) {
+                <tr [class.peq-row-selected]="isSelected(r.eventReference)" >
+                  <!-- Event reference (stable, read-only) -->
+                  <td class="peq-cell-event" data-label="Event reference">
+                    <button type="button" class="peq-event-link" (click)="inspect(r.eventReference); $event.stopPropagation()">
+                      {{ r.eventReference }}
+                    </button>
+                    <span class="peq-event-type">{{ r.mappedIntentOrPayment }}</span>
+                  </td>
+
+                  <!-- Donor name -->
+                  <td data-label="Donor name">{{ r.donorName }}</td>
+
+                  <!-- Donor email -->
+                  <td data-label="Email">{{ r.donorEmail }}</td>
+
+                  <!-- Campaign name -->
+                  <td data-label="Campaign">{{ r.campaignName }}</td>
+
+                  <!-- Amount + currency -->
+                  <td class="peq-col-num" data-label="Amount">{{ r.currency }} {{ r.donationAmount }}</td>
+
+                  <!-- Payment status (Pending / Success / Fail) -->
+                  <td data-label="Payment status">
+                    <span class="peq-badge" [class]="paymentStatusClass(r.paymentStatus)">{{ r.paymentStatus }}</span>
+                  </td>
+
+                  <!-- Received time (read-only) -->
+                  <td data-label="Received at">{{ r.receivedTime }}</td>
+
+                  <!-- Row actions: Verify (shield-check) + Eye (view) + Delete -->
+                  <td class="peq-col-actions" (click)="$event.stopPropagation()">
+                    <div class="peq-row-icons">
+                      <!-- <button type="button" class="peq-icon-btn peq-icon-btn-verify" (click)="verifyPaymentFromQueue(r)"
+                              [attr.aria-label]="'Verify payment ' + r.eventReference" title="Verify payment">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                      </button> -->
+                      <button type="button" class="peq-icon-btn" (click)="inspect(r.eventReference)"
+                              [attr.aria-label]="'View ' + r.eventReference" title="View details">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                      <!-- <button type="button" class="peq-icon-btn peq-icon-btn-danger" (click)="requestDeletePaymentEvent(r.eventReference)"
+                              [attr.aria-label]="'Delete ' + r.eventReference" title="Delete">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                      </button> -->
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="8" class="peq-table-empty">
+                    No payment events match this scope and filter. Reset filters to continue.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer: totals qualified by scope + last refresh, and pagination (4.4.1) -->
+        <div class="peq-table-footer">
+          <span class="peq-showing">
+            Showing {{ pagedRecords().length ? (currentPage() - 1) * pageSize + 1 : 0 }}–{{ (currentPage() - 1) * pageSize + pagedRecords().length }}
+            of {{ recordCount() }}
+          </span>
+          <nav class="peq-pagination" aria-label="Pagination">
+            <!-- <button type="button" class="peq-page-btn" aria-label="First page" [disabled]="currentPage() === 1" (click)="goToPage(1)">«</button> -->
+            <button type="button" class="peq-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
+            @for (p of pageNumbers(); track p) {
+              <button type="button" class="peq-page-btn" [class.is-current]="currentPage() === p"
+                      [attr.aria-current]="currentPage() === p ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+            }
+            <button type="button" class="peq-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
+            <!-- <button type="button" class="peq-page-btn" aria-label="Last page" [disabled]="currentPage() === totalPages()" (click)="goToPage(totalPages())">»</button> -->
+          </nav>
+        </div>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: payment details (offcanvas) ----------
+         Hidden until a row is inspected; opens as a fixed drawer overlaying the
+         right of the viewport (dimming backdrop behind it). Core view: Name, Mail,
+         Campaign, Payment status and Amount + basic event details below. -->
+    @if (selectedEvent(); as e) {
+      <div class="peq-detail-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
+      <aside class="peq-detail" role="dialog" aria-modal="true" aria-label="Payment details">
+        <div class="peq-detail-head">
+          <div class="peq-detail-id">
+            <span class="peq-detail-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>
+            </span>
+            <div>
+              <h2 class="peq-detail-title">Payment details</h2>
+            </div>
+          </div>
+          <button type="button" class="peq-detail-close" (click)="closeDetail()" aria-label="Close payment details">✕</button>
+        </div>
+
+          <div class="peq-detail-body">
+            <dl class="peq-kv">
+              <div><dt>Name</dt><dd>{{ e.donorName }}</dd></div>
+              <div><dt>Mail</dt><dd>{{ e.donorEmail }}</dd></div>
+              <div><dt>Campaign</dt><dd>{{ e.campaignName }}</dd></div>
+              <div><dt>Payment status</dt><dd><span class="peq-badge" [class]="paymentStatusClass(e.paymentStatus)">{{ e.paymentStatus }}</span></dd></div>
+              <div><dt>Amount</dt><dd>{{ e.currency }} {{ e.donationAmount }}</dd></div>
+              <div><dt>Event reference</dt><dd>{{ e.eventReference }}</dd></div>
+              <div><dt>Mobile</dt><dd>{{ selectedDonorDetails()?.mobile || '—' }}</dd></div>
+              <div><dt>Location</dt><dd>{{ selectedDonorLocation() || '—' }}</dd></div>
+              <div><dt>Donor ID</dt><dd>{{ selectedDonorDetails()?.donorId || '—' }}</dd></div>
+              <div><dt>Received time</dt><dd>{{ e.receivedTime }}</dd></div>
+              <div><dt>Attempts</dt><dd>{{ e.attempts }}</dd></div>
+            </dl>
+
+            <!-- Payment process actions on this event -->
+            <div class="peq-detail-actions">
+              @if (e.paymentStatus === 'Pending') {
+                <button type="button" class="peq-btn peq-btn-primary peq-btn-sm" (click)="continuePaymentFromQueue(e)">
+                  <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+                  Continue payment
+                </button>
+              }
+              @if (e.paymentStatus === 'Fail') {
+                <button type="button" class="peq-btn peq-btn-primary peq-btn-sm" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
+                  <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                  {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry payment' }}
+                </button>
+              }
+            </div>
+
+          </div>
+      </aside>
+    }
+  </div>
+
+  <!-- ============ DELETE CONFIRMATION MODAL ============ -->
+  @if (deleteDialogOpen() && deleteTarget()) {
+    <div class="peq-modal-backdrop" (click)="cancelDelete()">
+      <div class="peq-modal" role="dialog" aria-modal="true" aria-labelledby="peq-delete-title" (click)="$event.stopPropagation()">
+        <h2 id="peq-delete-title" class="peq-modal-title">Confirm Delete</h2>
+        <p class="peq-modal-lead">Are you sure you want to delete this payment event? This action cannot be undone.</p>
+        <dl class="peq-kv">
+          <div><dt>Event reference</dt><dd>{{ deleteTarget()!.eventReference }}</dd></div>
+          <div><dt>Donor name</dt><dd>{{ deleteTarget()!.donorName }}</dd></div>
+          <div><dt>Donor email</dt><dd>{{ deleteTarget()!.donorEmail }}</dd></div>
+          <div><dt>Amount</dt><dd>{{ deleteTarget()!.currency }} {{ deleteTarget()!.donationAmount }}</dd></div>
+          <div><dt>Payment status</dt><dd><span class="peq-badge" [class]="paymentStatusClass(deleteTarget()!.paymentStatus)">{{ deleteTarget()!.paymentStatus }}</span></dd></div>
+        </dl>
+        <div class="peq-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ RETRY CORRELATION DIALOG (4.4.3 Retry correlation) ============ -->
+  @if (retryDialogOpen() && retryTarget()) {
+    <div class="peq-modal-backdrop" (click)="cancelRetry()">
+      <div class="peq-modal" role="dialog" aria-modal="true" aria-labelledby="peq-retry-title" (click)="$event.stopPropagation()">
+        <h2 id="peq-retry-title" class="peq-modal-title">Confirm Retry correlation</h2>
+        <p class="peq-modal-lead">Executes idempotently. Only this authorised record in scope is affected; the confirmed
+          result is shown persistently, not by a toast alone.</p>
+        <dl class="peq-kv">
+          <div><dt>Event reference</dt><dd>{{ retryTarget()!.eventReference }}</dd></div>
+          <div><dt>Mapped intent or payment</dt><dd>{{ retryTarget()!.mappedIntentOrPayment }}</dd></div>
+          <div><dt>Current sequence status</dt><dd><span class="peq-badge peq-badge-sm" [class]="sequenceClass(retryTarget()!.sequenceStatus)">{{ retryTarget()!.sequenceStatus }}</span></dd></div>
+        </dl>
+        <div class="peq-modal-actions">
+          <button type="button" class="peq-btn peq-btn-outline" (click)="cancelRetry()">Cancel</button>
+          <button type="button" class="peq-btn peq-btn-primary" (click)="confirmRetry()">Retry correlation</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ RESOLVE DIALOG (4.4.3 Resolve — high-risk decision, 4.4.6) ============ -->
+  @if (resolveDialogOpen() && resolveTarget()) {
+    <div class="peq-modal-backdrop" (click)="cancelResolve()">
+      <div class="peq-modal" role="dialog" aria-modal="true" aria-labelledby="peq-resolve-title" (click)="$event.stopPropagation()">
+        <h2 id="peq-resolve-title" class="peq-modal-title">Confirm Resolve</h2>
+        <p class="peq-modal-lead">Review the affected record, consequence, reason and effective time. This decision
+          requires explicit confirmation.</p>
+        <dl class="peq-kv">
+          <div><dt>Event reference</dt><dd>{{ resolveTarget()!.eventReference }}</dd></div>
+          <div><dt>Before → after</dt><dd>{{ resolveTarget()!.eventState }} → Resolved</dd></div>
+          <div><dt>Effective permission</dt><dd>pay.payments.dismiss-event</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="peq-field" [class.peq-field-invalid]="resolveSubmitted() && !resolveActionValid()">
+          <label class="peq-field-label" for="peq-resolve-action">Resolution action <span class="peq-req">required</span></label>
+          <input id="peq-resolve-action" type="text" class="peq-input" [ngModel]="resolveAction()"
+                 (ngModelChange)="resolveAction.set($event)" placeholder="Describe the resolution action taken…" />
+          @if (resolveSubmitted() && !resolveActionValid()) { <p class="peq-field-hint peq-field-error">Enter Resolution action.</p> }
+        </div>
+        <div class="peq-field" [class.peq-field-invalid]="resolveSubmitted() && !resolveReasonValid()">
+          <label class="peq-field-label" for="peq-resolve-reason">Resolution reason <span class="peq-conf-tag">Confidential</span> <span class="peq-req">required</span></label>
+          <textarea id="peq-resolve-reason" class="peq-input peq-textarea" rows="3"
+                    [ngModel]="resolveReason()" (ngModelChange)="resolveReason.set($event)"
+                    [attr.maxlength]="resolveReasonMax"
+                    placeholder="Record the reason this event is being resolved…"
+                    [attr.aria-invalid]="resolveSubmitted() && !resolveReasonValid()"></textarea>
+          <p class="peq-field-hint" [class.peq-field-error]="resolveSubmitted() && !resolveReasonValid()" role="status">
+            {{ resolveReasonCount() }} / {{ resolveReasonMax }} characters (minimum {{ resolveReasonMin }})
+          </p>
+          @if (resolveSubmitted() && !resolveReasonValid()) { <p class="peq-field-hint peq-field-error">Enter Resolution reason. Provide between {{ resolveReasonMin }} and {{ resolveReasonMax }} characters.</p> }
+        </div>
+        <div class="peq-modal-actions">
+          <button type="button" class="peq-btn peq-btn-outline" (click)="cancelResolve()">Cancel</button>
+          <button type="button" class="peq-btn peq-btn-primary" (click)="confirmResolve()">Confirm resolve</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ ESCALATE DIALOG (4.4.3 Escalate — high-risk decision, danger, 4.4.6) ============ -->
+  @if (escalateDialogOpen() && escalateTarget()) {
+    <div class="peq-modal-backdrop" (click)="cancelEscalate()">
+      <div class="peq-modal" role="dialog" aria-modal="true" aria-labelledby="peq-escalate-title" (click)="$event.stopPropagation()">
+        <h2 id="peq-escalate-title" class="peq-modal-title">Confirm Escalate</h2>
+        <p class="peq-modal-lead">Review the affected record, consequence, reason and effective time. This decision
+          requires explicit confirmation.</p>
+        <dl class="peq-kv">
+          <div><dt>Event reference</dt><dd>{{ escalateTarget()!.eventReference }}</dd></div>
+          <div><dt>Before → after</dt><dd>{{ escalateTarget()!.eventState }} → Escalated</dd></div>
+          <div><dt>Effective permission</dt><dd>pay.payments.verify</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="peq-field" [class.peq-field-invalid]="escalateSubmitted() && !escalateActionValid()">
+          <label class="peq-field-label" for="peq-escalate-action">Resolution action <span class="peq-req">required</span></label>
+          <input id="peq-escalate-action" type="text" class="peq-input" [ngModel]="escalateAction()"
+                 (ngModelChange)="escalateAction.set($event)" placeholder="Describe the escalation action taken…" />
+          @if (escalateSubmitted() && !escalateActionValid()) { <p class="peq-field-hint peq-field-error">Enter Resolution action.</p> }
+        </div>
+        <div class="peq-field" [class.peq-field-invalid]="escalateSubmitted() && !escalateReasonValid()">
+          <label class="peq-field-label" for="peq-escalate-reason">Resolution reason <span class="peq-conf-tag">Confidential</span> <span class="peq-req">required</span></label>
+          <textarea id="peq-escalate-reason" class="peq-input peq-textarea" rows="3"
+                    [ngModel]="escalateReason()" (ngModelChange)="escalateReason.set($event)"
+                    [attr.maxlength]="escalateReasonMax"
+                    placeholder="Record the reason this event is being escalated…"
+                    [attr.aria-invalid]="escalateSubmitted() && !escalateReasonValid()"></textarea>
+          <p class="peq-field-hint" [class.peq-field-error]="escalateSubmitted() && !escalateReasonValid()" role="status">
+            {{ escalateReasonCount() }} / {{ escalateReasonMax }} characters (minimum {{ escalateReasonMin }})
+          </p>
+          @if (escalateSubmitted() && !escalateReasonValid()) { <p class="peq-field-hint peq-field-error">Enter Resolution reason. Provide between {{ escalateReasonMin }} and {{ escalateReasonMax }} characters.</p> }
+        </div>
+        <div class="peq-modal-actions">
+          <button type="button" class="peq-btn peq-btn-outline" (click)="cancelEscalate()">Cancel</button>
+          <button type="button" class="peq-btn peq-btn-danger" (click)="confirmEscalate()">Confirm escalate</button>
+        </div>
+      </div>
+    </div>
+  }
+
+
+</div>
+</div>
+</div>
+</main>

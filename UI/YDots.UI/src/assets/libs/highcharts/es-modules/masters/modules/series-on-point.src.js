@@ -1,0 +1,2 @@
+/*! For license information please see series-on-point.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import SeriesOnPointComposition from"../../Series/SeriesOnPointComposition.js";const G=Highcharts;SeriesOnPointComposition.compose(G.Series,G.Chart);export default Highcharts;

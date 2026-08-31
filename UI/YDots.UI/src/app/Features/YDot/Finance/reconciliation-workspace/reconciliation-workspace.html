@@ -1,0 +1,502 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+  <!-- ============================================================ -->
+  <!-- PAGE HEADER — flat text header                              -->
+  <!-- ============================================================ -->
+  <header class="rwn-header">
+    <div>
+      <!-- <p class="rwn-eyebrow">Finance · Reconciliation</p> -->
+      <div class="rwn-title-row">
+        <h1 class="rwn-title">{{ pageTitle }}</h1>
+        <span class="rwn-state-pill">{{ lifecycleState }}</span>
+      </div>
+      <p class="rwn-subtitle">{{ pageSubtitle }}</p>
+      <div class="rwn-meta">
+        <span>Owner <strong>{{ owner }}</strong></span>
+        <span class="rwn-dot">•</span>
+        <span>{{ lastRefresh() }}</span>
+        <span class="rwn-dot">•</span>
+        <span>{{ operatingTimeZone }}</span>
+      </div>
+    </div>
+    @if (uiState() !== 'loading' && uiState() !== 'empty' && uiState() !== 'no-access') {
+    <div class="rwn-header-actions">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="toggleFilters()" [attr.aria-expanded]="filtersOpen()">
+        <svg class="rwn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z" />
+        </svg>
+        {{ filtersOpen() ? 'Hide Filters' : 'Filters' }}
+        @if (activeFilterSummary().length) {
+          <span class="rwn-count">{{ activeFilterSummary().length }}</span>
+        }
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="performAutoMatch()" [class.disabled]="!autoMatchAllowed()" [attr.aria-disabled]="!autoMatchAllowed()">
+        <svg class="rwn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+        </svg>
+        Auto-match
+      </button>
+    </div>
+    }
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- OUTCOME PANELS                                               -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'success') {
+    <section class="rwn-outcome mb-5 mt-5" role="status" aria-live="polite">
+      <span class="rwn-outcome-icon" aria-hidden="true">✓</span>
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">Saved successfully</p>
+        <p class="rwn-outcome-detail">
+          Reference <strong>{{ persistentOutcome().reference }}</strong> · state <strong>{{ persistentOutcome().state }}</strong> · effective <strong>{{ persistentOutcome().effectiveTime }}</strong>
+        </p>
+      </div>
+      <button type="button" class="rwn-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'validation') {
+    <section class="rwn-outcome rwn-outcome-danger" role="alert">
+      <span class="rwn-outcome-icon rwn-outcome-icon-danger" aria-hidden="true">!</span>
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">Review the highlighted fields.</p>
+        <p class="rwn-outcome-detail">A value does not meet the stated format or range. Correct it to continue; entered values are kept.</p>
+      </div>
+      <button type="button" class="rwn-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'duplicate') {
+    <section class="rwn-outcome rwn-outcome-warn" role="alert">
+      <span class="rwn-outcome-icon rwn-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">Duplicate match proposal detected.</p>
+        <p class="rwn-outcome-detail">Review the safe candidate category and comparison route before continuing.</p>
+      </div>
+      <button type="button" class="rwn-outcome-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
+    </section>
+  }
+  @if (uiState() === 'conflict') {
+    <section class="rwn-outcome rwn-outcome-warn" role="alert">
+      <span class="rwn-outcome-icon rwn-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">This record changed after you opened it.</p>
+        <p class="rwn-outcome-detail">Review the latest version before continuing.</p>
+      </div>
+      <div class="rwn-outcome-actions">
+        <a class="rwn-link" href="javascript:void(0)" (click)="compareConflict()">Compare</a>
+        <a class="rwn-link" href="javascript:void(0)" (click)="reapplyConflictChanges()">Reapply</a>
+        <a class="rwn-link" href="javascript:void(0)" (click)="cancelConflict()">Cancel</a>
+      </div>
+    </section>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <section class="rwn-outcome rwn-outcome-warn" role="alert">
+      <span class="rwn-outcome-icon rwn-outcome-icon-warn" aria-hidden="true">!</span>
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">We could not complete the dependent service step.</p>
+        <p class="rwn-outcome-detail">Your confirmed local result is unchanged. Correlation INT-77334.</p>
+      </div>
+      <button type="button" class="rwn-btn rwn-btn-outline rwn-btn-sm" (click)="retryDependency()">Retry dependency</button>
+    </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- LOADING / EMPTY / NO-ACCESS — replace the workspace entirely -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'loading') {
+    <div class="rwn-outcome mt-5" role="status" aria-live="polite">
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">Loading Reconciliation workspace…</p>
+      </div>
+      <button type="button" class="rwn-btn rwn-btn-outline rwn-btn-sm" (click)="setUiState('ready')">Cancel</button>
+    </div>
+  }
+  @else if (uiState() === 'empty') {
+    <div class="rwn-outcome mt-5" role="status">
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">No rows are in scope for reconciliation.</p>
+        <p class="rwn-outcome-detail">This can come from scope, filters, missing setup, or genuinely no records. Reset filters or adjust scope to continue.</p>
+      </div>
+      <button type="button" class="rwn-btn rwn-btn-outline rwn-btn-sm" (click)="clearFilters(); setUiState('ready')">Reset filters</button>
+    </div>
+  }
+  @else if (uiState() === 'no-access') {
+    <div class="rwn-outcome mt-5" role="alert">
+      <div class="rwn-outcome-text">
+        <p class="rwn-outcome-title">This value cannot be displayed with your current access.</p>
+        <p class="rwn-outcome-detail">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+      </div>
+      <a class="rwn-btn rwn-btn-outline rwn-btn-sm" href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+    </div>
+  }
+  @else {
+  <!-- ============================================================ -->
+  <!-- SUMMARY CARDS — key metrics at a glance                     -->
+  <!-- ============================================================ -->
+  <div class="rwn-summary-grid">
+    <div class="rwn-summary-card">
+      <span class="rwn-summary-icon rwn-summary-icon-navy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      </span>
+      <div>
+        <span class="rwn-summary-label">Total rows</span>
+        <span class="rwn-summary-value">{{ ledgerRows().length }}</span>
+      </div>
+    </div>
+    <div class="rwn-summary-card">
+      <span class="rwn-summary-icon rwn-summary-icon-indigo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      </span>
+      <div>
+        <span class="rwn-summary-label">In view</span>
+        <span class="rwn-summary-value">{{ filteredRows().length }}</span>
+      </div>
+    </div>
+    <div class="rwn-summary-card">
+      <span class="rwn-summary-icon rwn-summary-icon-green">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      </span>
+      <div>
+        <span class="rwn-summary-label">Matched</span>
+        <span class="rwn-summary-value">{{ filteredRows().filter(r => r.paymentState === 'Matched').length }}</span>
+      </div>
+    </div>
+    <div class="rwn-summary-card">
+      <span class="rwn-summary-icon rwn-summary-icon-amber">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+      </span>
+      <div>
+        <span class="rwn-summary-label">Unmatched</span>
+        <span class="rwn-summary-value">{{ filteredRows().filter(r => r.paymentState !== 'Matched').length }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- FILTERS CARD                                                -->
+  <!-- ============================================================ -->
+  @if (filtersOpen()) {
+    <section class="rwn-card mt-5 mb-5" aria-label="Search and filters">
+      <div class="rwn-filter-grid">
+        <label class="rwn-field rwn-field-search">
+          <span class="rwn-field-label">Search</span>
+          <span class="rwn-input-wrap">
+            <input
+              type="search"
+              class="rwn-input"
+              placeholder="Search by payment, settlement or bank reference…"
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event)"
+              aria-label="Search"
+            />
+            <svg class="rwn-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </span>
+        </label>
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Payment state</span>
+          <span class="rwn-select-wrap">
+            <select class="rwn-select" [ngModel]="paymentStateFilter()" (ngModelChange)="paymentStateFilter.set($event)" aria-label="Payment state">
+              @for (s of paymentStateOptions; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Settlement state</span>
+          <span class="rwn-select-wrap">
+            <select class="rwn-select" [ngModel]="settlementStateFilter()" (ngModelChange)="settlementStateFilter.set($event)" aria-label="Settlement state">
+              @for (s of settlementStateOptions; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Variance</span>
+          <span class="rwn-select-wrap">
+            <select class="rwn-select" [ngModel]="varianceFilter()" (ngModelChange)="varianceFilter.set($event)" aria-label="Variance">
+              @for (v of varianceOptions; track v) {
+                <option [value]="v">{{ v }}</option>
+              }
+            </select>
+            <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Data scope</span>
+          <span class="rwn-select-wrap">
+            <select class="rwn-select" [ngModel]="scopeFilter()" (ngModelChange)="scopeFilter.set($event)" aria-label="Data scope">
+              @for (sc of scopeOptions; track sc) {
+                <option [value]="sc">{{ sc }}</option>
+              }
+            </select>
+            <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+      </div>
+
+      <div class="rwn-active-row">
+        <span class="rwn-active-label">Active Filters:</span>
+        @for (chip of activeFilterSummary(); track chip.key) {
+          <span class="rwn-chip">
+            {{ chip.label }}
+            <button type="button" class="rwn-chip-x" (click)="clearFilters()" [attr.aria-label]="'Remove filter ' + chip.label">✕</button>
+          </span>
+        } @empty {
+          <span class="rwn-active-none">None applied</span>
+        }
+        <button type="button" class="rwn-link" (click)="clearFilters()">Clear All</button>
+      </div>
+    </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- FULL-WIDTH LEDGER TABLE                                     -->
+  <!-- ============================================================ -->
+  <div class="rwn-table-card mt-5">
+    <div class="rwn-table-head">
+      <h2 class="rwn-table-title">Reconciliation ledger</h2>
+      <span class="rwn-showing">Showing <strong>{{ filteredRows().length }}</strong> of {{ ledgerRows().length }} rows</span>
+    </div>
+
+    <div class="rwn-table-scroll">
+      <table class="rwn-table">
+        <thead>
+          <tr>
+            <th scope="col" class="rwn-col-select"></th>
+            <th scope="col">Payment reference</th>
+            <th scope="col">Settlement line</th>
+            <th scope="col">Bank reference</th>
+            <th scope="col">Payment state</th>
+            <th scope="col">Settlement state</th>
+            <th scope="col" class="rwn-col-num">Gross</th>
+            <th scope="col" class="rwn-col-num">Fees + tax</th>
+            <th scope="col" class="rwn-col-num">Net</th>
+            <th scope="col" class="rwn-col-num">Variance</th>
+            <th scope="col">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of filteredRows(); track r.paymentReference) {
+            <tr [class.rwn-row-active]="activeRow() === r.paymentReference" (click)="selectRow(r.paymentReference)">
+              <td class="rwn-col-select" data-label="Select">
+                <input
+                  type="radio"
+                  name="ledger-select"
+                  [checked]="activeRow() === r.paymentReference"
+                  (change)="selectRow(r.paymentReference)"
+                  [attr.aria-label]="'Select ' + r.paymentReference"
+                />
+              </td>
+              <td data-label="Payment reference">
+                <span class="rwn-ref-main">{{ r.paymentReference }}</span>
+              </td>
+              <td data-label="Settlement line">
+                <span class="rwn-ref-main">{{ r.settlementLine }}</span>
+              </td>
+              <td data-label="Bank reference">
+                <span class="rwn-ref-sub">{{ r.bankReference }}</span>
+              </td>
+              <td data-label="Payment state">
+                <span class="rwn-badge rwn-badge-info">{{ r.paymentState }}</span>
+              </td>
+              <td data-label="Settlement state">
+                <span class="rwn-badge rwn-badge-blue">{{ r.settlementState }}</span>
+              </td>
+              <td class="rwn-col-num rwn-amount" data-label="Gross">₹ {{ formatAmount(r.grossAmount) }}</td>
+              <td class="rwn-col-num" data-label="Fees + tax">₹ {{ formatAmount(r.feesAndTax) }}</td>
+              <td class="rwn-col-num rwn-amount" data-label="Net">₹ {{ formatAmount(r.netAmount) }}</td>
+              <td class="rwn-col-num" data-label="Variance">
+                <span [class]="varianceClass(r.variance)">
+                  {{ r.variance === 0 ? '—' : '₹ ' + formatAmount(r.variance) }}
+                </span>
+              </td>
+              <td data-label="Score">
+                <span class="rwn-score" [class]="scoreClass(r.suggestedMatchScore)">{{ r.suggestedMatchScore }}%</span>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="11" class="rwn-table-empty">No rows match this scope and filter. Reset filters to continue.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- OFF-CANVAS MATCH PANEL — slides in from right when selected -->
+  <!-- ============================================================ -->
+  @if (activeRow()) {
+    <div class="rwn-offcanvas-backdrop" (click)="selectRow(activeRow())"></div>
+    <aside class="rwn-offcanvas" aria-labelledby="rwn-offcanvas-title">
+      <div class="rwn-offcanvas-head">
+        <div>
+          <h2 id="rwn-offcanvas-title" class="rwn-offcanvas-title">Suggested match</h2>
+          <span class="rwn-offcanvas-ref mono">{{ activeRow() }}</span>
+        </div>
+        <button type="button" class="rwn-offcanvas-close" (click)="selectRow(activeRow())" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="rwn-offcanvas-body">
+        @if (suggestedCandidate(); as candidate) {
+        <dl class="rwn-kv">
+          <div>
+            <dt>Settlement line</dt>
+            <dd class="mono">{{ candidate.settlementLine }}</dd>
+          </div>
+          <div>
+            <dt>Bank reference</dt>
+            <dd class="mono">{{ candidate.bankReference }}</dd>
+          </div>
+          <div>
+            <dt>Gross amount</dt>
+            <dd class="rwn-amount">₹ {{ formatAmount(candidate.grossAmount) }}</dd>
+          </div>
+          <div>
+            <dt>Fees and tax</dt>
+            <dd>₹ {{ formatAmount(candidate.feesAndTax) }}</dd>
+          </div>
+          <div>
+            <dt>Net amount</dt>
+            <dd class="rwn-amount">₹ {{ formatAmount(candidate.netAmount) }}</dd>
+          </div>
+          <div>
+            <dt>Suggested match score</dt>
+            <dd>
+              <span class="rwn-score" [class]="scoreClass(candidate.score)">{{ candidate.score }}%</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Maker</dt>
+            <dd>{{ maker }}</dd>
+          </div>
+          <div>
+            <dt>Checker</dt>
+            <dd>{{ checker }}</dd>
+          </div>
+          <div>
+            <dt>Approval state</dt>
+            <dd><span class="rwn-badge rwn-badge-blue">{{ approvalState.icon }} {{ approvalState.label }}</span></dd>
+          </div>
+        </dl>
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Selected match</span>
+          <span class="rwn-select-wrap">
+            <select class="rwn-select" [ngModel]="selectedSettlementLine()" (ngModelChange)="selectedSettlementLine.set($event)" aria-label="Selected match">
+              <option [value]="candidate.settlementLine">{{ candidate.settlementLine }} (suggested)</option>
+              @for (line of manualMatchAlternatives(); track line.lineReference) {
+                <option [value]="line.lineReference">{{ line.lineReference }} (manual · ₹{{ formatAmount(line.net) }})</option>
+              } @empty {
+                <option value="" disabled>No other unclaimed settlement lines available</option>
+              }
+            </select>
+            <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+        }
+
+        <label class="rwn-field">
+          <span class="rwn-field-label">Split or group amount</span>
+          <input
+            type="number"
+            class="rwn-input"
+            [ngModel]="splitAmount()"
+            (ngModelChange)="splitAmount.set(toNumber($event))"
+            placeholder="0.00"
+            aria-label="Split or group amount"
+          />
+        </label>
+      </div>
+
+      <div class="rwn-offcanvas-footer">
+        <button type="button" class="btn btn-outline-primary btn-sm" [title]="manualMatchAllowed() ? 'Manual match' : matchOrSplitBlockedReason()" (click)="openManualMatch()" [class.disabled]="!manualMatchAllowed()" [attr.aria-disabled]="!manualMatchAllowed()">
+          Manual match
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" [title]="splitAllowed() ? 'Split' : matchOrSplitBlockedReason()" (click)="performSplit()" [class.disabled]="!splitAllowed()" [attr.aria-disabled]="!splitAllowed()">
+          Split
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" [title]="unmatchAllowed() ? 'Unmatch' : unmatchBlockedReason()" (click)="performUnmatch()" [class.disabled]="!unmatchAllowed()" [attr.aria-disabled]="!unmatchAllowed()">
+          Unmatch
+        </button>
+      </div>
+    </aside>
+  }
+
+  }
+
+  <!-- ============================================================ -->
+  <!-- MANUAL MATCH DIALOG                                         -->
+  <!-- ============================================================ -->
+  @if (manualMatchDialogOpen()) {
+    <div class="rwn-modal-backdrop" (click)="cancelManualMatch()">
+      <div class="rwn-modal" role="dialog" aria-modal="true" aria-labelledby="rwn-manual-title" (click)="$event.stopPropagation()">
+        <h2 id="rwn-manual-title" class="rwn-modal-title">Confirm Manual Match</h2>
+        <p class="rwn-modal-lead">Every decision has a reason and an actor. Record the meaningful reason for this match.</p>
+        <dl class="rwn-kv">
+          <div>
+            <dt>Payment</dt>
+            <dd class="mono">{{ activeRow() }}</dd>
+          </div>
+          <div>
+            <dt>Selected match</dt>
+            <dd class="mono">{{ selectedSettlementLine() }}</dd>
+          </div>
+          <div>
+            <dt>Consequence</dt>
+            <dd>Links payment to settlement line; maker-checker separation required</dd>
+          </div>
+        </dl>
+        <div class="rwn-field">
+          <label class="rwn-field-label" for="rwn-match-reason">Match reason <span class="rwn-conf">Confidential</span></label>
+          <textarea
+            id="rwn-match-reason"
+            class="rwn-input rwn-textarea"
+            rows="3"
+            [ngModel]="matchReason()"
+            (ngModelChange)="matchReason.set($event)"
+            [attr.maxlength]="matchReasonMax"
+            placeholder="Record the meaningful reason for this match…"
+          ></textarea>
+          <span class="rwn-field-hint" [class.rwn-field-error]="matchReasonCount() > 0 && !matchReasonValid()" role="status">
+            {{ matchReasonCount() }} / {{ matchReasonMax }} characters (minimum {{ matchReasonMin }})
+          </span>
+        </div>
+        <div class="rwn-modal-actions">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="cancelManualMatch()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmManualMatch()" [disabled]="!matchReasonValid()">Confirm match</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</main>

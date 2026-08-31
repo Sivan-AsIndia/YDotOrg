@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>906edf7a-8712-4e3f-8c23-7dd7b12f74b5</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Authorization handlers and IHttpContextAccessor live in the shared framework, so one
+      FrameworkReference replaces several package references and cannot drift from the runtime
+      version.
+
+      This replaces a PackageReference to Microsoft.AspNetCore.Http.Abstractions 2.3.12 - an
+      ASP.NET Core 2.x package on a net10.0 project. It resolved, which is why nobody noticed,
+      but it carries the 2.x IHeaderDictionary with no typed UserAgent accessor and no
+      AddHttpContextAccessor extension, so the modern APIs simply were not there.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Pinned to 10.0.10, matching IAM and DON. CAM was on 10.0.11: a version drift between three
+      services that share one PostgreSQL database and one provider is exactly the kind of
+      difference that produces a migration one service can apply and another cannot read.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
+    <!-- snake_case column names, matching IAM and DON in the shared database. -->
+    <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+
+    <!-- Options and UserSecrets come with the shared framework above, so referencing them
+         explicitly only produces NU1510. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YDots.CAM.Application\YDots.CAM.Application.csproj" />
+  </ItemGroup>
+
+</Project>

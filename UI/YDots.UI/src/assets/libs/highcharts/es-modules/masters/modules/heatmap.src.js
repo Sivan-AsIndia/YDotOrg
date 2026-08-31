@@ -1,0 +1,2 @@
+/*! For license information please see heatmap.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"./coloraxis.src.js";import"../../Series/Heatmap/HeatmapSeries.js";export default Highcharts;

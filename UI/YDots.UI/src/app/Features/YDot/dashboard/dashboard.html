@@ -1,0 +1,716 @@
+<main class="app-wrapper">
+    <div class="container-fluid">
+
+        <!-- User Welcome Card -->
+        @if (!loadingUser()) {
+        <div class="card mb-4 border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="avatar-lg rounded-3 bg-primary-subtle d-flex align-items-center justify-content-center">
+                        <span class="fw-bold text-primary fs-4">{{ getInitials(currentUser()?.displayName || currentUser()?.username || 'User') }}</span>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-1 fw-bold">Welcome back, {{ currentUser()?.displayName || currentUser()?.username || 'User' }}</h4>
+                        <p class="text-muted mb-0">
+                            <i class="ri-mail-line me-1"></i>{{ currentUser()?.email || 'user@ydot.org' }}
+                            <span class="mx-2">|</span>
+                            <i class="ri-shield-user-line me-1"></i>{{ userRole() || 'Member' }}
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                
+                        <button class="btn btn-outline-danger btn-sm" (click)="signOut()">
+                            <i class="ri-logout-box-line me-1"></i> Sign Out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        }
+
+        <!-- Existing Dashboard Content -->
+        <div class="row row-cols-xxl-5 row-cols-xl-3 row-cols-md-2 row-cols-1">
+                <div class="col">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon">
+                                        <i class="ri-hand-coin-line fs-3 text-primary"></i>
+                                    </div>
+                                    <a href="#!" class="fw-medium text-body fs-16">Donations</a>
+                                </div>
+                            </div>
+                            <!-- EVERY FIGURE BELOW BELONGS TO THIS ORGANISATION, read from the
+                                 payments and donor services. They were literals - the same
+                                 48.72 lakh and 1,240 donors in every organisation on the
+                                 platform, shown to charities that had taken nothing at all. -->
+                            <div class="text-center mb-3">
+                                <h5 class="mb-1">{{ donationTotal() ?? (figuresLoading() ? '—' : 'Not available') }}</h5>
+                                <p class="text-muted mb-0">Net collection</p>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="border-end">
+                                        <span class="text-muted">Donors</span>
+                                        <h6 class="mb-0 mt-1">{{ donorCount() ?? '—' }}</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Settled</span>
+                                    <h6 class="mb-0 mt-1">{{ settledShare() ?? '—' }}</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon">
+                                        <i class="ri-megaphone-line fs-3 text-success"></i>
+                                    </div>
+                                    <a href="#!" class="fw-medium text-body fs-16">Campaigns</a>
+                                </div>
+                            </div>
+                            <div class="text-center mb-3">
+                                <h5 class="mb-1">{{ activeCampaigns() ?? '—' }}</h5>
+                                <p class="text-muted mb-0">Active campaigns</p>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="border-end">
+                                        <span class="text-muted">Closed</span>
+                                        <h6 class="mb-0 mt-1">{{ closedCampaigns() ?? '—' }}</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">All campaigns</span>
+                                    <h6 class="mb-0 mt-1">{{ campaignTotal() ?? '—' }}</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon">
+                                        <i class="ri-group-line fs-3 text-info"></i>
+                                    </div>
+                                    <a href="#!" class="fw-medium text-body fs-16">Beneficiaries</a>
+                                </div>
+                            </div>
+                            <!-- NO SERVICE BEHIND THIS TILE YET. It read 24,582 eligible and
+                                 22,410 verified, identically in every organisation. A tile that
+                                 admits it has no figure is worth more than one that invents an
+                                 authoritative-looking number. -->
+                            <div class="text-center mb-3">
+                                <h5 class="mb-1 text-muted">—</h5>
+                                <p class="text-muted mb-0">Beneficiary reporting is not yet available</p>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-12">
+                                    <span class="text-muted small">No beneficiary service is connected to this platform.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon">
+                                        <i class="ri-archive-drawer-line fs-3 text-warning"></i>
+                                    </div>
+                                    <a href="#!" class="fw-medium text-body fs-16">Stock</a>
+                                </div>
+                            </div>
+                            <!-- NO SERVICE BEHIND THIS TILE YET, for the same reason as the one
+                                 beside it. -->
+                            <div class="text-center mb-3">
+                                <h5 class="mb-1 text-muted">—</h5>
+                                <p class="text-muted mb-0">Stock reporting is not yet available</p>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="border-end">
+                                        <span class="text-muted">Warehouses</span>
+                                        <h6 class="mb-0 mt-1">6</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Allocated</span>
+                                    <h6 class="mb-0 mt-1">1,208</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon">
+                                        <i class="ri-check-double-line fs-3 text-danger"></i>
+                                    </div>
+                                    <a href="#!" class="fw-medium text-body fs-16">Distributions</a>
+                                </div>
+                                <span class="badge bg-success-subtle text-success">+ 6.7%</span>
+                            </div>
+                            <div class="text-center mb-3">
+                                <h5 class="mb-1">2,914</h5>
+                                <p class="text-muted mb-0">Acknowledged</p>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="border-end">
+                                        <span class="text-muted">OTP Verified</span>
+                                        <h6 class="mb-0 mt-1">2,105</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Signed</span>
+                                    <h6 class="mb-0 mt-1">809</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xl-5 col-xxl-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title">Donations Growth</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-light dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Sort by
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#!">Today</a></li>
+                                    <li><a class="dropdown-item" href="#!">This Week</a></li>
+                                    <li><a class="dropdown-item" href="#!">This Month</a></li>
+                                    <li><a class="dropdown-item" href="#!">This Year</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="instagramFollowerChart" class="w-100"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card card-h-100">
+                        <div class="card-body text-center">
+                            <div class="d-flex flex-column justify-content-between h-100">
+                                <div class="avatar-lg rounded-2 avatar-title bg-transparent shadow-sm shadow social-icon mx-auto mb-3">
+                                    <i class="ri-trophy-line fs-3 text-warning"></i>
+                                </div>
+                                    <h6 class="mb-2 fs-17">Top Donor of the Month</h6>
+                                    <p class="text-muted mb-4">Rahul Verma donated ₹50,000 to the Education Support Program this month.</p>
+                                    <div class="d-flex align-items-center justify-content-center gap-2 mb-3">
+                                        <img src="assets/images/avatar/avatar-1.jpg" class="rounded-circle" width="40" height="40" alt="Rahul Verma">
+                                        <div class="text-start">
+                                            <h6 class="mb-0 fw-semibold fs-14">Rahul Verma</h6>
+                                            <small class="text-muted">Top Donor</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary">View Donor</button>
+                            
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-4 col-xxl-3">
+                    <div class="card bg-black text-white border-0">
+                        <div class="card-body">
+                            <span class="badge bg-success float-end">5.1%</span>
+                            <h6 class="fs-18 mb-5 text-white">Blind-Stick Campaign</h6>
+                            <p class="mb-8 text-opacity-50">
+                                Our latest Blind-Stick Distribution Drive focuses on empowering visually impaired individuals across Maharashtra.
+                            </p>
+                            <div class="row text-center mb-6">
+                                <div class="col-6">
+                                    <div class="border-end border-opacity-50 border-light">
+                                        <h5 class="mb-1 text-white fw-medium">1,208</h5>
+                                        <span class="text-opacity-50">Sticks</span>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <h5 class="mb-1 text-white fw-medium">92%</h5>
+                                    <span class="text-opacity-50">Distributed</span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center flex-wrap gap-6">
+                                <div class="avatar-group">
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-1.jpg" alt="avatar image">
+                                    </div>
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-2.jpg" alt="avatar image">
+                                    </div>
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-3.jpg" alt="avatar image">
+                                    </div>
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-4.jpg" alt="avatar image">
+                                    </div>
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-5.jpg" alt="avatar image">
+                                    </div>
+                                    <div class="avatar-item border-black d-none d-md-block">
+                                        <img class="img-fluid avatar-md" src="assets/images/avatar/avatar-6.jpg" alt="avatar image">
+                                    </div>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1 fw-medium text-white">+ 1,208</h6>
+                                    <p class="mb-0 text-opacity-50">Sticks Distributed</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div dir="ltr" class="swiper social-performance-carousel">
+                        <div class="swiper-wrapper">
+                            <div class="swiper-slide">
+                                <div class="card scial-card">
+                                    <div class="card-body">
+                                        <a href="#!" class="fw-medium text-body d-block">Top Campaign - Blind-Stick</a>
+                                        <p class="text-muted mb-0 text-truncate">"Empowering independence with every blind stick distributed!"</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="swiper-slide">
+                                <div class="card scial-card">
+                                    <div class="card-body">
+                                        <a href="#!" class="fw-medium text-body d-block">Top Story - Education Drive</a>
+                                        <p class="text-muted mb-0 text-truncate">"Behind the scenes of our new education support program."</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="swiper-slide">
+                                <div class="card scial-card">
+                                    <div class="card-body">
+                                        <a href="#!" class="fw-medium text-body d-block">Top Update - Healthcare Aid</a>
+                                        <p class="text-muted mb-0 text-truncate">"AI tools are transforming NGO outreach strategy."</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-5 col-xxl-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title">Recent Activities</h5>
+                            <a href="apps-social-activities" class="text-muted">See all<i class="uil uil-angle-right-b"></i></a>
+                        </div>
+                        <div class="card-body">
+                            <div class="px-5 mx-n5" data-simplebar style="max-height: 355px;">
+                                <div class="px-4 py-3 border border-dashed rounded-2 mb-3">
+                                     <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-5.jpg" class="rounded-circle" width="40" height="40" alt="Priya Nair">
+                                        </div>
+                                        <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Priya Nair</a>
+                                            <p class="text-muted mb-0">Approved the Blind-Stick Distribution Drive</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">08:15 am</h6>
+                                            <small class="text-muted">2 mins ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-3 border border-dashed rounded-2 mb-3">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-1.jpg" class="rounded-circle" width="40" height="40" alt="Sophie Bennett">
+                                        </div>
+                                         <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Sophie Bennett</a>
+                                            <p class="text-muted mb-0">Submitted a new beneficiary onboarding request</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">09:22 am</h6>
+                                            <small class="text-muted">10 mins ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-3 border border-dashed rounded-2 mb-3">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-2.jpg" class="rounded-circle" width="40" height="40" alt="Rahul Verma">
+                                        </div>
+                                        <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Rahul Verma</a>
+                                            <p class="text-muted mb-0">Donated ₹50,000 to the Education Support Program</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">10:03 am</h6>
+                                            <small class="text-muted">18 mins ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-3 border border-dashed rounded-2 mb-3">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-4.jpg" class="rounded-circle" width="40" height="40" alt="Michael Brown">
+                                        </div>
+                                        <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Michael Brown</a>
+                                            <p class="text-muted mb-0">Updated stock allocation for Maharashtra warehouse</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">10:45 am</h6>
+                                            <small class="text-muted">30 mins ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-3 border border-dashed rounded-2 mb-3">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-7.jpg" class="rounded-circle" width="40" height="40" alt="Ava Martinez">
+                                        </div>
+                                         <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Ava Martinez</a>
+                                            <p class="text-muted mb-0">Confirmed distribution acknowledgement via OTP</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">11:10 am</h6>
+                                            <small class="text-muted">45 mins ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-4 py-3 border border-dashed rounded-2">
+                                     <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="flex-shrink-0">
+                                            <img src="assets/images/avatar/avatar-6.jpg" class="rounded-circle" width="40" height="40" alt="Liam Carter">
+                                        </div>
+                                        <div class="order-3 order-md-2">
+                                            <a href="#!" class="mb-1 text-body fw-medium d-block">Liam Carter</a>
+                                            <p class="text-muted mb-0">Raised an exception for reconciliation mismatch</p>
+                                        </div>
+                                        <div class="text-end ms-auto float-end order-2 order-md-3">
+                                            <h6 class="mb-0 small">11:45 am</h6>
+                                            <small class="text-muted">1 hour ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-7 col-xxl-5">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="px-5 pt-5">
+                                        <div class="dropdown float-end">
+                                            <a href="#!" class="fs-16 text-body" data-bs-toggle="dropdown" title="More"><i class="ri-more-2-fill"></i></a>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#">View Donation Analytics</a></li>
+                                                <li><a class="dropdown-item" href="#">Download Report</a></li>
+                                                <li><a class="dropdown-item" href="#">Compare to Last Month</a></li>
+                                                <li><a class="dropdown-item text-danger" href="#">Remove Widget</a></li>
+                                            </ul>
+                                        </div>
+                                        <h4 class="mb-2">₹48.72 L <small class="text-success fw-medium fs-14">+ 5.1%</small></h4>
+                                        <p class="mb-0 text-muted">Total Donations</p>
+                                    </div>
+                                    <div id="spark1"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="px-5 pt-5">
+                                        <div class="dropdown float-end">
+                                            <a href="#!" class="fs-16 text-body" data-bs-toggle="dropdown" title="More"><i class="ri-more-2-fill"></i></a>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#">View Expense Details</a></li>
+                                                <li><a class="dropdown-item" href="#">Download Summary</a></li>
+                                                <li><a class="dropdown-item" href="#">Monthly Breakdown</a></li>
+                                                <li><a class="dropdown-item text-danger" href="#">Remove Widget</a></li>
+                                            </ul>
+                                        </div>
+                                        <h4 class="mb-2">₹18.35 L <small class="text-danger fw-medium fs-14">- 2.3%</small></h4>
+                                        <p class="mb-0 text-muted">Total Expenses</p>
+                                    </div>
+                                    <div id="spark2"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="px-5 pt-5">
+                                        <div class="dropdown float-end">
+                                            <a href="#!" class="fs-16 text-body" data-bs-toggle="dropdown" title="More"><i class="ri-more-2-fill"></i></a>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#">Fund Summary</a></li>
+                                                <li><a class="dropdown-item" href="#">Download Report</a></li>
+                                                <li><a class="dropdown-item" href="#">Compare Q/Q</a></li>
+                                                <li><a class="dropdown-item text-danger" href="#">Remove Widget</a></li>
+                                            </ul>
+                                        </div>
+                                        <h4 class="mb-2">₹30.37 L <small class="text-success fw-medium fs-14">+ 8.7%</small></h4>
+                                        <p class="mb-0 text-muted">Net Funds</p>
+                                    </div>
+                                    <div id="spark3"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="px-5 pt-5">
+                                        <div class="dropdown float-end">
+                                            <a href="#!" class="fs-16 text-body" data-bs-toggle="dropdown" title="More"><i class="ri-more-2-fill"></i></a>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#">View Monthly Trends</a></li>
+                                                <li><a class="dropdown-item" href="#">Export as PDF</a></li>
+                                                <li><a class="dropdown-item" href="#">Compare YTD</a></li>
+                                                <li><a class="dropdown-item text-danger" href="#">Remove Widget</a></li>
+                                            </ul>
+                                        </div>
+                                        <h4 class="mb-2">₹12.96 L <small class="text-success fw-medium fs-14">+ 4.2%</small></h4>
+                                        <p class="mb-0 text-muted">Monthly Collections</p>
+                                    </div>
+                                    <div id="spark4"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-xxl-3">
+                    <div class="card card-h-100">
+                        <div class="card-header">
+                            <h5 class="card-title">Campaign Traffic</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-light dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">Monthly</button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#!">Weekly</a></li>
+                                    <li><a class="dropdown-item" href="#!">Monthly</a></li>
+                                    <li><a class="dropdown-item" href="#!">Yearly</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="platformTraffic" class="highchart mb-8 mt-4"></div>
+                            <div class="d-flex align-items-center justify-content-center gap-5 flex-wrap">
+                                <a href="#!" class="rotate-hover text-body fs-16 fw-medium d-flex align-items-center gap-1">
+                                    <i class="ri-loader-3-line text-primary lh-1 fs-5"></i>Blind-Stick
+                                </a>
+                                <a href="#!" class="rotate-hover text-body fs-16 fw-medium d-flex align-items-center gap-1">
+                                    <i class="ri-loader-3-line text-secondary lh-1 fs-5"></i>Education
+                                </a>
+                                <a href="#!" class="rotate-hover text-body fs-16 fw-medium d-flex align-items-center gap-1">
+                                    <i class="ri-loader-3-line text-success lh-1 fs-5"></i>Healthcare
+                                </a>
+                                <a href="#!" class="rotate-hover text-body fs-16 fw-medium d-flex align-items-center gap-1">
+                                    <i class="ri-loader-3-line text-info lh-1 fs-5"></i>Women Emp.
+                                </a>
+                                <a href="#!" class="rotate-hover text-body fs-16 fw-medium d-flex align-items-center gap-1">
+                                    <i class="ri-loader-3-line text-warning lh-1 fs-5"></i>Livelihood
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-8 col-xxl-5">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title">Beneficiaries by State</h5>
+                            <div class="dropdown float-end">
+                                <a href="#!" class="fs-16 text-body" data-bs-toggle="dropdown" title="More">
+                                    <i class="ri-more-2-fill"></i>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#">View Details</a></li>
+                                    <li><a class="dropdown-item" href="#">Export</a></li>
+                                    <li><a class="dropdown-item" href="#">Compare</a></li>
+                                    <li><a class="dropdown-item text-danger" href="#">Remove</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="world-map" class="min-h-300px"></div>
+                            <div class="d-flex flex-wrap row-gap-6">
+                                <div class="d-flex align-items-center gap-2 country-item px-md-4">
+                                    <img src="assets/images/circle-flag/in.svg" alt="Maharashtra" class="img-fluid avatar-md">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <a href="#!" class="text-body fw-medium">Maharashtra</a>
+                                            <span class="text-muted">8.2k</span>
+                                        </div>
+                                        <div class="progress progress-xs" role="progressbar" aria-label="Maharashtra" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar" style="width: 25%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 country-item px-md-4">
+                                    <img src="assets/images/circle-flag/in.svg" alt="Tamil Nadu" class="img-fluid avatar-md">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <a href="#!" class="text-body fw-medium">Tamil Nadu</a>
+                                            <span class="text-muted">6.4k</span>
+                                        </div>
+                                        <div class="progress progress-xs" role="progressbar" aria-label="Tamil Nadu" aria-valuenow="35" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar" style="width: 35%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 country-item px-md-4">
+                                    <img src="assets/images/circle-flag/in.svg" alt="Karnataka" class="img-fluid avatar-md">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <a href="#!" class="text-body fw-medium">Karnataka</a>
+                                            <span class="text-muted">5.8k</span>
+                                        </div>
+                                        <div class="progress progress-xs" role="progressbar" aria-label="Karnataka" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar" style="width: 20%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 country-item px-md-4">
+                                    <img src="assets/images/circle-flag/in.svg" alt="Kerala" class="img-fluid avatar-md">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <a href="#!" class="text-body fw-medium">Kerala</a>
+                                            <span class="text-muted">4.2k</span>
+                                        </div>
+                                        <div class="progress progress-xs" role="progressbar" aria-label="Kerala" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar" style="width: 40%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xxl-7">
+                    <div class="card card-h-100">
+                        <div class="card-header">
+                            <h5 class="card-title">Daily Donation Growth</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-light dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">Weekly</button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#!">Weekly</a></li>
+                                    <li><a class="dropdown-item" href="#!">Monthly</a></li>
+                                    <li><a class="dropdown-item" href="#!">Yearly</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-borderless text-nowrap align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Donation ID</th>
+                                            <th>Donor</th>
+                                            <th>Amount</th>
+                                            <th>Campaign</th>
+                                            <th>Growth %</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>#DON1023</td>
+                                            <td>
+                                                <a href="#!" class="text-body d-flex align-items-center gap-3">
+                                                    <img src="assets/images/avatar/avatar-1.jpg" alt="Rahul Verma" class="avatar avatar-md rounded-circle">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-semibold">Rahul Verma</h6>
+                                                        <small class="text-muted">rahul.verma@gmail.com</small>
+                                                    </div>
+                                                </a>
+                                            </td>
+                                            <td>₹50,000</td>
+                                            <td>Education Support</td>
+                                            <td><span class="text-success">+1.8%</span></td>
+                                            <td>29 Jul 2026</td>
+                                        </tr>
+                                        <tr>
+                                            <td>#DON2045</td>
+                                            <td>
+                                                <a href="#!" class="text-body d-flex align-items-center gap-3">
+                                                    <img src="assets/images/avatar/avatar-2.jpg" alt="Anita Desai" class="avatar avatar-md rounded-circle">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-semibold">Anita Desai</h6>
+                                                        <small class="text-muted">anita.desai@outlook.com</small>
+                                                    </div>
+                                                </a>
+                                            </td>
+                                            <td>₹35,000</td>
+                                            <td>Blind-Stick Drive</td>
+                                            <td><span class="text-success">+2.1%</span></td>
+                                            <td>29 Jul 2026</td>
+                                        </tr>
+                                        <tr>
+                                            <td>#DON4089</td>
+                                            <td>
+                                                <a href="#!" class="text-body d-flex align-items-center gap-3">
+                                                    <img src="assets/images/avatar/avatar-3.jpg" alt="Vikram Singh" class="avatar avatar-md rounded-circle">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-semibold">Vikram Singh</h6>
+                                                        <small class="text-muted">vikram.singh@yahoo.com</small>
+                                                    </div>
+                                                </a>
+                                            </td>
+                                            <td>₹25,000</td>
+                                            <td>Healthcare Aid</td>
+                                            <td><span class="text-success">+1.6%</span></td>
+                                            <td>29 Jul 2026</td>
+                                        </tr>
+                                        <tr>
+                                            <td>#DON5090</td>
+                                            <td>
+                                                <a href="#!" class="text-body d-flex align-items-center gap-3">
+                                                    <img src="assets/images/avatar/avatar-4.jpg" alt="Meera Krishnan" class="avatar avatar-md rounded-circle">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-semibold">Meera Krishnan</h6>
+                                                        <small class="text-muted">meera.krishnan@gmail.com</small>
+                                                    </div>
+                                                </a>
+                                            </td>
+                                            <td>₹20,000</td>
+                                            <td>Women Empowerment</td>
+                                            <td><span class="text-success">+2.5%</span></td>
+                                            <td>29 Jul 2026</td>
+                                        </tr>
+                                        <tr>
+                                            <td>#DON6122</td>
+                                            <td>
+                                                <a href="#!" class="text-body d-flex align-items-center gap-3">
+                                                    <img src="assets/images/avatar/avatar-5.jpg" alt="Arjun Patel" class="avatar avatar-md rounded-circle">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-semibold">Arjun Patel</h6>
+                                                        <small class="text-muted">arjun.patel@outlook.com</small>
+                                                    </div>
+                                                </a>
+                                            </td>
+                                            <td>₹15,000</td>
+                                            <td>Livelihood Program</td>
+                                            <td><span class="text-success">+1.0%</span></td>
+                                            <td>29 Jul 2026</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>

@@ -1,0 +1,243 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+
+  <div class="org-header">
+    <div>
+      <h1 class="org-title">
+        <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+        Organisations
+      </h1>
+      <p class="org-subtitle">
+        Every organisation on the platform, and where each one has reached in onboarding.
+      </p>
+    </div>
+    <div class="org-header-actions">
+      <a routerLink="/app/administration/organisation/setup-wizard"
+         class="org-btn org-btn-primary org-btn-sm">
+        <i class="ri-add-line"></i> Create organisation
+      </a>
+    </div>
+  </div>
+
+  <!-- Counters. Loaded separately, so a failure here never hides the table below. -->
+  @if (statistics(); as stats) {
+    <div class="org-stat-grid">
+      <div class="org-stat-card">
+        <div class="org-stat-icon"><i class="ri-building-4-line"></i></div>
+        <p class="org-stat-label">Total</p>
+        <p class="org-stat-value">{{ stats.total ?? 0 }}</p>
+      </div>
+      <div class="org-stat-card is-accent">
+        <div class="org-stat-icon"><i class="ri-checkbox-circle-line"></i></div>
+        <p class="org-stat-label">Active</p>
+        <p class="org-stat-value">{{ stats.active ?? 0 }}</p>
+      </div>
+      <button type="button" class="org-stat-card is-warn" (click)="toggleAwaitingReview()">
+        <div class="org-stat-icon"><i class="ri-time-line"></i></div>
+        <p class="org-stat-label">Awaiting review</p>
+        <p class="org-stat-value">{{ stats.awaitingReview ?? 0 }}</p>
+      </button>
+      <div class="org-stat-card is-info">
+        <div class="org-stat-icon"><i class="ri-draft-line"></i></div>
+        <p class="org-stat-label">Onboarding</p>
+        <p class="org-stat-value">{{ stats.onboarding ?? 0 }}</p>
+      </div>
+      <div class="org-stat-card is-error">
+        <div class="org-stat-icon"><i class="ri-forbid-2-line"></i></div>
+        <p class="org-stat-label">Suspended</p>
+        <p class="org-stat-value">{{ stats.suspended ?? 0 }}</p>
+      </div>
+    </div>
+  }
+
+  <section class="org-doc-section">
+    <h3 class="org-doc-heading org-doc-heading--blue">Filters</h3>
+    <div class="org-grid org-grid-4">
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label" for="org-search">Search</label>
+        <input id="org-search" type="text" class="org-input"
+               placeholder="Name, code, subdomain or administrator"
+               [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)">
+      </div>
+
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label" for="org-status">Status</label>
+        <select id="org-status" class="org-select"
+                [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
+          <option value="">All statuses</option>
+          @for (option of statusOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label" for="org-awaiting">On my desk</label>
+        <div class="org-check-row">
+          <input id="org-awaiting" type="checkbox"
+                 [checked]="awaitingReviewOnly()" (change)="toggleAwaitingReview()">
+          <label for="org-awaiting">Awaiting my review only</label>
+        </div>
+      </div>
+
+      <div class="org-field" style="margin-bottom:0;">
+        <label class="org-field-label" for="org-page-size">Rows per page</label>
+        <select id="org-page-size" class="org-select"
+                [ngModel]="pageSize()"
+                (ngModelChange)="pageSize.set(+$event); goToPage(1); load()">
+          <option [value]="10">10</option>
+          <option [value]="25">25</option>
+          <option [value]="50">50</option>
+        </select>
+      </div>
+    </div>
+
+    @if (hasActiveFilters()) {
+      <button type="button" class="org-btn org-btn-ghost org-btn-sm" style="margin-top:16px;"
+              (click)="clearFilters()">
+        <i class="ri-close-line"></i> Clear filters
+      </button>
+    }
+  </section>
+
+  @if (loading()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-loader-4-line"></i></div>
+      <h3 class="org-empty-title">Loading organisations…</h3>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-cloud-off-line"></i></div>
+      <h3 class="org-empty-title">The organisations could not be loaded</h3>
+      <p class="org-empty-body">{{ errorMessage() }}</p>
+      <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="load()">
+        <i class="ri-refresh-line"></i> Try again
+      </button>
+    </div>
+  } @else if (organisations().length === 0) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-building-4-line"></i></div>
+      <h3 class="org-empty-title">No organisations found</h3>
+      <p class="org-empty-body">
+        @if (hasActiveFilters()) {
+          Nothing matches those filters.
+        } @else {
+          Create the first organisation to get started.
+        }
+      </p>
+      @if (hasActiveFilters()) {
+        <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="clearFilters()">
+          Clear filters
+        </button>
+      } @else {
+        <a routerLink="/app/administration/organisation/setup-wizard"
+           class="org-btn org-btn-primary org-btn-sm">Create organisation</a>
+      }
+    </div>
+  } @else {
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--good">
+        {{ totalCount() }} organisation{{ totalCount() === 1 ? '' : 's' }}
+      </h3>
+
+      <div class="org-table-scroll">
+        <table class="org-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Web address</th>
+              <th>Administrator</th>
+              <th>People</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (org of organisations(); track trackById($index, org)) {
+              <tr>
+                <td>
+                  <button type="button" class="org-name-link" (click)="view(org.id!)">
+                    {{ org.name }}
+                  </button>
+                  <span class="org-code">{{ org.code }}</span>
+                </td>
+                <td><span class="org-code">{{ org.hostName }}</span></td>
+                <td>{{ org.adminEmail || '—' }}</td>
+                <td>{{ org.userCount ?? 0 }}</td>
+                <td>
+                  <span class="org-badge" [ngClass]="statusClass(org.status)">
+                    {{ org.statusDisplay || org.status }}
+                  </span>
+                  @if (org.isAwaitingReview) {
+                    <span class="org-badge is-warn">Needs review</span>
+                  }
+                </td>
+                <td>{{ org.createdAtUtc | date: 'mediumDate' }}</td>
+                <td class="text-end">
+                  <div class="org-row-actions">
+                    <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                            (click)="view(org.id!)">
+                      <i class="ri-eye-line"></i> View
+                    </button>
+
+                    @if (org.isAwaitingReview) {
+                      <button type="button" class="org-btn org-btn-primary org-btn-sm"
+                              (click)="review(org.id!)">
+                        <i class="ri-shield-check-line"></i> Review
+                      </button>
+                    }
+
+                    @if (awaitingInvitation(org)) {
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                              (click)="resendInvitation(org)">
+                        <i class="ri-mail-send-line"></i> Re-send invitation
+                      </button>
+                    }
+
+                    <!--
+                      Stepping into an Organisation re-issues the token against it. The root
+                      user's own record is untouched — selecting is an operating context, not
+                      ownership.
+                    -->
+                    @if (isSuperAdmin()) {
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                              [disabled]="switching() === org.id"
+                              (click)="enter(org)">
+                        @if (switching() === org.id) {
+                          <i class="ri-loader-4-line"></i> Switching…
+                        } @else {
+                          <i class="ri-login-box-line"></i> Work inside
+                        }
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (totalPages() > 1) {
+        <div class="org-pager">
+          <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                  [disabled]="page() === 1" (click)="goToPage(page() - 1)">
+            <i class="ri-arrow-left-s-line"></i> Previous
+          </button>
+
+          <span class="org-pager-label">Page {{ page() }} of {{ totalPages() }}</span>
+
+          <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                  [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">
+            Next <i class="ri-arrow-right-s-line"></i>
+          </button>
+        </div>
+      }
+    </section>
+  }
+
+</div>
+</div>
+</main>

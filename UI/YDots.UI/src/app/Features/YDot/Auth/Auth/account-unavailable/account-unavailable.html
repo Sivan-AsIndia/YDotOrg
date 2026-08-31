@@ -1,0 +1,141 @@
+<!--
+  IAM-AUTH-06 — Account unavailable.
+
+  Reached only after a correct password, which is why it is safe to name the reason here.
+  The page leads with what happened, then with the one action most likely to fix it.
+-->
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-10 px-4 auth-bg">
+  <div class="unavailable-card bg-white rounded-4 shadow border w-100">
+
+    <div class="text-center px-6 pt-8 pb-2">
+      <a routerLink="/auth/sign-in" class="d-inline-flex align-items-center gap-2 mb-6 text-decoration-none">
+        <img alt="YDot" src="assets/images/Outline ydot logo 2.svg" style="width: 44px;">
+        <span class="h5 mb-0 fw-semibold text-body">YDot</span>
+      </a>
+    </div>
+
+    <div class="px-6 pb-8">
+
+      @if (loading()) {
+        <div class="text-center py-6">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      } @else {
+
+        <!-- ===== What happened ===== -->
+        <div class="text-center mb-4">
+          <div class="status-icon mx-auto mb-3"><i [class]="icon()"></i></div>
+          <span class="badge rounded-pill px-3 py-2 mb-3" [class]="badgeClass()">{{ category() }}</span>
+          <h5 class="mb-2">We cannot sign you in right now</h5>
+          <p class="text-muted mb-0">{{ guidance() }}</p>
+        </div>
+
+        @if (nextEligibleAt()) {
+          <div class="alert alert-light border small d-flex align-items-center gap-2 mb-4">
+            <i class="ri-time-line"></i>
+            <span>You can try again after <strong>{{ nextEligibleAt() | date: 'medium' }}</strong>.</span>
+          </div>
+        }
+
+        @if (errorMessage()) {
+          <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+          </div>
+        }
+
+        @if (successMessage()) {
+          <div class="alert alert-success d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="ri-mail-check-line mt-1"></i><span>{{ successMessage() }}</span>
+          </div>
+        }
+
+        <!-- ===================================================================================
+             Start account recovery — the main way back in for a suspended account
+             =================================================================================== -->
+        @if (canStartRecovery() && !recoveryStarted()) {
+          <div class="action-panel rounded-3 border p-4 mb-3">
+            <div class="d-flex align-items-start gap-3 mb-3">
+              <span class="action-icon flex-shrink-0"><i class="ri-shield-keyhole-line"></i></span>
+              <div>
+                <div class="fw-semibold">Start account recovery</div>
+                <small class="text-muted">
+                  We will e-mail you a secure link. Opening it restores your access and lets you
+                  set a new password in the same step.
+                </small>
+              </div>
+            </div>
+
+            <label class="form-label small" for="recoveryIdentifier">E-mail address or username</label>
+            <input
+              id="recoveryIdentifier"
+              type="text"
+              class="form-control mb-3"
+              autocomplete="username"
+              placeholder="you@example.com"
+              [value]="emailOrUsername()"
+              (input)="onIdentifierInput($any($event.target).value)"
+              [disabled]="submitting()">
+
+            <button type="button" class="btn btn-primary w-100" [disabled]="submitting()" (click)="startRecovery()">
+              {{ submitting() ? 'Sending…' : 'Start account recovery' }}
+            </button>
+          </div>
+        }
+
+        <!-- ===================================================================================
+             Support reference — always available, and always safe to quote
+             =================================================================================== -->
+        <div class="reference-panel rounded-3 border p-3 mb-3 d-flex align-items-center justify-content-between gap-3">
+          <div class="min-w-0">
+            <div class="small text-muted">Support reference</div>
+            <code class="reference-code d-block text-truncate">{{ supportReference() }}</code>
+          </div>
+          <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="copyReference()">
+            <i class="ri-file-copy-line me-1"></i>{{ copied() === 'reference' ? 'Copied' : 'Copy' }}
+          </button>
+        </div>
+
+        <p class="small text-muted mb-3">
+          The reference identifies this sign-in attempt in our logs. It contains nothing personal,
+          so it is safe to share with the service desk.
+        </p>
+
+        <!-- ===================================================================================
+             Contact support
+             =================================================================================== -->
+        @if (!showSupportForm() && !supportSent()) {
+          <button type="button" class="btn btn-outline-secondary w-100 mb-2" (click)="openSupportForm()">
+            <i class="ri-customer-service-2-line me-1"></i> Contact the service desk
+          </button>
+        }
+
+        @if (showSupportForm() && !supportSent()) {
+          <div class="action-panel rounded-3 border p-4 mb-3">
+            <div class="fw-semibold mb-2">Tell the service desk what happened</div>
+
+            <textarea
+              class="form-control mb-3"
+              rows="4"
+              placeholder="Describe what you were trying to do and what you saw."
+              [value]="supportMessage()"
+              (input)="supportMessage.set($any($event.target).value)"></textarea>
+
+            <label class="form-label small" for="contactEmail">Where should we reply? (optional)</label>
+            <input id="contactEmail" type="email" class="form-control mb-3" placeholder="you@example.com"
+                   [value]="contactEmail()"
+                   (input)="contactEmail.set($any($event.target).value)">
+
+            <button type="button" class="btn btn-primary w-100" [disabled]="!canSubmitSupport()" (click)="submitSupportRequest()">
+              {{ submitting() ? 'Sending…' : 'Send request' }}
+            </button>
+          </div>
+        }
+
+        <button type="button" class="btn btn-link w-100" (click)="returnToSignIn()">
+          Return to sign in
+        </button>
+      }
+
+    </div>
+  </div>
+</div>

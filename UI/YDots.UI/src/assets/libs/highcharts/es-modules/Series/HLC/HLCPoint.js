@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{column:{prototype:{pointClass:ColumnPoint}}}=SeriesRegistry.seriesTypes;class HLCPoint extends ColumnPoint{}export default HLCPoint;

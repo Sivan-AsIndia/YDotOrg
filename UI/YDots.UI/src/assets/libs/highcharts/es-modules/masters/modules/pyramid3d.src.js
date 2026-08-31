@@ -1,0 +1,2 @@
+/*! For license information please see pyramid3d.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Pyramid3D/Pyramid3DSeries.js";export default Highcharts;

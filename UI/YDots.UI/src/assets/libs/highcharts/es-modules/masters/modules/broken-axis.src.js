@@ -1,0 +1,2 @@
+/*! For license information please see broken-axis.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import BrokenAxis from"../../Core/Axis/BrokenAxis.js";const G=Highcharts;G.BrokenAxis=G.BrokenAxis||BrokenAxis,G.BrokenAxis.compose(G.Axis,G.Series);export default Highcharts;

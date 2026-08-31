@@ -1,0 +1,161 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid py-6">
+
+    <div class="mb-6">
+      <h4 class="mb-1"><i class="ri-global-line me-2"></i>Platform</h4>
+      <p class="text-muted mb-0">
+        The root of the whole system. Every organisation is a subdomain beneath it.
+      </p>
+    </div>
+
+    @if (loading()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-loader-4-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3 mb-0">Loading…</p>
+        </div>
+      </div>
+    } @else if (loadFailed()) {
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-8">
+          <i class="ri-cloud-off-line fs-2 text-muted"></i>
+          <p class="text-muted mt-3">{{ errorMessage() }}</p>
+          <button type="button" class="btn btn-primary" (click)="load()">
+            <i class="ri-refresh-line me-1"></i> Try again
+          </button>
+        </div>
+      </div>
+    } @else if (businessUnit(); as unit) {
+
+      <div class="row g-6">
+        <div class="col-lg-7">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">{{ unit.name }}</h6>
+              <span class="badge" [ngClass]="statusClass(unit.status)">{{ unit.status }}</span>
+            </div>
+
+            <div class="card-body">
+              <dl class="row mb-0">
+                <dt class="col-sm-4 text-muted fw-normal small">Reference</dt>
+                <dd class="col-sm-8"><code>{{ unit.code }}</code></dd>
+
+                <dt class="col-sm-4 text-muted fw-normal small">Registered legal name</dt>
+                <dd class="col-sm-8">{{ unit.legalName || '—' }}</dd>
+
+                <dt class="col-sm-4 text-muted fw-normal small">Root domain</dt>
+                <dd class="col-sm-8">
+                  <code>{{ unit.rootDomain }}</code>
+                  <!--
+                    Read-only for a reason worth naming: every organisation's web address is a
+                    subdomain of this, so changing it would invalidate all of them at once. That
+                    is a migration, not a form field.
+                  -->
+                  <small class="text-muted d-block mt-1">
+                    Every organisation sits beneath this, so it cannot be changed here.
+                  </small>
+                </dd>
+
+                <dt class="col-sm-4 text-muted fw-normal small">Contact</dt>
+                <dd class="col-sm-8">{{ unit.contactEmail || '—' }}</dd>
+
+                <dt class="col-sm-4 text-muted fw-normal small">Support</dt>
+                <dd class="col-sm-8">{{ unit.supportEmail || '—' }}</dd>
+
+                <dt class="col-sm-4 text-muted fw-normal small">Defaults</dt>
+                <dd class="col-sm-8">
+                  {{ unit.timeZone }} · {{ unit.defaultCurrency }} · {{ unit.defaultCulture }}
+                </dd>
+
+                @if (unit.description) {
+                  <dt class="col-sm-4 text-muted fw-normal small">About</dt>
+                  <dd class="col-sm-8 mb-0">{{ unit.description }}</dd>
+                }
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <div class="card border-0 shadow-sm mb-6">
+            <div class="card-header">
+              <h6 class="mb-0">Organisations</h6>
+            </div>
+            <div class="card-body">
+              <div class="d-flex align-items-baseline gap-2 mb-3">
+                <span class="display-6 mb-0">{{ organisationCount() }}</span>
+                @if (maximumOrganisations()) {
+                  <span class="text-muted">of {{ maximumOrganisations() }}</span>
+                }
+              </div>
+
+              @if (maximumOrganisations()) {
+                <!--
+                  Shown as a proportion, because "180 of 200" only means something once somebody
+                  has done the division — and the point is to notice before the ceiling is
+                  reached rather than after.
+                -->
+                <div class="progress" style="height: 8px;">
+                  <div class="progress-bar" [ngClass]="capacityClass()"
+                       [style.width.%]="capacityPercent()"
+                       role="progressbar"
+                       [attr.aria-valuenow]="capacityPercent()"
+                       aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <small class="text-muted d-block mt-2">
+                  {{ capacityPercent() }}% of the platform's capacity is in use.
+                </small>
+              }
+
+              <a routerLink="/app/administration/organisation/directory"
+                 class="btn btn-sm btn-outline-secondary mt-4">
+                <i class="ri-list-check me-1"></i> See all organisations
+              </a>
+            </div>
+          </div>
+
+          @if (statistics(); as stats) {
+            <div class="card border-0 shadow-sm">
+              <div class="card-header">
+                <h6 class="mb-0">Where they are in onboarding</h6>
+              </div>
+              <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Active</span>
+                  <span class="badge bg-success-subtle text-success">{{ stats.active ?? 0 }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Awaiting review</span>
+                  <span class="badge bg-warning-subtle text-warning">
+                    {{ stats.awaitingReview ?? 0 }}
+                  </span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Still onboarding</span>
+                  <span class="badge bg-info-subtle text-info">{{ stats.onboarding ?? 0 }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Rejected</span>
+                  <span class="badge bg-danger-subtle text-danger">{{ stats.rejected ?? 0 }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Suspended</span>
+                  <span class="badge bg-danger-subtle text-danger">{{ stats.suspended ?? 0 }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Archived</span>
+                  <span class="badge bg-secondary-subtle text-secondary">
+                    {{ stats.archived ?? 0 }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+  </div>
+</div>
+</main>

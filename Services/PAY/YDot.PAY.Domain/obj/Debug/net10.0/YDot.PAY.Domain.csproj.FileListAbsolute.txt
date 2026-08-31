@@ -1,0 +1,51 @@
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.PAY.Domain.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.PAY.Domain.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.PAY.Domain.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.PAY.Domain.pdb
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\bin\Debug\net10.0\YDot.PAY.Domain.deps.json
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\bin\Debug\net10.0\YDot.PAY.Domain.dll
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\bin\Debug\net10.0\YDot.PAY.Domain.pdb
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.AssemblyInfoInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.AssemblyInfo.cs
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.csproj.CoreCompileInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.sourcelink.json
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.dll
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\refint\YDot.PAY.Domain.dll
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\YDot.PAY.Domain.pdb
+D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Domain\obj\Debug\net10.0\ref\YDot.PAY.Domain.dll

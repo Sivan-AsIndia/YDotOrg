@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>aa10c274-952e-4637-b837-ff4c4239373a</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>..\..\..</DockerfileContext>
+    <DockerComposeProjectPath>..\..\..\docker-compose.dcproj</DockerComposeProjectPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
+    <!-- AddSwaggerGen / UseSwagger / UseSwaggerUI in ServiceContainer and Program.cs. -->
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <!-- Validates the access token IAM issued. DON never signs one itself. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <!-- FluentValidationFilter resolves IValidator<T> from the container. -->
+    <PackageReference Include="FluentValidation" />
+    <!-- Logging. The sinks are configured from the "Serilog" section of appsettings.json. -->
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Async" />
+    <!-- Design-time only, so "dotnet ef" can target this startup project. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YDots.DON.Application\YDots.DON.Application.csproj" />
+    <ProjectReference Include="..\YDots.DON.Infrastructure\YDots.DON.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

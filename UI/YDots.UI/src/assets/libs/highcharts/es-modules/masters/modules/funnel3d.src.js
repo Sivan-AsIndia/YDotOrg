@@ -1,0 +1,2 @@
+/*! For license information please see funnel3d.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import Funnel3DSeries from"../../Series/Funnel3D/Funnel3DSeries.js";import RendererRegistry from"../../Core/Renderer/RendererRegistry.js";Funnel3DSeries.compose(RendererRegistry.getRendererType());export default Highcharts;

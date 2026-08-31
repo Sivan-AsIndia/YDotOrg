@@ -1,0 +1,419 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3 gs">
+
+      <!-- ============ HEADER ============ -->
+      <nav class="gs-breadcrumb" aria-label="Breadcrumb">
+        @for (crumb of meta.breadcrumb; track crumb; let last = $last) {
+          <span class="gs-breadcrumb__item" [class.is-current]="last">{{ crumb }}</span>
+          @if (!last) {
+            <span class="gs-breadcrumb__sep" aria-hidden="true">›</span>
+          }
+        }
+      </nav>
+
+      <header class="gs-header">
+        <div class="gs-header__titles">
+          <h1 class="gs-title">
+            {{ meta.title }}
+            <span class="gs-title__info" title="Search leads, notes, follow-ups and more" aria-hidden="true">ⓘ</span>
+          </h1>
+          <p class="gs-subtitle">{{ meta.subtitle }}</p>
+          <p class="gs-meta">Owner: {{ meta.owner }} <span class="gs-meta__dot">·</span> Data updated {{ meta.lastRefresh }}</p>
+        </div>
+
+        <div class="gs-header__actions">
+          <button
+            type="button"
+            class="btn btn-outline-primary btn-sm"
+            (click)="toggleFacetPanel()"
+            [attr.aria-pressed]="isFacetPanelOpen()"
+          >
+            <span class="btn-icon" aria-hidden="true">▤</span>
+            Filters
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="toggleAdvancedSearch()">
+            <span class="btn-icon" aria-hidden="true">+</span>
+            Advanced Search
+          </button>
+        </div>
+      </header>
+
+      <!-- ============ KPI CARDS ============ -->
+      <section class="gs-kpis" aria-label="Search statistics">
+        @for (kpi of kpis; track kpi.id) {
+          <article class="gs-kpi-card">
+            <div class="gs-kpi-card__top">
+              <span class="gs-kpi-card__label">{{ kpi.label }}</span>
+              <span class="gs-kpi-card__icon" [attr.data-tone]="kpi.tone" aria-hidden="true">
+                @switch (kpi.icon) {
+                  @case ('bookmark') { 🔖 }
+                  @case ('refresh') { ↻ }
+                  @case ('flame') { 🔥 }
+                  @case ('clock') { ⏱ }
+                }
+              </span>
+            </div>
+            <div class="gs-kpi-card__value">{{ kpi.value }}</div>
+            <div class="gs-kpi-card__hint">{{ kpi.hint }}</div>
+          </article>
+        }
+      </section>
+
+      <!-- ============ SEARCH BAR ============ -->
+      <section class="gs-searchbar" role="search">
+        <div class="gs-searchbar__field">
+          <span class="gs-searchbar__icon" aria-hidden="true">⌕</span>
+          <input
+            #searchInput
+            type="text"
+            class="gs-searchbar__input"
+            [value]="query()"
+            (input)="onQueryChange($any($event.target).value)"
+            placeholder="Search leads, donors, donations, communications, follow-ups, notes, attachments, campaigns…"
+            aria-label="Universal search"
+            autocomplete="off"
+          />
+          @if (query()) {
+            <button type="button" class="gs-searchbar__clear" (click)="clearQuery()" aria-label="Clear search">✕</button>
+          }
+          <kbd class="gs-searchbar__kbd" aria-hidden="true">⌘K</kbd>
+        </div>
+
+        <div class="gs-quickfilters" role="tablist" aria-label="Quick filters">
+          @for (chip of quickFilters; track chip) {
+            <button
+              type="button"
+              class="gs-chip"
+              role="tab"
+              [class.is-active]="activeQuickFilter() === chip"
+              [attr.aria-selected]="activeQuickFilter() === chip"
+              (click)="setQuickFilter(chip)"
+            >
+              {{ chip }}
+            </button>
+          }
+        </div>
+
+        @if (isAdvancedSearchOpen()) {
+          <div class="gs-advanced" role="region" aria-label="Advanced search">
+            <div class="gs-advanced__grid">
+              <label class="gs-field">
+                <span>Record type</span>
+                <select class="gs-input" (change)="setQuickFilter($any($event.target).value)">
+                  @for (chip of quickFilters; track chip) {
+                    <option [value]="chip" [selected]="activeQuickFilter() === chip">{{ chip }}</option>
+                  }
+                </select>
+              </label>
+              <label class="gs-field">
+                <span>Keyword</span>
+                <input class="gs-input" type="text" [value]="query()" (input)="onQueryChange($any($event.target).value)" placeholder="Name, ID, phone, email…" />
+              </label>
+              <label class="gs-field">
+                <span>Campaign</span>
+                <select class="gs-input" (change)="toggleFacet('campaign', $any($event.target).value)">
+                  <option value="">Any campaign</option>
+                  @for (c of facetOptions.campaigns; track c) {
+                    <option [value]="c">{{ c }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="gs-advanced__actions">
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearFacets()">Reset</button>
+              <button type="button" class="btn btn-primary btn-sm" (click)="toggleAdvancedSearch()">Run Search</button>
+            </div>
+          </div>
+        }
+
+        <div class="gs-searchmeta">
+          <div class="gs-searchmeta__group">
+            <span class="gs-searchmeta__label">Saved searches</span>
+            <div class="gs-pill-row">
+              @for (s of savedSearches(); track s.name) {
+                <button type="button" class="gs-pill" (click)="runSavedSearch(s)">{{ s.name }}</button>
+              }
+              <button type="button" class="gs-pill gs-pill--ghost" (click)="saveCurrentSearch()">+ Save current</button>
+            </div>
+          </div>
+
+          <div class="gs-searchmeta__group">
+            <span class="gs-searchmeta__label">Recent searches</span>
+            <div class="gs-pill-row">
+              @for (term of recentSearches(); track term) {
+                <button type="button" class="gs-pill gs-pill--muted" (click)="runRecentSearch(term)">{{ term }}</button>
+              } @empty {
+                <span class="gs-empty-inline">No recent searches</span>
+              }
+              @if (recentSearches().length) {
+                <button type="button" class="gs-pill gs-pill--text" (click)="clearSearchHistory()">Clear history</button>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="gs-suggested" aria-label="Suggested searches">
+          @for (card of suggestedSearches; track card.title) {
+            <button type="button" class="gs-suggested__card" (click)="runSuggestedSearch(card)">
+              <span class="gs-suggested__title">{{ card.title }}</span>
+              <span class="gs-suggested__hint">{{ card.hint }}</span>
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- ============ MAIN WORKSPACE ============ -->
+      <section class="gs-workspace" [class.facets-collapsed]="!isFacetPanelOpen()">
+
+        <!-- Facet filter panel -->
+        @if (isFacetPanelOpen()) {
+          <aside class="gs-panel gs-facets" aria-label="Facet filters">
+            <div class="gs-panel__header">
+              <h2 class="gs-panel__title">Filters</h2>
+              @if (hasActiveFacets()) {
+                <button type="button" class="gs-linkbtn" (click)="clearFacets()">Clear all</button>
+              }
+            </div>
+
+            <div class="gs-facet-group">
+              <h3 class="gs-facet-group__title">Stage</h3>
+              @for (stage of facetOptions.stages; track stage) {
+                <button
+                  type="button"
+                  class="gs-facet-option"
+                  [class.is-active]="facets().stage === stage"
+                  (click)="toggleFacet('stage', stage)"
+                >
+                  {{ stage }}
+                </button>
+              }
+            </div>
+
+            <div class="gs-facet-group">
+              <h3 class="gs-facet-group__title">Temperature</h3>
+              @for (t of facetOptions.temperatures; track t) {
+                <button
+                  type="button"
+                  class="gs-facet-option"
+                  [class.is-active]="facets().temperature === t"
+                  (click)="toggleFacet('temperature', t)"
+                >
+                  {{ t }}
+                </button>
+              }
+            </div>
+
+            <div class="gs-facet-group">
+              <h3 class="gs-facet-group__title">Donation potential</h3>
+              @for (p of facetOptions.potentials; track p) {
+                <button
+                  type="button"
+                  class="gs-facet-option"
+                  [class.is-active]="facets().potential === p"
+                  (click)="toggleFacet('potential', p)"
+                >
+                  {{ p }}
+                </button>
+              }
+            </div>
+
+            <div class="gs-facet-group">
+              <h3 class="gs-facet-group__title">Campaign</h3>
+              @for (c of facetOptions.campaigns; track c) {
+                <button
+                  type="button"
+                  class="gs-facet-option"
+                  [class.is-active]="facets().campaign === c"
+                  (click)="toggleFacet('campaign', c)"
+                >
+                  {{ c }}
+                </button>
+              }
+            </div>
+          </aside>
+        }
+
+        <!-- Results grid -->
+        <div class="gs-panel gs-results">
+          <div class="gs-panel__header">
+            <h2 class="gs-panel__title">Results <span class="gs-count">({{ resultCount() }})</span></h2>
+          </div>
+
+          @if (filteredRecords().length) {
+            <div class="gs-table-scroll">
+              <table class="gs-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Type</th>
+                    <th scope="col">Record</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Owner</th>
+                    <th scope="col">Last activity</th>
+                    <th scope="col">Relevance</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (record of filteredRecords(); track trackByRecordId($index, record)) {
+                    <tr
+                      class="gs-row"
+                      [class.is-selected]="selectedRecord()?.id === record.id"
+                      tabindex="0"
+                      (click)="openRecord(record)"
+                      (keydown.enter)="openRecord(record)"
+                    >
+                      <td data-label="Type">
+                        <span class="gs-badge" [attr.data-stage]="record.stage">{{ record.type }}</span>
+                      </td>
+                      <td data-label="Record">
+                        <div class="gs-record-cell">
+                          <span class="gs-record-cell__name">{{ record.name }}</span>
+                          <span class="gs-record-cell__id">{{ record.id }}</span>
+                        </div>
+                      </td>
+                      <td data-label="Phone">{{ record.mobile }}</td>
+                      <td data-label="Email" class="gs-ellipsis">{{ record.email }}</td>
+                      <td data-label="Owner">
+                        <span [class.gs-unassigned]="record.owner === 'Unassigned'">{{ record.owner }}</span>
+                      </td>
+                      <td data-label="Last activity">{{ record.lastActivity }}</td>
+                      <td data-label="Relevance">
+                        <span class="gs-relevance">{{ relevanceOf(record) }}%</span>
+                      </td>
+                      <td data-label="Actions" class="gs-actions-cell">
+                        <button type="button" class="btn btn-outline-primary btn-sm" (click)="selectRecord(record.id); $event.stopPropagation()">
+                          Preview
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="gs-empty">
+              <p class="gs-empty__title">No matching results found.</p>
+              <ul class="gs-empty__suggestions">
+                <li>Try another keyword</li>
+                <li>Remove filters</li>
+                <li>Use Advanced Search</li>
+              </ul>
+              @if (hasActiveFacets() || query()) {
+                <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearFacets(); clearQuery()">Reset search</button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Preview drawer + insights -->
+        <aside class="gs-panel gs-drawer" aria-label="Record preview">
+          @if (selectedRecord(); as record) {
+            <div class="gs-drawer__card">
+              <div class="gs-drawer__header">
+                <div class="gs-drawer__icon" aria-hidden="true">👤</div>
+                <div>
+                  <h3 class="gs-drawer__name">{{ record.name }}</h3>
+                  <p class="gs-drawer__id">{{ record.id }} · {{ record.type }}</p>
+                </div>
+                <span class="gs-badge gs-badge--pill" [attr.data-stage]="record.stage">{{ record.stage }}</span>
+              </div>
+
+              <div class="gs-drawer__badges">
+                <span class="gs-badge" [attr.data-temp]="record.temperature">{{ record.temperature }}</span>
+                <span class="gs-badge" [attr.data-potential]="record.potential">{{ record.potential }} potential</span>
+                @if (record.converted) {
+                  <span class="gs-badge" data-stage="Converted">Converted</span>
+                }
+              </div>
+
+              <dl class="gs-drawer__fields">
+                <div class="gs-drawer__row">
+                  <dt>Phone</dt>
+                  <dd>
+                    {{ record.mobile }}
+                    <button type="button" class="gs-linkbtn" (click)="copyToClipboard(record.mobile, 'phone')">
+                      {{ copiedField() === 'phone' ? 'Copied' : 'Copy' }}
+                    </button>
+                  </dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Email</dt>
+                  <dd class="gs-ellipsis">
+                    {{ record.email }}
+                    <button type="button" class="gs-linkbtn" (click)="copyToClipboard(record.email, 'email')">
+                      {{ copiedField() === 'email' ? 'Copied' : 'Copy' }}
+                    </button>
+                  </dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Owner</dt>
+                  <dd>{{ record.owner }}</dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Campaign</dt>
+                  <dd>{{ record.campaign }}</dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Source</dt>
+                  <dd>{{ record.source }}</dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Language</dt>
+                  <dd>{{ record.language }}</dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Created</dt>
+                  <dd>{{ record.createdAt }}</dd>
+                </div>
+                <div class="gs-drawer__row">
+                  <dt>Next follow-up</dt>
+                  <dd>{{ record.nextFollowUp }}</dd>
+                </div>
+              </dl>
+
+              <div class="gs-drawer__section">
+                <h4>Donor health</h4>
+                <div class="gs-health">
+                  <div class="gs-health__track">
+                    <div class="gs-health__fill" [style.width.%]="record.healthScore"></div>
+                  </div>
+                  <span class="gs-health__value">{{ record.healthScore }}</span>
+                </div>
+                @if (record.healthReasons.length) {
+                  <ul class="gs-reasons">
+                    @for (reason of record.healthReasons; track reason) {
+                      <li>{{ reason }}</li>
+                    }
+                  </ul>
+                }
+                <p class="gs-drawer__outcome">Last outcome: {{ record.lastContactOutcome }}</p>
+              </div>
+
+              <div class="gs-drawer__actions">
+                <button type="button" class="btn btn-primary btn-sm" (click)="communicateSelected()">Communicate</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" (click)="scheduleSelected()">Schedule Follow-Up</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" (click)="openTimelineSelected()">Open Timeline</button>
+              </div>
+            </div>
+          } @else {
+            <div class="gs-empty gs-empty--drawer">
+              <p class="gs-empty__title">Select a record to preview it here.</p>
+            </div>
+          }
+
+          <div class="gs-insights">
+            <h4 class="gs-insights__title">Search insights</h4>
+            <ul class="gs-insights__stats">
+              <li><span>{{ insights().total }}</span> results</li>
+              <li><span>{{ insights().hot }}</span> hot</li>
+              <li><span>{{ insights().highPotential }}</span> high potential</li>
+              <li><span>{{ insights().unassigned }}</span> unassigned</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </div>
+</main>

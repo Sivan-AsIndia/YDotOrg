@@ -1,0 +1,979 @@
+/* ============================================================
+   UX-UI-07 — Role-aware application shell
+   Card-grid workspace layout (per provided reference image).
+   Theme (4.7): Dark Meadow accents; warm-paper surface; calm-blue
+   information; antique-gold detail; deep-olive/gold focus ring.
+   Classes namespaced `sh-` to avoid the global theme's generic rules.
+   ============================================================ */
+:host {
+  --paper: #f6f5f1;
+  --card: #ffffff;
+  --ink: #1e241f;
+  --ink-soft: #55605a;
+  --muted: #8b938c;
+  --border: #ecebe4;
+  --line: #f1efe9;
+  --meadow: #315746;
+  --meadow-2: #26402f;
+  --deep-olive: #2e4034;
+  --green: #2f7350; /* accent links / active */
+  --green-soft: #e6f0e8;
+  --info: #3f6dab;
+  --info-soft: #e7eef7;
+  --gold: #c39433;
+  --amber-soft: #faf0d9;
+  --purple: #7a5cc0;
+  --purple-soft: #efeaf8;
+  --red: #cf483d;
+  --red-soft: #fbe7e4;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  display: block;
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.sh-page {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 30px 40px 60px;
+}
+
+/* ---- Focus visibility: deep-olive / antique-gold ring (4.7.5) ---- */
+.sh-page a:focus-visible,
+.sh-page button:focus-visible,
+.sh-page input:focus-visible,
+.sh-page select:focus-visible,
+.sh-page [tabindex]:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ============ Buttons ============ */
+.sh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sh-btn-primary {
+  background: var(--meadow);
+  color: #fff;
+}
+.sh-btn-primary:hover {
+  background: var(--meadow-2);
+}
+.sh-btn-ghost {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--border);
+}
+.sh-btn-ghost:hover {
+  background: #f1efe9;
+}
+.sh-btn-block {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.sh-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.sh-link:hover {
+  text-decoration: underline;
+}
+
+/* ============ Header ============ */
+.sh-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.sh-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.sh-title-block {
+  display: flex;
+  flex-direction: column;
+}
+.sh-leaf {
+  color: var(--green);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.sh-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sh-breadcrumbs a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.sh-breadcrumbs [aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.sh-title {
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 400;
+  margin: 0;
+  letter-spacing: -0.4px;
+  line-height: 1.05;
+  color: #000;
+}
+.sh-subtitle {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  max-width: 62ch;
+}
+.sh-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.sh-ref {
+  font-weight: 600;
+  color: var(--ink);
+  background: #eef1ec;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+.sh-state-pill {
+  background: var(--green-soft);
+  color: var(--green);
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.sh-meta-item {
+  color: var(--ink-soft);
+}
+
+.sh-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.sh-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.sh-role-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sh-role-caret {
+  color: var(--muted);
+  font-size: 14px;
+}
+.sh-icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+.sh-icon-btn:hover {
+  background: #f1efe9;
+}
+
+.sh-overflow-wrap {
+  position: relative;
+}
+.sh-overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+}
+.sh-overflow-menu button {
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+  min-height: 44px;
+}
+.sh-overflow-menu button:hover {
+  background: #f1efe9;
+}
+
+/* ============ Filter bar (context & filters) ============ */
+.sh-filterbar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 22px;
+  margin-bottom: 22px;
+}
+.sh-filter-controls {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1.3fr;
+  gap: 16px;
+}
+.sh-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sh-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.sh-control {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  color: var(--ink);
+  font-family: inherit;
+}
+.sh-control:focus-visible {
+  border-color: var(--deep-olive);
+}
+.sh-field-error {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--red);
+  font-weight: 600;
+}
+
+.sh-scope-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.sh-scope-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.sh-scope-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sh-scope-context {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.sh-caret {
+  color: var(--muted);
+  margin-left: 8px;
+}
+.sh-scope-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+}
+.sh-scope-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 9px 10px;
+  border-radius: 8px;
+}
+.sh-scope-option:hover {
+  background: #f1efe9;
+}
+.sh-scope-option[aria-selected='true'] {
+  background: var(--green-soft);
+}
+.sh-scope-empty {
+  padding: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.sh-filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.sh-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sh-chip {
+  background: #eef1ec;
+  color: var(--ink-soft);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.sh-totals {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ============ Banners (4.7.6) ============ */
+.sh-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  margin-bottom: 18px;
+}
+.sh-banner a {
+  color: inherit;
+  font-weight: 600;
+  margin-left: 6px;
+}
+.sh-banner-actions {
+  display: inline-flex;
+  gap: 14px;
+  margin-left: auto;
+}
+.sh-banner-error {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.sh-banner-warn {
+  background: var(--amber-soft);
+  color: var(--gold);
+}
+.sh-banner-success {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.sh-corr {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.sh-banner-error {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.sh-error-summary {
+  list-style: disc;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.sh-error-summary li {
+  margin: 3px 0;
+}
+.sh-error-summary a {
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Decision / review warning (4.7.1) */
+.sh-warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  color: var(--gold);
+  background: var(--amber-soft);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 0 0 14px;
+}
+
+/* ============ Cards ============ */
+.sh-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 24px;
+}
+.sh-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sh-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+.sh-count-pill {
+  background: #eef1ec;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 20px;
+}
+.sh-lead {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+.sh-empty {
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 10px 0;
+  list-style: none;
+  margin: 0;
+}
+.sh-blocked {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 14px 0 0;
+}
+
+/* ============ Main grid ============ */
+.sh-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.sh-main {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.sh-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* ---- Stat band ---- */
+.sh-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+.sh-stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.sh-stat-icon {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sh-ic-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.sh-ic-purple {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+.sh-ic-blue {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.sh-ic-amber {
+  background: var(--amber-soft);
+  color: var(--gold);
+}
+.sh-stat-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.sh-stat-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.sh-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.sh-stat-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.sh-stat-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- Menu groups ---- */
+.sh-menu-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sh-menu-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.sh-menu-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: #faf9f5;
+  border: none;
+  cursor: pointer;
+  padding: 13px 16px;
+  min-height: 46px;
+  text-align: left;
+}
+.sh-menu-group-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.sh-menu-group-count {
+  background: #eef1ec;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+.sh-menu-group-head .sh-caret {
+  margin-left: auto;
+}
+.sh-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 8px;
+}
+.sh-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+}
+.sh-menu-link {
+  display: block;
+  padding: 8px 8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+}
+.sh-menu-link:hover {
+  background: #f1efe9;
+}
+.sh-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 8px;
+}
+.sh-tag-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+/* ---- Definition lists (session / decision / outcome) ---- */
+.sh-def {
+  margin: 0;
+}
+.sh-def div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.sh-def div:last-child {
+  border-bottom: none;
+}
+.sh-def dt {
+  color: var(--muted);
+  margin: 0;
+  flex-shrink: 0;
+}
+.sh-def dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sh-main-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+
+/* ---- Related and history ---- */
+.sh-rel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.sh-rel-tab {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.sh-rel-tab.active {
+  background: var(--meadow);
+  color: #fff;
+  border-color: var(--meadow);
+}
+.sh-rel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sh-rel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sh-rel-row:last-child {
+  border-bottom: none;
+}
+.sh-rel-primary {
+  font-weight: 600;
+  font-size: 13px;
+}
+.sh-rel-secondary {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.sh-rel-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ---- Permitted commands (Quick-Actions style) ---- */
+.sh-action-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sh-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 11px 8px;
+  border-radius: 10px;
+  min-height: 44px;
+}
+.sh-action:hover {
+  background: #f1efe9;
+}
+.sh-action-icon {
+  color: var(--green);
+  display: flex;
+}
+.sh-action-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  flex: 1;
+}
+.sh-action-perm {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.sh-action-more {
+  margin-top: 8px;
+}
+
+/* ============ UI state cards (loading / empty / no-access) ============ */
+.sh-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.sh-state-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.sh-state-body {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 66ch;
+}
+.sh-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  width: 100%;
+}
+.sh-skeleton {
+  height: 80px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #edeae2 25%, #f6f5f1 37%, #edeae2 63%);
+  background-size: 400% 100%;
+  animation: sh-shimmer 1.4s ease infinite;
+}
+@keyframes sh-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* ============ Dialogs (4.7.3 / 4.7.6) ============ */
+.sh-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(24, 32, 26, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.sh-modal {
+  background: #fff;
+  border-radius: 18px;
+  padding: 28px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+.sh-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+}
+.sh-modal-lead {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0 0 18px;
+}
+.sh-modal .sh-field {
+  margin-bottom: 18px;
+}
+.sh-modal .sh-def {
+  margin-bottom: 4px;
+}
+.sh-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+.sh-palette {
+  max-width: 520px;
+}
+.sh-palette-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+}
+.sh-palette-list .sh-action {
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+}
+
+/* ============ Responsive (4.7.5) ============ */
+
+/* Tablet: single column; navigation & secondary filters collapse; keep scope,
+   identity, state and primary action visible. */
+@media (max-width: 1100px) {
+  .sh-grid {
+    grid-template-columns: 1fr;
+  }
+  .sh-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .sh-filter-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Mobile: one-column cards; pin the permitted primary action; preserve
+   Signed-in display name, Active role, Active organisation scope, Available
+   menu groups; 44px targets. */
+@media (max-width: 680px) {
+  .sh-page {
+    padding: 22px 16px 104px;
+  }
+  .sh-title {
+    font-size: 30px;
+  }
+  .sh-header {
+    flex-direction: column;
+  }
+  .sh-stats {
+    grid-template-columns: 1fr;
+  }
+  .sh-filter-controls {
+    grid-template-columns: 1fr;
+  }
+  .sh-main-2col {
+    grid-template-columns: 1fr;
+  }
+  .sh-skeleton-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sh-def div {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sh-def dd {
+    text-align: left;
+  }
+  .sh-filter-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Pin only the permitted primary action */
+  .sh-header-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    margin: 0;
+    padding: 12px 16px;
+    background: rgba(246, 245, 241, 0.96);
+    border-top: 1px solid var(--border);
+    justify-content: space-between;
+  }
+  .sh-role-pill {
+    flex: 1;
+    justify-content: space-between;
+  }
+}
+
+/* Zoom / reflow: no horizontal page scroll at 320px (4.7.5). */
+@media (max-width: 360px) {
+  .sh-action-perm {
+    display: none;
+  }
+}

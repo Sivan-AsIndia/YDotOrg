@@ -1,0 +1,6 @@
+/* The screen is built from the theme's own card and button classes, so it needs no styling of
+   its own beyond making the permission codes readable at a glance. */
+code {
+  font-size: 0.8125rem;
+  word-break: break-all;
+}

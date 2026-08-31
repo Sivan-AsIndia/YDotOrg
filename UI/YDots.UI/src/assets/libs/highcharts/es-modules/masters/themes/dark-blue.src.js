@@ -1,0 +1,2 @@
+/*! For license information please see dark-blue.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import DarkBlueTheme from"../../Extensions/Themes/DarkBlue.js";H.theme=DarkBlueTheme.options,DarkBlueTheme.apply();export default H;

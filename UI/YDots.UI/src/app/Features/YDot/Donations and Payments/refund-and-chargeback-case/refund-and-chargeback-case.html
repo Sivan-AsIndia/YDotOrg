@@ -1,0 +1,602 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+
+
+  <!-- ============ TASK HEADER (§7.6.1 Task header) — one primary action: Request ============ -->
+  <header class="rcc-task-header" aria-labelledby="rcc-title">
+    <div class="rcc-header-text">
+      <h1 class="rcc-title" id="rcc-title">
+        {{ pageTitle }}
+ 
+      </h1>
+      <p class="rcc-subtitle">{{ pageSubtitle }}</p>
+   
+    </div>
+
+    <div class="rcc-header-actions">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFiltersVisible()"
+              [attr.aria-expanded]="filtersVisible()">
+        <svg class="rcc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
+        @if (activeFilterSummary().length) { <span class="rcc-count">{{ activeFilterSummary().length }}</span> }
+      </button>
+      <!-- Primary action — Request (§7.6.3 Request); appears only when role/permission/scope allow -->
+      @if (permissions.request) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="openRequest()">
+          <svg class="rcc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Request
+        </button>
+      }
+    </div>
+  </header>
+
+  <!-- ============ TOTALS QUALIFIED BY SCOPE (§7.6.1 Context and filters — totals) ============ -->
+  <section class="rcc-stats" aria-label="Case totals in the selected scope">
+    <div class="rcc-stat-card">
+      <div class="rcc-stat-head"><span class="rcc-stat-label">Total cases</span>
+        <span class="rcc-stat-ic rcc-ic-neutral" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h9a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2z"/></svg></span>
+      </div>
+      <p class="rcc-stat-value">{{ totalCases() }}</p>
+      <p class="rcc-stat-sub">In selected scope</p>
+    </div>
+    <div class="rcc-stat-card">
+      <div class="rcc-stat-head"><span class="rcc-stat-label">Refund requests</span>
+        <span class="rcc-stat-ic rcc-ic-blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
+      </div>
+      <p class="rcc-stat-value">{{ refundRequestCount() }}</p>
+      <p class="rcc-stat-sub">In selected scope</p>
+    </div>
+    <div class="rcc-stat-card">
+      <div class="rcc-stat-head"><span class="rcc-stat-label">Chargebacks</span>
+        <span class="rcc-stat-ic rcc-ic-rose" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
+      </div>
+      <p class="rcc-stat-value">{{ chargebackCount() }}</p>
+      <p class="rcc-stat-sub">In selected scope</p>
+    </div>
+    <div class="rcc-stat-card">
+      <div class="rcc-stat-head"><span class="rcc-stat-label">Awaiting review</span>
+        <span class="rcc-stat-ic rcc-ic-gold" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+      </div>
+      <p class="rcc-stat-value">{{ awaitingReviewCount() }}</p>
+      <p class="rcc-stat-sub">In selected scope</p>
+    </div>
+  </section>
+
+  <!-- ============ CONTEXT AND FILTERS (§7.6.1) — shown only when the Filters button is used ============ -->
+  @if (filtersVisible()) {
+  <section class="rcc-filters-card" aria-label="Search and filters">
+    <div class="rcc-filters-toolbar">
+      <span class="rcc-filters-heading">Filters</span>
+      <button type="button" class="rcc-link" (click)="toggleFiltersVisible()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        Hide filters
+      </button>
+    </div>
+    <div class="rcc-filter-grid">
+      <!-- Scope-aware search (§7.6.1) -->
+      <label class="rcc-field rcc-field-search">
+        <span class="rcc-field-label">Search</span>
+        <span class="rcc-input-wrap">
+          <input type="search" class="rcc-input" placeholder="Search by case reference, payment reference or requester…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)"
+                 aria-label="Search refund and chargeback cases" />
+          <svg class="rcc-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+
+      <!-- Case type -->
+      <label class="rcc-field">
+        <span class="rcc-field-label">Case type</span>
+        <span class="rcc-select-wrap">
+          <select class="rcc-select" [ngModel]="caseTypeFilter()" (ngModelChange)="caseTypeFilter.set($event); currentPage.set(1)" aria-label="Case type">
+            <option value="">All types</option>
+            @for (t of caseTypeOptions; track t) { <option [value]="t">{{ t }}</option> }
+          </select>
+          <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <!-- Case status (lifecycle state) -->
+      <label class="rcc-field">
+        <span class="rcc-field-label">Status</span>
+        <span class="rcc-select-wrap">
+          <select class="rcc-select" [ngModel]="caseStateFilter()" (ngModelChange)="caseStateFilter.set($event); currentPage.set(1)" aria-label="Case status">
+            <option value="">All statuses</option>
+            @for (s of caseStateOptions; track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <!-- Date range — created time -->
+      <div class="rcc-field" [class.rcc-field-invalid]="rangeInvalid()">
+        <span class="rcc-field-label">Date range <span class="rcc-tz">{{ operatingTimeZone }}</span></span>
+        <div class="rcc-range">
+          <span class="rcc-input-wrap">
+            <input type="date" class="rcc-input" [ngModel]="rangeStart()" (ngModelChange)="rangeStart.set($event); currentPage.set(1)" aria-label="Created from date" />
+          </span>
+          <span class="rcc-range-sep" aria-hidden="true">→</span>
+          <span class="rcc-input-wrap">
+            <input type="date" class="rcc-input" [ngModel]="rangeEnd()" (ngModelChange)="rangeEnd.set($event); currentPage.set(1)" aria-label="Created to date" />
+          </span>
+        </div>
+      </div>
+
+      <!-- Progressive disclosure holding Data scope + Provider status (§7.6.1) -->
+      <div class="rcc-field rcc-field-more">
+        <span class="rcc-field-label" aria-hidden="true">&nbsp;</span>
+        <button type="button" class="rcc-btn rcc-btn-outline rcc-more-btn" (click)="toggleMoreFilters()"
+                [attr.aria-expanded]="moreFiltersOpen()">
+          <svg class="rcc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+          More
+          @if (moreFiltersCount()) { <span class="rcc-count">{{ moreFiltersCount() }}</span> }
+        </button>
+      </div>
+    </div>
+
+    <!-- Secondary filters panel (Provider status + Data scope) -->
+    @if (moreFiltersOpen()) {
+      <div class="rcc-more-panel">
+        <label class="rcc-field">
+          <span class="rcc-field-label">Provider status</span>
+          <span class="rcc-select-wrap">
+            <select class="rcc-select" [ngModel]="providerStatusFilter()" (ngModelChange)="providerStatusFilter.set($event); currentPage.set(1)" aria-label="Provider status">
+              <option value="">All provider statuses</option>
+              @for (p of providerStatusOptions; track p) { <option [value]="p">{{ p }}</option> }
+            </select>
+            <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </label>
+        <label class="rcc-field">
+          <span class="rcc-field-label">Data scope</span>
+          <span class="rcc-select-wrap">
+            <select class="rcc-select" [ngModel]="scopeFilter()" (ngModelChange)="scopeFilter.set($event); currentPage.set(1)" aria-label="Data scope">
+              @for (sc of scopeOptions; track sc) { <option [value]="sc">{{ sc }}</option> }
+            </select>
+            <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </label>
+        <p class="rcc-field-hint" [class.rcc-field-error]="rangeInvalid()" role="status">
+          @if (rangeInvalid()) { Review Date range. The end date is before the start date. }
+          @else { Interpreted as {{ interpretedRange() }} }
+        </p>
+        <div class="rcc-more-actions">
+          <button type="button" class="rcc-btn rcc-btn-primary rcc-btn-sm" (click)="applyFilters()" [disabled]="!filterAllowed()">Apply filters</button>
+        </div>
+      </div>
+    }
+
+    <!-- Active-filter summary + saved filter (§7.6.1) -->
+    <div class="rcc-active-row">
+      <span class="rcc-active-label">Active filters:</span>
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="rcc-chip">
+          {{ chip.label }}
+          <button type="button" class="rcc-chip-x" (click)="removeFilterChip(chip.key)"
+                  [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      } @empty {
+        <span class="rcc-active-none">None applied</span>
+      }
+      @if (activeFilterSummary().length) {
+        <button type="button" class="rcc-link" (click)="clearFilters()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+          Clear all
+        </button>
+      }
+
+      <span class="rcc-active-spacer"></span>
+
+      <span class="rcc-saved-label">Saved filter:</span>
+      <span class="rcc-select-wrap rcc-saved-select">
+        <select class="rcc-select" [ngModel]="savedFilter()" (ngModelChange)="savedFilter.set($event)" aria-label="Saved filter">
+          @for (v of savedFilters; track v) { <option [value]="v">{{ v }}</option> }
+        </select>
+        <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+    </div>
+  </section>
+  }
+
+ 
+
+  <!-- ============ WORK AREA (§7.6.5 Desktop) — table is full width until a case is selected,
+       then the Case Details panel opens alongside it (§7.6.1). ============ -->
+  <div class="rcc-work" [class.rcc-detail-open]="detailOpen()">
+
+    <!-- ---------- MAIN WORK: case index (§7.6.1 Main work) ---------- -->
+    <section class="rcc-main" aria-labelledby="rcc-records-heading">
+      <h2 id="rcc-records-heading" class="rcc-visually-hidden">Refund and chargeback cases</h2>
+
+      @if (recordCount() === 0) {
+        <!-- EMPTY (§7.6.4) -->
+        <div class="rcc-state-block">
+          <p class="rcc-state-title">No cases match this scope and filter.</p>
+          <p class="rcc-state-body">Zero results come from the current filters, not a global zero. Adjust the search,
+            case type, status, provider status, date range or scope, or reset filters to continue.</p>
+          <div class="rcc-state-actions">
+            <button type="button" class="rcc-btn rcc-btn-outline rcc-btn-sm" (click)="clearFilters()">Reset filters</button>
+          </div>
+        </div>
+      } @else {
+        <div class="rcc-table-scroll">
+          <table class="rcc-table">
+            <thead>
+              <tr>
+                <th scope="col">Case ID</th>
+                <!-- <th scope="col">Payment ref.</th> -->
+                <th scope="col" class="rcc-col-num">Captured</th>
+                <th scope="col" class="rcc-col-num">Prev. refunded</th>
+                <th scope="col" class="rcc-col-num">Requested</th>
+                <th scope="col">Provider</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="rcc-col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of pagedRecords(); track r.caseReference) {
+                <tr [class.rcc-row-selected]="isSelected(r.caseReference)" (click)="review(r.caseReference)">
+                  <!-- Case reference (stable, read-only) + Case type (§7.6.2) -->
+                  <td class="rcc-cell-case" data-label="Case ID">
+                    <button type="button" class="rcc-case-link" (click)="review(r.caseReference); $event.stopPropagation()">
+                      {{ r.caseReference }}
+                    </button>
+                    <span class="rcc-case-type">{{ r.caseType }}</span>
+                  </td>
+                  <!-- Payment reference (read-only) (§7.6.2) -->
+                  <!-- <td data-label="Payment ref."><span class="rcc-mono">{{ r.paymentReference }}</span></td> -->
+                  <!-- Captured amount (read-only) (§7.6.2) -->
+                  <td class="rcc-col-num" data-label="Captured">{{ formatMoney(r.capturedAmount, r.currency) }}</td>
+                  <!-- Previously refunded amount (read-only) (§7.6.2) -->
+                  <td class="rcc-col-num" data-label="Prev. refunded">{{ formatMoney(r.previouslyRefundedAmount, r.currency) }}</td>
+                  <!-- Requested amount (§7.6.2) -->
+                  <td class="rcc-col-num rcc-strong" data-label="Requested">{{ formatMoney(r.requestedAmount, r.currency) }}</td>
+                  <!-- Provider status (read-only badge; colour never carries meaning alone) (§7.6.2) -->
+                  <td data-label="Provider"><span class="rcc-badge" [class]="providerStatusClass(r.providerStatus)">{{ r.providerStatus }}</span></td>
+                  <!-- Case state (§7.6.3 lifecycle) -->
+                  <td data-label="Status"><span class="rcc-badge" [class]="caseStateClass(r.caseState)">{{ r.caseState }}</span></td>
+                  <!-- Row actions (§7.6.3): Review + state-eligible workflow actions, icon-triggered menu -->
+                  <td class="rcc-col-actions" (click)="$event.stopPropagation()">
+                    <div class="rcc-menu-wrap">
+                          <!-- <button type="button" class="btn btn-outline-primary btn-sm" role="menuitem" (click)="review(r.caseReference)">
+                            <svg class="rcc-ic rcc-menu-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                            
+                          </button> -->
+                             <button type="button" class="rcc-menu-item" role="menuitem" (click)="submitCase(r)">
+                              <svg class="rcc-ic rcc-menu-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+                              
+                            </button>
+                              <button type="button" class="rcc-menu-item" role="menuitem" (click)="requestApprove(r)">
+                              <svg class="rcc-ic rcc-menu-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                              
+                            </button>
+                                <button type="button" class="rcc-menu-item" role="menuitem" (click)="reconcileCase(r)">
+                              <svg class="rcc-ic rcc-menu-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+                              
+                            </button>
+                              <button type="button" class="rcc-menu-item rcc-menu-danger" role="menuitem" (click)="requestDelete(r)">
+                              <svg class="rcc-ic rcc-menu-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                             
+                            </button>
+                   
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer: totals qualified by scope + last refresh, and pagination (§7.6.1) -->
+        <div class="rcc-table-footer">
+          <span class="rcc-showing">
+            Showing {{ pagedRecords().length ? (currentPage() - 1) * pageSize + 1 : 0 }}–{{ (currentPage() - 1) * pageSize + pagedRecords().length }}
+            of {{ recordCount() }} cases 
+          </span>
+          <nav class="rcc-pagination" aria-label="Pagination">
+            <button type="button" class="rcc-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
+            @for (p of pageNumbers(); track p) {
+              <button type="button" class="rcc-page-btn" [class.is-current]="currentPage() === p"
+                      [attr.aria-current]="currentPage() === p ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+            }
+            <button type="button" class="rcc-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
+          </nav>
+        </div>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: Case Details (§7.6.1 Decision/review + Related and history) ----------
+         Only rendered once a case is selected — the table above stays full width until then. ---------- -->
+    @if (detailOpen() && selectedCase(); as c) {
+    <aside class="rcc-detail" aria-label="Case details">
+        <div class="rcc-detail-head">
+          <div class="rcc-detail-id">
+            <span class="rcc-detail-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
+            </span>
+            <div>
+              <h2 class="rcc-detail-title">Case Details</h2>
+              <p class="rcc-detail-sub">{{ c.caseReference }} · {{ c.caseType }}</p>
+            </div>
+          </div>
+          <button type="button" class="rcc-detail-close" (click)="closeDetailPanel()" aria-label="Close case details">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+
+        <div class="rcc-detail-body">
+          <!-- Identity and context -->
+          <dl class="rcc-kv">
+            <div><dt>Case reference</dt><dd>{{ c.caseReference }}
+              <button type="button" class="rcc-copy" (click)="copyValue('case', c.caseReference)" aria-label="Copy case reference">{{ copiedField() === 'case' ? 'Copied' : 'Copy' }}</button>
+            </dd></div>
+            <div><dt>Case type</dt><dd>{{ c.caseType }}</dd></div>
+            <div><dt>Payment reference</dt><dd><span class="rcc-mono">{{ c.paymentReference }}</span>
+              <button type="button" class="rcc-copy" (click)="copyValue('pay', c.paymentReference)" aria-label="Copy payment reference">{{ copiedField() === 'pay' ? 'Copied' : 'Copy' }}</button>
+            </dd></div>
+            <div><dt>Requester</dt><dd>{{ c.requester }}</dd></div>
+            <div><dt>Checker or approver</dt><dd>{{ c.checkerOrApprover }}</dd></div>
+            <div><dt>Created at</dt><dd>{{ c.createdAt }}</dd></div>
+          </dl>
+
+          <!-- Amounts (read-only, server-derived) (§7.6.2) -->
+          <h3 class="rcc-group-title">Eligibility</h3>
+          <dl class="rcc-kv">
+            <div><dt>Captured amount</dt><dd>{{ formatMoney(c.capturedAmount, c.currency) }}</dd></div>
+            <div><dt>Previously refunded</dt><dd>{{ formatMoney(c.previouslyRefundedAmount, c.currency) }}</dd></div>
+            <div><dt>Refundable balance</dt><dd>{{ formatMoney(c.refundableBalance, c.currency) }}</dd></div>
+            <div><dt>Requested amount</dt><dd class="rcc-strong">{{ formatMoney(c.requestedAmount, c.currency) }}</dd></div>
+          </dl>
+
+          <!-- Request reason (Confidential) (§7.6.2) -->
+          <h3 class="rcc-group-title">Request </h3>
+          <dl class="rcc-kv">
+            <div><dt>Reason category</dt><dd>{{ c.reasonCategory }}</dd></div>
+            <div class="rcc-kv-stack"><dt>Detailed reason</dt><dd class="rcc-break">{{ c.detailedReason }}</dd></div>
+          </dl>
+          <div class="rcc-evidence">
+            <span class="rcc-evidence-label">Evidence </span>
+            @if (c.evidence.length) {
+              <ul class="rcc-evidence-list" role="list">
+                @for (e of c.evidence; track e.name) {
+                  <li class="rcc-evidence-row">
+                    <span class="rcc-evidence-name">{{ e.name }}</span>
+                    <span class="rcc-evidence-tags">
+                      <span class="rcc-badge rcc-badge-sm rcc-badge-good">{{ e.uploadStatus }}</span>
+                      <span class="rcc-badge rcc-badge-sm rcc-badge-good">{{ e.scanStatus }}</span>
+                      <span class="rcc-badge rcc-badge-sm rcc-badge-blue">{{ e.linkStatus }}</span>
+                    </span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="rcc-evidence-none">No evidence linked.</p>
+            }
+          </div>
+
+          <!-- Provider action and outcome (§7.6.2) -->
+          <h3 class="rcc-group-title">Provider action and outcome</h3>
+          <dl class="rcc-kv">
+            <div><dt>Provider status</dt><dd><span class="rcc-badge rcc-badge-sm" [class]="providerStatusClass(c.providerStatus)">{{ c.providerStatus }}</span></dd></div>
+            <div><dt>Reconciliation status</dt><dd><span class="rcc-badge rcc-badge-sm" [class]="reconciliationClass(c.reconciliationStatus)">{{ c.reconciliationStatus }}</span></dd></div>
+            <div><dt>Outcome</dt><dd><span class="rcc-badge rcc-badge-sm" [class]="outcomeClass(c.outcomeStatus)">{{ c.outcomeStatus }}</span></dd></div>
+            @if (c.caseType === 'Chargeback') {
+              <div class="rcc-kv-stack"><dt>Chargeback details</dt><dd class="rcc-break">{{ c.chargebackDetails || '—' }}</dd></div>
+            }
+          </dl>
+
+        
+          <!-- Available actions on this case (§7.6.3) -->
+          <div class="rcc-detail-actions">
+            @if (submitAllowed(c)) {
+              <button type="button" class="btn btn-primary btn-sm" (click)="submitCase(c)">
+                <svg class="rcc-ic rcc-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+                Submit
+              </button>
+            }
+            @if (approveAllowed(c)) {
+              <button type="button" class="btn btn-primary btn-sm" (click)="requestApprove(c)">
+                <svg class="rcc-ic rcc-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                Approve
+              </button>
+            }
+            @if (reconcileAllowed(c)) {
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="reconcileCase(c)">
+                <svg class="rcc-ic rcc-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+                Reconcile
+              </button>
+            }
+            @if (deleteDraftAllowed(c)) {
+              <button type="button" class="btn btn-danger btn-sm" (click)="requestDelete(c)">
+                <svg class="rcc-ic rcc-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                Delete unused draft
+              </button>
+            }
+            @if (!anyRowActionAllowed(c)) { <span class="rcc-actions-note">No further action available in this state.</span> }
+          </div>
+
+      
+        </div>
+    </aside>
+    }
+  </div>
+
+
+  <!-- ============ REQUEST DIALOG (§7.6.3 Request — Main work: task-oriented request) ============ -->
+  @if (requestDialogOpen()) {
+    <div class="rcc-modal-backdrop" (click)="cancelRequest()">
+      <div class="rcc-modal" role="dialog" aria-modal="true" aria-labelledby="rcc-request-title" (click)="$event.stopPropagation()">
+        <h2 id="rcc-request-title" class="rcc-modal-title">Request refund case</h2>
+        <p class="rcc-modal-lead">Select the captured payment, confirm the eligible amount and record the reason. The case is created as a Draft and reviewed before any provider action.</p>
+
+        <!-- Payment reference — scope-aware source selection; each option shows the amount and the linked receipt number (derives read-only amounts, §7.6.2) -->
+        <div class="rcc-field" [class.rcc-field-invalid]="requestSubmitted() && !reqPaymentValid()">
+          <label class="rcc-field-label" for="rcc-req-pay">Payment reference </label>
+          <span class="rcc-select-wrap">
+            <select id="rcc-req-pay" class="rcc-select" [ngModel]="reqPaymentReference()" (ngModelChange)="reqPaymentReference.set($event)">
+              <option value="">Select an eligible captured payment…</option>
+              @for (p of eligiblePayments; track p.paymentReference) {
+                <option [value]="p.paymentReference">{{ p.paymentReference }} · Amount {{ formatMoney(p.capturedAmount, p.currency) }} · Receipt {{ p.receiptNumber }} · refundable {{ formatMoney(p.refundableBalance, p.currency) }}</option>
+              }
+            </select>
+            <svg class="rcc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+          @if (requestSubmitted() && !reqPaymentValid()) { <p class="rcc-field-hint rcc-field-error">Select a payment reference.</p> }
+        </div>
+
+        @if (selectedPayment(); as p) {
+          <!-- Duplicate detection (§7.6.4 Duplicate) -->
+          @if (requestDuplicate(); as dup) {
+            <div class="rcc-inline-warn" role="alert">
+              An open case ({{ dup.caseReference }} · {{ dup.caseState }}) already exists for this payment. Review it before requesting again — nothing is overwritten silently.
+              <button type="button" class="rcc-link rcc-link-inline" (click)="review(dup.caseReference); cancelRequest()">Review {{ dup.caseReference }}</button>
+            </div>
+          }
+          <div class="rcc-derived">
+            <div><span class="rcc-derived-label">Amount · Receipt</span><span class="rcc-derived-value">{{ formatMoney(p.capturedAmount, p.currency) }} · {{ p.receiptNumber }}</span></div>
+            <div><span class="rcc-derived-label">Previously refunded</span><span class="rcc-derived-value">{{ formatMoney(p.previouslyRefundedAmount, p.currency) }}</span></div>
+            <div><span class="rcc-derived-label">Refundable balance</span><span class="rcc-derived-value rcc-strong">{{ formatMoney(p.refundableBalance, p.currency) }}</span></div>
+          </div>
+
+          <!-- Requested amount — decimal, ≤ refundable balance (§7.6.2) -->
+          <div class="rcc-field" [class.rcc-field-invalid]="requestSubmitted() && !reqAmountValid()">
+            <label class="rcc-field-label" for="rcc-req-amt">Requested amount ({{ p.currency }}) </label>
+            <input id="rcc-req-amt" type="number" min="0" step="0.01" class="rcc-input"
+                   [ngModel]="reqAmountDisplay()"
+                   (ngModelChange)="onRequestedAmountChange($event)"
+                   placeholder="0.00" />
+            <p class="rcc-field-hint" [class.rcc-field-error]="requestSubmitted() && !reqAmountValid()">
+              Must be greater than zero and no more than the refundable balance ({{ formatMoney(p.refundableBalance, p.currency) }}).
+            </p>
+          </div>
+        }
+
+        <!-- Reason category — textarea with counter, 10–2000 (§7.6.2) -->
+        <div class="rcc-field" [class.rcc-field-invalid]="requestSubmitted() && !reqReasonCategoryValid()">
+          <label class="rcc-field-label" for="rcc-req-cat">Reason category  </label>
+          <textarea id="rcc-req-cat" class="rcc-input rcc-textarea rcc-textarea-sm" rows="2"
+                    [ngModel]="reqReasonCategory()" (ngModelChange)="reqReasonCategory.set($event)" [attr.maxlength]="reasonMax"
+                    placeholder="e.g. Duplicate donation, Donor requested refund, Cardholder dispute…"></textarea>
+          <p class="rcc-field-hint" [class.rcc-field-error]="requestSubmitted() && !reqReasonCategoryValid()" role="status">
+            {{ reqReasonCategoryCount() }} / {{ reasonMax }} characters (minimum {{ requestReasonMin }})
+          </p>
+        </div>
+
+        <!-- Detailed reason — textarea with counter, 10–2000 (§7.6.2) -->
+        <div class="rcc-field" [class.rcc-field-invalid]="requestSubmitted() && !reqDetailedReasonValid()">
+          <label class="rcc-field-label" for="rcc-req-reason">Detailed reason  </label>
+          <textarea id="rcc-req-reason" class="rcc-input rcc-textarea" rows="3"
+                    [ngModel]="reqDetailedReason()" (ngModelChange)="reqDetailedReason.set($event)" [attr.maxlength]="reasonMax"
+                    placeholder="Describe the reason for this refund or chargeback case…"></textarea>
+          <p class="rcc-field-hint" [class.rcc-field-error]="requestSubmitted() && !reqDetailedReasonValid()" role="status">
+            {{ reqDetailedReasonCount() }} / {{ reasonMax }} characters (minimum {{ requestReasonMin }})
+          </p>
+        </div>
+
+        <!-- Evidence — secure uploader; Attach opens the file picker and uploads the chosen file(s) (§7.6.2) -->
+        <div class="rcc-field">
+          <span class="rcc-field-label">Evidence  </span>
+          <div class="rcc-upload-row">
+            <input type="file" #evFile class="rcc-visually-hidden" multiple (change)="onEvidenceFileSelected($event)" aria-label="Choose evidence file" />
+            <button type="button" class="btn btn-secondary btn-sm" (click)="evFile.click()">
+              <svg class="rcc-ic rcc-btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M4 21h16"/></svg>
+              Attach
+            </button>
+            <span class="rcc-field-hint">Choose one or more files from your device to upload and link as evidence.</span>
+          </div>
+          @if (reqEvidence().length) {
+            <ul class="rcc-evidence-list" role="list">
+              @for (e of reqEvidence(); track e.name) {
+                <li class="rcc-evidence-row">
+                  <span class="rcc-evidence-name">{{ e.name }}</span>
+                  <span class="rcc-evidence-tags">
+                    <span class="rcc-badge rcc-badge-sm rcc-badge-good">{{ e.uploadStatus }}</span>
+                    <span class="rcc-badge rcc-badge-sm rcc-badge-good">{{ e.scanStatus }}</span>
+                    <span class="rcc-badge rcc-badge-sm rcc-badge-blue">{{ e.linkStatus }}</span>
+                    <button type="button" class="rcc-chip-x" (click)="removeEvidence(e.name)" aria-label="Remove evidence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+
+        <div class="rcc-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelRequest()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmRequest()">Request case</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ APPROVE DIALOG (§7.6.3 Approve — primary decision; independent authority) ============ -->
+  @if (approveDialogOpen() && approveTarget()) {
+    <div class="rcc-modal-backdrop" (click)="cancelApprove()">
+      <div class="rcc-modal" role="dialog" aria-modal="true" aria-labelledby="rcc-approve-title" (click)="$event.stopPropagation()">
+        <h2 id="rcc-approve-title" class="rcc-modal-title">Approval decision</h2>
+        <p class="rcc-modal-lead">Record an independent decision, authority, reason, effective time and resulting state. This decision requires explicit confirmation.</p>
+        <dl class="rcc-kv">
+          <div><dt>Case reference</dt><dd>{{ approveTarget()!.caseReference }}</dd></div>
+          <div><dt>Requested amount</dt><dd>{{ formatMoney(approveTarget()!.requestedAmount, approveTarget()!.currency) }}</dd></div>
+          <div><dt>Independent authority</dt><dd>{{ approverIdentity }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="rcc-field">
+          <span class="rcc-field-label">Decision </span>
+          <div class="rcc-radio-row">
+            <label class="rcc-radio"><input type="radio" name="rcc-decision" [checked]="approveDecision() === 'Approve'" (change)="approveDecision.set('Approve')" /> Approve</label>
+            <label class="rcc-radio"><input type="radio" name="rcc-decision" [checked]="approveDecision() === 'Decline'" (change)="approveDecision.set('Decline')" /> Decline</label>
+          </div>
+        </div>
+        <div class="rcc-field" [class.rcc-field-invalid]="approveSubmitted() && !approveReasonValid()">
+          <label class="rcc-field-label" for="rcc-approve-reason">Decision reason  </label>
+          <textarea id="rcc-approve-reason" class="rcc-input rcc-textarea" rows="3"
+                    [ngModel]="approveReason()" (ngModelChange)="approveReason.set($event)" [attr.maxlength]="reasonMax"
+                    placeholder="Record the reason for this decision…"></textarea>
+          <p class="rcc-field-hint" [class.rcc-field-error]="approveSubmitted() && !approveReasonValid()" role="status">
+            {{ approveReasonCount() }} / {{ reasonMax }} characters (minimum {{ requestReasonMin }})
+          </p>
+        </div>
+        <div class="rcc-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelApprove()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmApprove()">Confirm decision</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ DELETE UNUSED DRAFT DIALOG (§7.6.3 Delete unused draft — danger) ============ -->
+  @if (deleteDialogOpen() && deleteTarget()) {
+    <div class="rcc-modal-backdrop" (click)="cancelDelete()">
+      <div class="rcc-modal" role="dialog" aria-modal="true" aria-labelledby="rcc-delete-title" (click)="$event.stopPropagation()">
+        <h2 id="rcc-delete-title" class="rcc-modal-title">Delete unused draft</h2>
+        <p class="rcc-modal-lead">This draft has no downstream reference. Deleting it removes the draft while preserving linked history. Provide a named reason to continue.</p>
+        <dl class="rcc-kv">
+          <div><dt>Case reference</dt><dd>{{ deleteTarget()!.caseReference }}</dd></div>
+          <div><dt>Consequence</dt><dd>Draft removed; linked history preserved; not recoverable as a draft</dd></div>
+          <div><dt>Resulting state</dt><dd>Cancelled (draft deleted)</dd></div>
+        </dl>
+        <div class="rcc-field" [class.rcc-field-invalid]="deleteSubmitted() && !deleteReasonValid()">
+          <label class="rcc-field-label" for="rcc-delete-reason">Reason </label>
+          <textarea id="rcc-delete-reason" class="rcc-input rcc-textarea" rows="3"
+                    [ngModel]="deleteReason()" (ngModelChange)="deleteReason.set($event)" [attr.maxlength]="reasonMax"
+                    placeholder="Record why this unused draft is being deleted…"></textarea>
+          <p class="rcc-field-hint" [class.rcc-field-error]="deleteSubmitted() && !deleteReasonValid()" role="status">
+            {{ deleteReasonCount() }} / {{ reasonMax }} characters (minimum {{ requestReasonMin }})
+          </p>
+        </div>
+        <div class="rcc-modal-actions">
+          <button type="button" class="rcc-btn rcc-btn-outline" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="rcc-btn rcc-btn-danger" (click)="confirmDelete()">Delete draft</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</main>

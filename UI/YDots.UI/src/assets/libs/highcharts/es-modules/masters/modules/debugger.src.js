@@ -1,0 +1,2 @@
+/*! For license information please see debugger.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import Debugger from"../../Extensions/Debugger/Debugger.js";import ErrorMessages from"../../Extensions/Debugger/ErrorMessages.js";const G=Highcharts;G.errorMessages=G.errorMessages||ErrorMessages,Debugger.compose(G.Chart);export default Highcharts;

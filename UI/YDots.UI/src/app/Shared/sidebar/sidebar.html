@@ -1,0 +1,169 @@
+<aside class="pe-app-sidebar" id="sidebar">
+    <div class="pe-app-sidebar-logo px-5 d-flex align-items-center position-relative">
+        <!--begin::Brand Image-->
+        <a routerLink="/app/dashboard" class="d-flex gap-2 logo-main" style="width: 200px; align-items: center;">
+            <img height="80" width="70" class="logo-dark" alt="Dark Logo"
+                 src="assets/images/Outline ydot logo 2.svg" style="width: 50px;">
+            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">YDot</h3>
+        </a>
+        <button type="button" id="sidebarDefaultArrow"
+                class="btn btn-sm p-0 fs-4 ms-auto float-end d-none icon-hover-btn text-white text-opacity-60 d-none">
+            <i class="ri-arrow-right-double-line"></i>
+        </button>
+        <!--end::Brand Image-->
+    </div>
+
+    <nav class="pe-app-sidebar-menu nav nav-pills" data-simplebar id="sidebar-simplebar">
+        <div class="d-flex align-items-start flex-column w-100">
+            <ul class="pe-main-menu list-unstyled">
+
+                <!--
+                  EVERYTHING BELOW COMES FROM /api/v1/navigation.
+
+                  The server has already filtered it by what the product has, what this
+                  organisation enabled, what the role was given and what permissions the person
+                  holds — and pruned any group left with nothing under it. So there is no
+                  permission logic here: if a node arrived, it belongs on the screen.
+
+                  It is a courtesy, not a control. Every endpoint re-checks its own permission,
+                  so a hand-typed URL reaches a screen with nothing on it.
+                -->
+
+                @if (loading() && menu().length === 0) {
+                    <li class="pe-menu-title">Loading…</li>
+                }
+
+                @if (failed()) {
+                    <li class="pe-menu-title">Menu unavailable</li>
+                    <li class="pe-slide">
+                        <a href="javascript:void(0)" class="pe-nav-link" (click)="retry()">
+                            <i class="ri-refresh-line pe-nav-icon"></i>
+                            <span class="pe-nav-content">Try again</span>
+                        </a>
+                    </li>
+                }
+
+                @for (item of menu(); track trackByCode($index, item)) {
+
+                    <!-- A group heading with children: collapses, does not navigate. -->
+                    @if (isGroup(item)) {
+                        <li class="pe-slide pe-has-sub" routerLinkActive="active">
+                            <a [href]="'#' + collapseId(item)" class="pe-nav-link"
+                               data-bs-toggle="collapse" aria-expanded="false"
+                               [attr.aria-controls]="collapseId(item)"
+                               (click)="layoutService.closeThemePanel()">
+                                <i [class]="iconClass(item) + ' pe-nav-icon'"></i>
+                                <span class="pe-nav-content">{{ item.name }}</span>
+                                <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                            </a>
+
+                            <ul class="pe-slide-menu collapse" [id]="collapseId(item)">
+                                <li class="slide pe-nav-content1">
+                                    <a href="javascript:void(0)">{{ item.name }}</a>
+                                </li>
+
+                                @for (child of children(item); track trackByCode($index, child)) {
+
+                                    <!-- Third level: a submenu that itself has children. -->
+                                    @if (isGroup(child)) {
+                                        <li class="pe-slide pe-has-sub">
+                                            <a [href]="'#' + collapseId(child)" class="pe-nav-link"
+                                               data-bs-toggle="collapse" aria-expanded="false"
+                                               [attr.aria-controls]="collapseId(child)">
+                                                {{ child.name }}
+                                                <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                                <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                                            </a>
+
+                                            <ul class="pe-slide-menu collapse" [id]="collapseId(child)">
+                                                @for (grandchild of children(child);
+                                                      track trackByCode($index, grandchild)) {
+                                                    <li class="pe-slide-item">
+                                                        <a [routerLink]="grandchild.route"
+                                                           class="pe-nav-link" routerLinkActive="active"
+                                                           [attr.target]="grandchild.opensInNewTab ? '_blank' : null"
+                                                           (click)="layoutService.closeThemePanel()">
+                                                            {{ grandchild.name }}
+                                                        </a>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </li>
+                                    } @else {
+                                        <li class="pe-slide-item">
+                                            <a [routerLink]="child.route" class="pe-nav-link"
+                                               routerLinkActive="active"
+                                               [attr.target]="child.opensInNewTab ? '_blank' : null"
+                                               (click)="layoutService.closeThemePanel()">
+                                                {{ child.name }}
+                                            </a>
+                                        </li>
+                                    }
+                                }
+                            </ul>
+                        </li>
+                    } @else {
+                        <!-- A plain link at the top level, such as the dashboard. -->
+                        <li class="pe-slide pe-has-sub" routerLinkActive="active">
+                            <a [routerLink]="item.route" routerLinkActive="active"
+                               class="pe-nav-link"
+                               [attr.target]="item.opensInNewTab ? '_blank' : null"
+                               (click)="layoutService.closeThemePanel()">
+                                <i [class]="iconClass(item) + ' pe-nav-icon'"></i>
+                                <span class="pe-nav-content">{{ item.name }}</span>
+                            </a>
+                        </li>
+                    }
+                }
+
+                <!-- Account: theme settings and sign out are client concerns, not server menu. -->
+                <li class="pe-menu-title">Account</li>
+
+                <li class="pe-slide pe-has-sub">
+                    <a href="javascript:void(0)" class="pe-nav-link" [class.active]="themeMenuOpen"
+                       (click)="toggleThemeMenu()">
+                        <i class="ri-settings-3-line pe-nav-icon"></i>
+                        <span class="pe-nav-content">Theme Settings</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseHThemeSettings">
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('layout')">Layout</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('width')">Content Width</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('direction')">Direction</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('mode')">Mode</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('sidebar')">Sidebar Size</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('colors')">Colors</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('typography')">Typography</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('appearance')">Appearance</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('background')">Sidebar Bg</a></li>
+                        <li class="pe-slide-item"><a href="javascript:void(0)" class="pe-nav-link" (click)="openThemeSection('profile')">Profile Photo</a></li>
+                    </ul>
+                </li>
+
+                <li class="pe-slide pe-has-sub">
+                    <a routerLink="/auth/signout" class="pe-nav-link" routerLinkActive="active"
+                       (click)="layoutService.closeThemePanel()">
+                        <i class="ri-logout-box-r-line pe-nav-icon"></i>
+                        <span class="pe-nav-content">Log Out</span>
+                    </a>
+                </li>
+
+                <!--
+                  The "acting as" marker. A root user working inside somebody's organisation
+                  should never have to wonder whose data is on the screen.
+                -->
+                @if (isActingInOrganisation() && organisationName()) {
+                    <li class="pe-menu-title">Working inside</li>
+                    <li class="pe-slide">
+                        <a routerLink="/app/administration/organisation/directory" class="pe-nav-link">
+                            <i class="ri-building-4-line pe-nav-icon"></i>
+                            <span class="pe-nav-content">{{ organisationName() }}</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </div>
+    </nav>
+</aside>

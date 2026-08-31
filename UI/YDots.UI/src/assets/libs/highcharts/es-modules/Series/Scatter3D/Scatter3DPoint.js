@@ -1,0 +1,1 @@
+"use strict";import ScatterSeries from"../Scatter/ScatterSeries.js";const{pointClass:ScatterPoint}=ScatterSeries.prototype;import U from"../../Core/Utilities.js";const{defined:defined}=U;class Scatter3DPoint extends ScatterPoint{applyOptions(){return super.applyOptions.apply(this,arguments),defined(this.z)||(this.z=0),this}}export default Scatter3DPoint;

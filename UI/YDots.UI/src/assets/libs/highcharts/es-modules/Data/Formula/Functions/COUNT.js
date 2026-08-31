@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";function COUNT(r,e){const o=FormulaProcessor.getArgumentsValues(r,e);let s=0;for(let r,t=0,c=o.length;t<c;++t)switch(r=o[t],typeof r){case"number":isNaN(r)||++s;break;case"object":s+=COUNT(r,e)}return s}FormulaProcessor.registerProcessorFunction("COUNT",COUNT);export default COUNT;

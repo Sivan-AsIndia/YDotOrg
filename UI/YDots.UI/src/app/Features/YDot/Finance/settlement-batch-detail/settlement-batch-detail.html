@@ -1,0 +1,501 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div>
+
+  <!-- ============================================================ -->
+  <!-- BREADCRUMB + TASK HEADER (Donor 360 style)                  -->
+  <!-- ============================================================ -->
+  <header class="task-header mb-5">
+    <div class="task-header__identity">
+      <div class="task-header__title-row">
+        <h1 class="task-header__title">{{ pageTitle }}</h1>
+        <span class="badge" [class.badge--warn]="approvalState().tone === 'warning'"
+              [class.badge--good]="approvalState().tone === 'success'"
+              [class.badge--danger]="approvalState().tone === 'danger'">
+          {{ approvalState().icon }} {{ approvalState().label }}
+        </span>
+      </div>
+      <div class="task-header__meta">
+        <span class="task-header__ref">Ref {{ summary.settlementBatchReference }}</span>
+        <span class="dot" aria-hidden="true">•</span>
+        <span>Owner <strong>{{ owner }}</strong></span>
+        <span class="dot" aria-hidden="true">•</span>
+        <span>{{ lastRefresh() }}</span>
+        <span class="dot" aria-hidden="true">•</span>
+        <span>{{ operatingTimeZone }}</span>
+      </div>
+    </div>
+
+    @if (uiState() !== 'loading' && uiState() !== 'no-access') {
+    <div class="task-header__actions">
+      <button type="button" class="btn btn--secondary btn--sm" (click)="performAction('Validate')" [class.disabled]="!validateAllowed()" [attr.aria-disabled]="!validateAllowed()" [title]="validateAllowed() ? 'Validate' : lifecycleBlockedReason()">
+        Validate
+      </button>
+      <button type="button" class="btn btn--secondary btn--sm" (click)="performAction('Match')" [class.disabled]="!matchAllowed()" [attr.aria-disabled]="!matchAllowed()" [title]="matchAllowed() ? 'Match' : lifecycleBlockedReason()">
+        Match
+      </button>
+      <button type="button" class="btn btn--secondary btn--sm" (click)="openImportDialog()" [class.disabled]="!importAllowed()" [attr.aria-disabled]="!importAllowed()" [title]="importAllowed() ? 'Import' : lifecycleBlockedReason()">
+        Import
+      </button>
+      @if (approveAllowed()) {
+        <button type="button" class="btn btn--primary btn--sm" (click)="openApproveDialog()">
+          Approve
+        </button>
+      }
+    </div>
+    }
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- SUCCESS / OUTCOME PANEL                                       -->
+  <!-- ============================================================ -->
+  @if (uiState() === 'success') {
+    <section class="outcome" role="status" aria-live="polite">
+      <div class="outcome__main">
+        <span class="outcome__icon" aria-hidden="true">✓</span>
+        <div>
+          <p class="outcome__title">Saved successfully</p>
+          <p class="outcome__detail">
+            Reference <strong>{{ persistentOutcome().reference }}</strong> · state <strong>{{ persistentOutcome().state }}</strong> · effective <strong>{{ persistentOutcome().effectiveTime }}</strong>
+          </p>
+        </div>
+      </div>
+      <button type="button" class="btn btn--ghost btn--sm" (click)="dismissBanner()">✕</button>
+    </section>
+  }
+  @if (uiState() === 'validation') {
+    <section class="outcome outcome--danger" role="alert">
+      <div class="outcome__main">
+        <span class="outcome__icon outcome__icon--danger" aria-hidden="true">!</span>
+        <div>
+          <p class="outcome__title">Review the highlighted fields.</p>
+          <p class="outcome__detail">A value does not meet the stated format or range. Correct it to continue; entered values are kept.</p>
+        </div>
+      </div>
+      <button type="button" class="btn btn--ghost btn--sm" (click)="dismissBanner()">✕</button>
+    </section>
+  }
+  @if (uiState() === 'conflict') {
+    <section class="outcome outcome--warn" role="alert">
+      <div class="outcome__main">
+        <span class="outcome__icon outcome__icon--warn" aria-hidden="true">!</span>
+        <div>
+          <p class="outcome__title">This record changed after you opened it.</p>
+          <p class="outcome__detail">Review the latest version before continuing.</p>
+          @if (conflictCurrent(); as c) {
+            <p class="outcome__detail">
+              <strong>{{ c.settlementBatchReference }}</strong> is now: <strong>{{ c.approvalState.label }}</strong>
+              · Matched {{ formatAmount(c.matchedAmount) }} · Unmatched {{ formatAmount(c.unmatchedAmount) }}
+              @if (approveReason()) { <br>Your pending reason was kept: "{{ approveReason() }}" }
+            </p>
+          }
+        </div>
+      </div>
+      <div class="outcome__actions">
+        <a class="link" href="javascript:void(0)" (click)="compareConflict()">Compare</a>
+        <a class="link" href="javascript:void(0)" (click)="reapplyConflictChanges()">Reapply</a>
+        <a class="link" href="javascript:void(0)" (click)="cancelConflict()">Cancel</a>
+      </div>
+    </section>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <section class="outcome outcome--warn" role="alert">
+      <div class="outcome__main">
+        <span class="outcome__icon outcome__icon--warn" aria-hidden="true">!</span>
+        <div>
+          <p class="outcome__title">We could not complete the dependent service step.</p>
+          <p class="outcome__detail">Your confirmed local result is unchanged. Correlation INT-77332.</p>
+        </div>
+      </div>
+      <button type="button" class="btn btn--secondary btn--sm" (click)="retryDependency()">Retry dependency</button>
+    </section>
+  }
+
+  <!-- ============================================================ -->
+  <!-- TWO-COLUMN LAYOUT: main + sticky rail                        -->
+  <!-- ============================================================ -->
+  <div class="d360-layout">
+
+    <!-- ==================== MAIN COLUMN ==================== -->
+    <div class="d360-main">
+
+      @if (uiState() !== 'loading' && uiState() !== 'no-access') {
+      <!-- Summary card -->
+      <section class="card card--summary" aria-labelledby="summary-heading">
+        <h2 id="summary-heading" class="card__title">Batch summary</h2>
+        <div class="card__body">
+          <dl class="summary-grid">
+            <div>
+              <dt>Provider account</dt>
+              <dd>{{ summary.providerAccount }}</dd>
+            </div>
+            <div>
+              <dt>Settlement date</dt>
+              <dd>{{ formatDate(summary.settlementDate) }}</dd>
+            </div>
+            <div>
+              <dt>Bank-credit reference</dt>
+              <dd class="mono">{{ summary.bankCreditReference }}</dd>
+            </div>
+            <div>
+              <dt>Gross amount</dt>
+              <dd class="num">₹ {{ formatAmount(summary.grossAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Fees</dt>
+              <dd class="num">₹ {{ formatAmount(summary.fees) }}</dd>
+            </div>
+            <div>
+              <dt>Tax</dt>
+              <dd class="num">₹ {{ formatAmount(summary.tax) }}</dd>
+            </div>
+            <div>
+              <dt>Net amount</dt>
+              <dd class="num strong">₹ {{ formatAmount(summary.netAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Line count</dt>
+              <dd>{{ summary.lineCount }}</dd>
+            </div>
+            <div>
+              <dt>Matched amount</dt>
+              <dd class="num good">₹ {{ formatAmount(summary.matchedAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Unmatched amount</dt>
+              <dd class="num warn">₹ {{ formatAmount(summary.unmatchedAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Variance</dt>
+              <dd class="num danger">₹ {{ formatAmount(summary.variance) }}</dd>
+            </div>
+            <div>
+              <dt>Import evidence</dt>
+              <dd>
+                <a class="link" href="javascript:void(0)" title="Copy evidence reference" (click)="copyReference(importEvidenceFileName())">{{ importEvidenceFileName() }}</a>
+                <span class="conf-badge">Confidential</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Audit history</dt>
+              <dd><a class="link" href="javascript:void(0)" title="Copy audit trail reference" (click)="copyReference(summary.settlementBatchReference + '-AUDIT')">View audit trail</a></dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Filters card -->
+      <section class="card" aria-label="Filters">
+        <div class="card__body">
+          <div class="filter-grid">
+            <label class="field">
+              <span class="field__label">Batch</span>
+              <span class="select-wrap">
+                <select
+                  class="select"
+                  [ngModel]="selectedBatchRef"
+                  (ngModelChange)="selectBatch($event)"
+                  aria-label="Settlement batch"
+                >
+                  @for (b of batchOptions(); track b) {
+                    <option [value]="b">{{ b }}</option>
+                  }
+                </select>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+
+            <label class="field field--search">
+              <span class="field__label">Search</span>
+              <span class="input-wrap">
+                <input
+                  type="search"
+                  class="input"
+                  placeholder="Search by line or payment reference…"
+                  [ngModel]="searchTerm()"
+                  (ngModelChange)="searchTerm.set($event)"
+                  aria-label="Search by line or payment reference"
+                />
+                <svg class="input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field__label">Line state</span>
+              <span class="select-wrap">
+                <select
+                  class="select"
+                  [ngModel]="lineStateFilter()"
+                  (ngModelChange)="lineStateFilter.set($event)"
+                  aria-label="Line state"
+                >
+                  @for (s of lineStateOptions; track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field__label">Data scope</span>
+              <span class="select-wrap">
+                <select
+                  class="select"
+                  [ngModel]="scopeFilter()"
+                  (ngModelChange)="scopeFilter.set($event)"
+                  aria-label="Data scope"
+                >
+                  @for (sc of scopeOptions; track sc) {
+                    <option [value]="sc">{{ sc }}</option>
+                  }
+                </select>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            </label>
+          </div>
+
+          <div class="active-row">
+            <span class="active-label">Active Filters:</span>
+            @for (chip of activeFilterSummary(); track chip.key) {
+              <span class="chip">
+                {{ chip.label }}
+                <button type="button" class="chip__x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">✕</button>
+              </span>
+            } @empty {
+              <span class="active-none">None applied</span>
+            }
+            <button type="button" class="link" (click)="clearFilters()">Clear All</button>
+          </div>
+        </div>
+      </section>
+      }
+
+      <!-- Settlement lines table -->
+      <section class="card" aria-labelledby="lines-heading">
+        <div class="card__head">
+          <h2 id="lines-heading" class="card__title">Settlement lines</h2>
+          <span class="line-total">
+            Gross ₹ {{ formatAmount(lineTotals().gross) }} · Fees ₹ {{ formatAmount(lineTotals().fees) }}
+          </span>
+        </div>
+
+        @if (uiState() === 'loading') {
+          <div class="state-block" role="status" aria-live="polite">
+            <p class="state-title">Loading Settlement batch detail…</p>
+            <div class="skeleton" aria-hidden="true">
+              @for (n of [1, 2, 3, 4]; track n) {
+                <div class="skeleton-row"></div>
+              }
+            </div>
+            <button type="button" class="btn btn--secondary btn--sm" (click)="setUiState('ready')">Cancel</button>
+          </div>
+        }
+
+        @else if (uiState() === 'empty') {
+          <div class="state-block">
+            <p class="state-title">No settlement lines match this scope and filter.</p>
+            <p class="state-body">Zero results come from the current filters, not a global zero. Adjust the search, line state or scope, or reset filters to continue.</p>
+            <button type="button" class="btn btn--secondary btn--sm" (click)="clearFilters()">Reset filters</button>
+          </div>
+        }
+
+        @else if (uiState() === 'no-access') {
+          <div class="state-block">
+            <p class="state-title">This value cannot be displayed with your current access.</p>
+            <p class="state-body">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+            <a class="btn btn--secondary btn--sm" href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+          </div>
+        }
+
+        @else {
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Line reference</th>
+                  <th scope="col">Payment reference</th>
+                  <th scope="col" class="col-num">Amount</th>
+                  <th scope="col" class="col-num">Fee</th>
+                  <th scope="col" class="col-num">Tax</th>
+                  <th scope="col" class="col-num">Net</th>
+                  <th scope="col">Match state</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (l of filteredLines(); track l.lineReference) {
+                  <tr>
+                    <td data-label="Line reference"><span class="ref-main">{{ l.lineReference }}</span></td>
+                    <td data-label="Payment reference"><span class="ref-main">{{ l.paymentReference }}</span></td>
+                    <td class="col-num num" data-label="Amount">₹ {{ formatAmount(l.amount) }}</td>
+                    <td class="col-num" data-label="Fee">₹ {{ formatAmount(l.fee) }}</td>
+                    <td class="col-num" data-label="Tax">₹ {{ formatAmount(l.tax) }}</td>
+                    <td class="col-num num" data-label="Net">₹ {{ formatAmount(l.net) }}</td>
+                    <td data-label="Match state">
+                      <span class="badge" [class.badge--good]="l.matchState === 'Matched'"
+                            [class.badge--info]="l.matchState === 'Unmatched'"
+                            [class.badge--warn]="l.matchState === 'Variance'"
+                            [class.badge--danger]="l.matchState === 'Blocking'">
+                        {{ l.matchState }}
+                      </span>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="table-empty">No settlement lines match this scope and filter. Reset filters to continue.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-footer">
+            <span class="currency-note">
+              All amounts are in INR · {{ operatingTimeZone }}
+            </span>
+            <button type="button" class="btn btn--secondary btn--sm" (click)="openApproveDialog()" [class.disabled]="!approveAllowed()" [attr.aria-disabled]="!approveAllowed()" [title]="approveAllowed() ? 'Approve' : lifecycleBlockedReason()">
+              Approve
+            </button>
+          </div>
+        }
+      </section>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- IMPORT DIALOG                                                -->
+  <!-- ============================================================ -->
+  @if (importDialogOpen()) {
+    <div class="sb-modal-backdrop" (click)="cancelImport()">
+      <div class="sb-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" (click)="$event.stopPropagation()">
+        <h2 id="import-title" class="modal__title">Confirm Import</h2>
+        <p class="modal__lead">Capture provider settlement, bank evidence, fees, tax and totals. File integrity and batch identity must pass before continuation.</p>
+        <dl class="facts">
+          <div class="fact">
+            <dt>Batch</dt>
+            <dd class="mono">{{ summary.settlementBatchReference }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Provider account</dt>
+            <dd>{{ summary.providerAccount }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Evidence</dt>
+            <dd>
+              <label class="link" style="cursor: pointer;">
+                {{ importEvidenceFileName() }}
+                <input type="file" style="display: none;" accept=".pdf,.csv,.xlsx" (change)="onImportFileSelected($event)" />
+              </label>
+            </dd>
+          </div>
+          <div class="fact">
+            <dt>Resulting state</dt>
+            <dd>Imported · ready for validation</dd>
+          </div>
+        </dl>
+        <p class="field__hint">Sample settlement batch — the file above is attached as evidence for the audit trail only; its contents aren't read. Batch and line data shown here are the pre-loaded sample dataset for {{ summary.settlementBatchReference }}, not pulled from the file or an external provider.</p>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" (click)="cancelImport()">Cancel</button>
+          <button type="button" class="btn btn--primary" (click)="confirmImport()">Confirm import</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- APPROVE DIALOG                                               -->
+  <!-- ============================================================ -->
+  @if (approveDialogOpen()) {
+    <div class="sb-modal-backdrop" (click)="cancelApprove()">
+      <div class="sb-modal" role="dialog" aria-modal="true" aria-labelledby="approve-title" (click)="$event.stopPropagation()">
+        <h2 id="approve-title" class="modal__title">Confirm Approve</h2>
+        <p class="modal__lead">Record decision, independent authority, reason, effective version, time and resulting state. Show the next accountable owner.</p>
+        <dl class="facts">
+          <div class="fact">
+            <dt>Batch</dt>
+            <dd class="mono">{{ summary.settlementBatchReference }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Variance</dt>
+            <dd class="danger">₹ {{ formatAmount(summary.variance) }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Consequence</dt>
+            <dd>Approves the settlement batch with named reason</dd>
+          </div>
+          <div class="fact">
+            <dt>Effective time</dt>
+            <dd>{{ lastRefresh() }}</dd>
+          </div>
+        </dl>
+        <div class="field">
+          <label class="field__label" for="approve-reason">Reason <span class="req">Required</span></label>
+          <textarea
+            id="approve-reason"
+            class="input textarea"
+            rows="3"
+            [ngModel]="approveReason()"
+            (ngModelChange)="approveReason.set($event)"
+            [attr.maxlength]="approveReasonMax"
+            placeholder="Record the meaningful reason for this approval…"
+          ></textarea>
+          <p class="field__hint" [class.field__error]="approveReasonCount() > 0 && !approveReasonValid()" role="status">
+            {{ approveReasonCount() }} / {{ approveReasonMax }} characters (minimum {{ approveReasonMin }})
+          </p>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" (click)="cancelApprove()">Cancel</button>
+          <button type="button" class="btn btn--primary" (click)="confirmApprove()" [disabled]="!approveReasonValid()">Approve</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============================================================ -->
+  <!-- COMPARE MODAL (conflict recovery)                            -->
+  <!-- ============================================================ -->
+  @if (compareOpen()) {
+    <div class="sb-modal-backdrop" (click)="closeCompare()">
+      <div class="sb-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title" (click)="$event.stopPropagation()">
+        <h2 id="compare-title" class="modal__title">Compare versions</h2>
+        <p class="modal__lead">What this screen had loaded vs. the current version, before Approve was submitted.</p>
+        <dl class="facts">
+          <div class="fact">
+            <dt>Batch</dt>
+            <dd class="mono">{{ conflictCurrent()?.settlementBatchReference }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Current approval state (now)</dt>
+            <dd>{{ conflictCurrent()?.approvalState?.label }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Matched / Unmatched (now)</dt>
+            <dd>₹ {{ formatAmount(conflictCurrent()?.matchedAmount ?? 0) }} / ₹ {{ formatAmount(conflictCurrent()?.unmatchedAmount ?? 0) }}</dd>
+          </div>
+          <div class="fact">
+            <dt>Your reason (kept)</dt>
+            <dd>{{ approveReason() || '—' }}</dd>
+          </div>
+        </dl>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" (click)="closeCompare()">Close</button>
+          <button type="button" class="btn btn--primary" (click)="reapplyConflictChanges()">Reapply against latest</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</div>
+</main>

@@ -1,0 +1,2 @@
+/*! For license information please see acceleration-bands.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/ABands/ABandsIndicator.js";export default Highcharts;

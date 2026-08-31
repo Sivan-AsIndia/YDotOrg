@@ -1,0 +1,37 @@
+/* ---------------------------------------------------------------------------------------
+   The audit trail is built almost entirely from the theme's card and table classes, so the
+   only thing that needs styling here is the expanded payload: JSON is unreadable without a
+   monospace face and a scroll boundary, and a long one would otherwise stretch the table.
+   --------------------------------------------------------------------------------------- */
+.audit-payload {
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.125));
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+
+  /* Bounded in both directions: a large payload must not push the pager off the screen, and a
+     single long line must not widen the table past the viewport. */
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.audit-payload::-webkit-scrollbar { width: 8px; height: 8px; }
+.audit-payload::-webkit-scrollbar-thumb {
+  background: var(--bs-border-color, rgba(0, 0, 0, 0.2));
+  border-radius: 4px;
+}
+
+/* The action code beneath each action name. Small, dimmed, and monospaced so it reads as an
+   identifier rather than as prose. */
+.font-monospace {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 767.98px) {
+  .audit-payload { max-height: 220px; }
+}

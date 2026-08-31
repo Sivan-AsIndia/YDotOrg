@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Validators plus AddValidatorsFromAssembly in ServiceContainer/DependencyInjection.cs. -->
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- IServiceCollection registrations and services.Configure<T>(IConfiguration). -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YDots.DON.Domain\YDots.DON.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,587 @@
+<!--
+  IAM-USR-01 — Invite or create a user.
+
+  Four steps, then a confirmation. Every dropdown is filled from the server, because roles and
+  organisation units are identifiers rather than words, and a form that invents its own would look
+  correct and refuse to save.
+-->
+<!-- Same shell contract as every other page in this area. See the note in user-directory.html. -->
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+  <!-- ===================================================================================
+       Header
+       =================================================================================== -->
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+      <h4 class="mb-1">Create New User</h4>
+      <p class="text-muted mb-0">
+        Create the account and e-mail them a link to set their own password.
+      </p>
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" (click)="goBack()">
+      <i class="ri-arrow-left-line me-1"></i> Back to directory
+    </button>
+  </div>
+
+  <!-- ===================================================================================
+       Loading and load failure
+       =================================================================================== -->
+  @if (loading()) {
+    <div class="card border">
+      <div class="text-center py-8">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Loading roles and organisation units…</p>
+      </div>
+    </div>
+  }
+
+  @else if (loadFailed()) {
+    <div class="card border">
+      <div class="text-center py-8">
+        <i class="ri-error-warning-line text-muted d-block mb-2" style="font-size: 2.5rem;"></i>
+        <p class="fw-semibold mb-1">This form could not be loaded</p>
+        <p class="text-muted small mb-0">{{ errorMessage() }}</p>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================================
+       Confirmation — the account exists and the e-mail has gone
+       =================================================================================== -->
+  @else if (createdUser(); as created) {
+    <div class="card border">
+      <div class="card-body text-center py-8">
+        <div class="mb-3"><i class="ri-checkbox-circle-line text-success" style="font-size: 3.25rem;"></i></div>
+
+        <h5 class="mb-2">{{ created.displayName }} has an account</h5>
+        <p class="text-muted mb-4">
+          Reference <strong>{{ created.code }}</strong>
+        </p>
+
+        <!-- Three genuinely different outcomes. Saying "e-mailed" when the relay refused the
+             message would leave the administrator waiting for something that never left. -->
+        @if (invitationDelivered()) {
+          <div class="alert alert-light border text-start d-inline-block mb-4" style="max-width: 560px;">
+            <div class="fw-semibold mb-1"><i class="ri-mail-send-line me-1"></i> What happens next</div>
+            <ol class="small mb-0 ps-3">
+              <li>An invitation has been e-mailed to <strong>{{ created.email }}</strong>.</li>
+              <li>The link opens the activation page, where they confirm their details.</li>
+              <li>They set a password, and may add two-step verification — that part is optional.</li>
+              <li>Once activated, the directory shows them as <strong>Active</strong>, with MFA
+                  reading <strong>Enrolled</strong> if they added a second factor.</li>
+            </ol>
+          </div>
+        } @else if (invitationStuck()) {
+          <div class="alert alert-warning text-start d-inline-block mb-4" style="max-width: 560px;">
+            <div class="fw-semibold mb-1">
+              <i class="ri-mail-close-line me-1"></i> The account exists, but the e-mail did not go out
+            </div>
+            <p class="small mb-2">
+              <strong>{{ created.displayName }}</strong> was created and the invitation is recorded
+              as <strong>Pending</strong>, so nothing is lost. The mail relay refused the message,
+              which usually means its credentials or its sender address need attention.
+            </p>
+            <p class="small mb-0">
+              Once that is sorted, use <strong>Send invitation</strong> on the directory row to
+              deliver it. Do not create the user again — the record is already there.
+            </p>
+          </div>
+        } @else {
+          <div class="alert alert-warning text-start d-inline-block mb-4" style="max-width: 560px;">
+            <i class="ri-time-line me-1"></i>
+            No invitation was sent. The account stays a draft until you send one from the
+            directory, so they cannot sign in yet.
+          </div>
+        }
+
+        <div class="d-flex justify-content-center gap-2">
+          <button type="button" class="btn btn-outline-secondary" (click)="createAnother()">Create another user</button>
+          <button type="button" class="btn btn-primary" (click)="goBack()">Go to the directory</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================================
+       The form
+       =================================================================================== -->
+  @else {
+
+    <!-- Step rail -->
+    <div class="card border mb-4">
+      <div class="card-body py-3">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          @for (label of steps; track label; let i = $index) {
+            <button type="button" class="cu-step btn btn-sm d-flex align-items-center gap-2"
+                    [class.active]="activeStep() === i"
+                    [class.done]="activeStep() > i && isStepComplete(i)"
+                    (click)="goToStep(i)">
+              <span class="cu-step-dot">
+                @if (activeStep() > i && isStepComplete(i)) { <i class="ri-check-line"></i> } @else { {{ i + 1 }} }
+              </span>
+              <span class="d-none d-sm-inline">{{ label }}</span>
+            </button>
+
+            @if (i < steps.length - 1) { <i class="ri-arrow-right-s-line text-muted"></i> }
+          }
+        </div>
+      </div>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="alert alert-danger" role="alert" aria-live="assertive">
+        <div class="d-flex align-items-start gap-2">
+          <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+        </div>
+
+        <!-- The server's summary says "review the highlighted fields", so the fields it named
+             are listed here with the step each sits on. Clicking one goes straight there. -->
+        @if (serverErrorList().length > 0) {
+          <ul class="mb-0 mt-2 ps-4 small">
+            @for (item of serverErrorList(); track item.field) {
+              <li>
+                <button type="button" class="btn btn-link p-0 align-baseline text-danger fw-semibold"
+                        (click)="goToStep(item.step)">
+                  {{ item.stepName }}
+                </button>
+                — {{ item.message }}
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    <div class="card border">
+      <div class="card-body p-4 p-lg-5">
+
+        <!-- ============================= STEP 1 — Identity ============================= -->
+        @if (activeStep() === 0) {
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <span class="cu-avatar">{{ initials() }}</span>
+            <div>
+              <h6 class="mb-0">Who is this account for?</h6>
+              <small class="text-muted">The e-mail address is where the invitation goes.</small>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-6 col-lg-3">
+              <label class="form-label small" for="cuCategory">Account type *</label>
+              <select id="cuCategory" class="form-select" [value]="form().accountCategory"
+                      (change)="update('accountCategory', $any($event.target).value)">
+                @for (option of accountCategories(); track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="col-6 col-lg-2">
+              <label class="form-label small" for="cuTitle">Title</label>
+              <input id="cuTitle" class="form-control" [value]="form().title"
+                     (input)="update('title', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('title')">
+              @if (errorFor('title')) {
+                <div class="invalid-feedback d-block">{{ errorFor('title') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-3">
+              <label class="form-label small" for="cuFirst">First name *</label>
+              <input id="cuFirst" class="form-control" [class.is-invalid]="isFieldInvalid('firstName')"
+                     [value]="form().firstName"
+                     (input)="update('firstName', $any($event.target).value)"
+                     (blur)="onNameChanged()">
+              @if (errorFor('firstName')) {
+                <div class="invalid-feedback d-block">{{ errorFor('firstName') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-4">
+              <label class="form-label small" for="cuLast">Last name *</label>
+              <input id="cuLast" class="form-control" [class.is-invalid]="isFieldInvalid('lastName')"
+                     [value]="form().lastName"
+                     (input)="update('lastName', $any($event.target).value)"
+                     (blur)="onNameChanged()">
+              @if (errorFor('lastName')) {
+                <div class="invalid-feedback d-block">{{ errorFor('lastName') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuDisplay">Display name *</label>
+              <input id="cuDisplay" class="form-control" [class.is-invalid]="isFieldInvalid('displayName')"
+                     [value]="form().displayName"
+                     (input)="update('displayName', $any($event.target).value)">
+              @if (errorFor('displayName')) {
+                <div class="invalid-feedback d-block">{{ errorFor('displayName') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuPreferred">Preferred name</label>
+              <input id="cuPreferred" class="form-control" [value]="form().preferredName"
+                     (input)="update('preferredName', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('preferredName')">
+              @if (errorFor('preferredName')) {
+                <div class="invalid-feedback d-block">{{ errorFor('preferredName') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuEmail">Login e-mail *</label>
+              <input id="cuEmail" type="email" class="form-control" [class.is-invalid]="isFieldInvalid('email')"
+                     placeholder="name@organisation.org"
+                     [value]="form().email"
+                     (input)="update('email', $any($event.target).value)"
+                     (blur)="onEmailChanged()">
+              @if (errorFor('email')) {
+                <div class="invalid-feedback d-block">{{ errorFor('email') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuUsername">Username *</label>
+              <input id="cuUsername" class="form-control" [class.is-invalid]="isFieldInvalid('username')"
+                     [value]="form().username"
+                     (input)="update('username', $any($event.target).value)"
+                     (blur)="checkIdentity()">
+              @if (errorFor('username')) {
+                <div class="invalid-feedback d-block">{{ errorFor('username') }}</div>
+              }
+            </div>
+
+            <!-- Says "taken" or "available" and never who holds it — otherwise this form would be
+                 a way of enumerating the directory one guess at a time. -->
+            @if (identityCheck(); as check) {
+              <div class="col-12">
+                @if (check.checking) {
+                  <small class="text-muted"><i class="ri-loader-4-line"></i> Checking…</small>
+                } @else {
+                  <small [class]="check.ok ? 'text-success' : 'text-danger'">
+                    <i [class]="check.ok ? 'ri-check-line' : 'ri-close-line'"></i> {{ check.message }}
+                  </small>
+
+                  @if (check.suggestions.length > 0) {
+                    <small class="text-muted d-block mt-1">
+                      Try: {{ check.suggestions.join(', ') }}
+                    </small>
+                  }
+                }
+              </div>
+            }
+
+            <!-- A list, not a text box: the API requires the international form (+91), and a
+                 typed "91" used to sail through the browser and fail on the final step. -->
+            <div class="col-4 col-lg-2">
+              <label class="form-label small" for="cuCode">Country code</label>
+              <select id="cuCode" class="form-select"
+                      [class.is-invalid]="errorFor('mobileCountryCode')"
+                      [value]="form().mobileCountryCode"
+                      (change)="update('mobileCountryCode', $any($event.target).value)">
+                @for (code of countryCodes(); track code) {
+                  <option [value]="code">{{ code }}</option>
+                }
+              </select>
+              @if (errorFor('mobileCountryCode')) {
+                <div class="invalid-feedback d-block">{{ errorFor('mobileCountryCode') }}</div>
+              }
+            </div>
+
+            <!-- Whether these are required depends on the account type, and the server says which.
+                 The asterisk appears and disappears as the category changes. -->
+            <div class="col-8 col-lg-4">
+              <label class="form-label small" for="cuMobile">
+                Mobile @if (mobileRequired()) { <span class="text-danger">*</span> }
+              </label>
+              <input id="cuMobile" type="tel" class="form-control"
+                     [class.is-invalid]="isFieldInvalid('mobileNumber')"
+                     [value]="form().mobileNumber"
+                     (input)="update('mobileNumber', $any($event.target).value)">
+              @if (errorFor('mobileNumber')) {
+                <div class="invalid-feedback d-block">{{ errorFor('mobileNumber') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuEmployee">
+                Employee or volunteer number @if (employeeNumberRequired()) { <span class="text-danger">*</span> }
+              </label>
+              <input id="cuEmployee" class="form-control"
+                     [class.is-invalid]="isFieldInvalid('employeeNumber')"
+                     [value]="form().employeeNumber"
+                     (input)="update('employeeNumber', $any($event.target).value)">
+              @if (errorFor('employeeNumber')) {
+                <div class="invalid-feedback d-block">{{ errorFor('employeeNumber') }}</div>
+              }
+              @if (employeeNumberRequired()) {
+                <small class="text-muted">Required for a {{ form().accountCategory }} account.</small>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- ============================= STEP 2 — Organisation ============================= -->
+        @if (activeStep() === 1) {
+          <h6 class="mb-1">Where do they sit?</h6>
+          <p class="text-muted small mb-4">This drives which records they can see once they sign in.</p>
+
+          <div class="row g-3">
+            <div class="col-lg-4">
+              <label class="form-label small" for="cuEngagement">Engagement</label>
+              <select id="cuEngagement" class="form-select" [value]="form().engagementType"
+                      (change)="update('engagementType', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('engagementType')">
+                @for (option of engagementTypes(); track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+              @if (errorFor('engagementType')) {
+                <div class="invalid-feedback d-block">{{ errorFor('engagementType') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-4">
+              <label class="form-label small" for="cuUnit">Organisation unit</label>
+              <select id="cuUnit" class="form-select"
+                      [value]="form().organisationUnitId"
+                      (change)="update('organisationUnitId', $any($event.target).value)">
+                <option value="">Not set</option>
+                @for (option of organisationUnits(); track option.id) {
+                  <option [value]="option.id">{{ option.name }}</option>
+                }
+              </select>
+              @if (organisationUnits().length === 0) {
+                <div class="form-text small">
+                  No units yet. Create them under Organisation &rsaquo; Branches and Units;
+                  a user can be invited without one.
+                </div>
+              }
+            </div>
+
+            <div class="col-lg-4">
+              <label class="form-label small" for="cuDept">Department</label>
+              <select id="cuDept" class="form-select" [value]="form().departmentId"
+                      (change)="update('departmentId', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('departmentId')">
+              @if (errorFor('departmentId')) {
+                <div class="invalid-feedback d-block">{{ errorFor('departmentId') }}</div>
+              }
+                <option value="">Not set</option>
+                @for (option of departments(); track option.id) {
+                  <option [value]="option.id">{{ option.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuDesignation">Designation</label>
+              <input id="cuDesignation" class="form-control" [value]="form().designation"
+                     (input)="update('designation', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('designation')">
+              @if (errorFor('designation')) {
+                <div class="invalid-feedback d-block">{{ errorFor('designation') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuLocation">Work location</label>
+              <input id="cuLocation" class="form-control" [value]="form().workLocation"
+                     (input)="update('workLocation', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('workLocation')">
+              @if (errorFor('workLocation')) {
+                <div class="invalid-feedback d-block">{{ errorFor('workLocation') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuLanguage">Preferred language</label>
+              <select id="cuLanguage" class="form-select" [value]="form().preferredLanguage"
+                      (change)="update('preferredLanguage', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('preferredLanguage')">
+                <!-- The full catalogue. This form asks for no country, so the language list is
+                     the unfiltered one and needs no country link to load - the same supported
+                     case as the time-zone field below. The option VALUE is the culture code,
+                     because users.preferred_language stores exactly that. -->
+                <option value="">Select a language</option>
+                @for (language of geo.languages(); track language.id) {
+                  <option [value]="language.cultureCode">{{ language.displayLabel }}</option>
+                }
+              </select>
+              @if (errorFor('preferredLanguage')) {
+                <div class="invalid-feedback d-block">{{ errorFor('preferredLanguage') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuTimezone">Time zone</label>
+              <select id="cuTimezone" class="form-select" [value]="form().timeZoneId"
+                      (change)="update('timeZoneId', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('timeZoneId')">
+                <!-- The full zone catalogue. This form asks for no country, so the list is the
+                     unfiltered one and needs no country link to load. -->
+                <option value="">Select a time zone</option>
+                @for (zone of geo.timeZones(); track zone.id) {
+                  <option [value]="zone.ianaKey">{{ zone.name }}</option>
+                }
+              </select>
+              @if (errorFor('timeZoneId')) {
+                <div class="invalid-feedback d-block">{{ errorFor('timeZoneId') }}</div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- ============================= STEP 3 — Access ============================= -->
+        @if (activeStep() === 2) {
+          <h6 class="mb-1">What may they do?</h6>
+          <p class="text-muted small mb-4">
+            The role decides their permissions; the scope decides how much data those permissions reach.
+          </p>
+
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuRole">Primary role *</label>
+              <select id="cuRole" class="form-select" [class.is-invalid]="isFieldInvalid('primaryRoleId')"
+                      [value]="form().primaryRoleId"
+                      (change)="update('primaryRoleId', $any($event.target).value)">
+              @if (errorFor('primaryRoleId')) {
+                <div class="invalid-feedback d-block">{{ errorFor('primaryRoleId') }}</div>
+              }
+                <option value="">Choose…</option>
+                @for (option of roles(); track option.id) {
+                  <option [value]="option.id">{{ option.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuScope">Data scope</label>
+              <select id="cuScope" class="form-select" [value]="form().dataScopeType"
+                      (change)="update('dataScopeType', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('dataScopeType')">
+                @for (option of dataScopeTypes(); track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+              @if (errorFor('dataScopeType')) {
+                <div class="invalid-feedback d-block">{{ errorFor('dataScopeType') }}</div>
+              }
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuStart">Access starts</label>
+              <input id="cuStart" type="date" class="form-control" [value]="form().accessStartsAt"
+                     (change)="update('accessStartsAt', $any($event.target).value)">
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuEnd">Access ends</label>
+              <input id="cuEnd" type="date" class="form-control" [value]="form().accessEndsAt"
+                     (change)="update('accessEndsAt', $any($event.target).value)">
+              <small class="text-muted">Leave empty for open-ended access.</small>
+            </div>
+
+            <div class="col-lg-6">
+              <label class="form-label small" for="cuMfa">Two-step verification</label>
+              <select id="cuMfa" class="form-select" [value]="form().mfaRequirement"
+                      (change)="update('mfaRequirement', $any($event.target).value)"
+                     [class.is-invalid]="isFieldInvalid('mfaRequirement')">
+                @for (option of mfaRequirements(); track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+              @if (errorFor('mfaRequirement')) {
+                <div class="invalid-feedback d-block">{{ errorFor('mfaRequirement') }}</div>
+              }
+              <small class="text-muted">
+                <strong>Required</strong> means they must set up a second factor during activation.
+              </small>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small" for="cuJustification">Business justification *</label>
+              <textarea id="cuJustification" class="form-control" rows="3"
+                        [class.is-invalid]="isFieldInvalid('businessJustification')"
+                        placeholder="Why does this person need this access? At least 10 characters."
+                        [value]="form().businessJustification"
+                        (input)="update('businessJustification', $any($event.target).value)"></textarea>
+              @if (errorFor('businessJustification')) {
+                <div class="invalid-feedback d-block">{{ errorFor('businessJustification') }}</div>
+              }
+              <small class="text-muted">
+                Recorded in the audit trail, and the first thing an access review will look at.
+              </small>
+            </div>
+          </div>
+        }
+
+        <!-- ============================= STEP 4 — Review ============================= -->
+        @if (activeStep() === 3) {
+          <h6 class="mb-1">Check before you send</h6>
+          <p class="text-muted small mb-4">The invitation goes out as soon as you create the account.</p>
+
+          <div class="cu-review rounded-3 border p-4 mb-4">
+            <div class="row g-3">
+              <div class="col-sm-6"><div class="cu-label">Name</div><div class="cu-value">{{ form().displayName || '—' }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Login e-mail</div><div class="cu-value">{{ form().email || '—' }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Username</div><div class="cu-value">{{ form().username || '—' }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Account type</div><div class="cu-value">{{ form().accountCategory }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Access starts</div><div class="cu-value">{{ form().accessStartsAt || '—' }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Access ends</div><div class="cu-value">{{ form().accessEndsAt || 'Open-ended' }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Two-step verification</div><div class="cu-value">{{ form().mfaRequirement }}</div></div>
+              <!-- THE TWO FIELDS THAT DECIDE WHAT THE ACCOUNT CAN DO. Everything else on this
+                   panel describes who the person is; these describe what they are being given,
+                   and this is the screen an administrator is meant to check before granting it. -->
+              <div class="col-sm-6"><div class="cu-label">Primary role</div><div class="cu-value">{{ primaryRoleName() }}</div></div>
+              <div class="col-sm-6"><div class="cu-label">Data scope</div><div class="cu-value">{{ dataScopeName() }}</div></div>
+              <div class="col-12"><div class="cu-label">Justification</div><div class="cu-value">{{ form().businessJustification || '—' }}</div></div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label small" for="cuWelcome">Welcome message (optional)</label>
+            <textarea id="cuWelcome" class="form-control" rows="3"
+                      placeholder="Included in the invitation e-mail."
+                      [value]="form().welcomeMessage"
+                      (input)="update('welcomeMessage', $any($event.target).value)"></textarea>
+          </div>
+
+          <div class="alert alert-light border small">
+            <i class="ri-shield-check-line me-1"></i>
+            No password is created here. The person sets their own from the link in the e-mail,
+            so nobody — including you — ever knows what it is.
+          </div>
+        }
+
+        <!-- ============================= Footer ============================= -->
+        <div class="d-flex flex-wrap justify-content-between gap-2 mt-5 pt-4 border-top">
+          <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="activeStep() === 0" (click)="previousStep()">
+            <i class="ri-arrow-left-line me-1"></i> Back
+          </button>
+
+          @if (activeStep() < steps.length - 1) {
+            <button type="button" class="btn btn-primary btn-sm" (click)="nextStep()">
+              Continue <i class="ri-arrow-right-line ms-1"></i>
+            </button>
+          } @else {
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="submitting()" (click)="createWithoutInvite()">
+                Create without sending
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="!canSubmit()" (click)="createAndInvite()">
+                {{ submitting() ? 'Creating…' : 'Create and send invitation' }}
+              </button>
+            </div>
+          }
+        </div>
+
+      </div>
+    </div>
+  }
+
+  </div><!-- /container-fluid -->
+</div><!-- /page-wrapper -->
+</main><!-- /app-wrapper -->

@@ -1,0 +1,1 @@
+"use strict";import FormulaProcessor from"../FormulaProcessor.js";const{getArgumentValue:getArgumentValue}=FormulaProcessor;function NOT(e,r){let o=getArgumentValue(e[0],r);switch("object"==typeof o&&(o=o[0]),typeof o){case"boolean":case"number":return!o}return NaN}FormulaProcessor.registerProcessorFunction("NOT",NOT);export default NOT;

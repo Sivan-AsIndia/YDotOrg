@@ -1,0 +1,79 @@
+<div class="min-vh-100 d-flex align-items-center justify-content-center px-5 py-10 auth-bg">
+    <div class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
+        <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5"></div>
+        <div class="login-section bg-white rounded-4 p-6 px-xl-12">
+            <a routerLink="/auth/sign-in" class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-5 mb-lg-0">
+                <img height="33" width="33" class="logo-dark" alt="Dark Logo" src="assets/images/Outline ydot logo 2.svg">
+                <h3 class="mb-0 lh-base fw-semibold">YDot</h3>
+            </a>
+            <div class="d-flex flex-column justify-content-center h-100">
+                <div class="mb-12">
+                    <h5 class="mb-2">Two-Factor Authentication</h5>
+                    <p class="text-muted mb-0">6 digit OTP is sent to your mobile number</p>
+                </div>
+
+                @if (errorMessage) {
+                <div class="alert alert-danger d-flex align-items-start gap-2" role="alert">
+                    <i class="ri-error-warning-line fs-5 mt-1"></i>
+                    <span>{{ errorMessage }}</span>
+                </div>
+                }
+                @if (successMessage) {
+                <div class="alert alert-success d-flex align-items-start gap-2" role="alert">
+                    <i class="ri-checkbox-circle-line fs-5 mt-1"></i>
+                    <span>{{ successMessage }}</span>
+                </div>
+                }
+
+                @if (isSubmitting) {
+                <div class="text-center py-10">
+                    <div class="spinner-border text-primary mb-4" role="status">
+                        <span class="visually-hidden">Verifying...</span>
+                    </div>
+                    <h5 class="mb-2">Verifying your code</h5>
+                    <p class="text-muted mb-0">Please wait while we securely process your request.</p>
+                </div>
+                } @else {
+                <form (ngSubmit)="verifyOtp()">
+                    <div id="otp-container" class="d-flex flex-wrap flex-md-nowrap align-items-center justify-content-center gap-2 mb-3">
+                        @for (d of otpDigits; track $index; let i = $index) {
+                        <input
+                            type="text"
+                            class="form-control text-center min-h-50px max-w-64px border rounded"
+                            [id]="'tostep-otp-' + i"
+                            placeholder="0"
+                            maxlength="1"
+                            inputmode="numeric"
+                            pattern="[0-9]"
+                            [ngModel]="otpDigits[i]"
+                            [ngModelOptions]="{standalone: true}"
+                            (ngModelChange)="onOtpInput(i, $event)"
+                            (keydown)="onOtpKeydown(i, $event)"
+                            (paste)="onOtpPaste($event)"
+                            aria-label="OTP digit {{ i + 1 }}">
+                        }
+                    </div>
+                    <div class="small text-muted text-center mb-4">
+                        Code expires in <span class="fw-semibold">{{ formattedCodeExpiry }}</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" [disabled]="!canVerify">
+                        Verify & Continue
+                    </button>
+                </form>
+                <p class="text-center text-muted fs-14 my-6">
+                    Didn't receive the code?
+                    <a href="#!" class="link link-primary" (click)="resendCode()">
+                        @if (isResending) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Resend
+                    </a>
+                </p>
+                <p class="text-center text-muted fs-14 mb-0">
+                    <a routerLink="/auth/sign-in" class="link link-primary">
+                        <i class="ri-arrow-left-line me-1"></i> Cancel & Sign Out
+                    </a>
+                </p>
+                }
+            </div>
+        </div>
+    </div>
+</div>

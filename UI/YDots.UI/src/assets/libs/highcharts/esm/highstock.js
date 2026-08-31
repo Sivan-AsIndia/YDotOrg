@@ -1,0 +1,1 @@
+import*as t from"./highcharts.js";import"./modules/stock.js";var e,r,o={d:(e,t)=>{for(var r in t)o.o(t,r)&&!o.o(e,r)&&Object.defineProperty(e,r,{enumerable:!0,get:t[r]})},o:(e,t)=>Object.prototype.hasOwnProperty.call(e,t)};let a=(e={default:()=>t.default},r={},o.d(r,e),r);o.d({},{}),a.default.product="Highstock";let s=a.default;export{s as default};

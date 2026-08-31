@@ -1,0 +1,2 @@
+/*! For license information please see sunburst.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Treemap/TreemapSeries.js";import"../../Series/Sunburst/SunburstSeries.js";import Breadcrumbs from"../../Extensions/Breadcrumbs/Breadcrumbs.js";const G=Highcharts;G.Breadcrumbs=G.Breadcrumbs||Breadcrumbs,G.Breadcrumbs.compose(G.Chart,G.defaultOptions);export default Highcharts;

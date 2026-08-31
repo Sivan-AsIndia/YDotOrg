@@ -1,0 +1,370 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+<div [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.2.1) ============ -->
+  <header class="task-header" aria-labelledby="exec-title">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="javascript:void(0)">Workspace</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Executive dashboard</span>
+    </nav>
+
+    <div class="task-header-main">
+      <div class="task-identity">
+        <h1 class="page-title" id="exec-title">{{ pageTitle }}</h1>
+        <div class="task-meta">
+          <span class="state-pill">{{ lifecycleState }}</span>
+          <span class="owner">Owner: {{ owner }}</span>
+          <span class="freshness">Data as of {{ lastRefresh() }}</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ CONTEXT AND FILTERS (4.2.1 + 4.2.2) ============ -->
+  <section class="context-filters card" aria-labelledby="filters-heading">
+    <h2 class="visually-hidden" id="filters-heading">Context and filters</h2>
+
+    <div class="filter-grid">
+      <!-- Date range (4.2.2) -->
+      <div class="field" [class.field-invalid]="rangeInvalid()">
+        <label class="field-label" for="range-start">Date range
+          <span class="tz-label">{{ operatingTimeZone }}</span>
+        </label>
+        <div class="range-inputs">
+          <input id="range-start" type="date" class="control" [ngModel]="rangeStart()"
+                 (ngModelChange)="rangeStart.set($event)" aria-label="Start date" />
+          <span class="range-sep" aria-hidden="true">→</span>
+          <input id="range-end" type="date" class="control" [ngModel]="rangeEnd()"
+                 (ngModelChange)="rangeEnd.set($event)" aria-label="End date" />
+        </div>
+        <p class="field-hint" [class.field-error]="rangeInvalid()" role="status">
+          @if (rangeInvalid()) {
+            Review Date range. The value does not meet the stated format or range.
+          } @else {
+            Interpreted as {{ interpretedRange() }}
+          }
+        </p>
+      </div>
+
+      <!-- Organisation or campaign scope (4.2.2) -->
+      <div class="field scope-field">
+        <label class="field-label" for="scope-trigger">Organisation or campaign scope</label>
+        <button id="scope-trigger" type="button" class="control scope-trigger"
+                [attr.aria-expanded]="scopePickerOpen()" (click)="toggleScopePicker()">
+          <span class="scope-selected">
+            <span class="scope-name">{{ activeScope().name }}</span>
+            <span class="scope-context">{{ activeScope().reference }} · {{ activeScope().context }}</span>
+          </span>
+          <span class="chev" aria-hidden="true">▾</span>
+        </button>
+
+        @if (scopePickerOpen()) {
+          <div class="scope-popover" role="listbox" aria-label="Eligible scope">
+            <input type="search" class="control scope-search" placeholder="Search eligible scope…"
+                   [ngModel]="scopeQuery()" (ngModelChange)="scopeQuery.set($event)" aria-label="Search scope" />
+            @for (opt of scopeResults(); track opt.reference) {
+              <button type="button" class="scope-option" role="option"
+                      [attr.aria-selected]="opt.reference === activeScope().reference" (click)="selectScope(opt)">
+                <span class="scope-name">{{ opt.name }}</span>
+                <span class="scope-context">{{ opt.reference }} · {{ opt.context }}</span>
+              </button>
+            } @empty {
+              <p class="scope-empty">No eligible records match your search in this scope.</p>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Comparison period (4.2.2) -->
+      <div class="field">
+        <label class="field-label" for="comparison">Comparison period</label>
+        <select id="comparison" class="control" [ngModel]="comparisonPeriod()"
+                (ngModelChange)="setComparison($event)">
+          @for (opt of comparisonOptions; track opt) {
+            <option [value]="opt">{{ opt }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Saved filter -->
+      <div class="field">
+        <label class="field-label" for="saved-filter">Saved filter</label>
+        <select id="saved-filter" class="control" [ngModel]="savedFilter()"
+                (ngModelChange)="savedFilter.set($event)">
+          @for (f of savedFilters; track f) {
+            <option [value]="f">{{ f }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Search -->
+      <div class="field">
+        <label class="field-label" for="search">Search</label>
+        <input id="search" type="search" class="control" placeholder="Search within scope…"
+               [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" />
+      </div>
+    </div>
+
+    <!-- Active-filter summary + totals qualified by scope and last refresh (4.2.1) -->
+    <div class="filter-footer">
+      <div class="active-filters" aria-label="Active filters">
+        @for (chip of activeFilterSummary(); track chip.key) {
+          <span class="chip">{{ chip.label }}</span>
+        }
+        <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button>
+      </div>
+      <div class="filter-tools">
+        <span class="totals-caption">{{ totalsCaption() }}</span>
+        <button type="button" class="btn btn-primary" (click)="applyFilter()"
+                [disabled]="!filterAllowed()">Filter</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WORK SURFACE: two-region layout (4.2.5 desktop) ============ -->
+  <div class="work-surface">
+
+    <!-- ---------- MAIN WORK (4.2.1) ---------- -->
+    <section class="main-work" aria-labelledby="main-work-heading">
+      <div class="section-head">
+        <h2 id="main-work-heading">Outcome-level trends</h2>
+        <div class="section-head-tools">
+          <span class="freshness-inline">Last refresh {{ lastRefresh() }}</span>
+        </div>
+      </div>
+
+      <!-- LOADING (4.2.4) -->
+      @if (uiState() === 'loading') {
+        <div class="state-block" role="status" aria-live="polite">
+          <p class="state-title">Loading Executive dashboard…</p>
+          <div class="skeleton-grid" aria-hidden="true">
+            @for (n of [1,2,3,4,5,6]; track n) { <div class="skeleton-tile"></div> }
+          </div>
+          <button type="button" class="btn btn-ghost" (click)="setUiState('ready')">Cancel</button>
+        </div>
+      }
+
+      <!-- EMPTY (4.2.4) -->
+      @else if (uiState() === 'empty') {
+        <div class="state-block">
+          <p class="state-title">No results for this scope and filter.</p>
+          <p class="state-body">Zero results come from the current filters, not a global zero. Adjust the range or
+            scope, or reset filters to continue.</p>
+          <button type="button" class="btn btn-ghost" (click)="clearFilters(); setUiState('ready')">Reset filters</button>
+        </div>
+      }
+
+      <!-- NO ACCESS (4.2.4 / 4.2.6 restricted value) -->
+      @else if (uiState() === 'no-access') {
+        <div class="state-block">
+          <p class="state-title">This value cannot be displayed with your current access.</p>
+          <p class="state-body">Restricted records, fields, counts, actions and suggestions are hidden. Return to your
+            permitted landing page to continue.</p>
+          <a class="btn btn-ghost" href="javascript:void(0)" (click)="setUiState('ready')">Return to My Workspace</a>
+        </div>
+      }
+
+      <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS all keep the metrics visible -->
+      @else {
+
+        <!-- Situational banners (4.2.6) -->
+        @if (uiState() === 'validation') {
+          <div class="banner banner-error" role="alert">
+            <strong>Enter a valid Date range.</strong>
+            <a href="javascript:void(0)">Date range</a> does not meet the stated format or range.
+          </div>
+        }
+        @if (uiState() === 'duplicate') {
+          <div class="banner banner-warn" role="alert">
+            A similar saved view already exists. Link, change the value, request review or cancel — nothing is
+            overwritten silently.
+          </div>
+        }
+        @if (uiState() === 'conflict') {
+          <div class="banner banner-warn" role="alert">
+            This record changed after you opened it. Review the latest version before continuing.
+            <span class="banner-actions">
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Compare</a>
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Reapply eligible changes</a>
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Cancel</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'dependency-failure') {
+          <div class="banner banner-warn" role="alert">
+            We could not complete the dependent service step. Your confirmed local result is unchanged.
+            <span class="banner-actions">
+              <span class="corr">Correlation INT-77213</span>
+              <a href="javascript:void(0)" (click)="setUiState('ready')">Retry dependency</a>
+            </span>
+          </div>
+        }
+        @if (uiState() === 'success') {
+          <div class="banner banner-success" role="status">
+            Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }};
+            effective {{ persistentOutcome().effectiveTime }}.
+          </div>
+        }
+
+        <!-- Read-only outcome metrics with drill-down + progressive-disclosure definitions (4.2.2) -->
+        <div class="metric-grid">
+          @for (m of filteredMetrics(); track m.key) {
+            <article class="metric-tile">
+              <header class="metric-tile-head">
+                <span class="metric-label">{{ m.label }}</span>
+                <button type="button" class="def-toggle" [attr.aria-expanded]="openDefinition() === m.key"
+                        [attr.aria-label]="'Metric definition for ' + m.label" (click)="toggleDefinition(m.key)">ⓘ</button>
+              </header>
+              <p class="metric-value">{{ m.value }}</p>
+              <p class="metric-qualifier">{{ m.qualifier }}</p>
+              @if (openDefinition() === m.key) {
+                <p class="metric-definition" role="note">{{ m.definition }}</p>
+              }
+              <button type="button" class="drill-link" (click)="drillDown(m.key)">{{ m.drillLabel }} →</button>
+            </article>
+          }
+        </div>
+
+        <!-- Outcome-level trend line with drill-down and freshness read-out -->
+        <figure class="trend-chart">
+          <figcaption class="trend-caption">
+            <span class="legend"><i class="dot dot-donations"></i>Donations (₹L)</span>
+            <span class="legend"><i class="dot dot-beneficiaries"></i>Eligible beneficiaries</span>
+          </figcaption>
+
+          <svg viewBox="0 0 900 300" class="chart-svg" role="img"
+               [attr.aria-label]="'Outcome trend over ' + interpretedRange()">
+            <g class="gridlines" aria-hidden="true">
+              @for (y of [24,90,156,222,272]; track y) { <line x1="0" [attr.y1]="y" x2="900" [attr.y2]="y" /> }
+            </g>
+            <path [attr.d]="donationsPath()" class="path-donations" fill="none" />
+            <path [attr.d]="beneficiariesPath()" class="path-beneficiaries" fill="none" />
+
+            <line class="focus-line" [attr.x1]="focusX()" y1="12" [attr.x2]="focusX()" y2="272" />
+
+            @for (p of donationPoints(); track p.index) {
+              <circle class="pt pt-donations" [class.pt-focus]="p.index === focusedPoint()"
+                      [attr.cx]="p.x" [attr.cy]="p.y" r="4" tabindex="0"
+                      [attr.aria-label]="p.point.date + ', donations ₹' + p.point.donations + ' L'"
+                      (click)="focusPoint(p.index); drillDown('trend:' + p.point.date)"
+                      (focus)="focusPoint(p.index)" />
+            }
+            @for (p of beneficiaryPoints(); track p.index) {
+              <circle class="pt pt-beneficiaries" [class.pt-focus]="p.index === focusedPoint()"
+                      [attr.cx]="p.x" [attr.cy]="p.y" r="4" tabindex="0"
+                      [attr.aria-label]="p.point.date + ', beneficiaries ' + p.point.beneficiaries"
+                      (click)="focusPoint(p.index); drillDown('trend:' + p.point.date)"
+                      (focus)="focusPoint(p.index)" />
+            }
+          </svg>
+
+          <div class="x-axis" aria-hidden="true">
+            @for (p of trend; track p.date) { <span>{{ p.date }}</span> }
+          </div>
+
+          <p class="trend-readout" role="status">
+            {{ focusedTrend().date }} 2026 · Donations ₹{{ focusedTrend().donations }} L ·
+            Beneficiaries {{ focusedTrend().beneficiaries }} · as of {{ lastRefresh() }}
+          </p>
+        </figure>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: history / evidence (4.2.5 desktop) ---------- -->
+    <aside class="side-panel">
+
+      <!-- DECISION / REVIEW (4.2.1) -->
+      <section class="card decision-review" aria-labelledby="decision-heading">
+        <h2 id="decision-heading" class="section-head-2">Decision / review</h2>
+        <p class="dr-lead">Protected output requires review and explicit confirmation before it is made available.</p>
+
+        <dl class="dr-list">
+          <div><dt>Before → after</dt><dd>No export → Authorised summary generated</dd></div>
+          <div><dt>Evidence</dt><dd>{{ totalsCaption() }}</dd></div>
+          <div><dt>Reason</dt><dd>{{ exportConfirmation.purpose }}</dd></div>
+          <div><dt>Resulting state</dt><dd>Protected output available · {{ exportConfirmation.expiry }}</dd></div>
+        </dl>
+
+        <!-- Export authorised summary — workflow action (4.2.3) -->
+        @if (exportAllowed()) {
+          <button type="button" class="btn btn-primary btn-block" (click)="openExportDialog()">
+            Export authorised summary
+          </button>
+        } @else {
+          <p class="dr-blocked">Export is unavailable in the current lifecycle state or with your permissions.</p>
+        }
+      </section>
+
+      <!-- RELATED AND HISTORY (4.2.1) -->
+      <section class="card related-history" aria-labelledby="related-heading">
+        <h2 id="related-heading" class="section-head-2">Related and history</h2>
+
+        <div class="rel-tabs" role="tablist" aria-label="Related and history">
+          @for (tab of visibleRelatedTabs(); track tab.key) {
+            <button type="button" class="rel-tab" role="tab" [class.active]="activeRelatedTab() === tab.key"
+                    [attr.aria-selected]="activeRelatedTab() === tab.key" (click)="selectRelatedTab(tab.key)">
+              {{ tab.label }}
+            </button>
+          }
+        </div>
+
+        <ul class="rel-list" role="list">
+          @for (row of activeRelatedRows(); track row.primary) {
+            <li class="rel-row">
+              <span class="rel-primary">{{ row.primary }}</span>
+              <span class="rel-secondary">{{ row.secondary }}</span>
+              <span class="rel-meta">{{ row.meta }}</span>
+            </li>
+          } @empty {
+            <li class="rel-empty">No entries in scope.</li>
+          }
+        </ul>
+      </section>
+
+      <!-- PERSISTENT OUTCOME (4.2.1) -->
+      <section class="card persistent-outcome" aria-labelledby="outcome-heading">
+        <h2 id="outcome-heading" class="section-head-2">Persistent outcome</h2>
+        <dl class="outcome-list">
+          <div><dt>State</dt><dd>{{ persistentOutcome().state }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ persistentOutcome().effectiveTime }}</dd></div>
+          <div><dt>Downstream status</dt><dd>{{ persistentOutcome().downstreamStatus }}</dd></div>
+          <div><dt>Accountable owner</dt><dd>{{ persistentOutcome().owner }}</dd></div>
+          <div><dt>Next action</dt><dd>{{ persistentOutcome().nextAction }}</dd></div>
+        </dl>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ============ EXPORT CONFIRMATION DIALOG (4.2.3 / 4.2.6 high-risk) ============ -->
+  @if (exportDialogOpen()) {
+    <div class="modal-backdrop" (click)="cancelExport()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-dialog-title"
+           (click)="$event.stopPropagation()">
+        <h2 id="export-dialog-title" class="modal-title">Confirm Export authorised summary</h2>
+        <p class="modal-lead">Review the affected output, consequence, reason and effective time before the protected
+          output is made available.</p>
+
+        <dl class="modal-list">
+          <div><dt>Classification</dt><dd>{{ exportConfirmation.classification }}</dd></div>
+          <div><dt>Purpose</dt><dd>{{ exportConfirmation.purpose }}</dd></div>
+          <div><dt>Scope</dt><dd>{{ exportConfirmation.scope }}</dd></div>
+          <div><dt>Row / file count</dt><dd>{{ exportConfirmation.rowFileCount }}</dd></div>
+          <div><dt>Expiry</dt><dd>{{ exportConfirmation.expiry }}</dd></div>
+          <div><dt>Audit reference</dt><dd>{{ exportConfirmation.auditReference }}</dd></div>
+        </dl>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" (click)="cancelExport()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="confirmExport()">Confirm export</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</div>
+</div>
+</main>

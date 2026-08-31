@@ -1,0 +1,1 @@
+module.exports={plugins:[{removeAttrs:{attrs:["(path|rect|circle|polygon|line|polyline|g|ellipse)"]}},{removeTitle:!0},{removeStyleElement:!0},{removeComments:!0},{removeDesc:!0},{removeUselessDefs:!0},{cleanupIDs:{remove:!0,prefix:"svgicon-"}},{convertShapeToPath:!0}]};

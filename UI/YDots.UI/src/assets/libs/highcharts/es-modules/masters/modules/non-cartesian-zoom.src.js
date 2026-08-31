@@ -1,0 +1,2 @@
+/*! For license information please see non-cartesian-zoom.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import NonCartesianSeriesZoom from"../../Extensions/NonCartesianSeriesZoom/NonCartesianSeriesZoom.js";const G=Highcharts;G.NonCartesianSeriesZoom=G.NonCartesianSeriesZoom||NonCartesianSeriesZoom,G.NonCartesianSeriesZoom.compose(G.Chart,G.Series,G.Tooltip);export default Highcharts;

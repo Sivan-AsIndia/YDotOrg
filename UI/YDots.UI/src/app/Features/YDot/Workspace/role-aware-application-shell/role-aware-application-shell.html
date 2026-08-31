@@ -1,0 +1,749 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+   <div class="container-fluid px-4 py-3">
+  <div  [attr.data-ui-state]="uiState()">
+    <!-- ============ HEADER (Application shell title + primary role switch) ============ -->
+    <header class="sh-header">
+      <div class="sh-title-wrap">
+        <div class="sh-title-block">
+          <!-- Breadcrumbs (4.7.1 Application shell) -->
+      
+          <h1 class="sh-title">{{ pageTitle }}</h1>
+        </div>
+      </div>
+
+      <!-- Primary action: Switch permitted role (role pill) + secondary/overflow (4.7.3) -->
+      <div class="sh-header-actions">
+        @if (switchRoleAllowed()) {
+          <button
+            type="button"
+            class="sh-role-pill"
+            (click)="openRoleDialog()"
+            aria-label="Switch permitted role"
+          >
+            <span class="sh-role-name">{{ activeRole() }}</span>
+            <span class="sh-role-caret" aria-hidden="true">⌄</span>
+          </button>
+        }
+        <div class="sh-overflow-wrap">
+          <button
+            type="button"
+            class="sh-icon-btn"
+            [attr.aria-expanded]="overflowOpen()"
+            aria-label="More actions"
+            (click)="toggleOverflow()"
+          >
+            ⋯
+          </button>
+          @if (overflowOpen()) {
+            <div class="sh-overflow-menu" role="menu">
+              <button type="button" role="menuitem" (click)="switchPermittedScope()">
+                Switch permitted scope
+              </button>
+              <button type="button" role="menuitem" (click)="openCommandPalette()">
+                Open command palette
+              </button>
+              <button type="button" role="menuitem" (click)="signOut()">Sign out</button>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ CONTEXT AND FILTERS (4.7.1) ============ -->
+    <section class="sh-filterbar" aria-label="Context and filters">
+      <div class="sh-filter-controls">
+        <!-- Active organisation scope (4.7.2) -->
+        <div class="sh-field sh-scope-field">
+          <label class="sh-field-label" for="scope-trigger">Active organisation scope</label>
+          <button
+            id="scope-trigger"
+            type="button"
+            class="sh-control sh-scope-trigger"
+            [attr.aria-expanded]="scopePickerOpen()"
+            (click)="toggleScopePicker()"
+          >
+            <span class="sh-scope-selected">
+              <span class="sh-scope-name">{{ activeScope().name }}</span>
+              <span class="sh-scope-context"
+                >{{ activeScope().reference }} · {{ activeScope().context }}</span
+              >
+            </span>
+            <span class="sh-caret" aria-hidden="true">▾</span>
+          </button>
+          @if (scopePickerOpen()) {
+            <div class="sh-scope-popover" role="listbox" aria-label="Eligible scope">
+              <input
+                type="search"
+                class="sh-control"
+                placeholder="Search eligible scope…"
+                [ngModel]="scopeQuery()"
+                (ngModelChange)="scopeQuery.set($event)"
+                aria-label="Search scope"
+              />
+              @for (opt of scopeResults(); track opt.reference) {
+                <button
+                  type="button"
+                  class="sh-scope-option"
+                  role="option"
+                  [attr.aria-selected]="opt.reference === activeScope().reference"
+                  (click)="selectScope(opt)"
+                >
+                  <span class="sh-scope-name">{{ opt.name }}</span>
+                  <span class="sh-scope-context">{{ opt.reference }} · {{ opt.context }}</span>
+                </button>
+              } @empty {
+                <p class="sh-scope-empty">No eligible records match your search in this scope.</p>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Saved filter -->
+        <div class="sh-field">
+          <label class="sh-field-label" for="saved-filter">Saved filter</label>
+          <select
+            id="saved-filter"
+            class="sh-control"
+            [ngModel]="savedFilter()"
+            (ngModelChange)="savedFilter.set($event)"
+          >
+            @for (f of savedFilters; track f) {
+              <option [value]="f">{{ f }}</option>
+            }
+          </select>
+        </div>
+
+        <!-- Search -->
+        <div class="sh-field">
+          <label class="sh-field-label" for="search">Search</label>
+          <input
+            id="search"
+            type="search"
+            class="sh-control"
+            placeholder="Search menu, scope or commands…"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+          />
+        </div>
+      </div>
+
+      <div class="sh-filter-summary">
+        <div class="sh-chips" aria-label="Active filters">
+          @for (chip of activeFilterSummary(); track chip.key) {
+            <span class="sh-chip">{{ chip.label }}</span>
+          }
+          <button type="button" class="sh-link" (click)="clearFilters()">Clear filters</button>
+        </div>
+        <span class="sh-totals">{{ totalsCaption() }}</span>
+      </div>
+    </section>
+
+    <!-- ============ STATE BANNERS (4.7.6) ============ -->
+    @if (uiState() === 'validation') {
+      <div class="sh-banner sh-banner-error" role="alert">
+        <strong>Check the highlighted fields before continuing.</strong>
+        <ul class="sh-error-summary">
+          <li><a href="javascript:void(0)">Active role</a> — Enter Active role.</li>
+          <li>
+            <a href="javascript:void(0)">Session expiry warning</a> — Review Session expiry warning.
+            The value does not meet the stated format or range.
+          </li>
+        </ul>
+      </div>
+    }
+    @if (uiState() === 'duplicate') {
+      <div class="sh-banner sh-banner-warn" role="alert">
+        A similar saved shell view already exists. Link, change the value, request review or cancel
+        — nothing is overwritten silently.
+      </div>
+    }
+    @if (uiState() === 'conflict') {
+      <div class="sh-banner sh-banner-warn" role="alert">
+        This record changed after you opened it. Review the latest version before continuing.
+        <span class="sh-banner-actions">
+          <a href="javascript:void(0)" (click)="setUiState('ready')">Compare</a
+          ><a href="javascript:void(0)" (click)="setUiState('ready')">Reapply eligible changes</a
+          ><a href="javascript:void(0)" (click)="setUiState('ready')">Cancel</a>
+        </span>
+      </div>
+    }
+    @if (uiState() === 'dependency-failure') {
+      <div class="sh-banner sh-banner-warn" role="alert">
+        We could not complete the dependent service step. Your confirmed local result is unchanged.
+        <span class="sh-banner-actions"
+          ><span class="sh-corr">Correlation SESS-88431</span
+          ><a href="javascript:void(0)" (click)="setUiState('ready')">Retry dependency</a></span
+        >
+      </div>
+    }
+    @if (uiState() === 'success') {
+      <div class="sh-banner sh-banner-success" role="status">
+        Saved successfully. Reference {{ persistentOutcome.reference }}; state
+        {{ persistentOutcome.state }}; effective {{ persistentOutcome.effectiveTime }}.
+      </div>
+    }
+
+    <!-- ============ NO ACCESS replaces the surface (4.7.4 / 4.7.6) ============ -->
+    @if (uiState() === 'no-access') {
+      <section class="sh-card sh-state-card">
+        <p class="sh-state-title">This value cannot be displayed with your current access.</p>
+        <p class="sh-state-body">
+          Restricted menus, records, fields, counts, actions and search suggestions are hidden.
+          Return to your permitted landing page to continue.
+        </p>
+        <a class="sh-btn sh-btn-ghost" href="javascript:void(0)" (click)="setUiState('ready')"
+          >Return to My Workspace</a
+        >
+      </section>
+    }
+
+    <!-- ============ LOADING replaces the surface (4.7.4) ============ -->
+    @else if (uiState() === 'loading') {
+      <section class="sh-card sh-state-card" role="status" aria-live="polite">
+        <p class="sh-state-title">Loading Role-aware application shell…</p>
+        <div class="sh-skeleton-grid" aria-hidden="true">
+          @for (n of [1, 2, 3, 4, 5, 6]; track n) {
+            <div class="sh-skeleton"></div>
+          }
+        </div>
+        <button type="button" class="sh-btn sh-btn-ghost" (click)="setUiState('ready')">
+          Cancel
+        </button>
+      </section>
+    }
+
+    <!-- ============ EMPTY replaces the surface (4.7.4) ============ -->
+    @else if (uiState() === 'empty') {
+      <section class="sh-card sh-state-card">
+        <p class="sh-state-title">No menu groups or commands for this scope and filter.</p>
+        <p class="sh-state-body">
+          Zero results come from the current filters or scope, not a global zero. Reset filters or
+          switch scope to continue.
+        </p>
+        <button
+          type="button"
+          class="sh-btn sh-btn-ghost"
+          (click)="clearFilters(); setUiState('ready')"
+        >
+          Reset filters
+        </button>
+      </section>
+    }
+
+    <!-- ============ MAIN GRID (image card layout) ============ -->
+    @else {
+      <div class="sh-grid">
+        <!-- ---------- MAIN COLUMN ---------- -->
+        <div class="sh-main">
+          <!-- Stat band: read-only measure fields (4.7.2) -->
+          <section class="sh-stats" aria-label="Shell measures">
+            <article class="sh-stat">
+              <span class="sh-stat-icon sh-ic-green" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect
+                    x="5"
+                    y="4"
+                    width="14"
+                    height="17"
+                    rx="2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                  <path d="M9 3.5h6v2H9z" stroke="currentColor" stroke-width="1.4" />
+                  <path
+                    d="M9 12l2 2 4-4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <div class="sh-stat-copy">
+                <span class="sh-stat-label">Unread task count</span>
+                <span class="sh-stat-value"
+                  >{{ unreadTaskCount() }} <span class="sh-stat-unit">tasks</span></span
+                >
+              </div>
+            </article>
+
+            <article class="sh-stat">
+              <span class="sh-stat-icon sh-ic-purple" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M13.7 21a2 2 0 01-3.4 0"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <div class="sh-stat-copy">
+                <span class="sh-stat-label">Notification count</span>
+                <span class="sh-stat-value"
+                  >{{ notificationCount() }} <span class="sh-stat-unit">unread</span></span
+                >
+              </div>
+            </article>
+
+            <article class="sh-stat">
+              <span class="sh-stat-icon sh-ic-blue" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect
+                    x="3"
+                    y="3"
+                    width="7"
+                    height="7"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                  <rect
+                    x="14"
+                    y="3"
+                    width="7"
+                    height="7"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                  <rect
+                    x="3"
+                    y="14"
+                    width="7"
+                    height="7"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                  <rect
+                    x="14"
+                    y="14"
+                    width="7"
+                    height="7"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                </svg>
+              </span>
+              <div class="sh-stat-copy">
+                <span class="sh-stat-label">Available menu groups</span>
+                <span class="sh-stat-value"
+                  >{{ visibleMenuGroups().length }} <span class="sh-stat-unit">groups</span></span
+                >
+              </div>
+            </article>
+
+            <article class="sh-stat">
+              <span class="sh-stat-icon sh-ic-amber" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M13 3L4 14h6l-1 7 9-11h-6l1-7z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <div class="sh-stat-copy">
+                <span class="sh-stat-label">Permitted commands</span>
+                <span class="sh-stat-value"
+                  >{{ permittedCommands().length }} <span class="sh-stat-unit">commands</span></span
+                >
+              </div>
+            </article>
+          </section>
+
+          <!-- Permitted menu groups (4.7.1 Main work) -->
+          <section class="sh-card sh-menu-card" aria-labelledby="menu-heading">
+            <div class="sh-card-head">
+              <h2 class="sh-card-title" id="menu-heading">Permitted menu groups</h2>
+              <span class="sh-count-pill">{{ visibleMenuGroups().length }} groups</span>
+            </div>
+            <div class="sh-menu-groups">
+              @for (group of visibleMenuGroups(); track group.key) {
+                <div class="sh-menu-group">
+                  <button
+                    type="button"
+                    class="sh-menu-group-head"
+                    [attr.aria-expanded]="expandedGroup() === group.key"
+                    (click)="toggleGroup(group.key)"
+                  >
+                    <span class="sh-menu-group-label">{{ group.label }}</span>
+                    <span class="sh-menu-group-count">{{ group.destinations.length }}</span>
+                    <span class="sh-caret" aria-hidden="true">{{
+                      expandedGroup() === group.key ? '▾' : '▸'
+                    }}</span>
+                  </button>
+                  @if (expandedGroup() === group.key) {
+                    <ul class="sh-menu-list" role="list">
+                      @for (dest of group.destinations; track dest.route) {
+                        <li class="sh-menu-item">
+                          <a class="sh-menu-link" [href]="dest.route">{{ dest.label }}</a>
+                          <span class="sh-tag sh-tag-green">Permitted</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              } @empty {
+                <p class="sh-empty">No permitted menu groups in this scope.</p>
+              }
+            </div>
+          </section>
+
+          <!-- Session & identity fields (4.7.2) + Related and history (4.7.1) -->
+          <div class="sh-main-2col">
+            <section class="sh-card" aria-labelledby="session-heading">
+              <div class="sh-card-head">
+                <h2 class="sh-card-title" id="session-heading">Session &amp; identity</h2>
+              </div>
+              <dl class="sh-def">
+                <div>
+                  <dt>Signed-in display name</dt>
+                  <dd>{{ signedInName() }}</dd>
+                </div>
+                <div>
+                  <dt>Active role</dt>
+                  <dd>{{ activeRole() }}</dd>
+                </div>
+                <div>
+                  <dt>Help context</dt>
+                  <dd>{{ helpContext() }}</dd>
+                </div>
+                <div>
+                  <dt>Session expiry warning</dt>
+                  <dd>{{ sessionExpiryInterpreted() }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="sh-card" aria-labelledby="related-heading">
+              <div class="sh-card-head">
+                <h2 class="sh-card-title" id="related-heading">Related and history</h2>
+              </div>
+              <div class="sh-rel-tabs" role="tablist" aria-label="Related and history">
+                @for (tab of visibleRelatedTabs(); track tab.key) {
+                  <button
+                    type="button"
+                    class="sh-rel-tab"
+                    role="tab"
+                    [class.active]="activeRelatedTab() === tab.key"
+                    [attr.aria-selected]="activeRelatedTab() === tab.key"
+                    (click)="selectRelatedTab(tab.key)"
+                  >
+                    {{ tab.label }}
+                  </button>
+                }
+              </div>
+              <ul class="sh-rel-list" role="list">
+                @for (row of activeRelatedRows(); track row.primary) {
+                  <li class="sh-rel-row">
+                    <span class="sh-rel-primary">{{ row.primary }}</span>
+                    <span class="sh-rel-secondary">{{ row.secondary }}</span>
+                    <span class="sh-rel-meta">{{ row.meta }}</span>
+                  </li>
+                } @empty {
+                  <li class="sh-empty">No entries in scope.</li>
+                }
+              </ul>
+            </section>
+          </div>
+        </div>
+
+        <!-- ---------- SIDEBAR ---------- -->
+        <aside class="sh-aside">
+          <!-- Permitted commands (Quick-Actions style; 4.7.1 Main work) -->
+          <section class="sh-card sh-actions-card" aria-labelledby="commands-heading">
+            <div class="sh-card-head">
+              <h2 class="sh-card-title" id="commands-heading">Permitted commands</h2>
+            </div>
+            <ul class="sh-action-list" role="list">
+              @for (cmd of permittedCommands(); track cmd.permission) {
+                <li>
+                  <button type="button" class="sh-action" (click)="runCommand(cmd)">
+                    <span class="sh-action-icon" aria-hidden="true">
+                      @switch (cmd.icon) {
+                        @case ('edit') {
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M4 20h4l10-10-4-4L4 16v4z"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              stroke-linejoin="round"
+                            />
+                            <path d="M13.5 6.5l4 4" stroke="currentColor" stroke-width="1.6" />
+                          </svg>
+                        }
+                        @case ('people') {
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.6" />
+                            <path
+                              d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              stroke-linecap="round"
+                            />
+                            <path
+                              d="M16.5 9.5h3M18 8v3"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                        }
+                        @case ('check') {
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="9"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                            />
+                            <path
+                              d="M8.5 12.5l2.5 2.5 4.5-5"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        }
+                        @case ('lock') {
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <rect
+                              x="5"
+                              y="10"
+                              width="14"
+                              height="10"
+                              rx="2"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                            />
+                            <path
+                              d="M8 10V7a4 4 0 018 0v3"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                            />
+                          </svg>
+                        }
+                        @case ('megaphone') {
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M4 10v4l10 4V6L4 10z"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              stroke-linejoin="round"
+                            />
+                            <path d="M18 9a3 3 0 010 6" stroke="currentColor" stroke-width="1.6" />
+                          </svg>
+                        }
+                      }
+                    </span>
+                    <span class="sh-action-label">{{ cmd.label }}</span>
+                  </button>
+                </li>
+              } @empty {
+                <li class="sh-empty">No permitted commands in this scope.</li>
+              }
+            </ul>
+            <button type="button" class="sh-link sh-action-more" (click)="openCommandPalette()">
+              Open command palette →
+            </button>
+          </section>
+
+          <!-- Decision / review (4.7.1) -->
+          <section class="sh-card" aria-labelledby="decision-heading">
+            <div class="sh-card-head">
+              <h2 class="sh-card-title" id="decision-heading">Decision / review</h2>
+            </div>
+            <p class="sh-lead">
+              Switching the permitted role requires review and explicit confirmation before it takes
+              effect.
+            </p>
+            <p class="sh-warning" role="note">
+              <span aria-hidden="true">⚠</span> Switching role immediately re-resolves your
+              permitted menu, scope and commands.
+            </p>
+            <dl class="sh-def">
+              <div>
+                <dt>Before → after</dt>
+                <dd>{{ activeRole() }} → selected role</dd>
+              </div>
+              <div>
+                <dt>Effective permission</dt>
+                <dd>Switch permitted role — granted</dd>
+              </div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>{{ totalsCaption() }}</dd>
+              </div>
+              <div>
+                <dt>Reason</dt>
+                <dd>Operate under a different permitted role</dd>
+              </div>
+              <div>
+                <dt>Resulting state</dt>
+                <dd>Menu, scope and commands re-resolved</dd>
+              </div>
+            </dl>
+            @if (switchRoleAllowed()) {
+              <button type="button" class="btn btn-primary btn-sm w-100" (click)="openRoleDialog()">
+                Switch permitted role
+              </button>
+            } @else {
+              <p class="sh-blocked">
+                Role switching is unavailable with your current permissions or state.
+              </p>
+            }
+          </section>
+
+          <!-- Persistent outcome (4.7.1) -->
+          <section class="sh-card" aria-labelledby="outcome-heading">
+            <div class="sh-card-head">
+              <h2 class="sh-card-title" id="outcome-heading">Persistent outcome</h2>
+            </div>
+            <dl class="sh-def">
+              <div>
+                <dt>State</dt>
+                <dd>{{ persistentOutcome.state }}</dd>
+              </div>
+              <div>
+                <dt>Effective time</dt>
+                <dd>{{ persistentOutcome.effectiveTime }}</dd>
+              </div>
+              <div>
+                <dt>Downstream status</dt>
+                <dd>{{ persistentOutcome.downstreamStatus }}</dd>
+              </div>
+              <div>
+                <dt>Accountable owner</dt>
+                <dd>{{ persistentOutcome.owner }}</dd>
+              </div>
+              <div>
+                <dt>Next action</dt>
+                <dd>{{ persistentOutcome.nextAction }}</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    }
+
+    <!-- ============ SWITCH ROLE CONFIRMATION (4.7.3 / 4.7.6 high-risk) ============ -->
+    @if (roleDialogOpen()) {
+      <div class="sh-modal-backdrop" (click)="cancelRoleSwitch()">
+        <div
+          class="sh-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="role-dialog-title"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 id="role-dialog-title" class="sh-modal-title">Confirm Switch permitted role</h2>
+          <p class="sh-modal-lead">
+            Review the affected record, consequence, reason and effective time before the role is
+            switched.
+          </p>
+
+          <div class="sh-field">
+            <label class="sh-field-label" for="role-select">Active role</label>
+            <select
+              id="role-select"
+              class="sh-control"
+              [ngModel]="selectedRole()"
+              (ngModelChange)="selectedRole.set($event)"
+            >
+              <option value="" disabled>Select a permitted role…</option>
+              @for (role of permittedRoles; track role) {
+                <option [value]="role">{{ role }}</option>
+              }
+            </select>
+            @if (!selectedRole().trim()) {
+              <p class="sh-field-error" role="status">Enter Active role.</p>
+            }
+          </div>
+
+          <dl class="sh-def">
+            <div>
+              <dt>Affected record</dt>
+              <dd>{{ signedInName() }} · {{ stableReference }}</dd>
+            </div>
+            <div>
+              <dt>Consequence</dt>
+              <dd>Menu, scope and commands re-resolve for the new role</dd>
+            </div>
+            <div>
+              <dt>Reason</dt>
+              <dd>Operate under a different permitted role</dd>
+            </div>
+            <div>
+              <dt>Effective time</dt>
+              <dd>{{ lastRefresh() }}</dd>
+            </div>
+          </dl>
+
+          <div class="sh-modal-actions">
+            <button type="button" class="sh-btn sh-btn-ghost" (click)="cancelRoleSwitch()">
+              Cancel
+            </button>
+            <button type="button" class="sh-btn sh-btn-primary" (click)="confirmRoleSwitch()">
+              Confirm switch
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ============ COMMAND PALETTE (4.7.3 Open command palette) ============ -->
+    @if (commandPaletteOpen()) {
+      <div class="sh-modal-backdrop" (click)="closeCommandPalette()">
+        <div
+          class="sh-modal sh-palette"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="palette-title"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 id="palette-title" class="sh-modal-title">Command palette</h2>
+          <input
+            type="search"
+            class="sh-control"
+            placeholder="Search permitted commands…"
+            [ngModel]="commandQuery()"
+            (ngModelChange)="commandQuery.set($event)"
+            aria-label="Search commands"
+          />
+          <ul class="sh-palette-list" role="list">
+            @for (cmd of paletteResults(); track cmd.permission) {
+              <li>
+                <button type="button" class="sh-action" (click)="runCommand(cmd)">
+                  <span class="sh-action-label">{{ cmd.label }}</span>
+                </button>
+              </li>
+            } @empty {
+              <li class="sh-empty">No permitted commands match your search.</li>
+            }
+          </ul>
+          <div class="sh-modal-actions">
+            <button type="button" class="sh-btn sh-btn-ghost" (click)="closeCommandPalette()">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+  </div>
+  </div>
+
+</main>

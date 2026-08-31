@@ -1,0 +1,2 @@
+/*! For license information please see sand-signika.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import SandSignikaTheme from"../../Extensions/Themes/SandSignika.js";H.theme=SandSignikaTheme.options,SandSignikaTheme.apply();export default H;

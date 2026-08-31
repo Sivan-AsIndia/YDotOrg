@@ -1,0 +1,2 @@
+/*! For license information please see navigator.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import StandaloneNavigator from"../../Stock/Navigator/StandaloneNavigator.js";import NavigatorComposition from"../../Stock/Navigator/NavigatorComposition.js";const G=Highcharts;G.StandaloneNavigator=G.StandaloneNavigator||StandaloneNavigator,G.navigator=G.StandaloneNavigator.navigator,NavigatorComposition.compose(G.Chart,G.Axis,G.Series);export default Highcharts;

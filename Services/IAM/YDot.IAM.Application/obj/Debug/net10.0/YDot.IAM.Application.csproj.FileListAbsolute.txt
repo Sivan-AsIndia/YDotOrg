@@ -1,0 +1,69 @@
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\iamapi\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\iamapi\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild2\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\SIVANT~1\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\slnbuild3\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\bld\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\build2\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\final\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\gm\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\url\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\url\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\url\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\hl\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fin2\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\em\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\inv2\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\role\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\db293c33-01a9-4d43-9d0c-c8209ca3b6f1\scratchpad\fwd2\Debug\net10.0\YDot.IAM.Application.pdb
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\8efc7166-ceb8-4681-97b3-3fb2540b29df\scratchpad\obuild\Debug\net10.0\YDot.IAM.Application.deps.json
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\8efc7166-ceb8-4681-97b3-3fb2540b29df\scratchpad\obuild\Debug\net10.0\YDot.IAM.Application.dll
+C:\Users\Sivan T\AppData\Local\Temp\claude\d--Permaspace-Phase1-YDots-src\8efc7166-ceb8-4681-97b3-3fb2540b29df\scratchpad\obuild\Debug\net10.0\YDot.IAM.Application.pdb
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\bin\Debug\net10.0\YDot.IAM.Application.deps.json
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\bin\Debug\net10.0\YDot.IAM.Application.dll
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\bin\Debug\net10.0\YDot.IAM.Application.pdb
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\bin\Debug\net10.0\YDot.IAM.Domain.dll
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\bin\Debug\net10.0\YDot.IAM.Domain.pdb
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.csproj.AssemblyReference.cache
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.GeneratedMSBuildEditorConfig.editorconfig
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.AssemblyInfoInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.AssemblyInfo.cs
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.csproj.CoreCompileInputs.cache
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.sourcelink.json
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.A2F8002D.Up2Date
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.dll
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\refint\YDot.IAM.Application.dll
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\YDot.IAM.Application.pdb
+D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Application\obj\Debug\net10.0\ref\YDot.IAM.Application.dll

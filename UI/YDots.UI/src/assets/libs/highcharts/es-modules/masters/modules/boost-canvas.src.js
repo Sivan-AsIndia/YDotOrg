@@ -1,0 +1,2 @@
+/*! For license information please see boost-canvas.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import BoostCanvas from"../../Extensions/BoostCanvas.js";const G=Highcharts;G.initCanvasBoost=function(){BoostCanvas.compose(G.Chart,G.Series,G.seriesTypes)};export default Highcharts;

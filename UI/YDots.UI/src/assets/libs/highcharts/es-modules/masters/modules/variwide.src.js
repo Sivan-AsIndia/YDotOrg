@@ -1,0 +1,2 @@
+/*! For license information please see variwide.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import VariwideSeries from"../../Series/Variwide/VariwideSeries.js";const G=Highcharts;VariwideSeries.compose(G.Axis,G.Tick);export default Highcharts;

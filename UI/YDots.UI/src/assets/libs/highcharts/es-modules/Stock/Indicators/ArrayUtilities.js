@@ -1,0 +1,1 @@
+"use strict";function getArrayExtremes(r,e,t){return r.reduce((r,a)=>[Math.min(r[0],a[e]),Math.max(r[1],a[t])],[Number.MAX_VALUE,-Number.MAX_VALUE])}const ArrayUtilities={getArrayExtremes:getArrayExtremes};export default ArrayUtilities;

@@ -1,0 +1,151 @@
+/* SCR-IAM-001 — User directory.
+   Page width, padding and position come from the shell's app-wrapper / page-wrapper /
+   container-fluid, exactly as on every other page in this area. Nothing here should try to
+   own the page box — an earlier version did, with its own max-width and centring, and the
+   result was content sliding out from under the header. */
+
+/* Leaves room for the search icon sitting inside the input. */
+.ps-9 {
+  padding-left: 2.5rem;
+}
+
+/* ---- Table ------------------------------------------------------------------------------- */
+
+.ud-table thead th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom-width: 1px;
+}
+
+.ud-table td {
+  vertical-align: middle;
+}
+
+/* Without an explicit min-width of 0, a flex child refuses to shrink and `text-truncate`
+   silently does nothing — long e-mail addresses would then stretch the whole table. */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* ---- Avatar ------------------------------------------------------------------------------ */
+
+.ud-avatar {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.ud-avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 1.1rem;
+}
+
+/* ---- Status badges -----------------------------------------------------------------------
+   Each badge pairs a colour with the status word itself, so the meaning never depends on
+   colour alone. */
+
+.ud-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ud-badge-good {
+  background-color: #d1fae5;
+  color: #047857;
+}
+
+.ud-badge-danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.ud-badge-blue {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.ud-badge-muted {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+/* ---- Dialogs ------------------------------------------------------------------------------ */
+
+.ud-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  z-index: 1055;
+  overflow-y: auto;
+}
+
+.ud-dialog {
+  max-width: 620px;
+  /* Long records still scroll inside the dialog rather than pushing it off the screen. */
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+.ud-dialog-icon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 26px;
+}
+
+.ud-dialog-icon-warning {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+.ud-dialog-icon-danger {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.ud-dialog-icon-success {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+
+.ud-dialog-icon-primary {
+  background-color: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+}
+
+/* ---- Detail labels -------------------------------------------------------------------------- */
+
+.ud-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  margin-bottom: 0.1rem;
+}
+
+.ud-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1f2430;
+  word-break: break-word;
+}

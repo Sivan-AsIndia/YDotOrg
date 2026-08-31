@@ -1,0 +1,515 @@
+import { Injectable, inject } from '@angular/core';
+import { Observable, catchError, forkJoin, map, of, switchMap } from 'rxjs';
+import { PaymentVerificationRecord } from '../Shared/models/payment-verification.model';
+import { PaymentEventRecord, PaymentStatus } from '../Shared/models/payment-event-queue.model';
+import { ReceiptRecord } from '../Shared/models/receipt-register.model';
+import { RccRefundCaseRecord } from '../Shared/models/refund-chargeback-case.model';
+import { PsrRecoveryRecord } from '../Shared/models/payment-support-safe-retry.model';
+import { RcrCorrectionRequest } from '../Shared/models/receipt-correction-and-reissue.model';
+import {
+  DonationIntentListItem,
+  DonationIntentSearchFilter,
+  PublicDonationFormConfig,
+} from '../Shared/models/payment.model';
+import {
+  formatMoment,
+  DonationIntentScreenRecord,
+  toChargebackCaseRecord,
+  toIntentScreenRecord,
+  toPaymentEventRecord,
+  toReceiptRecord,
+  toRecoveryRecord,
+  toRefundCaseRecord,
+} from '../Shared/models/payment-adapters';
+import { PaymentApiService } from './payment-api.service';
+
+/**
+ * The read side of the eight Donations and Payments screens.
+ *
+ * WHAT THIS USED TO BE, AND WHY IT MATTERED. Every method here fetched a static JSON file from
+ * `assets/data/donations-payments/`, held it in a field, and let the screens mutate that field in
+ * place. Three consequences followed and all three were real:
+ *
+ *   - NOTHING WAS EVER SAVED. A receipt "issued" on the register existed until the tab was
+ *     refreshed and no further. The register and the API disagreed permanently.
+ *   - THE DATA WAS THE SAME FOR EVERY ORGANISATION AND EVERY USER, because a file on the web
+ *     server has no idea who asked for it. Tenant isolation stopped at the API boundary.
+ *   - Two screens showing the same donation could disagree, because each held its own copy.
+ *
+ * Every method now calls the payments API through <see cref="PaymentApiService"/> and adapts the
+ * response into the view model the screen already binds to - so the templates, the theme and the
+ * responsive layout are untouched, and the numbers on them are real.
+ *
+ * THE CACHES ARE GONE FROM THE READ PATH, deliberately, and that is a change of behaviour worth
+ * stating. Every other register on the platform can afford to cache; a donation register cannot.
+ * A payment captured thirty seconds ago must appear on the next refresh, and a refund approved by
+ * a colleague must not be invisible because this tab is holding an older answer. The `*Cache`
+ * accessors survive because several screens call them, and they now return null - which those
+ * screens already handle by fetching.
+ *
+ * THE `pending*` HAND-OFF FIELDS SURVIVE UNCHANGED. They carry a selected record from one screen
+ * to the next during a navigation - the event queue to the verification page, the intent detail
+ * to safe retry - which is genuine per-session UI state rather than data, and belongs on the
+ * client.
+ */
+@Injectable({ providedIn: 'root' })
+export class DataService {
+  private readonly payments = inject(PaymentApiService);
+
+  /**
+   * How many rows a screen's first page asks for.
+   *
+   * The screens page in memory over whatever they are given, so this is the working set rather
+   * than a page size. Capped because an unbounded fetch of a busy organisation's donation history
+   * is both a slow screen and more donor data in the browser than any one view needs.
+   */
+  private static readonly WorkingSetSize = 200;
+
+  // =========================================================================================
+  // Public donation initiation and donation intents
+  // =========================================================================================
+
+  /**
+   * The public donation form's presentation configuration.
+   *
+   * WHAT IS HERE AND WHAT IS DELIBERATELY NOT. The page copy, the currency list and the amount
+   * ceiling are PRESENTATION and belong on the client; they used to come from a JSON file for no
+   * reason other than that everything else did.
+   *
+   * THE CAMPAIGN LIST IS EMPTY, and that is the important change. A public donation page must not
+   * offer a stranger a list of campaigns to choose from - which charity's campaigns would it be?
+   * The campaign is resolved by the API from the tracking reference in the link the donor
+   * followed, and that resolution is also what decides which organisation the gift belongs to. A
+   * list here would have offered every organisation's campaigns to everybody.
+   *
+   * THE PERMISSIONS ARE ALL TRUE because a public donor has no account and no permissions to
+   * check. Whether they may actually donate is decided by the API from the link they arrived on -
+   * an inactive tracking asset or a closed campaign is refused there, where it cannot be bypassed.
+   */
+  getPublicDonationInitiationData(): Observable<PublicDonationFormConfig> {
+    return of({
+      pageTitle: 'Make a donation',
+      pageSubtitle: 'Your gift is recorded against the campaign you followed.',
+      operatingTimeZone: 'IST',
+
+      // The consent wording's version, recorded on the intent so a consent given today can be
+      // told apart from one given under different wording last year.
+      consentPolicyVersion: 'v1',
+
+      campaigns: [],
+
+      currencies: [
+        { reference: 'INR', label: 'INR - Indian Rupee' },
+        { reference: 'USD', label: 'USD - US Dollar' },
+        { reference: 'GBP', label: 'GBP - Pound Sterling' },
+        { reference: 'EUR', label: 'EUR - Euro' },
+      ],
+
+      geographies: [],
+
+      permissions: { view: true, submit: true, continueToPayment: true },
+
+      // A ceiling on the form, not a rule. The API has its own and enforces it; this only stops
+      // an obvious typo - an extra zero - reaching the gateway at all.
+      maxDonationAmount: 10_000_000,
+    });
+  }
+
+  /** Kept because the public form calls it after a submission. It no longer holds anything. */
+  updatePublicDonationInitiationData(_data: unknown): void {
+    // Intentionally empty. The intent is persisted by the API; there is nothing to keep here.
+  }
+
+  getPublicDonationInitiationCache(): null {
+    return null;
+  }
+
+  /**
+   * The donation intent register.
+   *
+   * `needsAttention` IS NOT SET HERE. The screen decides whether it is showing everything or the
+   * support subset, and passing a filter the screen did not ask for would silently hide rows
+   * somebody expected to see.
+   */
+  getDonationIntentRows(
+    filter: DonationIntentSearchFilter = {},
+  ): Observable<DonationIntentListItem[]> {
+    return this.payments
+      .searchIntents({ pageSize: DataService.WorkingSetSize, ...filter })
+      .pipe(map((page) => page.items));
+  }
+
+  /**
+   * The intent detail screen's records, in the shape it binds to.
+   *
+   * IT FETCHES THE LIST AND THEN EACH DETAIL, which looks expensive and is bounded: the screen
+   * shows ONE intent, so it is given the page of intents it can navigate between and the full
+   * detail of them. The alternative - a list-only payload - would leave the attempt timeline and
+   * the lifecycle history empty, and those are the two things somebody opens this screen for.
+   *
+   * A DETAIL THAT FAILS IS DROPPED, not fatal. One intent the caller cannot see must not blank
+   * the whole screen.
+   */
+  getDonationIntentsData(
+    filter: DonationIntentSearchFilter = {},
+  ): Observable<{ intents: DonationIntentScreenRecord[] }> {
+    return this.payments.searchIntents({ pageSize: 25, ...filter }).pipe(
+      switchMap((page) =>
+        page.items.length === 0
+          ? of([] as DonationIntentScreenRecord[])
+          : forkJoin(
+              page.items.map((item) =>
+                this.payments.getIntent(item.id).pipe(
+                  map(toIntentScreenRecord),
+                  catchError(() => of(null)),
+                ),
+              ),
+            ).pipe(
+              map((records) =>
+                records.filter((record): record is DonationIntentScreenRecord => record !== null),
+              ),
+            ),
+      ),
+      map((intents) => ({ intents })),
+    );
+  }
+
+  updateDonationIntentsData(_data: unknown): void {
+    // Intentionally empty. See the class comment: writes go to the API, not to a field.
+  }
+
+  getDonationIntentsCache(): null {
+    return null;
+  }
+
+  // =========================================================================================
+  // Payment verification - SCR-PAY-002
+  // =========================================================================================
+
+  /**
+   * The verification screen's records.
+   *
+   * IT RETURNS THE SUPPORT QUEUE, mapped, rather than "every payment". Verification is something
+   * a person does to a payment whose outcome is in doubt; listing every settled donation on this
+   * screen would bury the handful that need looking at.
+   *
+   * The screen calls `verifyPayment` on the API when somebody actually presses Verify - this is
+   * only what populates the list.
+   */
+  getPaymentVerificationData(): Observable<PaymentVerificationRecord[]> {
+    return this.payments
+      .getSupportQueue({ pageSize: DataService.WorkingSetSize })
+      .pipe(
+        map((page) =>
+          page.items.map<PaymentVerificationRecord>((item) => ({
+            donationReference: item.intentReference,
+            requestedAmount: item.amount.amount,
+            currency: item.amount.currencyCode,
+
+            // Uncertain outcomes show as Pending rather than Failed. The donor may already have
+            // been charged, and telling them it failed would be worse than telling them nothing.
+            backendPaymentState: item.requiresVerification
+              ? 'Pending'
+              : item.status === 'paid'
+                ? 'Confirmed'
+                : 'Failed',
+
+            lastVerifiedTime: formatMoment(item.lastAttemptAtUtc),
+            gatewayReference: item.lastGatewayResultCode ?? '',
+            receiptEligibility: item.status === 'paid' ? 'Eligible' : 'Not yet eligible',
+            receiptLink: null,
+            supportCorrelationReference: item.intentReference,
+          })),
+        ),
+      );
+  }
+
+  updatePaymentVerificationData(_data: PaymentVerificationRecord[]): void {
+    // Intentionally empty.
+  }
+
+  getPaymentVerificationCache(): PaymentVerificationRecord[] | null {
+    return null;
+  }
+
+  // =========================================================================================
+  // Payment event queue - SCR-PAY-003
+  // =========================================================================================
+
+  getPaymentEventQueueData(): Observable<PaymentEventRecord[]> {
+    return this.payments
+      .searchPaymentEvents({ pageSize: DataService.WorkingSetSize })
+      .pipe(map((page) => page.items.map(toPaymentEventRecord)));
+  }
+
+  updatePaymentEventQueueData(_data: PaymentEventRecord[]): void {
+    // Intentionally empty.
+  }
+
+  getPaymentEventQueueCache(): PaymentEventRecord[] | null {
+    return null;
+  }
+
+  /**
+   * NO LONGER ADDS ANYTHING.
+   *
+   * A gateway event is created by a payment provider posting a signed webhook, and by nothing
+   * else. The previous implementation let the browser push a row onto the queue, which meant the
+   * screen could show an "event" no gateway had ever sent - indistinguishable, once rendered,
+   * from one that had.
+   *
+   * The method survives because the public donation screen calls it after a submission; it is
+   * now a no-op, and the row appears on the next refresh once the gateway has actually reported.
+   */
+  addDonationToPaymentEventQueue(_record: PaymentEventRecord): void {
+    // Intentionally empty. See the comment above.
+  }
+
+  /**
+   * NO LONGER WRITES ANYTHING, and this one is the most important removal in the file.
+   *
+   * It used to mark a payment Success or Fail from the browser AND auto-generate a receipt with
+   * a random number - `REC-2025-` plus four random digits. Three separate problems with that:
+   *
+   *   - A CLIENT CANNOT DECIDE WHETHER A PAYMENT SUCCEEDED. Only the gateway knows, and the
+   *     answer reaches the platform through a signed webhook or a verification call.
+   *   - A RANDOM RECEIPT NUMBER IS NOT A RECEIPT NUMBER. Tax receipt numbers must run in an
+   *     unbroken per-organisation series; the API allocates them under a row lock precisely so
+   *     that two receipts issued in the same instant cannot collide.
+   *   - The receipt existed only in this tab, so the donor's copy and the register's copy would
+   *     have disagreed the moment anybody refreshed.
+   *
+   * Payment outcome now comes from `verifyPayment` or from the gateway's webhook, and receipts
+   * are issued by `issueReceipt`.
+   */
+  updatePaymentEventQueueStatus(_eventReference: string, _paymentStatus: PaymentStatus): void {
+    // Intentionally empty. See the comment above.
+  }
+
+  // =========================================================================================
+  // Cross-screen hand-off
+  //
+  // GENUINE CLIENT STATE, not data. Each field carries a selected record from one screen to the
+  // next during a navigation, and lives exactly as long as that navigation.
+  // =========================================================================================
+
+  /** The record chosen on the event queue and carried into the payment continuation. */
+  private pendingDonationForPayment: PaymentEventRecord | null = null;
+
+  setPendingDonationForPayment(record: PaymentEventRecord): void {
+    this.pendingDonationForPayment = record;
+  }
+
+  getPendingDonationForPayment(): PaymentEventRecord | null {
+    return this.pendingDonationForPayment;
+  }
+
+  clearPendingDonationForPayment(): void {
+    this.pendingDonationForPayment = null;
+  }
+
+  /** The record carried from the intent detail screen into safe retry. */
+  private pendingSafeRetryRecord: PaymentEventRecord | null = null;
+
+  setPendingSafeRetryRecord(record: PaymentEventRecord): void {
+    this.pendingSafeRetryRecord = record;
+  }
+
+  getPendingSafeRetryRecord(): PaymentEventRecord | null {
+    return this.pendingSafeRetryRecord;
+  }
+
+  clearPendingSafeRetryRecord(): void {
+    this.pendingSafeRetryRecord = null;
+  }
+
+  /** The record carried from the event queue into the verification page. */
+  private pendingVerificationRecord: PaymentEventRecord | null = null;
+
+  setPendingVerificationRecord(record: PaymentEventRecord): void {
+    this.pendingVerificationRecord = record;
+  }
+
+  getPendingVerificationRecord(): PaymentEventRecord | null {
+    return this.pendingVerificationRecord;
+  }
+
+  clearPendingVerificationRecord(): void {
+    this.pendingVerificationRecord = null;
+  }
+
+  // =========================================================================================
+  // Receipt register - SCR-PAY-005
+  // =========================================================================================
+
+  getReceiptRegisterData(): Observable<ReceiptRecord[]> {
+    return this.payments
+      .searchReceipts({ pageSize: DataService.WorkingSetSize })
+      .pipe(map((page) => page.items.map(toReceiptRecord)));
+  }
+
+  /**
+   * NO LONGER ADDS A LOCAL ROW.
+   *
+   * A receipt exists when the API has issued it and allocated its number, and not before. The
+   * previous version pushed a browser-made record onto the register, where it sat looking exactly
+   * like a real one until the next refresh removed it.
+   *
+   * The register re-fetches after issuing, so the real receipt - with its real number - appears
+   * a moment later.
+   */
+  addReceiptToRegister(_record: ReceiptRecord): void {
+    // Intentionally empty. See the comment above.
+  }
+
+  updateReceiptRegisterData(_data: ReceiptRecord[]): void {
+    // Intentionally empty.
+  }
+
+  getReceiptRegisterCache(): ReceiptRecord[] | null {
+    return null;
+  }
+
+  // =========================================================================================
+  // Refunds and chargebacks - SCR-PAY-006 and SCR-PAY-008
+  // =========================================================================================
+
+  /**
+   * The combined refund and chargeback register.
+   *
+   * TWO CALLS, ONE LIST, because the screen shows one register and filters it by case type. They
+   * are fetched in parallel and merged newest-first, so a chargeback opened this morning sits
+   * above a refund raised last week rather than after every refund.
+   */
+  getRefundChargebackData(): Observable<RccRefundCaseRecord[]> {
+    const refunds$ = this.payments
+      .searchRefunds({ pageSize: DataService.WorkingSetSize })
+      .pipe(map((page) => page.items.map(toRefundCaseRecord)));
+
+    // CHARGEBACKS FALL BACK TO AN EMPTY LIST rather than failing the screen. The two halves are
+    // separately permissioned - a Payment Operations user sees refunds and may not resolve
+    // chargebacks - and half a register is far more useful than an error page.
+    const chargebacks$ = this.payments
+      .searchChargebacks({ pageSize: DataService.WorkingSetSize })
+      .pipe(
+        map((page) => page.items.map(toChargebackCaseRecord)),
+        catchError(() => of([] as RccRefundCaseRecord[])),
+      );
+
+    return forkJoin([refunds$, chargebacks$]).pipe(
+      // Newest first across BOTH kinds, so a chargeback opened this morning sits above a refund
+      // raised last week rather than after every refund.
+      map(([refundRows, chargebackRows]) =>
+        [...refundRows, ...chargebackRows].sort((left, right) =>
+          right.createdIso.localeCompare(left.createdIso),
+        ),
+      ),
+    );
+  }
+
+  updateRefundChargebackData(_data: RccRefundCaseRecord[]): void {
+    // Intentionally empty.
+  }
+
+  getRefundChargebackCache(): RccRefundCaseRecord[] | null {
+    return null;
+  }
+
+  // =========================================================================================
+  // Payment support and safe retry - SCR-PAY-007
+  // =========================================================================================
+
+  getPaymentSupportRetryData(): Observable<PsrRecoveryRecord[]> {
+    return this.payments
+      .getSupportQueue({ pageSize: DataService.WorkingSetSize })
+      .pipe(map((page) => page.items.map(toRecoveryRecord)));
+  }
+
+  updatePaymentSupportRetryData(_data: PsrRecoveryRecord[]): void {
+    // Intentionally empty.
+  }
+
+  getPaymentSupportRetryCache(): PsrRecoveryRecord[] | null {
+    return null;
+  }
+
+  // =========================================================================================
+  // Receipt correction and reissue - SCR-PAY-008
+  // =========================================================================================
+
+  /**
+   * The correction worklist.
+   *
+   * IT IS DERIVED FROM THE RECEIPTS THEMSELVES rather than from a separate correction table, and
+   * that follows the domain: on this platform a correction IS a receipt - a new version pointing
+   * back at the one it supersedes. There is no pending-correction record to list, because a
+   * correction is issued in one step by somebody who holds the permission.
+   *
+   * So what this returns is every receipt that COULD be corrected: issued, not voided. That is
+   * the worklist an operator actually wants, and it cannot drift from the register because it is
+   * the same rows.
+   */
+  getReceiptCorrectionData(): Observable<RcrCorrectionRequest[]> {
+    return this.payments
+      .searchReceipts({ pageSize: DataService.WorkingSetSize, issueState: 'issued' })
+      .pipe(
+        map((page) =>
+          page.items.map<RcrCorrectionRequest>((receipt) => ({
+            receiptId: receipt.id,
+
+            // THE REFERENCE AN OPERATOR READS, never the identifier. A receipt number is what
+            // somebody quotes down a telephone; a GUID in that column tells them nothing and is
+            // the kind of internal detail a register should keep to itself.
+            requestReference: receipt.receiptNumber ?? receipt.donationReference,
+
+            correctionCategory: 'Reissue (Duplicate)',
+            receiptReference: receipt.receiptNumber ?? '',
+
+            // Blank until a correction is actually issued: the new number is allocated by the
+            // API at that moment and cannot be predicted here.
+            newReceiptReference: '',
+
+            donationReference: receipt.donationReference,
+            donorName: receipt.donorSnapshot,
+            currentValue: receipt.amount.display,
+            proposedValue: '',
+            currentVersion: receipt.versionNumber,
+            status: 'Draft',
+            requestedAtIso: receipt.issuedAtUtc ?? '',
+            requestedAtLabel: formatMoment(receipt.issuedAtUtc),
+            requestedBy: '',
+            reason: '',
+            supportingEvidence: [],
+            approver: '',
+            deliveryChannel: receipt.deliveryStateDescription,
+            version: receipt.version,
+            hasDownstreamReference: !!receipt.supersedesReceiptId,
+            downstreamStatus: receipt.issueStateDescription,
+
+            history: [
+              {
+                label: 'Issued',
+                detail: receipt.receiptNumber ?? '',
+                meta: formatMoment(receipt.issuedAtUtc),
+              },
+            ],
+
+            linkedRecords: [{ reference: receipt.donationReference, kind: 'Donation' }],
+            documents: receipt.documentUrl
+              ? [{ name: 'Receipt document', classification: 'Tax document' }]
+              : [],
+            integrationStatus: { provider: 'Receipt delivery', state: receipt.deliveryStateDescription },
+            supportCorrelation: { reference: receipt.donationReference, state: 'Open' },
+          })),
+        ),
+      );
+  }
+
+  updateReceiptCorrectionData(_data: RcrCorrectionRequest[]): void {
+    // Intentionally empty.
+  }
+
+  getReceiptCorrectionCache(): RcrCorrectionRequest[] | null {
+    return null;
+  }
+}

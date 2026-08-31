@@ -1,0 +1,2 @@
+/*! For license information please see aroon-oscillator.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/AroonOscillator/AroonOscillatorIndicator.js";export default Highcharts;

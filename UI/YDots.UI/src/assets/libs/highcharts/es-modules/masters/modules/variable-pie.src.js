@@ -1,0 +1,2 @@
+/*! For license information please see variable-pie.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/VariablePie/VariablePieSeries.js";export default Highcharts;

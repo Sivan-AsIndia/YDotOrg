@@ -1,0 +1,490 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+    <!-- ============ PAGE HEADER (User Directory style) ============ -->
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+        <div>
+          <h3 class="mb-1 fin-page-title">{{ pageTitle }}</h3>
+          <p class="mb-0 fs-14">{{ pageSubtitle }}</p>
+          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+            <span class="text-muted small">Owner: {{ owner }}</span>
+            <span class="text-muted small">Data updated {{ lastRefresh() }}</span>
+            <span class="text-muted small">{{ operatingTimeZone }}</span>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <span class="iam-status-pill">{{ lifecycleState }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SITUATIONAL BANNERS ============ -->
+    @if (uiState() === 'validation') {
+      <div class="alert alert-danger d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span><strong>Review the highlighted fields.</strong> A value does not meet the stated format or range. Correct it to continue.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+    @if (uiState() === 'duplicate') {
+      <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span>Duplicate exception detected. Review the safe candidate category and comparison route before continuing.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+    @if (uiState() === 'conflict') {
+      <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span>This record changed after you opened it. Review the latest version before continuing.</span>
+        <span class="d-flex gap-2">
+          <a href="javascript:void(0)" class="fw-link" (click)="dismissBanner()">Compare</a>
+          <a href="javascript:void(0)" class="fw-link" (click)="dismissBanner()">Reapply eligible changes</a>
+          <a href="javascript:void(0)" class="fw-link" (click)="dismissBanner()">Cancel</a>
+        </span>
+      </div>
+    }
+    @if (uiState() === 'dependency-failure') {
+      <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span>We could not complete the dependent service step. Your confirmed local result is unchanged. <span class="fw-corr">Correlation INT-77335</span></span>
+        <a href="javascript:void(0)" class="fw-link" (click)="dismissBanner()">Retry dependency</a>
+      </div>
+    }
+    @if (uiState() === 'success') {
+      <div class="alert alert-success d-flex align-items-center justify-content-between py-2 mb-3" role="status">
+        <span>Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+
+    <!-- ============ FILTER BAR (User Directory style) ============ -->
+    <div class="filter-bar-wrap mb-4">
+      <input type="checkbox" id="filterPanelToggle" class="filter-panel-toggle-input" hidden>
+
+      <div class="filter-topbar">
+        <div class="filter-topbar-search">
+          <i class="ri-search-line"></i>
+          <input type="text" placeholder="Search by exception reference…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+        </div>
+        <label for="filterPanelToggle" class="btn btn-primary btn-sm px-3">
+          <i class="ri-equalizer-line"></i> Filter
+          @if (activeFilterSummary().length) { <span class="filter-topbar-dot"></span> }
+        </label>
+      </div>
+
+      <label for="filterPanelToggle" class="filter-modal-backdrop" aria-hidden="true"></label>
+
+      <div class="filter-modal" role="dialog" aria-modal="true" aria-label="Filters">
+        <div class="filter-modal-header">
+          <h5>Filters</h5>
+          <label for="filterPanelToggle" class="filter-modal-close">
+            <i class="ri-close-line fs-18"></i>
+          </label>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Exception type</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="typeRadio" [checked]="exceptionTypeFilter() === ''" (change)="exceptionTypeFilter.set('')">
+                <span class="check-box"></span> All types
+              </label>
+              @for (t of exceptionTypeOptions; track t) {
+                <label class="check-pill">
+                  <input type="radio" name="typeRadio" [checked]="exceptionTypeFilter() === t" (change)="exceptionTypeFilter.set(t)">
+                  <span class="check-box"></span> {{ t }}
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Status</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="statusRadio" [checked]="statusFilter() === '' || statusFilter() === 'All statuses'" (change)="statusFilter.set('')">
+                <span class="check-box"></span> All statuses
+              </label>
+              @for (s of statusOptions; track s) {
+                @if (s !== 'All statuses') {
+                  <label class="check-pill">
+                    <input type="radio" name="statusRadio" [checked]="statusFilter() === s" (change)="statusFilter.set(s)">
+                    <span class="check-box"></span> {{ s }}
+                  </label>
+                }
+              }
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Data scope</div>
+            <div class="filter-chip-select">
+              <i class="ri-global-line"></i>
+              <select [ngModel]="scopeFilter()" (ngModelChange)="scopeFilter.set($event)">
+                @for (sc of scopeOptions; track sc) {
+                  <option [value]="sc">{{ sc }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-panel-footer">
+          <button type="button" class="filter-reset-link" (click)="clearFilters()">Clear</button>
+          <label for="filterPanelToggle" class="btn btn-primary btn-sm px-4 mb-0">Apply</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ ACTIVE FILTER CHIPS ============ -->
+    @if (activeFilterSummary().length) {
+      <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+        <span class="fw-active-label">Active Filters:</span>
+        @for (chip of activeFilterSummary(); track chip.key) {
+          <span class="fw-chip">
+            {{ chip.label }}
+            <button type="button" class="fw-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+              <i class="ri-close-line"></i>
+            </button>
+          </span>
+        }
+        <button type="button" class="fw-link" (click)="clearFilters()">Clear All</button>
+      </div>
+    }
+
+    <!-- ============ LOADING STATE ============ -->
+    @if (uiState() === 'loading') {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading exception cases...</p>
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="setUiState('ready')">Cancel</button>
+      </div>
+    }
+
+    <!-- ============ EMPTY STATE ============ -->
+    @else if (uiState() === 'empty') {
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="ri-alert-line"></i>
+        </div>
+        <h5 class="fw-bold">No exceptions found</h5>
+        <p class="text-muted mb-3">Zero results come from the current filters, not a global zero. Adjust the search, type, status or scope.</p>
+        <button class="btn btn-outline-primary" (click)="clearFilters()">
+          <i class="ri-filter-off-line me-1"></i> Clear filters
+        </button>
+      </div>
+    }
+
+    <!-- ============ NO ACCESS STATE ============ -->
+    @else if (uiState() === 'no-access') {
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="ri-lock-line"></i>
+        </div>
+        <h5 class="fw-bold">This value cannot be displayed with your current access.</h5>
+        <p class="text-muted mb-3">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+        <a class="btn btn-outline-primary" href="javascript:void(0)" (click)="setUiState('ready')">Return to My Workspace</a>
+      </div>
+    }
+
+    <!-- ============ READY STATE ============ -->
+    @else {
+      <!-- Table (User Directory style) -->
+      <div class="card border">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Exception reference</th>
+                <th>Exception type</th>
+                <th>Affected payment / batch</th>
+                <th>Detected time</th>
+                <th class="text-end">Amount / variance</th>
+                <th>Risk and age</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th>Approval req.</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of filteredRecords(); track r.exceptionReference) {
+                <tr>
+                  <td>
+                    <span class="fw-medium">{{ r.exceptionReference }}</span>
+                  </td>
+                  <td>
+                    <span class="badge" [class]="typeBadgeClass(r.exceptionType)">{{ r.exceptionType }}</span>
+                  </td>
+                  <td class="small fw-medium">{{ r.affectedPaymentOrBatch }}</td>
+                  <td class="small">{{ formatDateTime(r.detectedTime) }}</td>
+                  <td class="text-end fw-semibold">₹ {{ formatAmount(r.amountOrVariance) }}</td>
+                  <td>
+                    <span class="fw-risk" [class]="riskToneClass(r.riskAndAge.tone)">
+                      {{ r.riskAndAge.icon }} {{ r.riskAndAge.label }}
+                    </span>
+                  </td>
+                  <td class="small fw-medium">{{ r.ownerReference === 'USR-0258' ? 'Divya Krishnan' : r.ownerReference === 'USR-0244' ? 'Arjun Menon' : 'Priya Raghavan' }}</td>
+                  <td>
+                    <span class="badge" [class]="statusBadgeClass(r.status)">{{ r.status }}</span>
+                  </td>
+                  <td>
+                    <span class="badge" [class]="approvalBadgeClass(r.approvalRequirement.tone)">{{ r.approvalRequirement.label }}</span>
+                  </td>
+                  <td>
+                    <div class="d-flex gap-1 justify-content-end">
+                      <button type="button" class="btn btn-sm btn-outline-primary" [title]="assignAllowed(r) ? 'Assign' : actionBlockedReason(r)" (click)="openAssignDialog(r.exceptionReference)" [class.disabled]="!assignAllowed(r)" [attr.aria-disabled]="!assignAllowed(r)">
+                        <i class="ri-user-add-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-info" [title]="evidenceAllowed(r) ? 'Evidence' : actionBlockedReason(r)" (click)="openEvidenceDialog(r.exceptionReference)" [class.disabled]="!evidenceAllowed(r)" [attr.aria-disabled]="!evidenceAllowed(r)">
+                        <i class="ri-file-search-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-warning" [title]="correctAllowed(r) ? 'Correct' : actionBlockedReason(r)" (click)="openCorrectDialog(r.exceptionReference)" [class.disabled]="!correctAllowed(r)" [attr.aria-disabled]="!correctAllowed(r)">
+                        <i class="ri-tools-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-success" [title]="resolveAllowed(r) ? 'Resolve' : actionBlockedReason(r)" (click)="openResolveDialog(r.exceptionReference)" [class.disabled]="!resolveAllowed(r)" [attr.aria-disabled]="!resolveAllowed(r)">
+                        <i class="ri-check-double-line"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="10" class="text-center text-muted py-4">
+                    No exceptions match this scope and filter. Reset filters to continue.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    <!-- ============ ASSIGN DIALOG ============ -->
+    @if (assignDialogOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-user-add-line me-2" style="color: var(--accent);"></i>Confirm Assign</h5>
+              <button type="button" class="btn-close" (click)="cancelAssign()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Review the affected record, consequence, reason and effective time. The assignee must be in effective scope.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Exception</dt>
+                  <dd class="fw-medium">{{ assignTarget() }}</dd>
+                </div>
+                <div>
+                  <dt>Consequence</dt>
+                  <dd>Transfers ownership to the selected finance role</dd>
+                </div>
+                <div>
+                  <dt>Effective time</dt>
+                  <dd>{{ lastRefresh() }}</dd>
+                </div>
+              </dl>
+              <label class="form-label small fw-semibold mt-3">Assign to <span class="text-danger">*</span></label>
+              <select class="form-select" [ngModel]="assignTo()" (ngModelChange)="assignTo.set($event)" aria-label="Assign to">
+                <option value="">Select assignee</option>
+                @for (a of assigneeOptions; track a.reference) {
+                  <option [value]="a.reference">{{ a.name }} · {{ a.context }}</option>
+                }
+              </select>
+              <label class="form-label small fw-semibold mt-3">Reason <span class="text-danger">*</span></label>
+              <textarea
+                class="form-control"
+                rows="3"
+                [ngModel]="assignReason()"
+                (ngModelChange)="assignReason.set($event)"
+                [attr.maxlength]="assignReasonMax"
+                placeholder="Record the meaningful reason for this assignment…"
+              ></textarea>
+              <small class="text-muted" [class.text-danger]="assignReasonCount() > 0 && !assignReasonValid()">
+                {{ assignReasonCount() }} / {{ assignReasonMax }} characters (minimum {{ assignReasonMin }})
+              </small>
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="cancelAssign()">Cancel</button>
+              <button class="btn btn-primary" (click)="confirmAssign()" [disabled]="!assignReasonValid() || !assignTo()">
+                <i class="ri-check-line me-1"></i> Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- ============ CORRECT DIALOG ============ -->
+    @if (correctDialogOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-tools-line me-2" style="color: var(--accent);"></i>Confirm Correct</h5>
+              <button type="button" class="btn-close" (click)="cancelCorrect()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Review the affected exception, consequence and reason before continuing.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Exception</dt>
+                  <dd class="fw-medium">{{ correctTarget() }}</dd>
+                </div>
+                <div>
+                  <dt>Consequence</dt>
+                  <dd>Moves the case to Correction and records the corrective action taken</dd>
+                </div>
+                <div>
+                  <dt>Effective time</dt>
+                  <dd>{{ lastRefresh() }}</dd>
+                </div>
+              </dl>
+              <label class="form-label small fw-semibold mt-3">Root cause <span class="text-danger">*</span></label>
+              <textarea
+                class="form-control"
+                rows="3"
+                [ngModel]="rootCause()"
+                (ngModelChange)="rootCause.set($event)"
+                [attr.maxlength]="rootCauseMax"
+                placeholder="Record the confirmed root cause of this exception…"
+              ></textarea>
+              <small class="text-muted" [class.text-danger]="rootCauseCount() > 0 && !rootCauseValid()">
+                {{ rootCauseCount() }} / {{ rootCauseMax }} characters (minimum {{ rootCauseMin }})
+              </small>
+              <label class="form-label small fw-semibold mt-3">Correction action <span class="text-danger">*</span></label>
+              <input
+                type="text"
+                class="form-control"
+                [ngModel]="correctionAction()"
+                (ngModelChange)="correctionAction.set($event)"
+                placeholder="Describe the correction being applied…"
+              >
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="cancelCorrect()">Cancel</button>
+              <button class="btn btn-primary" (click)="confirmCorrect()" [disabled]="!rootCauseValid() || !correctionActionValid()">
+                <i class="ri-check-line me-1"></i> Correct
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- ============ RESOLVE DIALOG ============ -->
+    @if (resolveDialogOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-check-double-line me-2" style="color: var(--accent);"></i>Confirm Resolve</h5>
+              <button type="button" class="btn-close" (click)="cancelResolve()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Review the affected exception, consequence and reason before continuing. This closes the case.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Exception</dt>
+                  <dd class="fw-medium">{{ resolveTarget() }}</dd>
+                </div>
+                <div>
+                  <dt>Consequence</dt>
+                  <dd>Sets the case to Resolved; the resolution reason is retained in audit history</dd>
+                </div>
+                <div>
+                  <dt>Effective time</dt>
+                  <dd>{{ lastRefresh() }}</dd>
+                </div>
+              </dl>
+              <label class="form-label small fw-semibold mt-3">
+                Resolution reason <span class="text-danger">*</span>
+                <span class="fw-corr">Confidential — visible within record scope and purpose only</span>
+              </label>
+              <textarea
+                class="form-control"
+                rows="3"
+                [ngModel]="resolutionReason()"
+                (ngModelChange)="resolutionReason.set($event)"
+                [attr.maxlength]="resolutionReasonMax"
+                placeholder="Record the meaningful reason this exception is resolved…"
+              ></textarea>
+              <small class="text-muted" [class.text-danger]="resolutionReasonCount() > 0 && !resolutionReasonValid()">
+                {{ resolutionReasonCount() }} / {{ resolutionReasonMax }} characters (minimum {{ resolutionReasonMin }})
+              </small>
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="cancelResolve()">Cancel</button>
+              <button class="btn btn-primary" (click)="confirmResolve()" [disabled]="!resolutionReasonValid()">
+                <i class="ri-check-line me-1"></i> Resolve
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- ============ EVIDENCE DIALOG ============ -->
+    @if (evidenceDialogOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-file-search-line me-2" style="color: var(--accent);"></i>Confirm Evidence</h5>
+              <button type="button" class="btn-close" (click)="cancelEvidence()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Attach linked evidence for this exception. Approved types only: PDF, PNG, JPG — up to 10 MB.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Exception</dt>
+                  <dd class="fw-medium">{{ evidenceTarget() }}</dd>
+                </div>
+              </dl>
+              <label class="form-label small fw-semibold mt-3">
+                Evidence document <span class="text-danger">*</span>
+                <span class="fw-corr">Confidential — visible within record scope and purpose only</span>
+              </label>
+              <input
+                type="file"
+                class="form-control"
+                accept=".pdf,.png,.jpg,.jpeg"
+                (change)="onEvidenceFileSelected($event)"
+              >
+              @if (evidenceError()) {
+                <small class="text-danger d-block mt-2">{{ evidenceError() }}</small>
+              }
+              @if (evidenceFileName() && !evidenceError()) {
+                <div class="d-flex align-items-center gap-2 mt-2 small">
+                  <span class="fw-medium">{{ evidenceFileName() }}</span>
+                  @if (evidenceUploadStatus() === 'scanning') {
+                    <span class="badge bg-info bg-opacity-10 text-info">Scanning…</span>
+                  }
+                  @if (evidenceUploadStatus() === 'classified') {
+                    <span class="badge bg-success bg-opacity-10 text-success">Uploaded · Scanned · Classified confidential</span>
+                  }
+                </div>
+              }
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="cancelEvidence()">Cancel</button>
+              <button class="btn btn-primary" (click)="confirmEvidence()" [disabled]="!evidenceValid()">
+                <i class="ri-check-line me-1"></i> Attach evidence
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+  </div>
+</div>
+</main>

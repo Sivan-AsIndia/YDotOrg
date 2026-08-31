@@ -1,0 +1,2 @@
+/*! For license information please see keltner-channels.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/KeltnerChannels/KeltnerChannelsIndicator.js";export default Highcharts;

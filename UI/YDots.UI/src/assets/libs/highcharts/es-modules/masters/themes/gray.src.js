@@ -1,0 +1,2 @@
+/*! For license information please see gray.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import GrayTheme from"../../Extensions/Themes/Gray.js";H.theme=GrayTheme.options,GrayTheme.apply();export default H;

@@ -1,0 +1,1 @@
+const compressArray=e=>{for(var r=[],o=e.slice(0),s=0;s<e.length;s++){for(var t=0,a=0;a<o.length;a++)e[s]==o[a]&&(t++,delete o[a]);if(t>0){var c=new Object;c.value=e[s],c.count=t,r.push(c)}}return r};module.exports=compressArray;

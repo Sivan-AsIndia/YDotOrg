@@ -1,0 +1,113 @@
+{
+  "screen": {
+    "viewId": "INV-UI-08",
+    "title": "Stock Adjustment Approval",
+    "route": "/inv/stock-adjustment-approval",
+    "purpose": "Review a proposed stock correction without directly editing posted balances.",
+    "primaryAction": "Submit adjustment",
+    "viewPermission": "inv.stock-adjustment-approval.view",
+    "primaryUsers": ["Warehouse", "Programme", "Auditor", "Warehouse Operator", "Distribution", "Warehouse Manager", "Counters"],
+    "scope": "YDot Foundation · National",
+    "lastRefresh": "Today, 02:30 PM · IST"
+  },
+  "permissions": {
+    "view": true,
+    "submitAdjustment": true,
+    "approve": true,
+    "reject": true,
+    "postCorrection": true,
+    "requestRecount": true
+  },
+  "records": [
+    {
+      "adjustmentReference": "ADJ-2025-0031",
+      "itemAndBatch": "SKU-BS-001 · BAT-2025-001",
+      "itemName": "Blind Stick - Standard",
+      "warehouse": "WH-CHN-01",
+      "systemQuantity": 250,
+      "observedQuantity": 248,
+      "difference": -2,
+      "reasonCategory": "Damaged during count",
+      "detailedReason": "Two units found damaged during stock count session CSC-2025-0201",
+      "evidence": "IMG-2025-0401.jpg",
+      "proposer": "S. Iyer",
+      "independentApprover": "P. Raghavan",
+      "resultingBalance": { "label": "Pending review", "tone": "warning", "icon": "⏳" }
+    },
+    {
+      "adjustmentReference": "ADJ-2025-0032",
+      "itemAndBatch": "SKU-BS-005 · BAT-2025-005",
+      "itemName": "Audio Book Player",
+      "warehouse": "WH-CHN-01",
+      "systemQuantity": 15,
+      "observedQuantity": 12,
+      "difference": -3,
+      "reasonCategory": "Confirmed damaged",
+      "detailedReason": "Three units confirmed damaged and recommended for write-off",
+      "evidence": "IMG-2025-0402.jpg",
+      "proposer": "M. Das",
+      "independentApprover": "P. Raghavan",
+      "resultingBalance": { "label": "Approved", "tone": "success", "icon": "✓" }
+    },
+    {
+      "adjustmentReference": "ADJ-2025-0033",
+      "itemAndBatch": "SKU-BS-006 · BAT-2025-006",
+      "itemName": "Braille Paper Pack",
+      "warehouse": "WH-BLR-02",
+      "systemQuantity": 500,
+      "observedQuantity": 498,
+      "difference": -2,
+      "reasonCategory": "Counting error",
+      "detailedReason": "Recount confirmed two units short",
+      "evidence": "",
+      "proposer": "V. Sharma",
+      "independentApprover": "",
+      "resultingBalance": { "label": "Pending review", "tone": "warning", "icon": "⏳" }
+    },
+    {
+      "adjustmentReference": "ADJ-2025-0034",
+      "itemAndBatch": "SKU-BS-002 · BAT-2025-002",
+      "itemName": "Braille Slate - A4",
+      "warehouse": "WH-BLR-02",
+      "systemQuantity": 120,
+      "observedQuantity": 118,
+      "difference": -2,
+      "reasonCategory": "Missing units",
+      "detailedReason": "Two units missing from bin during count",
+      "evidence": "",
+      "proposer": "P. Nair",
+      "independentApprover": "A. Menon",
+      "resultingBalance": { "label": "Rejected", "tone": "danger", "icon": "✕" }
+    },
+    {
+      "adjustmentReference": "ADJ-2025-0035",
+      "itemAndBatch": "SKU-BS-003 · BAT-2025-003",
+      "itemName": "Tactile Map Kit",
+      "warehouse": "WH-DEL-03",
+      "systemQuantity": 45,
+      "observedQuantity": 45,
+      "difference": 0,
+      "reasonCategory": "No adjustment",
+      "detailedReason": "Count confirmed no variance",
+      "evidence": "",
+      "proposer": "K. Ghosh",
+      "independentApprover": "",
+      "resultingBalance": { "label": "No variance", "tone": "success", "icon": "✓" }
+    }
+  ],
+  "savedFilters": ["All Adjustments (Default)", "Pending review", "Approved", "Rejected", "No variance"],
+  "fieldContracts": [
+    { "label": "Adjustment reference", "control": "Read-only text", "required": false, "visibility": "Internal" },
+    { "label": "Item and batch", "control": "Text input / read-only text", "required": false, "visibility": "Internal" },
+    { "label": "Warehouse", "control": "Scope-aware searchable selector", "required": false, "visibility": "Internal" },
+    { "label": "System quantity", "control": "Numeric input", "required": false, "visibility": "Internal" },
+    { "label": "Difference", "control": "Text input / read-only text", "required": false, "visibility": "Internal" }
+  ],
+  "actions": [
+    { "id": "submit-adjustment", "label": "Submit adjustment", "placement": "Primary", "permission": "inv.stock-adjustment-approval.submit-adjustment", "allowedState": "Compatible state", "result": "Execute idempotently; show stable reference, accepted/committed result" },
+    { "id": "approve", "label": "Approve", "placement": "Secondary / overflow", "permission": "inv.stock-adjustment-approval.approve", "allowedState": "Compatible state", "result": "Record decision, independent authority, reason, effective version, time and resulting state" },
+    { "id": "reject", "label": "Reject", "placement": "Danger / confirmation", "permission": "inv.stock-adjustment-approval.reject", "allowedState": "Compatible state", "result": "Record decision, independent authority, reason, effective version, time and resulting state" },
+    { "id": "post-correction", "label": "Post correction", "placement": "Secondary / overflow", "permission": "inv.stock-adjustment-approval.post-correction", "allowedState": "Compatible state", "result": "Execute idempotently; show stable reference, accepted/committed result" },
+    { "id": "request-recount", "label": "Request recount", "placement": "Secondary / overflow", "permission": "inv.stock-adjustment-approval.request-recount", "allowedState": "Compatible state", "result": "Refresh or change only the authorised record in effective scope" }
+  ]
+}

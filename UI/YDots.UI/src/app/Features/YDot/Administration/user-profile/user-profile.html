@@ -1,0 +1,430 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+    <!-- Loading State -->
+    @if (loading()) {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading user profile...</p>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (loadError() && !loading()) {
+      <div class="empty-state">
+        <div class="empty-state-icon"><i class="ri-error-warning-line"></i></div>
+        <h5 class="fw-bold">Failed to load</h5>
+        <p class="text-muted mb-3">The user profile couldn't be retrieved. Try again.</p>
+        <button class="btn btn-primary" (click)="retry()"><i class="ri-refresh-line me-1"></i> Retry</button>
+      </div>
+    }
+
+    @if (!loading() && !loadError()) {
+
+      <!-- Profile Header Card -->
+      <div class="profile-header-card mb-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="user-avatar-lg">{{ getInitials(data()?.displayName || '') }}</div>
+          <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h4 class="fw-bold mb-0">{{ data()?.displayName }}</h4>
+              <span class="status-pill status-active"><span class="dot"></span> {{ data()?.accountStatus }}</span>
+              <span class="status-pill status-neutral">{{ data()?.accountCategory }}</span>
+            </div>
+            <p class="text-muted mb-0 small">
+              {{ data()?.designation }} · {{ data()?.department }} · {{ data()?.reference }}
+            </p>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-outline-secondary btn-sm px-3" (click)="openThemeSettings()">
+            <i class="ri-settings-3-line me-1"></i> Settings
+          </button>
+          <button class="btn btn-primary btn-sm px-3" (click)="openEditModal()">
+            <i class="ri-edit-line me-1"></i> Edit profile
+          </button>
+      
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tab-bar-underline mb-4">
+        <button class="tab-underline-item" [class.active]="activeTab()==='profile'" (click)="setTab('profile')">Profile</button>
+        <button class="tab-underline-item" [class.active]="activeTab()==='access'" (click)="setTab('access')">
+          Access <span class="tab-count-pill">{{ accessCount() }}</span>
+        </button>
+        <button class="tab-underline-item" [class.active]="activeTab()==='security'" (click)="setTab('security')">Security</button>
+      </div>
+
+      <!-- Two column layout -->
+      <div class="row g-3">
+        <!-- Main content (tab-dependent) -->
+        <div class="col-lg-8">
+
+          @if (activeTab() === 'profile') {
+            <!-- Identity Card -->
+            <div class="detail-card mb-3">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Identity</h6>
+                <!-- <a href="javascript:void(0)" class="edit-link" (click)="openEditModal()"><i class="ri-pencil-line me-1"></i>Edit</a> -->
+              </div>
+              <div class="detail-card-body">
+                <div class="row g-4">
+                  <div class="col-md-4"><small class="info-label d-block">Reference</small><span class="info-value">{{ data()?.reference }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Employee ID</small><span class="info-value">{{ data()?.employeeId }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Username</small><span class="info-value">{{ data()?.username }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Email</small><span class="info-value">{{ data()?.loginEmail }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Mobile</small><span class="info-value">{{ data()?.mobileNumber }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Language and timezone</small><span class="info-value">{{ data()?.preferredLanguage }} · {{ data()?.timeZone }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Organisation Card -->
+            <div class="detail-card mb-3">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Organisation</h6>
+                <!-- <a href="javascript:void(0)" class="edit-link" (click)="openEditModal()"><i class="ri-pencil-line me-1"></i>Edit</a> -->
+              </div>
+              <div class="detail-card-body">
+                <div class="row g-4">
+                  <div class="col-md-4"><small class="info-label d-block">Organisation unit</small><span class="info-value">{{ data()?.organisationUnit }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Department</small><span class="info-value">{{ data()?.department }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Designation</small><span class="info-value">{{ data()?.designation }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Manager</small><span class="info-value">{{ data()?.manager }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Work location</small><span class="info-value">{{ data()?.workLocation }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Joined</small><span class="info-value">{{ data()?.accessStartDate }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Assigned Roles Card — search + sort + chevron rows + pagination,
+                 matching the "Recently Viewed Projects" card in the reference. -->
+            <div class="detail-card">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Assigned roles</h6>
+                <a href="javascript:void(0)" class="edit-link" (click)="setTab('access')">View all <i class="ri-arrow-right-line ms-1"></i></a>
+              </div>
+              <div class="search-sort-bar">
+                <div class="search-sort-input">
+                  <i class="ri-search-line"></i>
+                  <input type="text" placeholder="Search assigned roles...">
+                </div>
+   <div class="position-relative">
+                  <button type="button" class="sort-btn" (click)="toggleSortMenu()">
+                    <i class="ri-sort-desc"></i> Sort by
+                    <i class="ri-arrow-down-s-line ms-1"></i>
+                  </button>
+                  @if (showSortMenu()) {
+                    <div class="sort-menu">
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='role'" (click)="setSort('role')">
+                        Role @if (sortField()==='role') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='scope'" (click)="setSort('scope')">
+                        Scope @if (sortField()==='scope') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='term'" (click)="setSort('term')">
+                        Term @if (sortField()==='term') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                    </div>
+                  }
+                </div>              </div>
+              <div class="table-responsive">
+                <table class="table role-table mb-0">
+                  <thead>
+                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th><th class="text-end"></th></tr>
+                  </thead>
+                  <tbody>
+                    @for (r of roleAssignments(); track r.role) {
+                      <tr>
+                        <td>
+                          <div class="fw-semibold">{{ r.role }}</div>
+                          <div class="text-muted small">{{ r.assignmentType }}</div>
+                        </td>
+                        <td>{{ r.scope }}</td>
+                        <td>{{ r.permissions }}</td>
+                        <td>
+                          @if (r.term === 'Permanent') {
+                            <span class="pill-soft pill-green"><span class="dot"></span> {{ r.term }}</span>
+                          } @else {
+                            <span class="pill-soft pill-amber"><span class="dot"></span> {{ r.term }}</span>
+                          }
+                        </td>
+                        <td class="text-end"><i class="ri-arrow-right-s-line row-chevron"></i></td>
+                      </tr>
+                    }
+                    @empty {
+                      <tr><td colspan="5" class="text-center text-muted py-3">No role assignments found.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-footer-simple">
+                <span>1-{{ roleAssignments().length }} of {{ roleAssignments().length }}</span>
+                <span class="pf-arrows"><i class="ri-arrow-left-s-line"></i><i class="ri-arrow-right-s-line"></i></span>
+              </div>
+            </div>
+          }
+
+          @if (activeTab() === 'access') {
+            <div class="detail-card">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Role Assignments & Data Scopes</h6>
+              </div>
+              <div class="search-sort-bar">
+                <div class="search-sort-input">
+                  <i class="ri-search-line"></i>
+                  <input type="text" placeholder="Search assigned roles...">
+                </div>
+   <div class="position-relative">
+                  <button type="button" class="sort-btn" (click)="toggleSortMenu()">
+                    <i class="ri-sort-desc"></i> Sort by
+                    <i class="ri-arrow-down-s-line ms-1"></i>
+                  </button>
+                  @if (showSortMenu()) {
+                    <div class="sort-menu">
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='role'" (click)="setSort('role')">
+                        Role @if (sortField()==='role') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='scope'" (click)="setSort('scope')">
+                        Scope @if (sortField()==='scope') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                      <button type="button" class="sort-menu-item" [class.active]="sortField()==='term'" (click)="setSort('term')">
+                        Term @if (sortField()==='term') { <i class="ri-arrow-{{ sortAsc() ? 'up' : 'down' }}-line"></i> }
+                      </button>
+                    </div>
+                  }
+                </div>              </div>
+              <div class="table-responsive">
+                <table class="table role-table mb-0">
+                  <thead>
+                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th><th class="text-end"></th></tr>
+                  </thead>
+                  <tbody>
+                    @for (r of roleAssignments(); track r.role) {
+                      <tr>
+                        <td>
+                          <div class="fw-semibold">{{ r.role }}</div>
+                          <div class="text-muted small">{{ r.assignmentType }}</div>
+                        </td>
+                        <td>{{ r.scope }}</td>
+                        <td>{{ r.permissions }}</td>
+                        <td>
+                          @if (r.term === 'Permanent') {
+                            <span class="pill-soft pill-green"><span class="dot"></span> {{ r.term }}</span>
+                          } @else {
+                            <span class="pill-soft pill-amber"><span class="dot"></span> {{ r.term }}</span>
+                          }
+                        </td>
+                        <td class="text-end"><i class="ri-arrow-right-s-line row-chevron"></i></td>
+                      </tr>
+                    }
+                    @empty {
+                      <tr><td colspan="5" class="text-center text-muted py-3">No role assignments found.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <div class="pagination-footer-simple">
+                <span>1-{{ roleAssignments().length }} of {{ roleAssignments().length }}</span>
+                <span class="pf-arrows"><i class="ri-arrow-left-s-line"></i><i class="ri-arrow-right-s-line"></i></span>
+              </div>
+              <div class="detail-card-body border-top">
+                <div class="row g-4">
+                  <div class="col-md-4"><small class="info-label d-block">Access start</small><span class="info-value">{{ data()?.accessStartDate }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Access end</small><span class="info-value">{{ data()?.accessEndDate }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Review due</small><span class="info-value">{{ data()?.accessReviewDue }}</span></div>
+                </div>
+              </div>
+            </div>
+          }
+
+          @if (activeTab() === 'security') {
+            <div class="detail-card">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Security Overview</h6>
+              </div>
+              <div class="detail-card-body">
+                <div class="row g-4">
+                  <div class="col-md-6"><small class="info-label d-block">MFA status</small><span class="status-pill" [class.status-active]="mfaEnabled()" [class.status-neutral]="!mfaEnabled()"><span class="dot"></span> {{ getMfaStatusLabel() }}</span></div>
+                  <div class="col-md-6"><small class="info-label d-block">Active sessions</small><span class="info-value">{{ data()?.activeSessions }}</span></div>
+                  <div class="col-md-6"><small class="info-label d-block">Trusted devices</small><span class="info-value">{{ data()?.trustedDevices }}</span></div>
+                  <div class="col-md-6"><small class="info-label d-block">Failed sign-ins (24h)</small><span class="info-value">{{ data()?.failedSignins?.last24Hours }}</span></div>
+                </div>
+           
+              </div>
+            </div>
+
+            <!-- MFA Methods Card -->
+            <div class="detail-card mt-4">
+              <div class="detail-card-header">
+                <h6 class="mb-0 fw-bold">Authentication Methods</h6>
+                <span class="tab-count-pill">{{ mfaMethods().filter(m => m.enabled).length }} enabled</span>
+              </div>
+              <div class="detail-card-body">
+                <div class="mfa-methods-list">
+                  @for (method of mfaMethods(); track method.id) {
+                    <div class="mfa-method-row" [class.enabled]="method.enabled">
+                      <div class="mfa-method-icon" [class.tone-success]="method.enabled" [class.tone-muted]="!method.enabled">
+                        <i class="{{ method.icon }}"></i>
+                      </div>
+                      <div class="mfa-method-info">
+                        <div class="mfa-method-name">{{ method.name }}</div>
+                        <div class="mfa-method-desc">{{ method.description }}</div>
+                      </div>
+                      <!--
+                        Remove, not a switch. A factor cannot be turned back on from here:
+                        enrolling one needs a code from the device it lives on, which is the
+                        entire point of it. A toggle promised something nobody can deliver.
+                      -->
+                      <div class="mfa-method-toggle">
+                        @if (method.enabled) {
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                [disabled]="submitting()"
+                                (click)="removeMfaMethod(method.id)">
+                          <i class="ri-delete-bin-line me-1"></i> Remove
+                        </button>
+                        } @else {
+                        <span class="badge bg-secondary-subtle text-secondary">Not set up</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+
+    
+        </div>
+
+        <!-- Persistent Sidebar — notification-style rows: tinted icon,
+             bold title, muted sub-line, trailing status on the right. -->
+        <div class="col-lg-4">
+          <div class="detail-card mb-3">
+            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Security</h6></div>
+            <div class="detail-card-body">
+              <div class="notif-row">
+                <div class="notif-avatar tone-success"><i class="ri-shield-check-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Multi-factor</div>
+                  <div class="notif-sub">Authenticator app</div>
+                </div>
+                <span class="notif-trailing text-success">Enrolled</span>
+              </div>
+              <div class="notif-row">
+                <div class="notif-avatar tone-warning"><i class="ri-lock-password-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Password</div>
+                  <div class="notif-sub">Changed 68 days ago</div>
+                </div>
+                <span class="notif-trailing text-warning">Rotate soon</span>
+              </div>
+              <div class="notif-row">
+                <div class="notif-avatar tone-accent"><i class="ri-login-circle-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Last sign-in</div>
+                  <div class="notif-sub">{{ data()?.lastSignIn }}</div>
+                </div>
+              </div>
+              <div class="notif-row border-0">
+                <div class="notif-avatar tone-muted"><i class="ri-computer-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Active sessions</div>
+                  <div class="notif-sub">{{ data()?.activeSessionDevices }}</div>
+                </div>
+                <span class="notif-trailing text-muted">{{ data()?.activeSessions }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-card">
+            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Access review</h6></div>
+            <div class="detail-card-body">
+              <div class="notif-row">
+                <div class="notif-avatar tone-warning"><i class="ri-calendar-check-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Next review due</div>
+                  <div class="notif-sub">{{ data()?.accessReviewDue }}</div>
+                </div>
+                <span class="notif-trailing text-warning">19 days</span>
+              </div>
+              <div class="notif-row border-0">
+                <div class="notif-avatar tone-accent"><i class="ri-user-star-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Last certified</div>
+                  <div class="notif-sub">12 February 2026</div>
+                </div>
+                <span class="notif-trailing text-muted">{{ data()?.manager }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Edit Modal -->
+  @if (showEditModal()) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom" style="padding-bottom: 15px;">
+            <h5 class="modal-title fw-bold"><i class="ri-edit-line me-2 text-warning"></i>Edit Profile</h5>
+            <button type="button" class="btn-close" (click)="closeEditModal()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label small fw-semibold">Display Name</label><input type="text" class="form-control" [ngModel]="editForm().displayName" (ngModelChange)="editForm.set({...editForm(), displayName: $event})"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Email</label><input type="email" class="form-control" [ngModel]="editForm().email" (ngModelChange)="editForm.set({...editForm(), email: $event})"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Mobile</label><input type="text" class="form-control" [ngModel]="editForm().mobile" (ngModelChange)="editForm.set({...editForm(), mobile: $event})"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Department</label><input type="text" class="form-control" [ngModel]="editForm().department" (ngModelChange)="editForm.set({...editForm(), department: $event})"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Designation</label><input type="text" class="form-control" [ngModel]="editForm().designation" (ngModelChange)="editForm.set({...editForm(), designation: $event})"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Manager</label><input type="text" class="form-control" [ngModel]="editForm().manager" (ngModelChange)="editForm.set({...editForm(), manager: $event})"></div>
+            </div>
+          </div>
+          <div class="modal-footer border-top mt-6" style="padding-top: 13px !important">
+            <button class="btn btn-light btn-sm " (click)="closeEditModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm " (click)="saveProfile()" [disabled]="submitting()">
+              @if(submitting()){<span class="spinner-border spinner-border-sm me-1"></span>}<i class="ri-save-line me-1"></i> Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+
+  <!-- Suspend Modal -->
+  @if (showSuspendModal()) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom" style="padding-bottom: 15px;">
+            <h5 class="modal-title fw-bold"><i class="ri-alert-line me-2 text-warning"></i>Suspend Account</h5>
+            <button type="button" class="btn-close" (click)="closeSuspendModal()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning py-2"><i class="ri-information-line me-1"></i><small>This will revoke active sessions and prevent access.</small></div>
+            <label class="form-label small fw-semibold">Reason <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" placeholder="Enter reason..." [ngModel]="suspendReason()" (ngModelChange)="suspendReason.set($event)"></textarea>
+          </div>
+          <div class="modal-footer border-top" style="padding-top: 18px;">
+            <button class="btn btn-light btn-sm" (click)="closeSuspendModal()">Cancel</button>
+            <button class="btn btn-warning btn-sm" (click)="confirmSuspend()" [disabled]="!suspendReason().trim()||submitting()">
+              @if(submitting()){<span class="spinner-border spinner-border-sm me-1"></span>}<i class="ri-pause-circle-line me-1"></i> Suspend
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+
+
+</div>
+</main>

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      IHttpContextAccessor, the authorization handler types and IHeaderDictionary all live in the
+      shared framework. One FrameworkReference replaces several package references and cannot
+      drift from the runtime version - which is exactly the drift that broke CAM, where an
+      ASP.NET Core 2.x abstractions package resolved happily on a net10.0 project and quietly
+      supplied types a decade older than the code using them.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Pinned to the same versions as IAM, DON and CAM. Four services share ONE PostgreSQL
+      database through one provider; a version drift between them is how you get a migration one
+      service can apply and another cannot read.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
+    <!-- snake_case column names, matching the other three services in the shared database. -->
+    <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+
+    <!--
+      MailKit, and PINNED TO THE SAME 4.8.0 AS IAM. It replaced System.Net.Mail.SmtpClient in
+      SmtpEmailSender, which could not open an implicit-TLS connection at all: on port 465 it
+      connected in the clear, waited for a greeting that never came, and failed on the timeout -
+      measured at twenty seconds against smtp.hostinger.com, with "The operation has timed out"
+      as the only clue. One set of environment variables configures mail for both services, so a
+      relay on 465 left IAM sending and PAY filing every receipt as undelivered.
+    -->
+    <PackageReference Include="MailKit" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YDot.PAY.Application\YDot.PAY.Application.csproj" />
+  </ItemGroup>
+
+</Project>

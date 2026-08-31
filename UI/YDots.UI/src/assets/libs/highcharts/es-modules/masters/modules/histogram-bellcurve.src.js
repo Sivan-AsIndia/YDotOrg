@@ -1,0 +1,2 @@
+/*! For license information please see histogram-bellcurve.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Series/Histogram/HistogramSeries.js";import"../../Series/Bellcurve/BellcurveSeries.js";export default Highcharts;

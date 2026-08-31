@@ -1,0 +1,256 @@
+<main class="app-wrapper">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3 fup-page">
+      <header class="fup-header" aria-labelledby="follow-up-title">
+        <div>
+          <h1 id="follow-up-title" class="fup-title">{{ screen.title }}</h1>
+          <p class="fup-subtitle">{{ screen.purpose }}</p>
+        </div>
+
+        <dl class="fup-reference-group" aria-label="Record references">
+          <div class="fup-reference-card">
+            <dt>Reference</dt>
+            <dd>{{ followUpId() || '—' }}</dd>
+          </div>
+          <div class="fup-reference-card">
+            <dt>Lead</dt>
+            <dd>{{ recordReference() }}</dd>
+          </div>
+        </dl>
+      </header>
+
+      @if (uiState() === 'success') {
+        <div class="fup-alert fup-alert-success" role="status" aria-live="polite">
+          <div>
+            <strong>Follow-up updated successfully.</strong>
+            <span>The authorised record has been refreshed.</span>
+          </div>
+          <button class="fup-icon-button" type="button" aria-label="Dismiss success message" (click)="dismissBanner()">×</button>
+        </div>
+      } @else if (uiState() === 'error') {
+        <div class="fup-alert fup-alert-error" role="alert">
+          <div>
+            <strong>Unable to update follow-up.</strong>
+            <span>Please try again.</span>
+          </div>
+          <button class="btn btn-outline-primary btn-sm" type="button" (click)="setUiState('ready')">Retry</button>
+        </div>
+      }
+
+      <section class="fup-summary-strip" aria-label="Follow-up summary">
+        <article class="fup-summary-card fup-summary-priority">
+          <span class="fup-summary-label"><span class="fup-priority-dot" aria-hidden="true"></span>Priority</span>
+          <strong>{{ priority() }}</strong>
+        </article>
+        <article class="fup-summary-card">
+          <span class="fup-summary-label">Owner</span>
+          <strong>{{ owner() }}</strong>
+        </article>
+        <article class="fup-summary-card">
+          <span class="fup-summary-label">Channel</span>
+          <strong>{{ followUpType() }}</strong>
+        </article>
+        <article class="fup-summary-card fup-summary-wide">
+          <span class="fup-summary-label">Due</span>
+          <strong>{{ scheduledDate() || '—' }} {{ scheduledTime() }}</strong>
+        </article>
+        <article class="fup-summary-card fup-summary-wide">
+          <span class="fup-summary-label">Updated</span>
+          <strong>{{ lastRefresh() || '—' }}</strong>
+        </article>
+      </section>
+
+      <section class="fup-filterbar" aria-label="Queue scope and saved view">
+        <div class="fup-scope-chip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-4.3 6-11a6 6 0 1 0-12 0c0 6.7 6 11 6 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg>
+          <span>{{ assignedScope() || '—' }}</span>
+        </div>
+
+        <div class="fup-view-control">
+          <label for="saved-view">Saved view</label>
+          <select
+            id="saved-view"
+            class="form-select form-select-sm fup-select"
+            [ngModel]="savedFilter()"
+            (ngModelChange)="savedFilter.set($event)"
+            aria-label="Saved view"
+          >
+            @for (filter of savedFilters; track filter) {
+              <option [value]="filter">{{ filter }}</option>
+            }
+          </select>
+        </div>
+      </section>
+
+      @if (activeFilterSummary().length) {
+        <div class="fup-active-filters" aria-label="Active filters">
+          @for (chip of activeFilterSummary(); track chip.key) {
+            <button type="button" class="fup-filter-chip" (click)="removeFilterChip(chip.key)">
+              {{ chip.label }} <span aria-hidden="true">×</span>
+              <span class="visually-hidden">Remove filter</span>
+            </button>
+          }
+        </div>
+      }
+
+      @if (uiState() === 'loading') {
+        <section class="fup-loading-card" aria-busy="true" aria-live="polite">
+          <span class="fup-spinner" aria-hidden="true"></span>
+          <span>Loading follow-up details…</span>
+        </section>
+      } @else if (!hasRecord() || uiState() === 'empty') {
+        <section class="fup-empty-state">
+          <div class="fup-empty-icon" aria-hidden="true">◎</div>
+          <h2>No follow-up found</h2>
+          <p>There is no follow-up available in the selected view.</p>
+          <button class="btn btn-primary btn-sm" type="button" (click)="openAction('scheduleFollowUp')">Schedule follow-up</button>
+        </section>
+      } @else {
+        <div class="fup-layout">
+          <div class="fup-main-column">
+            <section class="fup-next-action" aria-labelledby="next-action-heading">
+              <div class="fup-next-action-topline">
+                <h2 id="next-action-heading">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
+                  Next action
+                </h2>
+                <span class="fup-due-badge">Due {{ scheduledDate() || '—' }} {{ scheduledTime() }}</span>
+              </div>
+              <div class="fup-divider"></div>
+              <p class="fup-next-action-title">{{ purpose() || '—' }}</p>
+              <div class="fup-badge-row">
+                <span class="fup-badge" [class]="priorityClass(priority())">
+                  <span class="fup-badge-dot" aria-hidden="true"></span>{{ priority() }} priority
+                </span>
+                <span class="fup-channel-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a14 14 0 0 0 6 6l1.5-2L21 14v3c0 2-1 4-4 4C9.3 21 3 14.7 3 7c0-3 2-4 4-4Z"/></svg>
+                  {{ followUpType() }}
+                </span>
+              </div>
+            </section>
+
+            @if (validationMessage()) {
+              <div class="fup-alert fup-alert-error" role="alert">
+                <div><strong>Follow-up details required.</strong><span>{{ validationMessage() }}</span></div>
+              </div>
+            }
+
+            <section class="fup-card" aria-labelledby="details-heading">
+              <div class="fup-card-heading">
+                <h2 id="details-heading">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 12h5M10 16h5"/></svg>
+                  Follow-up details
+                </h2>
+              </div>
+
+              <dl class="fup-detail-grid">
+                <div class="fup-detail-item">
+                  <dt>Donor or lead reference</dt>
+                  <dd>{{ recordReference() }}</dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Assigned user</dt>
+                  <dd>
+                    <select class="form-select form-select-sm fup-select" [ngModel]="owner()" (ngModelChange)="owner.set($event)" aria-label="Assigned user">
+                      @for (option of ownerOptions(); track option.value) {
+                        <option [value]="option.label">{{ option.label }}</option>
+                      }
+                    </select>
+                  </dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Follow-up type</dt>
+                  <dd>
+                    <select class="form-select form-select-sm fup-select" [ngModel]="followUpType()" (ngModelChange)="followUpType.set($event)" aria-label="Follow-up type">
+                      <option value="Call">Call</option><option value="Meeting">Meeting</option><option value="Visit">Visit</option>
+                      <option value="Email">Email</option><option value="WhatsApp">WhatsApp</option><option value="Verification">Verification</option><option value="Custom">Custom</option>
+                    </select>
+                  </dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Priority</dt>
+                  <dd>
+                    <select class="form-select form-select-sm fup-select" [ngModel]="priority()" (ngModelChange)="priority.set($event)" aria-label="Priority">
+                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                    </select>
+                  </dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Scheduled date</dt>
+                  <dd><input type="date" class="form-control form-control-sm" [ngModel]="scheduledDate()" (ngModelChange)="scheduledDate.set($event)" aria-label="Scheduled date" /></dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Scheduled time</dt>
+                  <dd><input type="time" class="form-control form-control-sm" [ngModel]="scheduledTime()" (ngModelChange)="scheduledTime.set($event)" aria-label="Scheduled time" /></dd>
+                </div>
+                <div class="fup-detail-item fup-detail-item-full">
+                  <dt>Purpose</dt>
+                  <dd><textarea class="form-control form-control-sm" rows="2" maxlength="500" [ngModel]="purpose()" (ngModelChange)="purpose.set($event)" aria-label="Purpose"></textarea></dd>
+                </div>
+                <div class="fup-detail-item fup-detail-item-full">
+                  <dt>Expected outcome</dt>
+                  <dd><textarea class="form-control form-control-sm" rows="2" maxlength="500" [ngModel]="expectedOutcome()" (ngModelChange)="expectedOutcome.set($event)" aria-label="Expected outcome"></textarea></dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Preferred language</dt>
+                  <dd>{{ preferredLanguage() }}</dd>
+                </div>
+                <div class="fup-detail-item">
+                  <dt>Preferred contact time</dt>
+                  <dd>{{ preferredContactTime() || '—' }}</dd>
+                </div>
+                <div class="fup-detail-item fup-detail-item-full">
+                  <dt>Consent</dt>
+                  <dd><span class="fup-consent-status">{{ consentWarning() || 'No consent warning on this record.' }}</span></dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          <aside class="fup-actions-card" aria-labelledby="actions-heading">
+            <div class="fup-actions-heading">
+              <h2 id="actions-heading">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 4-4 4 4-4 4M18 2v6M10 14l-6 6M4 20l-2 2M7 17l-3-3 7-7 3 3z"/></svg>
+                Actions
+              </h2>
+            </div>
+
+            <div class="fup-action-list">
+              @for (action of visibleActions(); track action.id) {
+                <button
+                  type="button"
+                  class="fup-action-button"
+                  [class.fup-action-primary]="action.placement === 'primary'"
+                  [class.fup-action-danger]="action.placement === 'danger'"
+                  [disabled]="uiState() === 'loading'"
+                  [attr.aria-busy]="activeActionId() === action.id ? 'true' : null"
+                  (click)="openAction(action.id)"
+                >
+                  <span class="fup-action-icon" aria-hidden="true">
+                    @switch (actionIcon(action.id)) {
+                      @case ('plus') { + }
+                      @case ('users') { ♙ }
+                      @case ('check') { ✓ }
+                      @case ('refresh') { ↻ }
+                      @case ('close') { × }
+                      @default { • }
+                    }
+                  </span>
+                  <span>{{ action.label }}</span>
+                </button>
+              }
+            </div>
+          </aside>
+        </div>
+      }
+    </div>
+  </div>
+</main>
+
+@if (confirmConfig(); as config) {
+  <app-confirm-modal
+    [config]="config"
+    (confirm)="onConfirm($event)"
+    (cancel)="onCancel()"
+  />
+}

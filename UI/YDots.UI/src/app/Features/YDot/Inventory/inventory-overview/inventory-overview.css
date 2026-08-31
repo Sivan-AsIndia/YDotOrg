@@ -1,0 +1,181 @@
+/* =========================================================
+   Inventory Overview
+   Design tokens — "Indigo" theme (matches User Directory)
+   ========================================================= */
+:host {
+  --bg-page:     #F6F7FC;
+  --surface:     #FFFFFF;
+  --border:      #ECEDF5;
+  --border-soft: #F1F2F8;
+
+  --ink-900: #1B1D2A;
+  --ink-700: #333647;
+  --ink-500: #6B7280;
+  --ink-400: #9AA0AC;
+
+  --accent:       #5B4EE5;
+  --accent-dark:  #4A3FCB;
+  --accent-soft:  #EEECFC;
+
+  --success:      #16A34A;
+  --success-soft: #E7F7ED;
+  --warning:      #D97706;
+  --warning-soft: #FDF1DE;
+  --danger:       #E11D48;
+  --danger-soft:  #FCE8ED;
+  --info:         #2F80ED;
+  --info-soft:    #E9F1FE;
+
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+
+  display: block;
+  font-family: var(--font-ui);
+  background: var(--bg-page);
+  color: var(--ink-700);
+  min-height: 100%;
+}
+* { box-sizing: border-box; }
+
+/* =========================================================
+   Header — flat and light, sitting on the page background.
+   ========================================================= */
+.page-header-gradient { background: transparent; border: none; border-radius: 0; padding: 4px 0 18px; }
+.page-header-gradient h3 { color: var(--ink-900); letter-spacing: -0.01em; }
+.inv-subtitle { color: var(--ink-500) !important; }
+.inv-scope-chip {
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent-dark); border: 1px solid var(--border);
+}
+.iam-status-pill {
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 8px;
+  color: var(--accent-dark); background: var(--accent-soft);
+}
+.page-header-gradient .btn-outline-secondary {
+  border: 1px solid var(--border); color: var(--ink-700); background: var(--surface);
+  border-radius: 8px; font-weight: 500;
+}
+.page-header-gradient .btn-outline-secondary:hover {
+  background: var(--border-soft); border-color: var(--border); color: var(--ink-900);
+}
+
+/* =========================================================
+   Summary stat cards
+   ========================================================= */
+.inv-stat-card { border-radius: 8px; border: 1px solid var(--border) !important; background: var(--surface); box-shadow: 0 1px 2px rgba(20, 20, 43, 0.03); }
+.inv-stat-card h4 { font-weight: 700; font-size: 20px; color: var(--ink-900); }
+.inv-stat-card small { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: var(--ink-400); }
+.inv-stat-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.inv-stat-olive { background: var(--accent-soft); color: var(--accent-dark); }
+.inv-stat-blue  { background: var(--info-soft); color: var(--info); }
+.inv-stat-gold  { background: var(--warning-soft); color: var(--warning); }
+.inv-stat-warn  { background: var(--danger-soft); color: var(--danger); }
+.inv-stat-info  { background: var(--info-soft); color: var(--info); }
+.inv-stat-danger{ background: var(--danger-soft); color: var(--danger); }
+
+.card { border-color: var(--border) !important; border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgba(20, 20, 43, 0.03); }
+
+/* =========================================================
+   Filter bar — pill search box, soft card
+   ========================================================= */
+.filter-bar-wrap { position: relative; }
+.filter-topbar {
+  display: flex; align-items: center; gap: 10px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px 6px 16px;
+  box-shadow: 0 1px 2px rgba(20, 20, 43, 0.03);
+}
+.filter-topbar-search { flex: 1; display: flex; align-items: center; gap: 10px; color: var(--ink-400); }
+.filter-topbar-search input { border: none; outline: none; flex: 1; font-size: 14px; background: transparent; color: var(--ink-700); padding: 8px 0; }
+.inv-filter-select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--ink-700); background: var(--bg-page); }
+.filter-topbar .btn-primary { background: var(--accent); border-color: var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; }
+.filter-topbar .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.filter-topbar-dot { width: 8px; height: 8px; border-radius: 8px; background: #fff; display: inline-block; margin-left: 2px; }
+
+.fw-active-label { font-size: 12px; font-weight: 700; color: var(--ink-500); }
+.fw-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--accent-soft); border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--accent-dark); }
+.fw-chip-x { background: none; border: none; cursor: pointer; padding: 0; color: var(--accent-dark); opacity: 0.6; }
+.fw-chip-x:hover { opacity: 1; }
+.fw-link { background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); padding: 4px 8px; text-decoration: none; }
+.fw-link:hover { background: var(--accent-soft); color: var(--accent-dark); }
+
+/* =========================================================
+   Table — light header, order-table style, reference codes mono
+   ========================================================= */
+.inv-table thead th, .table-light th {
+  background: transparent; color: var(--ink-400); font-size: 11px; letter-spacing: 0.05em;
+  text-transform: uppercase; font-weight: 600; padding: 14px; border-bottom: 1px solid var(--border);
+}
+.inv-table { border-collapse: separate; border-spacing: 0; }
+.inv-table tbody td { background: var(--surface); border-color: var(--border-soft); vertical-align: middle; padding: 10px 14px; color: var(--ink-900); font-weight: 500; }
+.inv-table tbody tr:hover td { background: var(--bg-page); }
+.fw-mono { font-family: var(--font-mono); font-size: 12px; }
+.inv-available { color: var(--accent-dark); font-weight: 700; }
+.inv-warn-text { color: var(--danger); font-weight: 600; }
+.inv-info-text { color: var(--info); font-weight: 600; }
+.inv-danger-text { color: var(--danger); font-weight: 700; }
+.inv-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-dark);
+  display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; flex-shrink: 0;
+}
+.inv-plus-btn { border-color: var(--border); color: var(--ink-400); border-radius: 8px; background: transparent; }
+.inv-plus-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.table .btn-outline-primary { border-color: var(--border); color: var(--ink-400); border-radius: 8px; background: transparent; }
+.table .btn-outline-primary:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.table .btn-outline-secondary { border-color: var(--border); color: var(--ink-400); border-radius: 8px; background: transparent; }
+.table .btn-outline-secondary:hover { background: var(--border-soft); border-color: var(--border); color: var(--ink-900); }
+
+/* Badges — flat pill, Indigo palette */
+.badge { border-radius: 8px !important; font-weight: 500; font-size: 11.5px; padding: 5px 10px 5px 8px; display: inline-flex; align-items: center; gap: 5px; border: none !important; }
+.badge.bg-success { background: var(--success-soft) !important; color: var(--success) !important; }
+.badge.bg-warning { background: var(--warning-soft) !important; color: var(--warning) !important; }
+.badge.bg-info    { background: var(--info-soft) !important; color: var(--info) !important; }
+.badge.bg-danger  { background: var(--danger-soft) !important; color: var(--danger) !important; }
+.badge.bg-primary { background: var(--accent-soft) !important; color: var(--accent-dark) !important; }
+
+/* Pagination */
+.pagination .page-link { color: var(--ink-500); border-color: var(--border); border-radius: 8px; margin: 0 2px; font-size: 13px; }
+.pagination .page-item.active .page-link { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 56px 20px; }
+.empty-state-icon { width: 56px; height: 56px; border-radius: 8px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; color: var(--accent); }
+.btn-outline-primary { color: var(--accent); border-color: var(--accent); }
+.btn-outline-primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* =========================================================
+   Decision / review · Related and history · Persistent outcome
+   ========================================================= */
+.fw-kv { margin: 0; }
+.fw-kv div { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.fw-kv div:last-child { border-bottom: none; }
+.fw-kv dt { font-weight: 600; color: var(--ink-500); min-width: 120px; font-size: 13px; }
+.fw-kv dd { margin: 0; color: var(--ink-900); font-size: 13px; }
+
+.fw-rel-list { list-style: none; margin: 0; padding: 0; }
+.fw-rel-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.fw-rel-row:last-child { border-bottom: none; }
+.fw-rel-primary { font-weight: 600; font-size: 13px; color: var(--accent-dark); }
+.fw-rel-secondary { font-size: 12px; color: var(--ink-500); }
+.fw-rel-meta { font-size: 11px; color: var(--ink-400); }
+
+.fw-corr { font-family: var(--font-mono); font-size: 12px; }
+
+/* =========================================================
+   Situational banners
+   ========================================================= */
+.alert-danger  { background: var(--danger-soft); color: var(--danger); border: 1px solid #F7D2DD; border-radius: 8px; }
+.alert-warning { background: var(--warning-soft); color: var(--warning); border: 1px solid #FBE3BB; border-radius: 8px; }
+.alert-success { background: var(--success-soft); color: var(--success); border: 1px solid #C9EFD6; border-radius: 8px; }
+
+/* =========================================================
+   Row detail modal
+   ========================================================= */
+.modal-content { border-radius: 14px; }
+.modal-header { padding-top: 18px; }
+.modal-header.border-bottom { border-top: 4px solid var(--accent); border-radius: 14px 14px 0 0; border-color: var(--border) !important; }
+.modal-title { color: var(--ink-900); }
+.bg-light { background: var(--bg-page) !important; }
+.btn-light { background: var(--surface); border: 1px solid var(--border); color: var(--ink-700); }
+.btn-light:hover { background: var(--border-soft); border-color: var(--border); color: var(--ink-900); }
+.btn-primary { background: var(--accent); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }

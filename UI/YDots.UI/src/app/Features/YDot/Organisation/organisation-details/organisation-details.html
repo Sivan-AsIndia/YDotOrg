@@ -1,0 +1,318 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="org-page">
+  @if (notFound()) {
+    <div class="org-card org-empty">
+      <div class="org-empty-icon"><i class="ri-error-warning-line"></i></div>
+      <h3 class="org-empty-title">Organisation not found</h3>
+      <p class="org-empty-body">It may have been removed, or the link is incorrect.</p>
+      <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-primary org-btn-sm">Back to Directory</a>
+    </div>
+  } @else if (organisation(); as org) {
+    <div class="org-breadcrumb">
+      <a routerLink="/app/administration/organisation/super-admin-view">Organisation Directory</a>
+      <span class="sep">/</span>
+      <span class="current">{{ org.name }}</span>
+    </div>
+
+    <div class="org-header">
+      <div>
+        <h1 class="org-title">
+          <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+          {{ org.name }}
+          <span class="org-badge" [ngClass]="org.statusClass">{{ org.status }}</span>
+          <span class="org-badge" [ngClass]="verificationClass()">Verification: {{ verificationLabel() }}</span>
+        </h1>
+        <p class="org-meta">{{ org.id }} &middot; {{ org.organisationType }} &middot; {{ org.legalStructure }}</p>
+        <p class="org-meta">Owner: {{ org.ownerName }} ({{ org.ownerEmail }}) &middot; {{ org.phone }}</p>
+        <p class="org-meta">Created {{ org.createdDate }} &middot; Updated {{ org.updatedDate }}</p>
+        @if (org.verifiedBy) {
+          <p class="org-meta">Verified by {{ org.verifiedBy }} on {{ org.verifiedDate }}</p>
+        }
+      </div>
+      <div class="org-header-actions">
+        @if (!editing()) {
+          <button type="button" class="org-btn org-btn-outline org-btn-sm" (click)="startEdit()"><i class="ri-edit-line"></i>Edit</button>
+        }
+        @if (canVerify()) {
+          <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="openVerification()"><i class="ri-shield-check-line"></i>Verify / Review</button>
+        }
+        @if (canActivate() || canSuspend() || canDeactivate()) {
+          <div class="org-menu-wrap dropdown">
+            <button class="org-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown">More Actions</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              @if (canActivate()) { <li><a class="dropdown-item" href="javascript:void(0)" (click)="activate()">Activate</a></li> }
+              @if (canSuspend()) { <li><a class="dropdown-item text-warning" href="javascript:void(0)" (click)="suspend()">Suspend</a></li> }
+              @if (canDeactivate()) { <li><a class="dropdown-item text-danger" href="javascript:void(0)" (click)="deactivate()">Deactivate</a></li> }
+            </ul>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (org.status === 'Changes Requested' && org.changeRequestReason) {
+      <div class="org-banner org-banner-warn">
+        <i class="ri-error-warning-line"></i>
+        <span><strong>Change reason:</strong> {{ org.changeRequestReason }}</span>
+      </div>
+    }
+
+    <div class="org-doc-columns">
+    <!-- Organisation Information -->
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading">Organisation Information</h3>
+          @if (!editing()) {
+            <dl class="org-dl">
+              <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
+              <div class="org-dl-row"><dt>Type</dt><dd>{{ org.organisationType }}</dd></div>
+              <div class="org-dl-row"><dt>Legal Structure</dt><dd>{{ org.legalStructure }}</dd></div>
+              <div class="org-dl-row"><dt>Registration Number</dt><dd>{{ org.registrationNumber || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>Registration Date</dt><dd>{{ org.registrationDate || '—' }}</dd></div>
+            </dl>
+          } @else {
+            <div class="org-grid org-grid-1">
+              <div class="org-field">
+                <label class="org-field-label">Organisation Name</label>
+                <input class="org-input" [ngModel]="editValues().name" (ngModelChange)="setField('name', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Type</label>
+                <select class="org-select" [ngModel]="editType" (ngModelChange)="setField('organisationType', $event)">
+                  @for (t of organisationTypes; track t) { <option [value]="t">{{ t }}</option> }
+                </select>
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Legal Structure</label>
+                <select class="org-select" [ngModel]="editLegal" (ngModelChange)="setField('legalStructure', $event)">
+                  @for (t of legalStructures; track t) { <option [value]="t">{{ t }}</option> }
+                </select>
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Registration Number</label>
+                <input class="org-input" [ngModel]="editValues().registrationNumber" (ngModelChange)="setField('registrationNumber', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Registration Date</label>
+                <input type="date" class="org-input" [ngModel]="editValues().registrationDate" (ngModelChange)="setField('registrationDate', $event)">
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- Owner Information -->
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--blue">Owner Information</h3>
+          @if (!editing()) {
+            <dl class="org-dl">
+              <div class="org-dl-row"><dt>Owner Name</dt><dd>{{ org.ownerName }}</dd></div>
+              <div class="org-dl-row"><dt>Owner Email / Login ID</dt><dd>{{ org.ownerEmail }}</dd></div>
+              <div class="org-dl-row"><dt>Owner Mobile Number</dt><dd>{{ org.ownerMobile }}</dd></div>
+              <div class="org-dl-row"><dt>Designation</dt><dd>{{ org.ownerDesignation || '—' }}</dd></div>
+            </dl>
+          } @else {
+            <div class="org-grid org-grid-1">
+              <div class="org-field">
+                <label class="org-field-label">Owner Name</label>
+                <input class="org-input" [ngModel]="editValues().ownerName" (ngModelChange)="setField('ownerName', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Owner Email / Login ID</label>
+                <input class="org-input" [ngModel]="editValues().ownerEmail" (ngModelChange)="setField('ownerEmail', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Owner Mobile Number</label>
+                <input class="org-input" [ngModel]="editValues().ownerMobile" (ngModelChange)="setField('ownerMobile', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Designation</label>
+                <input class="org-input" [ngModel]="editValues().ownerDesignation" (ngModelChange)="setField('ownerDesignation', $event)">
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- Address Information -->
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--plum">Address Information</h3>
+          @if (!editing()) {
+            <dl class="org-dl">
+              <div class="org-dl-row"><dt>Address Line 1</dt><dd>{{ org.addressLine1 || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>Address Line 2</dt><dd>{{ org.addressLine2 || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>Country</dt><dd>{{ org.country || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>State / Province</dt><dd>{{ org.state || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>City</dt><dd>{{ org.city || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>PIN / Postal Code</dt><dd>{{ org.pinCode || '—' }}</dd></div>
+            </dl>
+          } @else {
+            <div class="org-grid org-grid-2">
+              <div class="org-field">
+                <label class="org-field-label">Address Line 1</label>
+                <input class="org-input" [ngModel]="editValues().addressLine1" (ngModelChange)="setField('addressLine1', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Address Line 2</label>
+                <input class="org-input" [ngModel]="editValues().addressLine2" (ngModelChange)="setField('addressLine2', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Country</label>
+                <select class="org-select" [ngModel]="editValues().country" (ngModelChange)="onEditCountryChange($event)">
+                  @for (c of geo.countryNames(); track c) { <option [value]="c">{{ c }}</option> }
+                </select>
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">State / Province</label>
+                @if (hasStateOptions()) {
+                  <select class="org-select" [ngModel]="editValues().state" (ngModelChange)="onEditStateChange($event)">
+                    <option value="">Select state</option>
+                    @for (s of geo.stateNames(); track s) { <option [value]="s">{{ s }}</option> }
+                  </select>
+                } @else {
+                  <input class="org-input" [ngModel]="editValues().state" (ngModelChange)="onEditStateChange($event)">
+                }
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">City</label>
+                <!-- Gated on the CITIES existing, not the states. A state whose cities are not in
+                     the catalogue still needs a way to record one, and a dropdown that can only
+                     ever be empty is not it. -->
+                @if (editAvailableCities().length) {
+                  <select class="org-select" [ngModel]="editValues().city" (ngModelChange)="setField('city', $event)" [disabled]="!editValues().state">
+                    <option value="">{{ editValues().state ? 'Select city' : 'Select a state first' }}</option>
+                    @for (c of editAvailableCities(); track c) { <option [value]="c">{{ c }}</option> }
+                  </select>
+                } @else {
+                  <input class="org-input" [ngModel]="editValues().city" (ngModelChange)="setField('city', $event)">
+                }
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">PIN / Postal Code</label>
+                <input class="org-input" [ngModel]="editValues().pinCode" (ngModelChange)="setField('pinCode', $event)">
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- Contact Information -->
+        <section class="org-doc-section">
+          <h3 class="org-doc-heading org-doc-heading--gold">Contact Information</h3>
+          @if (!editing()) {
+            <dl class="org-dl">
+              <div class="org-dl-row"><dt>Email</dt><dd>{{ org.email }}</dd></div>
+              <div class="org-dl-row"><dt>Phone</dt><dd>{{ org.phone }}</dd></div>
+              <div class="org-dl-row"><dt>Alternate Phone</dt><dd>{{ org.alternatePhone || '—' }}</dd></div>
+              <div class="org-dl-row"><dt>Website</dt><dd>{{ org.website || '—' }}</dd></div>
+            </dl>
+          } @else {
+            <div class="org-grid org-grid-2">
+              <div class="org-field">
+                <label class="org-field-label">Email</label>
+                <input class="org-input" [ngModel]="editValues().email" (ngModelChange)="setField('email', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Phone</label>
+                <input class="org-input" [ngModel]="editValues().phone" (ngModelChange)="setField('phone', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Alternate Phone</label>
+                <input class="org-input" [ngModel]="editValues().alternatePhone" (ngModelChange)="setField('alternatePhone', $event)">
+              </div>
+              <div class="org-field">
+                <label class="org-field-label">Website</label>
+                <input class="org-input" [ngModel]="editValues().website" (ngModelChange)="setField('website', $event)">
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- Compliance Information -->
+        <section class="org-doc-section org-doc-section--full">
+          <h3 class="org-doc-heading org-doc-heading--good">Compliance Information</h3>
+          @if (!editing()) {
+            <dl class="org-dl" style="max-width:320px;">
+              <div class="org-dl-row"><dt>PAN / Tax ID</dt><dd>{{ org.panTaxId || '—' }}</dd></div>
+            </dl>
+          } @else {
+            <div class="org-field" style="max-width:320px;">
+              <label class="org-field-label">PAN / Tax ID</label>
+              <input class="org-input" [ngModel]="editValues().panTaxId" (ngModelChange)="setField('panTaxId', $event)">
+            </div>
+            <p class="org-field-hint">12A / 80G / FCRA / GST applicability is set at creation and is not changed here.</p>
+          }
+          <dl class="org-dl" style="max-width:480px; margin-top:8px;">
+            <div class="org-dl-row"><dt>12A</dt><dd [class.is-good]="org.compliance.twelveA.applicable">{{ org.compliance.twelveA.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>80G</dt><dd [class.is-good]="org.compliance.eightyG.applicable">{{ org.compliance.eightyG.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>FCRA</dt><dd [class.is-good]="org.compliance.fcra.applicable">{{ org.compliance.fcra.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+            <div class="org-dl-row"><dt>GST</dt><dd [class.is-good]="org.compliance.gst.applicable">{{ org.compliance.gst.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
+          </dl>
+
+          @if (editing()) {
+            <div class="d-flex gap-2" style="margin-top:20px;">
+              <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="saveEdit()">Save Changes</button>
+              <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="cancelEdit()">Cancel</button>
+            </div>
+          }
+        </section>
+
+        <!-- Documents -->
+        <section class="org-doc-section org-doc-section--full" id="documents">
+          <h3 class="org-doc-heading org-doc-heading--blue">Documents</h3>
+          <div class="org-doc-list">
+            @for (d of org.documents; track d.id) {
+              <div class="org-doc-row">
+                <span class="org-doc-icon"
+                      [ngClass]="{
+                        'is-good': d.status === 'Accepted',
+                        'is-error': d.status === 'Rejected',
+                        'is-blue': d.status === 'Uploaded' || d.status === 'Under Review'
+                      }"><i class="ri-file-text-line"></i></span>
+                <div class="org-doc-main">
+                  <p class="org-doc-name">
+                    {{ d.name }}
+                    <span class="org-doc-req" [ngClass]="d.required ? 'is-required' : 'is-optional'">{{ d.required ? 'Required' : 'Optional' }}</span>
+                  </p>
+                  <p class="org-doc-meta">
+                    @if (d.uploadedDate) { Uploaded {{ d.uploadedDate }} by {{ d.uploadedBy || '—' }} } @else { Not uploaded yet }
+                  </p>
+                </div>
+                <span class="org-badge"
+                      [ngClass]="{
+                        'org-badge-muted': d.status === 'Pending' || d.status === 'Not Applicable',
+                        'org-badge-blue': d.status === 'Uploaded' || d.status === 'Under Review',
+                        'org-badge-good': d.status === 'Accepted',
+                        'org-badge-error': d.status === 'Rejected'
+                      }">{{ d.status }}</span>
+              </div>
+            }
+          </div>
+          <p class="org-field-hint" style="margin-top:12px;">Documents are uploaded by the Organisation Owner through their own workflow &mdash; Super Admin reviews here but does not edit them.</p>
+        </section>
+
+        <!-- Audit -->
+        <section class="org-doc-section org-doc-section--full" id="audit">
+          <h3 class="org-doc-heading">History / Audit Log</h3>
+          @if (audit().length === 0) {
+            <p class="org-field-hint">No audit records yet.</p>
+          } @else {
+            <div class="org-table-scroll">
+              <table class="org-table">
+                <thead><tr><th>Timestamp</th><th>Action</th><th>Old &rarr; New</th><th>Performed By</th><th>Reason</th></tr></thead>
+                <tbody>
+                  @for (entry of audit(); track entry.id) {
+                    <tr>
+                      <td>{{ entry.timestamp | date: 'medium' }}</td>
+                      <td>{{ entry.action }}</td>
+                      <td>{{ entry.oldValue || '—' }} @if (entry.oldValue && entry.newValue) { &rarr; } {{ entry.newValue || '' }}</td>
+                      <td>{{ entry.performedBy }}</td>
+                      <td>{{ entry.reason || '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+    </div>
+  }
+</div>
+</div>
+</main>

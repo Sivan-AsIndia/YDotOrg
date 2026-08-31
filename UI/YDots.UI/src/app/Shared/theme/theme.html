@@ -1,0 +1,392 @@
+<!-- ═══════════ Theme Customizer — Trigger Button ═══════════ -->
+
+<!-- ═══════════ Backdrop ═══════════ -->
+@if (isOpen) {
+  <div class="tc-backdrop" (click)="closePanel()"></div>
+}
+
+<!-- ═══════════ Panel ═══════════ -->
+<aside class="tc-panel" [class.tc-panel--open]="isOpen" role="dialog" aria-label="Theme settings">
+
+  <!-- ── Header ── -->
+  <header class="tc-header">
+    <div class="tc-header-title">
+      <span class="tc-header-icon"><i class="bi bi-magic"></i></span>
+      <div>
+        <h2>Customize workspace</h2>
+        <p>Changes preview instantly — nothing is applied until you save.</p>
+      </div>
+    </div>
+    <button type="button" class="tc-close" (click)="closePanel()" aria-label="Close">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </header>
+
+  <!-- ── Toast ── -->
+  @if (toast) {
+    <div class="tc-toast" [class.tc-toast--error]="toast.type === 'error'" [class.tc-toast--success]="toast.type === 'success'">
+      <i class="{{ toast.type === 'error' ? 'bi bi-exclamation-circle' : 'bi bi-check-circle' }}"></i>
+      <span>{{ toast.message }}</span>
+    </div>
+  }
+
+  <!-- ── Live preview strip (signature element) ── -->
+
+  <!-- ── Body: rail + content ── -->
+  <div class="tc-body">
+
+
+    <!-- Content -->
+    <div class="tc-content">
+
+      <!-- 1. Primary color -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-palette2"></i></span>
+          <div>
+            <h4>Primary color</h4>
+            <p>Buttons, links and highlighted states across the app.</p>
+          </div>
+        </div>
+        <div class="tc-swatch-row">
+          @for (color of primaryPresets; track color) {
+            <button type="button" class="tc-swatch" [class.tc-swatch--active]="primaryColor.toLowerCase() === color.toLowerCase()"
+                    [style.background]="color" (click)="setPrimaryPreset(color)" [attr.title]="color">
+              @if (primaryColor.toLowerCase() === color.toLowerCase()) {
+                <i class="bi bi-check-lg"></i>
+              }
+            </button>
+          }
+          @if (isCustomPrimary) {
+            <button type="button" class="tc-swatch tc-swatch--active" [style.background]="primaryColor">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          }
+          <label class="tc-swatch tc-swatch--picker" title="Custom color">
+            <input type="color" [value]="primaryColor" (input)="onPrimaryInput($event)">
+            <i class="bi bi-eyedropper"></i>
+          </label>
+        </div>
+      </section>
+
+      <!-- 2. Secondary color -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-droplet-half"></i></span>
+          <div>
+            <h4>Secondary color</h4>
+            <p>Supporting labels, badges and quieter actions.</p>
+          </div>
+        </div>
+        <div class="tc-swatch-row">
+          @for (color of secondaryPresets; track color) {
+            <button type="button" class="tc-swatch" [class.tc-swatch--active]="secondaryColor.toLowerCase() === color.toLowerCase()"
+                    [style.background]="color" (click)="setSecondaryPreset(color)" [attr.title]="color">
+              @if (secondaryColor.toLowerCase() === color.toLowerCase()) {
+                <i class="bi bi-check-lg"></i>
+              }
+            </button>
+          }
+          @if (isCustomSecondary) {
+            <button type="button" class="tc-swatch tc-swatch--active" [style.background]="secondaryColor">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          }
+          <label class="tc-swatch tc-swatch--picker" title="Custom color">
+            <input type="color" [value]="secondaryColor" (input)="onSecondaryInput($event)">
+            <i class="bi bi-eyedropper"></i>
+          </label>
+        </div>
+      </section>
+
+      <!-- 3. Theme mode -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-circle-half"></i></span>
+          <div>
+            <h4>Appearance mode</h4>
+            <p>Switch the whole workspace between light and dark.</p>
+          </div>
+        </div>
+        <div class="tc-mode-row">
+          <button type="button" class="tc-mode-card" [class.tc-mode-card--active]="!isDarkMode" (click)="setThemeMode(false)">
+            <i class="bi bi-sun"></i>
+            <span>Light</span>
+          </button>
+          <button type="button" class="tc-mode-card" [class.tc-mode-card--active]="isDarkMode" (click)="setThemeMode(true)">
+            <i class="bi bi-moon-stars-fill"></i>
+            <span>Dark</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 4. Layout -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-layout-split"></i></span>
+          <div>
+            <h4>Layout</h4>
+            <p>Choose how navigation and content are arranged.</p>
+          </div>
+        </div>
+        <div class="tc-layout-row">
+          <button type="button" class="tc-layout-card" [class.tc-layout-card--active]="layoutMode === 'fluid'" (click)="selectLayout('horizontal')">
+            <span class="tc-layout-preview tc-layout-preview--h">
+              <span class="tc-lp-topbar"></span>
+              <span class="tc-lp-body"><span class="tc-lp-line"></span><span class="tc-lp-line short"></span></span>
+            </span>
+            <span class="tc-layout-label">Horizontal</span>
+            <i class="bi bi-check-circle-fill tc-layout-check"></i>
+          </button>
+          <button type="button" class="tc-layout-card" [class.tc-layout-card--active]="layoutMode === 'box'" (click)="selectLayout('vertical')">
+            <span class="tc-layout-preview tc-layout-preview--v">
+              <span class="tc-lp-sidebar"></span>
+              <span class="tc-lp-body"><span class="tc-lp-line"></span><span class="tc-lp-line short"></span></span>
+            </span>
+            <span class="tc-layout-label">Vertical</span>
+            <i class="bi bi-check-circle-fill tc-layout-check"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- 5. Font family -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-fonts"></i></span>
+          <div>
+            <h4>Font family</h4>
+            <p>Set typefaces independently for each role.</p>
+          </div>
+        </div>
+
+        <div class="tc-font-block">
+          <h5>Menu font</h5>
+          <div class="tc-pill-row">
+            @for (font of fonts; track font.value) {
+              <button type="button" class="tc-pill" [class.tc-pill--active]="selectedMenuFont === font.value"
+                      [style.fontFamily]="font.value" (click)="setFont('menu', font.value)">
+                {{ font.name }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="tc-font-block">
+          <h5>Heading font</h5>
+          <div class="tc-pill-row">
+            @for (font of fonts; track font.value) {
+              <button type="button" class="tc-pill" [class.tc-pill--active]="selectedHeadingFont === font.value"
+                      [style.fontFamily]="font.value" (click)="setFont('heading', font.value)">
+                {{ font.name }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="tc-font-block">
+          <h5>Number font</h5>
+          <div class="tc-pill-row">
+            @for (font of fonts; track font.value) {
+              <button type="button" class="tc-pill" [class.tc-pill--active]="selectedNumberFont === font.value"
+                      [style.fontFamily]="font.value" (click)="setFont('number', font.value)">
+                {{ font.name }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="tc-font-block">
+          <h5>Body font</h5>
+          <div class="tc-pill-row">
+            @for (font of fonts; track font.value) {
+              <button type="button" class="tc-pill" [class.tc-pill--active]="selectedOtherFont === font.value"
+                      [style.fontFamily]="font.value" (click)="setFont('other', font.value)">
+                {{ font.name }}
+              </button>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Font size & style -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-type"></i></span>
+          <div>
+            <h4>Font size &amp; style</h4>
+            <p>Base size, weight and line spacing for body text.</p>
+          </div>
+        </div>
+
+        <h5 class="tc-subhead">Font size</h5>
+        <div class="tc-size-row">
+          @for (size of fontSizes; track size) {
+            <button type="button" class="tc-size-tile" [class.tc-size-tile--active]="selectedFontSize === size.toString() + 'px'"
+                    (click)="setFontSize(size)">
+              <span class="tc-size-num">{{ size }}</span><span class="tc-size-unit">px</span>
+            </button>
+          }
+        </div>
+
+        <h5 class="tc-subhead">Font weight</h5>
+        <div class="tc-weight-row">
+          @for (w of fontWeights; track w.value) {
+            <button type="button" class="tc-weight-card" [class.tc-weight-card--active]="selectedFontWeight === w.value"
+                    (click)="setFontWeight(w.value)">
+              <span class="tc-weight-sample" [style.fontWeight]="w.value">Aa</span>
+              <span class="tc-weight-name">{{ w.label }}</span>
+            </button>
+          }
+        </div>
+
+        <h5 class="tc-subhead">
+          Line height
+          <span class="tc-subhead-value">{{ getLineHeightLabel() }} · {{ selectedLineHeight }}</span>
+        </h5>
+        <input type="range" min="1" max="2.4" step="0.1" class="tc-range"
+               [value]="selectedLineHeight" (input)="onLineHeightInput($event)">
+      </section>
+
+      <!-- 7. Appearance: shadow & radius -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-shadows"></i></span>
+          <div>
+            <h4>Shadow &amp; radius</h4>
+            <p>Fine-tune elevation and corner rounding.</p>
+          </div>
+        </div>
+
+        <div class="tc-slider-block">
+          <h5 class="tc-subhead">Shadow <span class="tc-subhead-value">{{ shadowLevel }}</span></h5>
+          <input type="range" min="0" max="40" step="1" class="tc-range" [value]="shadowLevel" (input)="onShadowInput($event)">
+        </div>
+
+        <div class="tc-slider-block">
+          <h5 class="tc-subhead">Border radius <span class="tc-subhead-value">{{ borderRadiusLevel }}px</span></h5>
+          <input type="range" min="0" max="40" step="1" class="tc-range" [value]="borderRadiusLevel" (input)="onBorderRadiusInput($event)">
+        </div>
+
+        <div class="tc-slider-block">
+          <h5 class="tc-subhead">Button radius <span class="tc-subhead-value">{{ buttonRadiusLevel }}px</span></h5>
+          <input type="range" min="0" max="40" step="1" class="tc-range" [value]="buttonRadiusLevel" (input)="onButtonRadiusInput($event)">
+        </div>
+      </section>
+
+      <!-- 8. Icon color -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-stars"></i></span>
+          <div>
+            <h4>Icon color</h4>
+            <p>Applies to sidebar and menu icons.</p>
+          </div>
+        </div>
+        <div class="tc-swatch-row">
+          @for (color of iconPresets; track color) {
+            <button type="button" class="tc-swatch" [class.tc-swatch--active]="iconColor.toLowerCase() === color.toLowerCase()"
+                    [style.background]="color" (click)="setIconPreset(color)" [attr.title]="color">
+              @if (iconColor.toLowerCase() === color.toLowerCase()) {
+                <i class="bi bi-check-lg"></i>
+              }
+            </button>
+          }
+          @if (isCustomIcon) {
+            <button type="button" class="tc-swatch tc-swatch--active" [style.background]="iconColor">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          }
+          <label class="tc-swatch tc-swatch--picker" title="Custom color">
+            <input type="color" [value]="iconColor" (input)="onIconInput($event)">
+            <i class="bi bi-eyedropper"></i>
+          </label>
+        </div>
+      </section>
+
+      <!-- 9. Heading color -->
+      <section class="tc-section">
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-type-h1"></i></span>
+          <div>
+            <h4>Heading color</h4>
+            <p>Applies to page and section headings.</p>
+          </div>
+        </div>
+        <div class="tc-swatch-row">
+          @for (color of headingPresets; track color) {
+            <button type="button" class="tc-swatch" [class.tc-swatch--active]="headingColor.toLowerCase() === color.toLowerCase()"
+                    [style.background]="color" (click)="setHeadingPreset(color)" [attr.title]="color">
+              @if (headingColor.toLowerCase() === color.toLowerCase()) {
+                <i class="bi bi-check-lg"></i>
+              }
+            </button>
+          }
+          @if (isCustomHeading) {
+            <button type="button" class="tc-swatch tc-swatch--active" [style.background]="headingColor">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          }
+          <label class="tc-swatch tc-swatch--picker" title="Custom color">
+            <input type="color" [value]="headingColor" (input)="onHeadingInput($event)">
+            <i class="bi bi-eyedropper"></i>
+          </label>
+        </div>
+      </section>
+
+      <!-- 10. Sidebar background -->
+      <section class="tc-section" >
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-image"></i></span>
+          <div>
+            <h4>Sidebar background</h4>
+            <p>Pick a texture for the navigation sidebar, or none.</p>
+          </div>
+        </div>
+        <div class="tc-bg-grid">
+          <button type="button" class="tc-bg-tile tc-bg-tile--none" [class.tc-bg-tile--active]="!selectedBg" (click)="selectBg(null)">
+            <i class="bi bi-slash-circle"></i>
+            <span>None</span>
+          </button>
+          @for (bg of backgrounds; track bg) {
+            <button type="button" class="tc-bg-tile" [class.tc-bg-tile--active]="selectedBg === bg"
+                    [style.backgroundImage]="'url(' + bg + ')'" (click)="selectBg(bg)">
+              @if (selectedBg === bg) {
+                <i class="bi bi-check-circle-fill tc-bg-check"></i>
+              }
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- 11. Profile photo -->
+      <section class="tc-section">
+        <div class="tc-section-head">
+          <span class="tc-section-icon"><i class="bi bi-person-circle"></i></span>
+          <div>
+            <h4>Profile photo</h4>
+            <p>Pick an avatar to use across the workspace.</p>
+          </div>
+        </div>
+        <div class="tc-avatar-grid">
+          @for (img of profileImages; track img) {
+            <button type="button" class="tc-avatar" [class.tc-avatar--active]="selectedProfilePhoto === img"
+                    [style.backgroundImage]="'url(' + img + ')'" (click)="selectProfile(img)" [attr.aria-label]="'Select avatar'">
+            </button>
+          }
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ── Footer ── -->
+  <footer class="tc-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" (click)="resetTheme()">
+      <i class="bi bi-arrow-counterclockwise"></i> Reset
+    </button>
+    <button type="button" class="btn btn-primary btn-sm" (click)="saveTheme()">
+      <i class="bi bi-check2"></i> Save changes
+    </button>
+  </footer>
+
+</aside>

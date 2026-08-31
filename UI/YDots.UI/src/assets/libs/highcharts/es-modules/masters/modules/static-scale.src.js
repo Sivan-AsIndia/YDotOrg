@@ -1,0 +1,2 @@
+/*! For license information please see static-scale.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import StaticScale from"../../Extensions/StaticScale.js";const G=Highcharts;StaticScale.compose(G.Axis,G.Chart);export default Highcharts;

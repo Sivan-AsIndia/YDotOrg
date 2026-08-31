@@ -1,0 +1,112 @@
+<!-- ============================ Backdrop ============================ -->
+<div class="crcx-backdrop" (click)="attemptClose()"></div>
+
+<!-- ============================ Off-canvas ============================ -->
+<aside class="crcx-drawer" role="dialog" aria-modal="true" aria-labelledby="crcx-check-title">
+  <header class="crcx-head">
+    <div class="crcx-head-text">
+      <p class="crcx-eyebrow">Readiness check</p>
+      <h2 id="crcx-check-title" class="crcx-title">{{ isEditMode() ? 'Edit readiness check' : 'Add readiness check' }}</h2>
+      <p class="crcx-subtitle">Define what must be validated and how it is confirmed.</p>
+    </div>
+    <button type="button" class="crcx-close" (click)="attemptClose()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </header>
+
+  <div class="crcx-body">
+    <div class="crcx-grid">
+      <div class="crcx-field crcx-col-2">
+        <label class="crcx-label" for="crcx-c-name">Check name <span class="crcx-req">*</span></label>
+        <input id="crcx-c-name" class="crcx-input" type="text"
+               [class.is-invalid]="submitted() && !cNameValid()"
+               [ngModel]="cName()" (ngModelChange)="cName.set($event)" />
+        @if (submitted() && !cNameValid()) { <span class="crcx-error">Enter a check name.</span> }
+      </div>
+
+      <div class="crcx-field crcx-col-2">
+        <label class="crcx-label" for="crcx-c-desc">Description</label>
+        <textarea id="crcx-c-desc" class="crcx-input crcx-textarea" [ngModel]="cDescription()" (ngModelChange)="cDescription.set($event)"></textarea>
+      </div>
+
+      <div class="crcx-field">
+        <label class="crcx-label" for="crcx-c-cat">Category <span class="crcx-req">*</span></label>
+        <select id="crcx-c-cat" class="crcx-input crcx-select" [class.is-invalid]="submitted() && !cCategoryValid()" [ngModel]="cCategory()" (ngModelChange)="cCategory.set($event)">
+          <option value="" disabled>Select…</option>
+          @for (o of categories; track o) { <option [value]="o">{{ o }}</option> }
+        </select>
+        @if (submitted() && !cCategoryValid()) { <span class="crcx-error">Select a category.</span> }
+      </div>
+
+      <div class="crcx-field crcx-col-2">
+        <label class="crcx-label" for="crcx-c-success">Success criteria <span class="crcx-req">*</span></label>
+        <textarea id="crcx-c-success" class="crcx-input crcx-textarea" [class.is-invalid]="submitted() && !cSuccessValid()" [ngModel]="cSuccessCriteria()" (ngModelChange)="cSuccessCriteria.set($event)" placeholder="What condition marks this check as met?"></textarea>
+        @if (submitted() && !cSuccessValid()) { <span class="crcx-error">Enter the success criteria.</span> }
+      </div>
+
+      <div class="crcx-field">
+        <label class="crcx-label">Required for launch <span class="crcx-req">*</span></label>
+        <div class="crcx-segment" role="group" aria-label="Required for launch">
+          <button type="button" class="crcx-seg" [class.is-active]="cRequiredForLaunch()" (click)="cRequiredForLaunch.set(true)">Yes</button>
+          <button type="button" class="crcx-seg" [class.is-active]="!cRequiredForLaunch()" (click)="cRequiredForLaunch.set(false)">No</button>
+        </div>
+      </div>
+
+      <div class="crcx-field">
+        <label class="crcx-label">Owner</label>
+        <div class="crcx-combo">
+          <button #ownerBtn type="button" class="crcx-combo-trigger" (click)="ownerComboOpen() ? ownerComboOpen.set(false) : openOwnerCombo()">
+            <span [class.crcx-placeholder]="!checkOwnerLabel()">{{ checkOwnerLabel() || 'Assign an owner…' }}</span>
+            <svg class="crcx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          @if (ownerComboOpen()) {
+            <div class="crcx-pop" appClickOutside [clickOutsideExcept]="ownerBtn" (appClickOutside)="ownerComboOpen.set(false)">
+              <input class="crcx-pop-search" type="text" [ngModel]="ownerQuery()" (ngModelChange)="ownerQuery.set($event)" placeholder="Search people…" />
+              <ul class="crcx-pop-list">
+                @if (cOwnerId()) { <li><button type="button" class="crcx-pop-opt crcx-pop-clear" (click)="clearCheckOwner()">Clear owner</button></li> }
+                @for (o of ownerFiltered(); track o.reference) {
+                  <li>
+                    <button type="button" class="crcx-pop-opt" [class.is-selected]="o.reference === cOwnerId()" (click)="selectCheckOwner(o.reference)">
+                      <span class="crcx-opt-main">{{ o.name }}</span>
+                      <span class="crcx-opt-sub">{{ o.context }}</span>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="crcx-pop-empty">No people match “{{ ownerQuery() }}”.</li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="crcx-field">
+        <label class="crcx-label" for="crcx-c-due">Due date</label>
+        <input id="crcx-c-due" class="crcx-input" type="date" [ngModel]="cDueDate()" (ngModelChange)="cDueDate.set($event)" />
+      </div>
+
+      <div class="crcx-field crcx-col-2">
+        <label class="crcx-label" for="crcx-c-notes">Notes</label>
+        <textarea id="crcx-c-notes" class="crcx-input crcx-textarea" [ngModel]="cNotes()" (ngModelChange)="cNotes.set($event)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <footer class="crcx-foot">
+    <button type="button" class="crcx-btn crcx-btn-ghost" (click)="attemptClose()">Cancel</button>
+    <button type="button" class="crcx-btn crcx-btn-primary" [disabled]="!checkValid()" (click)="addCheck()">{{ isEditMode() ? 'Save changes' : 'Add check' }}</button>
+  </footer>
+</aside>
+
+<!-- ============================ Discard-changes guard ============================ -->
+@if (discardConfirmOpen()) {
+  <div class="crcx-modal-backdrop" (click)="cancelDiscard()"></div>
+  <div class="crcx-modal" role="dialog" aria-modal="true" aria-labelledby="crcx-discard-title">
+    <h2 id="crcx-discard-title" class="crcx-modal-title">Discard unsaved changes?</h2>
+    <p class="crcx-modal-sub">You have unsaved changes in this check. Closing now will discard them. This cannot be undone.</p>
+    <div class="crcx-modal-actions">
+      <button type="button" class="crcx-btn crcx-btn-ghost" (click)="cancelDiscard()">Keep editing</button>
+      <button type="button" class="crcx-btn crcx-btn-danger" (click)="confirmDiscard()">Discard changes</button>
+    </div>
+  </div>
+}

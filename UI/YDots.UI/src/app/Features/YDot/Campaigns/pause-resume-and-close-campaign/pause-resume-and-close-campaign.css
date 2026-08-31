@@ -1,0 +1,453 @@
+/* Fonts are self-hosted from assets/fonts/fonts.css, loaded once in index.html.
+   Do NOT re-add an @import to fonts.googleapis.com: it makes the Angular production
+   build reach the network at compile time, which fails the Docker image build. */
+:host {
+  /* ===== Color tokens ===== */
+  --primary: #1a5f4a;
+  --primary-dark: #0f3d2f;
+  --primary-hover: #164f3d;
+  --primary-soft: #eaf5ef;
+  --primary-border: #c3e0d1;
+
+  --danger: #ad2a21;
+  --danger-soft: #fbebe9;
+  --danger-border: #f0c3bd;
+
+  --warning: #9a5b00;
+  --warning-soft: #fdf1e0;
+  --warning-border: #f0d9a8;
+
+  --info: #1c5a8a;
+  --info-soft: #e8f2fa;
+  --info-border: #bcdcf2;
+
+  --neutral: #667085;
+  --neutral-soft: #eef0ee;
+
+  --ink: #14181f;
+  --ink-secondary: #565f6b;
+  --ink-faint: #8a92a0;
+
+  --canvas: #f6f7f5;
+  --surface: #ffffff;
+  --border: #e3e6e2;
+  --border-strong: #cdd2cd;
+
+  /* ===== Type tokens ===== */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  display: block;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--canvas);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+/* ===================== EMPTY / LOADING STATES ===================== */
+.empty-state-icon { font-size: 34px; opacity: 0.55; }
+
+/* ===================== HEADER ===================== */
+/* Centred record summary — title, purpose, meta and the raised figure all stack
+   and centre so the block reads as one balanced header instead of a left-aligned strip. */
+.prc-record-head {
+  text-align: center;
+  padding: 10px 8px 6px;
+}
+.prc-record-purpose {
+  max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.prc-amount-block { margin-top: 14px; }
+.prc-amount-block .progress-track { margin-top: 8px; }
+
+.record-title {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.record-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-secondary);
+  letter-spacing: 0.01em;
+}
+
+.record-meta .dot { color: var(--border-strong); }
+
+.link-refresh {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+.link-refresh:hover { color: var(--primary-hover); text-decoration: underline; }
+
+.amount-figure {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.amount-sub { font-size: 12px; color: var(--ink-secondary); margin-top: 2px; }
+
+.progress-track {
+  width: 220px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--neutral-soft);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary) 0%, #2f7d61 100%);
+  border-radius: 999px;
+}
+
+/* ===== Status Badge ===== */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+.status-badge::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-active       { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-border); }
+.status-paused       { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-border); }
+.status-pending_close{ background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+.status-closed        { background: var(--neutral-soft); color: var(--neutral); border-color: var(--border-strong); }
+.status-draft         { background: #efeaf9; color: #5b3fc0; border-color: #d9cdf2; }
+.status-cancelled     { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
+
+/* ===================== ACCESS SIMULATOR (dev-tool treatment) ===================== */
+.sim-panel {
+  background: repeating-linear-gradient(
+    135deg, #fbfbfa, #fbfbfa 8px, #f4f4f2 8px, #f4f4f2 16px
+  );
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+}
+.sim-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sim-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--ink);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sim-select {
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.sim-scope-chip {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink-secondary);
+}
+.sim-state-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-secondary);
+}
+.sim-state-btn:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sim-toggle summary { list-style: none; }
+.sim-toggle summary::-webkit-details-marker { display: none; }
+
+/* ===================== BANNERS ===================== */
+.banner {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+}
+.banner-warning { background: var(--warning-soft); color: #6b3f00; border-color: var(--warning-border); }
+.banner-danger  { background: var(--danger-soft);  color: #7a1d16; border-color: var(--danger-border); }
+.banner-info    { background: var(--info-soft);    color: #133f5c; border-color: var(--info-border); }
+.banner-success { background: var(--primary-soft);  color: var(--primary-dark); border-color: var(--primary-border); }
+
+.banner-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.banner-btn:hover { background: rgba(0,0,0,0.05); }
+
+/* ===================== SECTION LABELS ===================== */
+.section-label {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-transform: none;
+}
+
+/* ===== Action Card ===== */
+.action-card-minimal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.action-card-minimal:hover {
+  box-shadow: 0 2px 10px rgba(20, 24, 31, 0.06);
+  border-color: var(--border-strong);
+}
+.action-card-disabled {
+  opacity: 0.55;
+  background: #fbfbfa;
+}
+.action-card-disabled:hover { box-shadow: none; }
+
+.action-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.action-icon-safe   { background: var(--primary-soft); color: var(--primary); }
+.action-icon-danger { background: var(--danger-soft);  color: var(--danger); }
+
+.action-title { font-size: 13px; font-weight: 650; color: var(--ink); }
+.action-desc  { font-size: 11.5px; line-height: 1.4; color: var(--ink-secondary); }
+.action-ineligible { font-size: 10.5px; font-weight: 600; color: var(--danger); }
+
+.action-btn {
+  /* Match the New Campaign wizard's compact primary button height (btn-sm ≈ 36px)
+     so the lifecycle buttons are not oversized. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 7px;
+  border: none;
+  line-height: 1.2;
+}
+.action-btn.btn-primary { background: var(--primary); }
+.action-btn.btn-primary:hover { background: var(--primary-hover); }
+.action-btn.btn-danger { background: var(--danger); }
+.action-btn:disabled { background: var(--neutral-soft) !important; color: var(--ink-faint) !important; }
+
+/* ===== Consequence Preview ===== */
+.consequence-list { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 14px; }
+.consequence-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.consequence-row:last-child { border-bottom: none; }
+/* Horizontal strip variant — used when the consequence preview spans the full drawer width. */
+.consequence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+}
+.consequence-strip .consequence-row {
+  flex: 1 1 150px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: none;
+  border-right: 1px solid var(--border);
+}
+.consequence-strip .consequence-row:last-child { border-right: none; }
+.consequence-strip .consequence-value { font-size: 15px; }
+.consequence-label { color: var(--ink-secondary); }
+.consequence-value { font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
+.consequence-clear { color: var(--primary); }
+.consequence-alert { color: var(--danger); }
+
+/* ===== Action Panel ===== */
+/* Hide the main lifecycle-actions surface while an action off-canvas is open, so only one
+   off-canvas is visible at a time (the fixed overlays below are siblings, not descendants). */
+.prc-main-hidden { display: none; }
+
+.panel-overlay {
+  position: fixed; inset: 0; background: rgba(20, 24, 31, 0.32); z-index: 1111;
+  backdrop-filter: blur(1px);
+}
+.action-panel {
+  position: fixed; top: 0; right: 0; height: 100vh; width: min(430px, 100vw);
+  background: var(--surface); box-shadow: -6px 0 24px rgba(20,24,31,0.14); z-index: 1111;
+  display: flex; flex-direction: column; animation: slide-in 0.22s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.action-panel-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.action-panel-header h6 { font-size: 15px; font-weight: 650; }
+.action-panel-header small { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-secondary); }
+.action-panel-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+.action-panel-footer, footer.border-top { border-top: 1px solid var(--border) !important; }
+
+.form-label { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
+.form-control, .form-select {
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.field-hint { font-size: 10.5px; color: var(--ink-faint); }
+.field-error { font-size: 11.5px; color: var(--danger); font-weight: 500; }
+
+/* ===== Modal (prefixed.prc-modal* — bootstrap's global.modal{display:none} otherwise hides this) ===== */
+.prc-modal-overlay {
+  position: fixed; inset: 0; background: rgba(20,24,31,0.4); z-index: 1200;
+}
+.prc-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(440px, 92vw); max-height: 80vh; overflow-y: auto;
+  background: var(--surface); border-radius: 14px; box-shadow: 0 16px 40px rgba(20,24,31,0.18);
+  padding: 22px 24px; z-index: 1201;
+}
+.prc-modal h6 { font-size: 15px; font-weight: 650; }
+.confirm-summary { background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.confirm-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12.5px; }
+.confirm-row .label { color: var(--ink-secondary); }
+.confirm-row .value { font-weight: 600; }
+
+/* ===== Toast ===== */
+.toast-minimal {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px;
+  font-size: 13px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); z-index: 60;
+}
+
+/* ===== Nav Pills ===== */
+.nav-pills-sm .nav-link-sm {
+  display: inline-block;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  border-radius: 7px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nav-pills-sm .nav-link-sm:hover { background: var(--neutral-soft); color: var(--ink); }
+.nav-pills-sm .nav-link-sm.active { background: var(--primary); color: #fff; }
+
+.search-input {
+  font-size: 12.5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+}
+
+/* ===== Skeleton ===== */
+.skeleton-box {
+  background: linear-gradient(90deg, #e9ebe8 25%, #f4f5f3 50%, #e9ebe8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ===== Tables ===== */
+.table { font-size: 13px; }
+.table thead th {
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.table td { border-color: var(--border); vertical-align: middle; }
+.table-hover tbody tr:hover { background: var(--canvas); }
+
+.pill-status {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--neutral-soft);
+  color: var(--ink-secondary);
+  border: 1px solid var(--border);
+}
+
+/* ===== Activity timeline ===== */
+.timeline-minimal .timeline-dot {
+  width: 8px; height: 8px; margin-top: 6px;
+  background: var(--border-strong);
+}
+.timeline-minimal .timeline-row { border-color: var(--border) !important; }
+.timeline-action { font-size: 12px; font-weight: 650; color: var(--ink); }
+.timeline-meta { font-size: 10px; color: var(--ink-faint); }
+.timeline-actor { font-size: 11px; color: var(--ink-secondary); }
+.timeline-reason { font-size: 11px; color: var(--ink-secondary); }
+
+/* ===== Integration list ===== */
+.integration-dot-ok { background: var(--primary); }
+.integration-dot-warn { background: var(--warning); }
+.integration-item { font-size: 13px; color: var(--ink-secondary); }
+
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 768px) {
+  .action-panel { width: 100vw; }
+  .progress-track { width: 140px; }
+}

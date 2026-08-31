@@ -1,0 +1,520 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+    <!-- ============ PAGE HEADER (User Directory style) ============ -->
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index: 1;">
+        <div>
+          <h3 class="mb-1 fin-page-title">{{ pageTitle }}</h3>
+          <p class="mb-0 fs-14">{{ pageSubtitle }}</p>
+          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+            <span class="text-muted small">Owner: {{ owner }}</span>
+            <span class="text-muted small">Data updated {{ lastRefresh() }}</span>
+            <span class="text-muted small">{{ operatingTimeZone }}</span>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+                   <span class="iam-status-pill">{{ lifecycleState }}</span>
+          <button
+            type="button"
+            class="btn btn-sm fw-btn-doc-primary"
+            (click)="openHeaderVerifyDialog()"
+            [class.disabled]="!headerVerifyTarget()"
+            [attr.aria-disabled]="!headerVerifyTarget()"
+            [title]="headerVerifyTarget() ? ('Verify ' + headerVerifyTarget()!.workReference) : headerVerifyBlockedReason()"
+          >
+            <i class="ri-check-double-line me-1"></i> Verify
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ============ QUEUE SUMMARY CARDS ============ -->
+    @if (uiState() !== 'loading' && uiState() !== 'no-access') {
+    <div class="row g-3 mb-4">
+      @for (q of queueSummary(); track q.key) {
+        <div class="col-6 col-md-4 col-xl">
+          <button
+            type="button"
+            class="stat-card card w-100 text-start p-3"
+            [class.stat-card-active]="workQueueFilter() === q.key"
+            (click)="workQueueFilter.set(workQueueFilter() === q.key ? '' : q.key); currentPage.set(1); applyFilter()"
+            [attr.aria-pressed]="workQueueFilter() === q.key"
+          >
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <small>{{ q.label }}</small>
+                <h4 class="mb-0 mt-1">{{ q.count }}</h4>
+              </div>
+              <div class="stat-icon" [class]="'stat-icon-' + q.tone">
+                <i [class]="queueIcon(q.key)"></i>
+              </div>
+            </div>
+          </button>
+        </div>
+      }
+    </div>
+    }
+
+    <!-- ============ SITUATIONAL BANNERS ============ -->
+    @if (uiState() === 'validation') {
+      <div class="alert alert-danger d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span><strong>Review the highlighted filters.</strong> A value does not meet the stated format or range. Correct it to continue; entered values are kept.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+    @if (uiState() === 'duplicate') {
+      <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span>This record already exists in the work queue. Link, change the value, request review or cancel — nothing is overwritten silently.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+    @if (uiState() === 'conflict') {
+      <div class="alert alert-warning py-2 mb-3" role="alert">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+          <div>
+            <div>This record changed after you opened it. Review the latest version before continuing.</div>
+            @if (conflictCurrent(); as c) {
+              <div class="small text-muted mt-1">
+                <strong>{{ c.workReference }}</strong> is now: <strong>{{ c.currentStage }}</strong> · Next action: <strong>{{ c.nextAction }}</strong>
+                @if (verifyReason()) {
+                  <div>Your pending reason was kept: "{{ verifyReason() }}"</div>
+                }
+              </div>
+            }
+          </div>
+          <span class="d-flex gap-2">
+            <a href="javascript:void(0)" class="fw-link" (click)="compareConflict()">Compare</a>
+            <a href="javascript:void(0)" class="fw-link" (click)="reapplyConflictChanges()">Reapply eligible changes</a>
+            <a href="javascript:void(0)" class="fw-link" (click)="cancelConflict()">Cancel</a>
+          </span>
+        </div>
+      </div>
+    }
+    @if (uiState() === 'dependency-failure') {
+      <div class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-3" role="alert">
+        <span>We could not complete the dependent service step. Your confirmed local result is unchanged. <span class="fw-corr">Correlation INT-77331</span></span>
+        <a href="javascript:void(0)" class="fw-link" (click)="retryDependency()">Retry dependency</a>
+      </div>
+    }
+    @if (uiState() === 'success') {
+      <div class="alert alert-success d-flex align-items-center justify-content-between py-2 mb-3" role="status">
+        <span>Saved successfully. Reference {{ persistentOutcome().reference }}; state {{ persistentOutcome().state }}; effective {{ persistentOutcome().effectiveTime }}.</span>
+        <button type="button" class="btn-close" (click)="dismissBanner()" aria-label="Dismiss"></button>
+      </div>
+    }
+
+    <!-- ============ LOADING STATE ============ -->
+    @if (uiState() === 'loading') {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading Finance workbench...</p>
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="setUiState('ready')">Cancel</button>
+      </div>
+    }
+
+    <!-- ============ EMPTY STATE ============ -->
+    @else if (uiState() === 'empty') {
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="ri-file-search-line"></i>
+        </div>
+        <h5 class="fw-bold">No records found</h5>
+        <p class="text-muted mb-3">No records match the current filters. Adjust your search criteria.</p>
+        <button class="btn btn-outline-primary" (click)="clearFilters()">
+          <i class="ri-filter-off-line me-1"></i> Clear filters
+        </button>
+      </div>
+    }
+
+    <!-- ============ NO ACCESS STATE ============ -->
+    @else if (uiState() === 'no-access') {
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="ri-lock-line"></i>
+        </div>
+        <h5 class="fw-bold">This value cannot be displayed with your current access.</h5>
+        <p class="text-muted mb-3">Restricted records, fields, counts, actions and search suggestions are hidden. Return to your permitted landing page to continue.</p>
+        <a class="btn btn-outline-primary" href="javascript:void(0)" (click)="returnToWorkspace()">Return to My Workspace</a>
+      </div>
+    }
+
+    <!-- ============ READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS ============ -->
+    @else {
+      <!-- Pager row -->
+
+
+    <!-- ============ FILTER BAR (User Directory style) ============ -->
+    <div class="filter-bar-wrap mb-4">
+      <input type="checkbox" id="filterPanelToggle" class="filter-panel-toggle-input" hidden>
+
+      <div class="filter-topbar">
+        <div class="filter-topbar-search">
+          <i class="ri-search-line"></i>
+          <input type="text" placeholder="Search by work or payment reference…"
+                 [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)">
+        </div>
+        <label for="filterPanelToggle" class="btn btn-primary btn-sm px-3">
+          <i class="ri-equalizer-line"></i> Filter
+          @if (activeFilterSummary().length) { <span class="filter-topbar-dot"></span> }
+        </label>
+      </div>
+
+      <!-- Backdrop — click anywhere here to close -->
+      <label for="filterPanelToggle" class="filter-modal-backdrop" aria-hidden="true"></label>
+
+      <!-- Modal card — sibling of the backdrop, clicks inside don't close it -->
+      <div class="filter-modal" role="dialog" aria-modal="true" aria-label="Filters">
+        <div class="filter-modal-header">
+          <h5>Filters</h5>
+          <label for="filterPanelToggle" class="filter-modal-close">
+            <i class="ri-close-line fs-18"></i>
+          </label>
+        </div>
+
+        <div class="filter-modal-body">
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Work queue</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="queueRadio" [checked]="workQueueFilter() === ''" (change)="workQueueFilter.set('')">
+                <span class="check-box"></span> All queues
+              </label>
+              @for (q of workQueueCatalogue; track q) {
+                <label class="check-pill">
+                  <input type="radio" name="queueRadio" [checked]="workQueueFilter() === q" (change)="workQueueFilter.set(q)">
+                  <span class="check-box"></span> {{ q }}
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Priority</div>
+            <div class="d-flex flex-wrap gap-4">
+              <label class="check-pill">
+                <input type="radio" name="priorityRadio" [checked]="priorityFilter() === ''" (change)="priorityFilter.set('')">
+                <span class="check-box"></span> All priorities
+              </label>
+              @for (p of priorityOptions; track p) {
+                <label class="check-pill">
+                  <input type="radio" name="priorityRadio" [checked]="priorityFilter() === p" (change)="priorityFilter.set(p)">
+                  <span class="check-box"></span> {{ p }}
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="filter-panel-section">
+            <div class="filter-panel-label">Owner</div>
+            <div class="filter-chip-select mb-3">
+              <i class="ri-user-line"></i>
+              <select [ngModel]="ownerFilter()" (ngModelChange)="ownerFilter.set($event)">
+                @for (o of ownerOptions; track o.reference) {
+                  <option [value]="o.reference">
+                    {{ o.reference === 'USR-0000' ? 'All Owners' : o.name + ' · ' + o.reference }}
+                  </option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+
+            <div class="filter-panel-label">Age</div>
+            <div class="filter-chip-select mb-3">
+              <i class="ri-time-line"></i>
+              <select [ngModel]="ageFilter()" (ngModelChange)="ageFilter.set($event)">
+                @for (a of ageOptions; track a) {
+                  <option [value]="a">{{ a }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+
+            <div class="filter-panel-label">Campaign or period</div>
+            <div class="filter-chip-select mb-3">
+              <i class="ri-megaphone-line"></i>
+              <select [ngModel]="campaignFilter()" (ngModelChange)="campaignFilter.set($event)">
+                @for (c of campaignOptions; track c.reference) {
+                  <option [value]="c.reference">{{ c.label }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+
+            <div class="filter-panel-label">Data scope</div>
+            <div class="filter-chip-select">
+              <i class="ri-global-line"></i>
+              <select [ngModel]="scopeFilter()" (ngModelChange)="scopeFilter.set($event)">
+                @for (sc of scopeOptions; track sc) {
+                  <option [value]="sc">{{ sc }}</option>
+                }
+              </select>
+              <i class="ri-arrow-down-s-line chevron"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-panel-footer">
+          <button type="button" class="filter-reset-link" (click)="clearFilters()">Clear</button>
+          <label for="filterPanelToggle" class="btn btn-primary btn-sm px-4 mb-0" (click)="applyFilter()">Apply</label>
+        </div>
+      </div>
+    </div>
+
+
+      <!-- ============ ACTIVE FILTER CHIPS ============ -->
+    @if (activeFilterSummary().length) {
+      <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+        <span class="fw-active-label">Active Filters:</span>
+        @for (chip of activeFilterSummary(); track chip.key) {
+          <span class="fw-chip">
+            {{ chip.label }}
+            <button type="button" class="fw-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+              <i class="ri-close-line"></i>
+            </button>
+          </span>
+        }
+        <button type="button" class="fw-link" (click)="clearFilters()">Clear All</button>
+      </div>
+    }
+
+    
+      <!-- Table (User Directory style) -->
+      <div class="card border">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col" class="text-center" style="width: 40px;">Select</th>
+                <th>Work reference</th>
+                <th>Payment / settlement</th>
+                <th>Work queue</th>
+                <th>Age</th>
+                <th>Priority</th>
+                <th>Owner</th>
+                <th class="text-end">Gross amount</th>
+                <th class="text-end">Variance</th>
+                <th>Current stage</th>
+                <th>SLA state</th>
+                <th>Next action</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of pagedRecords(); track r.workReference) {
+                <tr class="animate-row" [class.table-active]="selectedWorkReference() === r.workReference" (click)="selectRow(r.workReference)">
+                  <td class="text-center" (click)="$event.stopPropagation()">
+                    <input
+                      type="radio"
+                      name="workbench-select"
+                      [checked]="selectedWorkReference() === r.workReference"
+                      (change)="selectRow(r.workReference)"
+                      [attr.aria-label]="'Select ' + r.workReference"
+                    />
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="user-avatar">
+                        {{ ownerOf(r.ownerReference).initials }}
+                      </div>
+                      <div>
+                        <a href="javascript:void(0)" class="text-decoration-none fw-semibold text-body" title="Copy work reference" (click)="copyReference(r.workReference)">
+                          {{ r.workReference }}
+                        </a>
+                        <div class="text-muted small">{{ r.campaignOrPeriod }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="small fw-medium">{{ r.paymentOrSettlementReference }}</td>
+                  <td>
+                    <span class="badge" [class]="queueBadgeClass(r.workQueue)">{{ r.workQueue }}</span>
+                  </td>
+                  <td class="small">{{ r.age }}</td>
+                  <td>
+                    <span class="fw-priority" [class.fw-priority-high]="r.priority === 'High'" [class.fw-priority-med]="r.priority === 'Medium'" [class.fw-priority-low]="r.priority === 'Low'">{{ r.priority }}</span>
+                  </td>
+                  <td class="small fw-medium">{{ ownerOf(r.ownerReference).name }}</td>
+                  <td class="text-end fw-semibold">₹ {{ formatAmount(r.grossAmount) }}</td>
+                  <td class="text-end fw-semibold" [class.fw-variance-pos]="r.variance > 0">
+                    {{ r.variance > 0 ? '₹ ' + formatAmount(r.variance) : '—' }}
+                  </td>
+                  <td class="small">{{ r.currentStage }}</td>
+                  <td>
+                    <span class="badge" [class]="slaBadgeClass(r)">
+                      {{ r.slaState.icon }} {{ r.slaState.label }}
+                    </span>
+                  </td>
+                  <td class="small fw-medium fw-next">{{ r.nextAction }}</td>
+                  <td>
+                    <div class="d-flex gap-1 justify-content-end">
+                      <button class="btn btn-sm btn-outline-primary" [title]="matchTitle(r)" (click)="performAction(r, 'Match')" [class.disabled]="!matchAllowed(r)" [attr.aria-disabled]="!matchAllowed(r)">
+                        <i class="ri-link"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-warning"
+                        [title]="verifyBlockedBySelfApproval(r) ? 'Blocked: you prepared this record and cannot verify your own work' : verifyTitle(r)"
+                        (click)="openVerifyDialog(r)"
+                        [class.disabled]="!verifyAllowed(r)"
+                        [attr.aria-disabled]="!verifyAllowed(r)"
+                      >
+                        <i class="ri-check-double-line"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" [title]="escalateTitle(r)" (click)="performAction(r, 'Escalate')" [class.disabled]="!escalateAllowed(r)" [attr.aria-disabled]="!escalateAllowed(r)">
+                        <i class="ri-alert-line"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="12" class="text-center text-muted py-4">
+                    No records match this scope and filter. Reset filters to continue.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination (User Directory style) -->
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <small class="text-muted">
+            Showing <strong>{{ pageStart() }}</strong> to <strong>{{ pageEnd() }}</strong> of <strong>{{ recordCount() }}</strong> records
+          </small>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="currentPage() === 1">
+                <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() - 1)">
+                  <i class="ri-arrow-left-s-line"></i>
+                </a>
+              </li>
+              @if (pageNumbers()[0] > 1) {
+                <li class="page-item"><a class="page-link" href="javascript:void(0)" (click)="goToPage(1)">1</a></li>
+                @if (pageNumbers()[0] > 2) { <li class="page-item disabled"><a class="page-link" href="javascript:void(0)">...</a></li> }
+              }
+              @for (p of pageNumbers(); track p) {
+                <li class="page-item" [class.active]="currentPage() === p">
+                  <a class="page-link" href="javascript:void(0)" (click)="goToPage(p)">{{ p }}</a>
+                </li>
+              }
+              @if (pageNumbers()[pageNumbers().length - 1] < totalPages()) {
+                @if (pageNumbers()[pageNumbers().length - 1] < totalPages() - 1) { <li class="page-item disabled"><a class="page-link" href="javascript:void(0)">...</a></li> }
+                <li class="page-item"><a class="page-link" href="javascript:void(0)" (click)="goToPage(totalPages())">{{ totalPages() }}</a></li>
+              }
+              <li class="page-item" [class.disabled]="currentPage() === totalPages()">
+                <a class="page-link" href="javascript:void(0)" (click)="goToPage(currentPage() + 1)">
+                  <i class="ri-arrow-right-s-line"></i>
+                </a>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Currency note -->
+      <div class="d-flex align-items-center gap-2 mt-2">
+        <i class="ri-information-line text-muted"></i>
+        <small class="text-muted">All amounts are in INR · {{ operatingTimeZone }}</small>
+      </div>
+    }
+
+    <!-- ============ VERIFY DIALOG ============ -->
+    @if (verifyDialogOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-check-double-line me-2" style="color: var(--accent);"></i>Confirm Verify</h5>
+              <button type="button" class="btn-close" (click)="cancelVerify()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Review the affected record, consequence, reason and effective time. Verify is restricted to the Checker role and cannot be performed by the record's own Maker.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Work reference</dt>
+                  <dd class="fw-medium">{{ verifyTarget()?.workReference }}</dd>
+                </div>
+                <div>
+                  <dt>Before → after</dt>
+                  <dd>{{ verifyTarget()?.currentStage }} → Verified</dd>
+                </div>
+                <div>
+                  <dt>Checker</dt>
+                  <dd>{{ viewingActor.name }} · {{ viewingActor.role }}</dd>
+                </div>
+                <div>
+                  <dt>Effective time</dt>
+                  <dd>{{ lastRefresh() }}</dd>
+                </div>
+              </dl>
+              <label class="form-label small fw-semibold mt-3">Reason <span class="text-danger">*</span></label>
+              <textarea
+                class="form-control"
+                rows="3"
+                [ngModel]="verifyReason()"
+                (ngModelChange)="verifyReason.set($event)"
+                [attr.maxlength]="verifyReasonMax"
+                placeholder="Record the meaningful reason this settlement is verified…"
+              ></textarea>
+              <small class="text-muted" [class.text-danger]="verifyReasonCount() > 0 && !verifyReasonValid()">
+                {{ verifyReasonCount() }} / {{ verifyReasonMax }} characters (minimum {{ verifyReasonMin }})
+              </small>
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="cancelVerify()">Cancel</button>
+              <button class="btn btn-primary" (click)="confirmVerify()" [disabled]="!verifyReasonValid()">
+                <i class="ri-check-line me-1"></i> Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- ============ COMPARE MODAL (conflict recovery) ============ -->
+    @if (compareOpen()) {
+      <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+              <h5 class="modal-title fw-bold"><i class="ri-git-compare-line me-2"></i>Compare versions</h5>
+              <button type="button" class="btn-close" (click)="closeCompare()"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">What this screen had loaded vs. the current version, before Verify was submitted.</p>
+              <dl class="fw-kv mb-0">
+                <div>
+                  <dt>Work reference</dt>
+                  <dd class="fw-medium">{{ conflictCurrent()?.workReference }}</dd>
+                </div>
+                <div>
+                  <dt>Loaded stage (yours)</dt>
+                  <dd>{{ verifyTarget()?.currentStage }} · {{ verifyTarget()?.nextAction }}</dd>
+                </div>
+                <div>
+                  <dt>Current stage (now)</dt>
+                  <dd>{{ conflictCurrent()?.currentStage }} · {{ conflictCurrent()?.nextAction }}</dd>
+                </div>
+                <div>
+                  <dt>Your reason (kept)</dt>
+                  <dd>{{ verifyReason() || '—' }}</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="modal-footer border-top">
+              <button class="btn btn-light" (click)="closeCompare()">Close</button>
+              <button class="btn btn-primary" (click)="reapplyConflictChanges()">
+                <i class="ri-refresh-line me-1"></i> Reapply against latest
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show"></div>
+    }
+  </div>
+</div>
+</main>

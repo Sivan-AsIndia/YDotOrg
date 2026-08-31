@@ -1,0 +1,2 @@
+/*! For license information please see grid-light.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import GridLightTheme from"../../Extensions/Themes/GridLight.js";H.theme=GridLightTheme.options,GridLightTheme.apply();export default H;

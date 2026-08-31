@@ -1,0 +1,1 @@
+"use strict";import SeriesRegistry from"../../Core/Series/SeriesRegistry.js";const{column:{prototype:{pointClass:ColumnPoint}}}=SeriesRegistry.seriesTypes;import U from"../../Core/Utilities.js";const{isNumber:isNumber}=U;class VariwidePoint extends ColumnPoint{isValid(){return isNumber(this.y)&&isNumber(this.z)}}export default VariwidePoint;

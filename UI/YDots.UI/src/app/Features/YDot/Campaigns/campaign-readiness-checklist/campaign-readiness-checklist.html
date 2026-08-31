@@ -1,0 +1,558 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div class="crc-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============================ LOADING ============================ -->
+  @if (uiState() === 'loading') {
+    <header class="crc-task-header">
+      <div class="crc-header-text">
+        <p class="crc-eyebrow">Campaign readiness</p>
+        <h1 class="crc-title">{{ pageTitle }}</h1>
+        <p class="crc-subtitle">{{ pageSubtitle }}</p>
+      </div>
+    </header>
+    <div class="crc-skeleton" aria-live="polite" aria-busy="true">
+      <span class="crc-visually-hidden">Loading campaign readiness checklist…</span>
+      <div class="crc-skel-block"></div>
+      <div class="crc-skel-grid">
+        <div class="crc-skel-card"></div><div class="crc-skel-card"></div>
+        <div class="crc-skel-card"></div><div class="crc-skel-card"></div>
+      </div>
+    </div>
+  }
+
+  <!-- ============================ NO ACCESS ============================ -->
+  @else if (uiState() === 'no-access') {
+    <div class="crc-state-view" role="alert">
+      <div class="crc-state-icon crc-state-icon-muted">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 class="crc-state-title">This value cannot be displayed with your current access.</h2>
+      <p class="crc-state-text">You do not have permission to view the campaign readiness checklist. Return to a permitted page, or request access through the approved route.</p>
+    </div>
+  }
+
+  <!-- ============================ EMPTY ============================ -->
+  @else if (uiState() === 'empty') {
+    <header class="crc-task-header">
+      <div class="crc-header-text">
+        <p class="crc-eyebrow">Campaign readiness</p>
+        <h1 class="crc-title">{{ pageTitle }}</h1>
+        <p class="crc-subtitle">{{ pageSubtitle }}</p>
+      </div>
+    </header>
+    <div class="crc-state-view">
+      <div class="crc-state-icon crc-state-icon-muted">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <h2 class="crc-state-title">No campaign to show for this reference</h2>
+      <p class="crc-state-text">No campaign matches <strong>{{ campaignRef }}</strong> inside your effective scope. This is a scope/setup result, not a global zero — open the checklist from a campaign in Campaign register or Campaign detail.</p>
+    </div>
+  }
+
+  <!-- ============================ MAIN (ready + recoverable banners) ============================ -->
+  @else {
+  <header class="crc-task-header">
+    <div class="crc-header-top">
+      <div class="crc-title-wrap">
+        <span class="crc-title-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+        <div class="crc-header-text">
+          <p class="crc-eyebrow">Campaign readiness</p>
+          <h1 class="crc-title">{{ pageTitle }}</h1>
+          <p class="crc-subtitle">{{ pageSubtitle }}</p>
+        </div>
+      </div>
+
+      <!-- Task header: overflow actions -->
+      <div class="crc-action-bar">
+        <div class="crc-overflow">
+          <button #crcActionsBtn type="button" class="crc-btn crc-btn-ghost" aria-haspopup="menu" [attr.aria-expanded]="actionsMenuOpen()" (click)="toggleActionsMenu()">
+            Actions
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          @if (actionsMenuOpen()) {
+            <div class="crc-menu" role="menu"
+                 appClickOutside [clickOutsideExcept]="crcActionsBtn" (appClickOutside)="closeActionsMenu()">
+              <button type="button" role="menuitem" class="crc-menu-item"
+                      (click)="openAddCheckDrawer()">Add readiness check</button>
+              <div class="crc-menu-divider" role="separator"></div>
+              <button type="button" role="menuitem" class="crc-menu-item"
+                      [disabled]="!permissions().requestApproval || !requestApprovalEligible()"
+                      [attr.title]="!permissions().requestApproval ? 'Request approval requires the request-approval permission.' : (!requestApprovalEligible() ? 'Budget approval and Tracking readiness must pass (or an exception recorded) first.' : null)"
+                      (click)="openRequestDialog()">Request approval</button>
+              <button type="button" role="menuitem" class="crc-menu-item"
+                      [disabled]="!approveLaunchAllowed()"
+                      [attr.title]="approveDisabledReason() || null"
+                      (click)="openApproveDialog()">Approve launch</button>
+              <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
+                      [disabled]="!returnToDraftAllowed()"
+                      [attr.title]="returnDisabledReason() || null"
+                      (click)="openReturnDialog()">Return to draft</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Structured metadata strip -->
+    <div class="crc-header-meta">
+      <div class="crc-meta-cell">
+        <span class="crc-meta-key">Campaign</span>
+        <span class="crc-meta-val">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          {{ campaignName() }}
+        </span>
+      </div>
+      <div class="crc-meta-cell">
+        <span class="crc-meta-key">Reference</span>
+        <span class="crc-meta-val crc-meta-val-ref">
+          {{ campaignRef }}
+          <span class="crc-state-chip" [attr.data-state]="lifecycleState()">{{ lifecycleState() }}</span>
+        </span>
+      </div>
+      <div class="crc-meta-cell">
+        <span class="crc-meta-key">Owner</span>
+        <span class="crc-meta-val">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          {{ ownerName(ownerReference()) }}
+        </span>
+      </div>
+      <div class="crc-meta-cell">
+        <span class="crc-meta-key">Updated</span>
+        <span class="crc-meta-val">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          {{ lastRefresh() }}
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Recoverable-state banners (preserve input; never replace the task) ===== -->
+  @if (uiState() === 'success') {
+    <section class="crc-banner crc-banner-success" role="status">
+      <div class="crc-banner-body">
+        <p class="crc-banner-title">Saved successfully. Reference {{ successReference() }}; state {{ successState() }}; effective {{ successEffective() }}.</p>
+        <p class="crc-banner-text">Next: {{ successNextAction() }}.
+          @if (getFailCount() + getPendingCount() > 0) { <span class="crc-banner-dim">· {{ getFailCount() + getPendingCount() }} dependency(ies) still not passing.</span> }
+        </p>
+      </div>
+      <button type="button" class="crc-banner-dismiss" (click)="dismissBanner()">Dismiss</button>
+    </section>
+  }
+  @if (uiState() === 'conflict') {
+    <section class="crc-banner crc-banner-conflict" role="alert">
+      <div class="crc-banner-body">
+        <p class="crc-banner-title">This record changed after you opened it. Review the latest version before continuing.</p>
+        <p class="crc-banner-text">Someone else approved or returned this campaign while the page was open. Your proposed values are kept.</p>
+      </div>
+      <button type="button" class="crc-btn crc-btn-ghost crc-btn-sm" (click)="reviewLatest()">Review latest</button>
+    </section>
+  }
+  @if (uiState() === 'duplicate') {
+    <section class="crc-banner crc-banner-warn" role="alert">
+      <div class="crc-banner-body">
+        <p class="crc-banner-title">A matching entry already exists</p>
+        <p class="crc-banner-text">This dependency already has an open blocker, or a launch request is already in progress. Compare or cancel — nothing was overwritten.</p>
+      </div>
+      <button type="button" class="crc-btn crc-btn-ghost crc-btn-sm" (click)="dismissBanner()">Cancel</button>
+    </section>
+  }
+  @if (uiState() === 'dependency-failure') {
+    <section class="crc-banner crc-banner-warn" role="alert">
+      <div class="crc-banner-body">
+        <p class="crc-banner-title">We could not complete the dependent service step. Your confirmed local result is unchanged.</p>
+        <p class="crc-banner-text">Budget approval and Tracking readiness are computed locally and remain valid. The content/payment service (correlation CRC-{{ campaignRef }}) is unreachable.</p>
+      </div>
+      <button type="button" class="crc-btn crc-btn-ghost crc-btn-sm" (click)="retryDependency()">Retry dependency</button>
+    </section>
+  }
+  @if (uiState() === 'validation') {
+    <section class="crc-banner crc-banner-error" role="alert">
+      <div class="crc-banner-body">
+        <p class="crc-banner-title">Check the highlighted field before continuing</p>
+        <ul class="crc-error-summary">
+          @for (err of validationErrors(); track err.fieldId) {
+            <li><button type="button" class="crc-error-link" (click)="focusField(err.fieldId)">{{ err.message }}</button></li>
+          }
+        </ul>
+      </div>
+    </section>
+  }
+
+  <!-- Readiness meter -->
+  <section class="crc-meter">
+    <div class="crc-meter-top">
+      <span class="crc-meter-label">Overall readiness</span>
+      <span class="crc-meter-pct">{{ getReadinessPct() }}%</span>
+    </div>
+    <div class="crc-meter-track">
+      <div class="crc-meter-seg pass" *ngIf="getPassCount() > 0" [style.width.%]="getTotalCount() ? (getPassCount() / getTotalCount()) * 100 : 0"></div>
+      <div class="crc-meter-seg fail" *ngIf="getFailCount() > 0" [style.width.%]="getTotalCount() ? (getFailCount() / getTotalCount()) * 100 : 0"></div>
+      <div class="crc-meter-seg pending" *ngIf="getPendingCount() > 0" [style.width.%]="getTotalCount() ? (getPendingCount() / getTotalCount()) * 100 : 0"></div>
+    </div>
+    <div class="crc-meter-legend">
+      <span class="crc-meter-legend-item"><span class="crc-meter-dot pass"></span>Passed <strong>{{ getPassCount() }}</strong></span>
+      <span class="crc-meter-legend-item"><span class="crc-meter-dot fail"></span>Failed <strong>{{ getFailCount() }}</strong></span>
+      <span class="crc-meter-legend-item"><span class="crc-meter-dot pending"></span>Pending <strong>{{ getPendingCount() }}</strong></span>
+      @if (lastValidatedAt()) { <span class="crc-meter-legend-item crc-validated-note">Last validated {{ lastValidatedAt() }}</span> }
+    </div>
+  </section>
+
+  <!-- Stat strip -->
+  <section class="crc-summary">
+    <div class="crc-summary-card crc-summary-pass">
+      <div class="crc-summary-value">{{ getPassCount() }}</div>
+      <div class="crc-summary-label">Passed</div>
+    </div>
+    <div class="crc-summary-card crc-summary-fail">
+      <div class="crc-summary-value">{{ getFailCount() }}</div>
+      <div class="crc-summary-label">Failed</div>
+    </div>
+    <div class="crc-summary-card crc-summary-pending">
+      <div class="crc-summary-value">{{ getPendingCount() }}</div>
+      <div class="crc-summary-label">Pending</div>
+    </div>
+    <div class="crc-summary-card crc-summary-total">
+      <div class="crc-summary-value">{{ getTotalCount() }}</div>
+      <div class="crc-summary-label">Total items</div>
+    </div>
+  </section>
+
+  <!-- Checklist Cards Grid — derived dependencies, then every manually-added readiness check
+       appended after them in the same grid, in the order they were added. -->
+  <section class="crc-main">
+    <div class="crc-checklist-grid">
+      @for (item of dependencyResults(); track item.key) {
+        <div class="crc-card crc-card-clickable" role="button" tabindex="0"
+             (click)="openViewDependency(item)" (keydown.enter)="openViewDependency(item)"
+             [class.crc-card-pass]="meterStatus(item.status) === 'pass'"
+             [class.crc-card-fail]="meterStatus(item.status) === 'fail'"
+             [class.crc-card-pending]="meterStatus(item.status) === 'pending'">
+          <div class="crc-card-icon">
+            @if (item.status === 'pass') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            } @else if (item.status === 'fail') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            }
+          </div>
+          <div class="crc-card-body">
+            <div class="crc-card-top-row">
+              <span class="crc-card-label">{{ item.label }}</span>
+              <span class="crc-card-badge" [class.crc-badge-pass]="meterStatus(item.status) === 'pass'"
+                    [class.crc-badge-fail]="meterStatus(item.status) === 'fail'"
+                    [class.crc-badge-pending]="meterStatus(item.status) === 'pending'">
+                {{ item.status === 'unknown' ? 'unavailable' : item.status }}
+              </span>
+            </div>
+            <span class="crc-card-note">{{ item.note }}</span>
+            @if (isDependencyOverridden(item.key)) { <span class="crc-card-source">Manually overridden</span> }
+            @else if (item.derived) { <span class="crc-card-source">Derived live</span> }
+            @else { <span class="crc-card-source crc-card-source-stub">Stub · external domain</span> }
+
+            <div class="crc-card-actions" (click)="$event.stopPropagation()">
+              <div class="crc-overflow">
+                <button #crcDepBtn type="button" class="crc-btn crc-btn-ghost crc-btn-sm" aria-haspopup="menu"
+                        [attr.aria-expanded]="dependencyRowMenuOpen() === item.key" aria-label="Dependency actions"
+                        (click)="toggleDependencyMenu(item.key)">
+                  Action
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                @if (dependencyRowMenuOpen() === item.key) {
+                  <div class="crc-menu" role="menu"
+                       appClickOutside [clickOutsideExcept]="crcDepBtn" (appClickOutside)="closeDependencyMenu()">
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="item.status === 'pass'"
+                            (click)="markDependencyPassed(item)">Pass / Completed</button>
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="item.status === 'fail'"
+                            (click)="markDependencyFailed(item)">Fail</button>
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="!permissions().assignBlocker"
+                            [attr.title]="permissions().assignBlocker ? null : 'Assign blocker requires the assign-blocker permission.'"
+                            (click)="openBlockerFor(item.key, item.label)">Assign blocker</button>
+                    @if (isDependencyOverridden(item.key)) {
+                      <div class="crc-menu-divider" role="separator"></div>
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              (click)="resetDependencyOverride(item)">Reset to automatic</button>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Manually-added readiness checks (authored via Actions → Add readiness check) — each
+           one lands here as its own card, with its own Action menu (Pass/Completed · Edit · Delete). -->
+      @for (item of checklistItems(); track item.id) {
+        <div class="crc-card crc-card-clickable" role="button" tabindex="0"
+             (click)="openViewCheck(item)" (keydown.enter)="openViewCheck(item)"
+             [class.crc-card-pass]="checklistStatusClass(item.status) === 'pass'"
+             [class.crc-card-fail]="checklistStatusClass(item.status) === 'fail'"
+             [class.crc-card-pending]="checklistStatusClass(item.status) === 'pending'">
+          <div class="crc-card-icon">
+            @if (item.status === 'Passed') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            } @else if (item.status === 'Failed') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            }
+          </div>
+          <div class="crc-card-body">
+            <div class="crc-card-top-row">
+              <span class="crc-card-label">{{ item.name }}</span>
+              <span class="crc-card-badge" [class.crc-badge-pass]="checklistStatusClass(item.status) === 'pass'"
+                    [class.crc-badge-fail]="checklistStatusClass(item.status) === 'fail'"
+                    [class.crc-badge-pending]="checklistStatusClass(item.status) === 'pending'">
+                {{ item.status }}
+              </span>
+            </div>
+            <span class="crc-card-note">{{ item.category }}@if (item.ownerId) { · Owner {{ ownerName(item.ownerId) }} }</span>
+            <span class="crc-card-source">Manually added</span>
+
+            <div class="crc-card-actions" (click)="$event.stopPropagation()">
+              <div class="crc-overflow">
+                <button #crcChecklistBtn type="button" class="crc-btn crc-btn-ghost crc-btn-sm" aria-haspopup="menu"
+                        [attr.aria-expanded]="checklistRowMenuOpen() === item.id" aria-label="Checklist item actions"
+                        (click)="toggleChecklistRowMenu(item.id)">
+                  Action
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                @if (checklistRowMenuOpen() === item.id) {
+                  <div class="crc-menu" role="menu"
+                       appClickOutside [clickOutsideExcept]="crcChecklistBtn" (appClickOutside)="closeChecklistRowMenu()">
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="item.status === 'Passed'"
+                            (click)="markChecklistPassed(item)">Pass / Completed</button>
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="item.status === 'Failed'"
+                            (click)="markChecklistFailed(item)">Fail</button>
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            (click)="openEditCheckDrawer(item)">Edit</button>
+                    <button type="button" role="menuitem" class="crc-menu-item"
+                            [disabled]="!permissions().assignBlocker"
+                            [attr.title]="permissions().assignBlocker ? null : 'Assign blocker requires the assign-blocker permission.'"
+                            (click)="openBlockerFor(item.id, item.name)">Assign blocker</button>
+                    <div class="crc-menu-divider" role="separator"></div>
+                    <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
+                            (click)="deleteChecklistItem(item)">Delete</button>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </section>
+
+  <!-- ===== Launch readiness panel: Open blockers ===== -->
+  <section class="crc-launch-panel">
+    <!-- Open blockers -->
+    <div class="crc-blockers">
+      <div class="crc-blockers-head">
+        <h3 class="crc-blockers-title">Open blockers <span class="crc-count">{{ blockers().length }}</span></h3>
+      </div>
+      @if (blockers().length === 0) {
+        <p class="crc-blockers-empty">No open blockers. Use <strong>Assign blocker</strong> to tie an unmet dependency to an owner.</p>
+      } @else {
+        <ul class="crc-blocker-list">
+          @for (b of blockers(); track b.id) {
+            <li class="crc-blocker-item">
+              <div class="crc-blocker-main">
+                <span class="crc-blocker-dep">{{ b.dependencyLabel }}</span>
+                <span class="crc-blocker-note">{{ b.note }}</span>
+                <span class="crc-blocker-meta">Owner {{ b.owner }} · raised {{ b.createdAt }}</span>
+              </div>
+              @if (permissions().assignBlocker) {
+                <button type="button" class="crc-blocker-remove" (click)="removeBlocker(b.id)" aria-label="Resolve blocker">Resolve</button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    <!-- Small dev affordance to exercise the dependency-failure state (stub outage). -->
+    <div class="crc-dev-row">
+      <button type="button" class="crc-textlink" (click)="simulateDependencyOutage()">Simulate content/payment service outage</button>
+    </div>
+  </section>
+  }
+</div>
+</div>
+</div>
+
+<!-- ============================ DIALOGS ============================ -->
+
+<!-- Assign blocker -->
+@if (blockerDialogOpen()) {
+  <div class="crc-modal-backdrop" (click)="cancelBlocker()"></div>
+  <div class="crc-modal" role="dialog" aria-modal="true" aria-labelledby="crc-blocker-title">
+    <h2 id="crc-blocker-title" class="crc-modal-title">Assign blocker</h2>
+    <p class="crc-modal-sub">Tie an unmet dependency to an owner. Nothing launches while a blocker is open.</p>
+    <div class="crc-field">
+      <span class="crc-field-label">Checklist item</span>
+      <div class="crc-readonly-value">{{ blockerTargetLabel() }}</div>
+    </div>
+    <div class="crc-field">
+      <label class="crc-field-label" for="crc-blocker-owner">Owner</label>
+      <select id="crc-blocker-owner" class="crc-input" [ngModel]="blockerOwnerRef()" (ngModelChange)="blockerOwnerRef.set($event)">
+        <option value="" disabled>Select an owner…</option>
+        @for (o of ownerOptions(); track o.reference) {
+          <option [value]="o.reference">{{ o.name }} — {{ o.context }}</option>
+        }
+      </select>
+      @if (blockerTouched() && !blockerOwnerValid()) { <span class="crc-field-error">Enter Owner.</span> }
+    </div>
+    <div class="crc-field">
+      <label class="crc-field-label" for="crc-blocker-note">Blocker note</label>
+      <textarea id="crc-blocker-note" class="crc-input crc-textarea" rows="3" [ngModel]="blockerNote()" (ngModelChange)="blockerNote.set($event)" placeholder="What must be resolved?"></textarea>
+      @if (blockerTouched() && !blockerNoteValid()) { <span class="crc-field-error">Enter Blocker note.</span> }
+    </div>
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="cancelBlocker()">Cancel</button>
+      <button type="button" class="crc-btn crc-btn-primary" (click)="confirmBlocker()">Add blocker</button>
+    </div>
+  </div>
+}
+
+<!-- Request approval -->
+@if (requestDialogOpen()) {
+  <div class="crc-modal-backdrop" (click)="cancelRequest()"></div>
+  <div class="crc-modal" role="dialog" aria-modal="true" aria-labelledby="crc-request-title">
+    <h2 id="crc-request-title" class="crc-modal-title">Request approval</h2>
+    <p class="crc-modal-sub">Move this readiness record to <strong>awaiting Approve launch</strong>. An independent approver must then approve.</p>
+    <div class="crc-review">
+      <div class="crc-review-row"><span>Campaign</span><strong>{{ campaignName() }} · {{ campaignRef }}</strong></div>
+      <div class="crc-review-row"><span>Budget approval</span><strong [class.crc-ok]="budgetResult().status === 'pass'" [class.crc-bad]="budgetResult().status !== 'pass'">{{ budgetResult().status }}</strong></div>
+      <div class="crc-review-row"><span>Tracking readiness</span><strong [class.crc-ok]="trackingResult().status === 'pass'" [class.crc-bad]="trackingResult().status !== 'pass'">{{ trackingResult().status }}</strong></div>
+      <div class="crc-review-row"><span>Planned launch</span><strong>{{ plannedLaunchTime() ? interpretLaunchTime(plannedLaunchTime()) : 'Not set' }}</strong></div>
+    </div>
+    @if (!minimumGateMet()) {
+      <div class="crc-field crc-exception">
+        <label class="crc-checkline">
+          <input type="checkbox" [ngModel]="exceptionRecorded()" (ngModelChange)="exceptionRecorded.set($event)"/>
+          Record an authorised exception (budget/tracking not fully satisfied)
+        </label>
+        @if (exceptionRecorded()) {
+          <textarea class="crc-input crc-textarea" rows="2" [ngModel]="exceptionReason()" (ngModelChange)="exceptionReason.set($event)" placeholder="Reason for the exception (min 10 characters)"></textarea>
+          @if (requestTouched() && !requestReasonValid()) { <span class="crc-field-error">Review Reason. The value does not meet the stated format or range.</span> }
+        }
+      </div>
+    }
+    @if (!plannedLaunchTime()) { <p class="crc-field-error">Enter Planned launch time before requesting approval.</p> }
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="cancelRequest()">Cancel</button>
+      <button type="button" class="crc-btn crc-btn-primary" [disabled]="!requestApprovalEligible()" (click)="confirmRequest()">Request approval</button>
+    </div>
+  </div>
+}
+
+<!-- Approve launch (high-risk) -->
+@if (approveDialogOpen()) {
+  <div class="crc-modal-backdrop" (click)="cancelApprove()"></div>
+  <div class="crc-modal crc-modal-risk" role="dialog" aria-modal="true" aria-labelledby="crc-approve-title">
+    <h2 id="crc-approve-title" class="crc-modal-title">Confirm Approve launch. Review the affected record, consequence, reason and effective time.</h2>
+    <div class="crc-review">
+      <div class="crc-review-row"><span>Affected record</span><strong>{{ campaignName() }} · {{ campaignRef }}</strong></div>
+      <div class="crc-review-row"><span>Consequence</span><strong>Lifecycle {{ lifecycleState() }} → {{ launchTarget() }}</strong></div>
+      <div class="crc-review-row"><span>Effective time</span><strong>{{ lastRefresh() }}</strong></div>
+      <div class="crc-review-row"><span>Approver</span><strong>{{ currentUserName() }} ({{ currentUserRef() }})</strong></div>
+    </div>
+    <div class="crc-field">
+      <label class="crc-field-label" for="crc-approve-reason">Reason</label>
+      <textarea id="crc-approve-reason" class="crc-input crc-textarea" rows="3" [ngModel]="approveReason()" (ngModelChange)="approveReason.set($event)" placeholder="Record the launch decision (min 10 characters)"></textarea>
+      <div class="crc-charcount" [class.crc-bad]="!approveReasonValid()">{{ approveReasonCount() }} / {{ approveReasonMax }}</div>
+      @if (approveTouched() && !approveReasonValid()) { <span class="crc-field-error">Review Reason. The value does not meet the stated format or range.</span> }
+    </div>
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="cancelApprove()">Cancel</button>
+      <button type="button" class="crc-btn crc-btn-danger" [disabled]="!approveReasonValid()" (click)="confirmApprove()">Approve launch</button>
+    </div>
+  </div>
+}
+
+<!-- Return to draft (treated as high-risk per confirmed assumption) -->
+@if (returnDialogOpen()) {
+  <div class="crc-modal-backdrop" (click)="cancelReturn()"></div>
+  <div class="crc-modal crc-modal-risk" role="dialog" aria-modal="true" aria-labelledby="crc-return-title">
+    <h2 id="crc-return-title" class="crc-modal-title">Confirm Return to draft. Review the affected record, consequence, reason and effective time.</h2>
+    <div class="crc-review">
+      <div class="crc-review-row"><span>Affected record</span><strong>{{ campaignName() }} · {{ campaignRef }}</strong></div>
+      <div class="crc-review-row"><span>Consequence</span><strong>Lifecycle {{ lifecycleState() }} → Draft</strong></div>
+      <div class="crc-review-row"><span>Effective time</span><strong>{{ lastRefresh() }}</strong></div>
+    </div>
+    <div class="crc-field">
+      <label class="crc-field-label" for="crc-return-reason">Reason</label>
+      <textarea id="crc-return-reason" class="crc-input crc-textarea" rows="3" [ngModel]="returnReason()" (ngModelChange)="returnReason.set($event)" placeholder="Why is this campaign returning to draft? (min 10 characters)"></textarea>
+      <div class="crc-charcount" [class.crc-bad]="!returnReasonValid()">{{ returnReasonCount() }} / {{ returnReasonMax }}</div>
+      @if (returnTouched() && !returnReasonValid()) { <span class="crc-field-error">Review Reason. The value does not meet the stated format or range.</span> }
+    </div>
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="cancelReturn()">Cancel</button>
+      <button type="button" class="crc-btn crc-btn-danger" [disabled]="!returnReasonValid()" (click)="confirmReturn()">Return to draft</button>
+    </div>
+  </div>
+}
+
+<!-- ============================ View readiness check ============================ -->
+@if (viewCheck(); as vc) {
+  <div class="crc-modal-backdrop" (click)="closeViewCheck()"></div>
+  <div class="crc-modal" role="dialog" aria-modal="true" aria-labelledby="crc-view-title">
+    <h2 id="crc-view-title" class="crc-modal-title">{{ vc.name }}</h2>
+    <p class="crc-modal-sub">Details captured when this readiness check was created.</p>
+    <div class="crc-review">
+      <div class="crc-review-row"><span>Status</span><strong>{{ vc.status }}</strong></div>
+      <div class="crc-review-row"><span>Category</span><strong>{{ vc.category }}</strong></div>
+      @if (vc.description) { <div class="crc-review-row"><span>Description</span><strong>{{ vc.description }}</strong></div> }
+      <div class="crc-review-row"><span>Success criteria</span><strong>{{ vc.successCriteria }}</strong></div>
+      <div class="crc-review-row"><span>Required for launch</span><strong>{{ vc.requiredForLaunch ? 'Yes' : 'No' }}</strong></div>
+      @if (vc.ownerId) { <div class="crc-review-row"><span>Owner</span><strong>{{ ownerName(vc.ownerId) }}</strong></div> }
+      @if (vc.dueDate) { <div class="crc-review-row"><span>Due date</span><strong>{{ vc.dueDate }}</strong></div> }
+      @if (vc.notes) { <div class="crc-review-row"><span>Notes</span><strong>{{ vc.notes }}</strong></div> }
+    </div>
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="closeViewCheck()">Close</button>
+      <button type="button" class="crc-btn crc-btn-primary" (click)="editFromView(vc)">Edit</button>
+    </div>
+  </div>
+}
+
+<!-- ============================ View dependency (existing checklist item) ============================ -->
+@if (viewDependency(); as vd) {
+  <div class="crc-modal-backdrop" (click)="closeViewDependency()"></div>
+  <div class="crc-modal" role="dialog" aria-modal="true" aria-labelledby="crc-viewdep-title">
+    <h2 id="crc-viewdep-title" class="crc-modal-title">{{ vd.label }}</h2>
+    <p class="crc-modal-sub">Readiness dependency details for this campaign.</p>
+    <div class="crc-review">
+      <div class="crc-review-row"><span>Status</span><strong>{{ vd.status === 'unknown' ? 'unavailable' : vd.status }}</strong></div>
+      <div class="crc-review-row"><span>Detail</span><strong>{{ vd.note }}</strong></div>
+      <div class="crc-review-row"><span>Source</span><strong>{{ dependencySourceLabel(vd) }}</strong></div>
+    </div>
+    <div class="crc-modal-actions">
+      <button type="button" class="crc-btn crc-btn-ghost" (click)="closeViewDependency()">Close</button>
+      <button type="button" class="crc-btn crc-btn-primary"
+              [disabled]="!permissions().assignBlocker"
+              (click)="closeViewDependency(); openBlockerFor(vd.key, vd.label)">Assign blocker</button>
+    </div>
+  </div>
+}
+
+<!-- ============================ Add Readiness Check off-canvas ============================ -->
+@if (addCheckDrawerOpen()) {
+  <app-add-readiness-check
+    [ownerOptions]="ownerOptions()"
+    [editing]="editingCheck()"
+    (added)="onCheckAdded($event)"
+    (closed)="closeAddCheckDrawer()" />
+}
+
+</main>

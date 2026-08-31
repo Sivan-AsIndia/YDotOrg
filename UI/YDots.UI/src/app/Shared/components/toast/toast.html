@@ -1,0 +1,64 @@
+<div class="toast-container">
+
+@for(toast of toastService.toasts();track toast.id){
+
+<div
+class="toast-card"
+
+[class.success]="toast.type==='success'"
+
+[class.error]="toast.type==='error'"
+
+[class.warning]="toast.type==='warning'"
+
+[class.info]="toast.type==='info'">
+
+<div class="icon">
+
+<i
+[class]="
+
+toast.type==='success'
+?'ri-checkbox-circle-fill'
+
+:toast.type==='error'
+?'ri-close-circle-fill'
+
+:toast.type==='warning'
+?'ri-error-warning-fill'
+
+:'ri-information-fill'
+
+"></i>
+
+</div>
+
+<div class="content">
+
+<h6>
+
+{{toast.title}}
+
+</h6>
+
+<p>
+
+{{toast.message}}
+
+</p>
+
+</div>
+
+<button
+
+class="close"
+
+(click)="toastService.remove(toast.id)">
+
+<i class="ri-close-line"></i>
+
+</button>
+
+</div>
+
+}

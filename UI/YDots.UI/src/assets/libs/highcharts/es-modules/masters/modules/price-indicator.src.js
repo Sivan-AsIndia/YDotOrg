@@ -1,0 +1,2 @@
+/*! For license information please see price-indicator.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import PriceIndication from"../../Extensions/PriceIndication.js";const G=Highcharts;PriceIndication.compose(G.Series);export default Highcharts;

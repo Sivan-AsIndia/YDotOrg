@@ -1,0 +1,296 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+    <!-- Loading State -->
+    @if (loading()) {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">Loading user details...</p>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (loadError() && !loading()) {
+      <div class="empty-state">
+        <div class="empty-state-icon"><i class="ri-error-warning-line"></i></div>
+        <h5 class="fw-bold">Failed to load</h5>
+        <p class="text-muted mb-3">The user details couldn't be retrieved. Try again.</p>
+        <button class="btn btn-primary" (click)="retry()"><i class="ri-refresh-line me-1"></i> Retry</button>
+      </div>
+    }
+
+    @if (!loading() && !loadError() && user()) {
+
+      <!-- User Details Header Card -->
+      <div class="profile-header-card mb-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="user-avatar-lg">{{ getInitials(user()?.displayName || '') }}</div>
+          <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h4 class="fw-bold mb-0">{{ user()?.displayName }}</h4>
+              <span class="status-pill status-active"><span class="dot"></span> {{ user()?.accountStatus }}</span>
+              <span class="status-pill status-neutral">{{ user()?.accountCategory }}</span>
+            </div>
+            <p class="text-muted mb-0 small">
+              {{ user()?.designation }} · {{ user()?.department }} · {{ user()?.reference }}
+            </p>
+          </div>
+        </div>
+
+   
+      </div>
+
+      <!-- Two column layout -->
+      <div class="row g-3">
+
+        <!-- Main content -->
+        <div class="col-lg-8">
+
+          <!-- Identity Card -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <h6 class="mb-0 fw-bold">Identity</h6>
+            </div>
+            <div class="detail-card-body">
+              <div class="row g-4">
+                <div class="col-md-4"><small class="info-label d-block">Reference</small><span class="info-value">{{ user()?.reference }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Employee ID</small><span class="info-value">{{ user()?.employeeId }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Username</small><span class="info-value">{{ user()?.username }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Email</small><span class="info-value">{{ user()?.loginEmail }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Mobile</small><span class="info-value">{{ user()?.mobileNumber }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Language & Timezone</small><span class="info-value">{{ user()?.preferredLanguage }} · {{ user()?.timeZone }}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Organisation Card -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <h6 class="mb-0 fw-bold">Organisation</h6>
+            </div>
+            <div class="detail-card-body">
+              <div class="row g-4">
+                <div class="col-md-4"><small class="info-label d-block">Organisation unit</small><span class="info-value">{{ user()?.organisationUnit }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Department</small><span class="info-value">{{ user()?.department }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Designation</small><span class="info-value">{{ user()?.designation }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Manager</small><span class="info-value">{{ user()?.manager }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Work location</small><span class="info-value">{{ user()?.workLocation }}</span></div>
+                <div class="col-md-4"><small class="info-label d-block">Access start</small><span class="info-value">{{ user()?.accessStartDate }}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assigned Roles Card -->
+          <div class="detail-card">
+            <div class="detail-card-header">
+              <h6 class="mb-0 fw-bold">Assigned roles</h6>
+            </div>
+            <div class="table-responsive">
+              <table class="table role-table mb-0">
+                <thead>
+                  <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th></tr>
+                </thead>
+                <tbody>
+                  @for (r of user()?.roleAssignments; track r.role) {
+                    <tr>
+                      <td>
+                        <div class="fw-semibold">{{ r.role }}</div>
+                        <div class="text-muted small">{{ r.assignmentType }}</div>
+                      </td>
+                      <td>{{ r.scope }}</td>
+                      <td>{{ r.permissions }}</td>
+                      <td>
+                        @if (r.term === 'Permanent') {
+                          <span class="pill-soft pill-green"><span class="dot"></span> {{ r.term }}</span>
+                        } @else {
+                          <span class="pill-soft pill-amber"><span class="dot"></span> {{ r.term }}</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                  @empty {
+                    <tr><td colspan="4" class="text-center text-muted py-3">No role assignments found.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right sidebar -->
+        <div class="col-lg-4">
+          <div class="detail-card mb-3">
+            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Security</h6></div>
+            <div class="detail-card-body">
+              <div class="notif-row">
+                <div class="notif-avatar" [class.tone-success]="mfaEnabled()" [class.tone-muted]="!mfaEnabled()">
+                  <i [class]="mfaEnabled() ? 'ri-shield-check-line' : 'ri-shield-line'"></i>
+                </div>
+                <div class="notif-body">
+                  <div class="notif-title">Multi-factor Authentication</div>
+                  <div class="notif-sub">{{ mfaEnabled() ? 'A second factor is set up on this account' : 'No second factor is set up on this account' }}</div>
+                </div>
+                <span class="notif-trailing" [class.text-success]="mfaEnabled()" [class.text-danger]="!mfaEnabled()">
+                  {{ getMfaStatusLabel() }}
+                </span>
+              </div>
+              <div class="notif-row">
+                <div class="notif-avatar tone-warning"><i class="ri-lock-password-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Password</div>
+                  <div class="notif-sub">Reset via forgot password</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" (click)="openForgotPasswordModal()">Reset</button>
+              </div>
+              <div class="notif-row">
+                <div class="notif-avatar tone-accent"><i class="ri-login-circle-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Last sign-in</div>
+                  <div class="notif-sub">{{ user()?.lastSuccessfulSignIn }}</div>
+                </div>
+              </div>
+              <div class="notif-row border-0">
+                <div class="notif-avatar tone-muted"><i class="ri-computer-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Active sessions</div>
+                  <div class="notif-sub">{{ user()?.activeSessionDevices }} devices</div>
+                </div>
+                <span class="notif-trailing text-muted">{{ user()?.activeSessions }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-card">
+            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Access review</h6></div>
+            <div class="detail-card-body">
+              <div class="notif-row">
+                <div class="notif-avatar tone-warning"><i class="ri-calendar-check-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Next review due</div>
+                  <div class="notif-sub">{{ user()?.accessReviewDue }}</div>
+                </div>
+              </div>
+              <div class="notif-row border-0">
+                <div class="notif-avatar tone-accent"><i class="ri-user-star-line"></i></div>
+                <div class="notif-body">
+                  <div class="notif-title">Access end</div>
+                  <div class="notif-sub">{{ user()?.accessEndDate }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- MFA Enable/Disable Modal -->
+  @if (showMfaModal()) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom" style="padding-bottom: 15px;">
+            <h5 class="modal-title fw-bold">
+              <i [class]="mfaAction() === 'enable' ? 'ri-shield-keyhole-line me-2 text-success' : 'ri-shield-off-line me-2 text-danger'"></i>
+              {{ mfaAction() === 'enable' ? 'Enable MFA' : 'Disable MFA' }}
+            </h5>
+            <button type="button" class="btn-close" (click)="closeMfaModal()"></button>
+          </div>
+          <div class="modal-body">
+            <!--
+              Nobody can enrol a factor for somebody else — enrolling needs the device in their
+              hand — so "enable" sets the requirement and the person completes it themselves.
+            -->
+            @if (mfaAction() === 'enable') {
+              <div class="alert alert-success py-2">
+                <i class="ri-information-line me-1"></i>
+                <small>
+                  <strong>{{ user()?.displayName }}</strong> will be asked to set up two-step
+                  verification the next time they sign in, and will not be able to skip it.
+                  You cannot set it up on their behalf — that needs their device.
+                </small>
+              </div>
+            } @else {
+              <div class="alert alert-warning py-2">
+                <i class="ri-alert-line me-1"></i>
+                <small>
+                  Every verification method, backup code and remembered device for
+                  <strong>{{ user()?.displayName }}</strong> will be removed, and they will be
+                  signed out everywhere. If your organisation requires two-step verification
+                  they will be asked to set it up again at their next sign-in.
+                </small>
+              </div>
+            }
+            <label class="form-label small fw-semibold" for="mfaReasonInput">
+              Reason <span class="text-danger">*</span>
+            </label>
+            <textarea id="mfaReasonInput" class="form-control" rows="2"
+                      placeholder="Why is this being done? At least 10 characters."
+                      [ngModel]="mfaReason()" (ngModelChange)="mfaReason.set($event)"></textarea>
+            <small class="text-muted">This is recorded against your name in the audit trail.</small>
+          </div>
+          <div class="modal-footer border-top" style="padding-top: 18px;">
+            <button class="btn btn-light btn-sm" (click)="closeMfaModal()">Cancel</button>
+            <button class="btn btn-sm" [class.btn-success]="mfaAction() === 'enable'" [class.btn-danger]="mfaAction() === 'disable'" (click)="toggleMfa()" [disabled]="mfaSubmitting()">
+              @if (mfaSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+              <i class="ri-check-line me-1"></i> {{ mfaAction() === 'enable' ? 'Require two-step verification' : 'Reset two-step verification' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+
+  <!-- Forgot Password Modal -->
+  @if (showForgotPasswordModal()) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-bottom" style="padding-bottom: 15px;">
+            <h5 class="modal-title fw-bold"><i class="ri-lock-password-line me-2 text-warning"></i>Forgot Password</h5>
+            <button type="button" class="btn-close" (click)="closeForgotPasswordModal()"></button>
+          </div>
+          <div class="modal-body">
+            @if (!forgotPasswordSent()) {
+              <div class="alert alert-info py-2">
+                <i class="ri-information-line me-1"></i>
+                <small>A password reset link will be sent to the user's registered email address.</small>
+              </div>
+              <label class="form-label small fw-semibold">Email Address <span class="text-danger">*</span></label>
+              <input type="email" class="form-control" [value]="forgotPasswordEmail()" readonly>
+              <small class="text-muted">
+                The link always goes to the address on the account. It cannot be redirected from
+                here.
+              </small>
+            } @else {
+              <div class="text-center py-3">
+                <div class="mb-3">
+                  <i class="ri-mail-check-line text-success" style="font-size: 3rem;"></i>
+                </div>
+                <h6 class="mb-2">Reset link sent</h6>
+                <p class="text-muted mb-0 small">
+                  Password reset instructions have been sent to <strong>{{ forgotPasswordEmail() }}</strong>.
+                </p>
+              </div>
+            }
+          </div>
+          <div class="modal-footer border-top" style="padding-top: 18px;">
+            <button class="btn btn-light btn-sm" (click)="closeForgotPasswordModal()">Close</button>
+            @if (!forgotPasswordSent()) {
+              <button class="btn btn-primary btn-sm" (click)="sendForgotPassword()" [disabled]="forgotPasswordSubmitting()">
+                @if (forgotPasswordSubmitting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                <i class="ri-send-plane-line me-1"></i> Send Reset Link
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+  }
+</div>
+</main>

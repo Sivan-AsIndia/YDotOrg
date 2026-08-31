@@ -1,0 +1,108 @@
+<!--
+  IAM-AUTH-07 — Confirm it is still you.
+
+  This is not a sign-in: the session is alive and the person's work is still there. The screen
+  says whose account it is, asks for the password (plus a code when a factor is enrolled), and
+  offers to save unsaved work rather than losing it.
+-->
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-10 px-4 auth-bg">
+  <div class="reauth-card bg-white rounded-4 shadow border w-100">
+
+    <div class="text-center px-6 pt-8 pb-2">
+      <div class="reauth-icon mx-auto mb-4"><i class="ri-shield-user-line"></i></div>
+      <h5 class="mb-2">Confirm it is still you</h5>
+      <p class="text-muted mb-0">{{ summary() }}</p>
+    </div>
+
+    <div class="px-6 pb-8">
+
+      @if (loading()) {
+        <div class="text-center py-6">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      } @else {
+
+        <!-- Naming the account removes any doubt about which identity is being confirmed —
+             useful on a shared machine, where the wrong session may be the reason for the halt. -->
+        <div class="identity-panel rounded-3 border p-3 mb-4 d-flex align-items-center gap-3">
+          <span class="identity-avatar flex-shrink-0">{{ (displayName() || '?').charAt(0) }}</span>
+          <div class="min-w-0">
+            <div class="fw-semibold text-truncate">{{ displayName() }}</div>
+            <small class="text-muted text-truncate d-block">{{ email() }}</small>
+          </div>
+        </div>
+
+        @if (errorMessage()) {
+          <div class="alert alert-danger d-flex align-items-start gap-2 mb-4" role="alert" aria-live="assertive">
+            <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+          </div>
+        }
+
+        @if (draftSaved()) {
+          <div class="alert alert-success d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="ri-save-line mt-1"></i>
+            <span>Your unsaved work has been stored as a draft.</span>
+          </div>
+        }
+
+        <form (ngSubmit)="confirm()">
+          <div class="mb-3">
+            <label class="form-label" for="reauthPassword">Your password</label>
+            <div class="position-relative">
+              <input
+                id="reauthPassword"
+                [type]="showPassword() ? 'text' : 'password'"
+                class="form-control pe-10"
+                autocomplete="current-password"
+                [value]="password()"
+                (input)="password.set($any($event.target).value)"
+                [disabled]="submitting()">
+              <button type="button" class="btn btn-link position-absolute end-0 top-0 text-muted" (click)="togglePassword()">
+                <i [class]="showPassword() ? 'ri-eye-line' : 'ri-eye-off-line'"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Only rendered when the account actually has a second factor enrolled. -->
+          @if (needsCode()) {
+            <div class="mb-4">
+              <label class="form-label" for="reauthCode">Verification code</label>
+              <input
+                id="reauthCode"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="8"
+                class="form-control text-center code-input"
+                placeholder="000000"
+                [value]="verificationCode()"
+                (input)="verificationCode.set($any($event.target).value)"
+                [disabled]="submitting()">
+              <small class="text-muted d-block mt-1">
+                The current code from your authenticator application.
+              </small>
+            </div>
+          }
+
+          <button type="submit" class="btn btn-primary w-100 mb-3" [disabled]="!canSubmit()">
+            {{ submitting() ? 'Confirming…' : 'Confirm and continue' }}
+          </button>
+        </form>
+
+        <div class="border-top pt-3">
+          @if (!draftSaved()) {
+            <button type="button" class="btn btn-outline-secondary w-100 mb-2" [disabled]="savingDraft()" (click)="saveDraft()">
+              <i class="ri-save-line me-1"></i>
+              {{ savingDraft() ? 'Saving…' : 'Save my work and finish later' }}
+            </button>
+          }
+
+          <button type="button" class="btn btn-link w-100 text-danger" (click)="signOut()">
+            Sign out instead
+          </button>
+        </div>
+      }
+
+    </div>
+  </div>
+</div>

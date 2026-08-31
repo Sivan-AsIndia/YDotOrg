@@ -1,0 +1,35 @@
+<div class="ss-wrap">
+  @if (disabled) {
+    <input class="ss-input" type="text" [value]="disabledPlaceholder" disabled>
+  } @else {
+    <input
+      class="ss-input"
+      type="text"
+      [placeholder]="placeholder"
+      [value]="displayValue"
+      (focus)="onFocus()"
+      (input)="onInput($any($event.target).value)"
+      autocomplete="off"
+    >
+    @if (value) {
+      <button type="button" class="ss-clear" (click)="clear($event)" aria-label="Clear">
+        <i class="ri-close-line"></i>
+      </button>
+    }
+    <i class="ri-search-line ss-icon"></i>
+
+    @if (open()) {
+      <div class="ss-panel">
+        @if (filtered().length === 0) {
+          <div class="ss-empty">No matches</div>
+        } @else {
+          @for (opt of filtered(); track opt) {
+            <button type="button" class="ss-option" [class.is-selected]="opt === value" (click)="select(opt)">
+              {{ opt }}
+            </button>
+          }
+        }
+      </div>
+    }
+  }
+</div>

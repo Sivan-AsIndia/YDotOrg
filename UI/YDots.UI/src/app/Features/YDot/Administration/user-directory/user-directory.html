@@ -1,0 +1,667 @@
+<!--
+  SCR-IAM-001 — User directory.
+
+  Everything here is server-driven: the rows, the filter options, and even which buttons appear
+  (permittedActions comes from the caller's permissions). Nothing is decided in the browser that
+  the server would decide differently.
+-->
+<!--
+  app-wrapper / page-wrapper / container-fluid is the application shell's layout contract, and
+  every other page in this area opens with it. It is what positions the content beside the fixed
+  sidebar and below the sticky top header. Without it the page renders outside the shell's flow:
+  the header row slides under the top bar and the right-aligned buttons go off-screen.
+-->
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+  <!-- ===================================================================================
+       Header
+       =================================================================================== -->
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+      <h4 class="mb-1">User directory</h4>
+      <p class="text-muted mb-0">
+        Search, review and manage accounts.
+      </p>
+    </div>
+
+    <div class="d-flex gap-2">
+      @if (canExport()) {
+        <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="busy() || loading()" (click)="exportCsv()">
+          <i class="ri-download-2-line me-1"></i> Export
+        </button>
+      }
+      <button type="button" class="btn btn-outline-primary btn-sm" [disabled]="bulkSelectionCount() === 0" (click)="goToBulkActions()">
+        <i class="ri-group-2-line me-1"></i> Bulk Actions
+        @if (bulkSelectionCount() > 0) {
+          <span class="badge bg-primary-subtle text-primary ms-1">{{ bulkSelectionCount() }}</span>
+        }
+      </button>
+      @if (canCreate()) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="createUser()">
+          <i class="ri-user-add-line me-1"></i> Create User
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- ===================================================================================
+       Filters — every change re-queries the server
+       =================================================================================== -->
+  <div class="card border mb-4">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <label class="form-label small" for="udSearch">Search</label>
+          <div class="position-relative">
+            <i class="ri-search-line position-absolute top-50 translate-middle-y ms-3 text-muted"></i>
+            <input
+              id="udSearch"
+              type="search"
+              class="form-control ps-9"
+              placeholder="Name, e-mail, username or reference"
+              [value]="searchText"
+              (input)="onSearchChange($any($event.target).value)">
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small" for="udStatus">Status</label>
+          <select id="udStatus" class="form-select" [value]="filter().status ?? ''"
+                  (change)="setFilter('status', $any($event.target).value)">
+            <option value="">All</option>
+            @for (option of statusOptions(); track option.id) {
+              <option [value]="option.id">{{ option.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small" for="udCategory">Account type</label>
+          <select id="udCategory" class="form-select" [value]="filter().accountCategory ?? ''"
+                  (change)="setFilter('accountCategory', $any($event.target).value)">
+            <option value="">All</option>
+            @for (option of categoryOptions(); track option.id) {
+              <option [value]="option.id">{{ option.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small" for="udUnit">Organisation unit</label>
+          <select id="udUnit" class="form-select" [value]="filter().organisationUnitId ?? ''"
+                  (change)="setFilter('organisationUnitId', $any($event.target).value)">
+            <option value="">All</option>
+            @for (option of unitOptions(); track option.id) {
+              <option [value]="option.id">{{ option.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small" for="udRole">Role</label>
+          <select id="udRole" class="form-select" [value]="filter().roleId ?? ''"
+                  (change)="setFilter('roleId', $any($event.target).value)">
+            <option value="">All</option>
+            @for (option of roleOptions(); track option.id) {
+              <option [value]="option.id">{{ option.name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      @if (hasActiveFilters()) {
+        <div class="d-flex align-items-center gap-2 mt-3">
+          <small class="text-muted">{{ filterSummary() }}</small>
+          <button type="button" class="btn btn-link btn-sm p-0" (click)="clearFilters()">Clear all</button>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ===================================================================================
+       Results
+       =================================================================================== -->
+  <div class="card border">
+
+    @if (loading()) {
+      <div class="text-center py-8">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Loading the directory…</p>
+      </div>
+    }
+
+    @else if (loadFailed()) {
+      <div class="text-center py-8">
+        <i class="ri-wifi-off-line text-muted d-block mb-2" style="font-size: 2.5rem;"></i>
+        <p class="mb-1 fw-semibold">The directory could not be loaded</p>
+        <p class="text-muted small mb-3">{{ errorMessage() }}</p>
+        <button type="button" class="btn btn-outline-primary" (click)="retry()">Try again</button>
+      </div>
+    }
+
+    @else if (users().length === 0) {
+      <div class="text-center py-8">
+        <i class="ri-user-search-line text-muted d-block mb-2" style="font-size: 2.5rem;"></i>
+        <p class="mb-1 fw-semibold">No accounts match</p>
+        <p class="text-muted small mb-3">
+          {{ hasActiveFilters() ? 'Try widening or clearing the filters.' : 'No accounts have been created yet.' }}
+        </p>
+
+        <!-- An empty directory is the one moment Create User matters most, and the header button
+             is easy to miss when the middle of the page is blank. -->
+        <div class="d-flex justify-content-center gap-2">
+          @if (hasActiveFilters()) {
+            <button type="button" class="btn btn-outline-primary" (click)="clearFilters()">Clear filters</button>
+          }
+          @if (canCreate()) {
+            <button type="button" class="btn btn-primary" (click)="createUser()">
+              <i class="ri-user-add-line me-1"></i> Create User
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    @else {
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 ud-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">
+                <input
+                  type="checkbox"
+                  class="form-check-input"
+                  [checked]="allOnPageSelected()"
+                  (change)="toggleAllOnPage()"
+                  [attr.aria-label]="'Select all on page'">
+              </th>
+              <th>User</th>
+              <th class="d-none d-lg-table-cell">Organisation</th>
+              <th class="d-none d-xl-table-cell">Role</th>
+              <th>Status</th>
+              <th>MFA</th>
+              <th class="d-none d-lg-table-cell">Last sign-in</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (user of users(); track user.id) {
+              <tr [class.table-active]="isRowSelected(user)">
+                <!-- Selection -->
+                <td>
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    [checked]="isRowSelected(user)"
+                    (change)="toggleRowSelection(user)"
+                    [attr.aria-label]="'Select ' + user.displayName">
+                </td>
+                <!-- Identity -->
+                <td>
+                  <div class="d-flex align-items-center gap-3">
+                    <span class="ud-avatar flex-shrink-0">{{ initials(user.displayName) }}</span>
+                    <div class="min-w-0">
+                      <button type="button" class="btn btn-link p-0 fw-semibold text-start text-truncate d-block"
+                              (click)="openProfile(user)">
+                        {{ user.displayName }}
+                      </button>
+                      <small class="text-muted d-block text-truncate">{{ user.email }}</small>
+                      <small class="text-muted d-block d-lg-none">{{ user.code }}</small>
+                    </div>
+                  </div>
+                </td>
+
+                <td class="d-none d-lg-table-cell">
+                  <div class="small">{{ user.organisationUnitName || '—' }}</div>
+                  <small class="text-muted">{{ user.departmentName || user.accountCategory }}</small>
+                </td>
+
+                <td class="d-none d-xl-table-cell">
+                  <span class="small text-truncate d-inline-block" style="max-width: 200px;"
+                        [title]="roleSummary(user)">{{ roleSummary(user) }}</span>
+                </td>
+
+                <td>
+                  <span class="ud-badge" [class]="statusClass(user.status)">{{ user.statusDisplay || user.status }}</span>
+                  @if (user.status === 'invited') {
+                    <small class="d-block text-muted mt-1">Invitation sent</small>
+                  }
+                  @if (user.isLockedOut) {
+                    <small class="d-block text-danger mt-1">
+                      <i class="ri-lock-line me-1" aria-hidden="true"></i>Locked out
+                    </small>
+                  }
+                </td>
+
+                <!-- "Enrolled" once a second factor is confirmed during activation. -->
+                <td>
+                  <span class="ud-badge" [class]="mfaClass(user.mfaEnabled)">{{ mfaLabel(user.mfaEnabled) }}</span>
+                </td>
+
+                <td class="d-none d-lg-table-cell">
+                  <small class="text-muted">
+                    {{ user.lastLoginAtUtc ? (user.lastLoginAtUtc | date: 'dd MMM yyyy, HH:mm') : 'Never' }}
+                  </small>
+                </td>
+
+                <!-- Which actions appear depends on the row's state, so no button is offered
+                     that the server would refuse. -->
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm gap-2">
+                    <button type="button" class="btn btn-outline-secondary" title="View profile" (click)="openProfile(user)">
+                      <i class="ri-eye-line"></i>
+                    </button>
+
+                    <button type="button" class="btn btn-outline-secondary" title="Edit" (click)="openEdit(user)">
+                      <i class="ri-edit-line"></i>
+                    </button>
+
+                    @if (canInvite(user)) {
+                      <button type="button" class="btn btn-outline-secondary" title="Send invitation" (click)="openInvite(user)">
+                        <i class="ri-mail-send-line"></i>
+                      </button>
+                    }
+
+                    @if (canSuspend() && user.status === 'active') {
+                      <button type="button" class="btn btn-outline-warning" title="Suspend" (click)="openSuspend(user)">
+                        <i class="ri-forbid-2-line"></i>
+                      </button>
+                    }
+
+                    @if (user.status === 'suspended') {
+                      <button type="button" class="btn btn-outline-success" title="Reactivate" (click)="openReactivate(user)">
+                        <i class="ri-play-circle-line"></i>
+                      </button>
+                    }
+
+                    @if (user.status !== 'deactivated') {
+                      <button type="button" class="btn btn-outline-danger" title="Delete or deactivate" (click)="openDelete(user)">
+                        <i class="ri-delete-bin-line"></i>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pager -->
+      <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <small class="text-muted">
+            Showing {{ users().length }} of {{ totalCount() }} account(s)
+          </small>
+          <select class="form-select form-select-sm" style="width: auto;"
+                  [value]="pageSize()" (change)="changePageSize(+$any($event.target).value)">
+            @for (size of [10, 25, 50, 100]; track size) {
+              <option [value]="size">{{ size }} per page</option>
+            }
+          </select>
+        </div>
+
+        @if (totalPages() > 1) {
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="pageIndex() === 1">
+                <button type="button" class="page-link" (click)="goToPage(pageIndex() - 1)">
+                  <i class="ri-arrow-left-s-line"></i>
+                </button>
+              </li>
+
+              @for (page of pageNumbers(); track page) {
+                <li class="page-item" [class.active]="page === pageIndex()">
+                  <button type="button" class="page-link" (click)="goToPage(page)">{{ page }}</button>
+                </li>
+              }
+
+              <li class="page-item" [class.disabled]="pageIndex() === totalPages()">
+                <button type="button" class="page-link" (click)="goToPage(pageIndex() + 1)">
+                  <i class="ri-arrow-right-s-line"></i>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        }
+      </div>
+    }
+  </div>
+
+  </div><!-- /container-fluid -->
+</div><!-- /page-wrapper -->
+</main><!-- /app-wrapper -->
+
+<!-- =====================================================================================
+     Dialogs — outside the shell wrappers on purpose: they are fixed-position overlays and
+     must not inherit the page's padding or stacking context.
+     ===================================================================================== -->
+@if (dialog() !== 'none') {
+  <div class="ud-backdrop d-flex align-items-center justify-content-center p-4">
+    <div class="bg-white rounded-4 shadow ud-dialog w-100">
+
+      <!-- ===== View ===== -->
+      @if (dialog() === 'view') {
+        <div class="p-5">
+          <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+            <h5 class="mb-0">Account details</h5>
+            <button type="button" class="btn-close" (click)="closeDialog()"></button>
+          </div>
+
+          @if (detailLoading()) {
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+          } @else if (detail(); as d) {
+            <div class="d-flex align-items-center gap-3 mb-4">
+              <span class="ud-avatar ud-avatar-lg">{{ initials(d.displayName) }}</span>
+              <div class="min-w-0">
+                <div class="h6 mb-0 text-truncate">{{ d.displayName }}</div>
+                <small class="text-muted d-block text-truncate">{{ d.email }}</small>
+                <span class="ud-badge mt-1 d-inline-block" [class]="statusClass(d.status)">{{ d.statusDisplay || d.status }}</span>
+              </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <div class="col-sm-6"><div class="ud-label">Reference</div><div class="ud-value">{{ d.code }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Username</div><div class="ud-value">{{ d.username }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Account type</div><div class="ud-value">{{ d.accountCategory }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Organisation unit</div><div class="ud-value">{{ d.organisationUnitName || '—' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Department</div><div class="ud-value">{{ d.departmentName || '—' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Designation</div><div class="ud-value">{{ d.designation || '—' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Mobile</div><div class="ud-value">{{ d.mobileNumber ? d.mobileCountryCode + ' ' + d.mobileNumber : '—' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Second factor</div><div class="ud-value">{{ mfaRequirementLabel(d) }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Access starts</div><div class="ud-value">{{ d.accessStartsAtUtc | date: 'mediumDate' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Access ends</div><div class="ud-value">{{ d.accessEndsAtUtc ? (d.accessEndsAtUtc | date: 'mediumDate') : 'No end date' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Last sign-in</div><div class="ud-value">{{ d.lastLoginAtUtc ? (d.lastLoginAtUtc | date: 'medium') : 'Never' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Invitation</div><div class="ud-value">{{ invitationLabel(d) }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Manager</div><div class="ud-value">{{ d.managerName || '—' }}</div></div>
+              <div class="col-sm-6"><div class="ud-label">Signed in from</div><div class="ud-value">{{ d.lastLoginIpAddress || '—' }}</div></div>
+            </div>
+
+            @if ((d.roles ?? []).length > 0) {
+              <div class="ud-label mb-2">Roles</div>
+              <div class="d-flex flex-wrap gap-2 mb-4">
+                @for (role of d.roles ?? []; track role.id) {
+                  <span class="badge bg-light text-dark border">
+                    {{ role.roleName }}
+                    @if (role.isPrimary) { <span class="text-primary ms-1">(primary)</span> }
+                    @if (role.isEffective === false) { <span class="text-muted ms-1">(not in effect)</span> }
+                  </span>
+                }
+              </div>
+            }
+
+            <!-- A lockout is the one status that carries its own explanation, and it is the one
+                 somebody looking at a blocked account most needs to read. -->
+            @if (d.isLockedOut) {
+              <div class="alert alert-warning border small mb-4">
+                <div class="fw-semibold mb-1">Locked out</div>
+                {{ d.lockoutReason || 'Too many failed sign-in attempts.' }}
+                @if (d.lockoutEndUtc) {
+                  <div class="mt-1">Unlocks {{ d.lockoutEndUtc | date: 'medium' }}.</div>
+                }
+              </div>
+            }
+
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="copy(d.email, 'email')">
+                <i class="ri-file-copy-line me-1"></i>{{ copiedField() === 'email' ? 'Copied' : 'Copy e-mail' }}
+              </button>
+              <button type="button" class="btn btn-primary flex-grow-1" (click)="openProfile(selected()!)">
+                Open full profile
+              </button>
+            </div>
+          } @else {
+            <div class="alert alert-danger">{{ errorMessage() }}</div>
+          }
+        </div>
+      }
+
+      <!-- ===== Edit ===== -->
+      @if (dialog() === 'edit') {
+        <div class="p-5">
+          <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+            <div>
+              <h5 class="mb-1">Edit profile</h5>
+              <small class="text-muted">
+                The login e-mail, role and data scope are changed elsewhere, because each needs its
+                own approval.
+              </small>
+            </div>
+            <button type="button" class="btn-close" (click)="closeDialog()"></button>
+          </div>
+
+          @if (detailLoading()) {
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+          } @else if (detail()) {
+            @if (errorMessage()) {
+              <div class="alert alert-danger d-flex align-items-start gap-2" role="alert">
+                <i class="ri-error-warning-line mt-1"></i><span>{{ errorMessage() }}</span>
+              </div>
+            }
+
+            <div class="row g-3 mb-4">
+              <div class="col-4 col-sm-2">
+                <label class="form-label small" for="edTitle">Title</label>
+                <input id="edTitle" class="form-control" [value]="editForm().title"
+                       (input)="updateEditField('title', $any($event.target).value)">
+              </div>
+              <div class="col-8 col-sm-5">
+                <label class="form-label small" for="edFirst">First name *</label>
+                <input id="edFirst" class="form-control" [value]="editForm().firstName"
+                       (input)="updateEditField('firstName', $any($event.target).value)">
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label small" for="edLast">Last name *</label>
+                <input id="edLast" class="form-control" [value]="editForm().lastName"
+                       (input)="updateEditField('lastName', $any($event.target).value)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small" for="edDisplay">Display name *</label>
+                <input id="edDisplay" class="form-control" [value]="editForm().displayName"
+                       (input)="updateEditField('displayName', $any($event.target).value)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small" for="edPreferred">Preferred name</label>
+                <input id="edPreferred" class="form-control" [value]="editForm().preferredName"
+                       (input)="updateEditField('preferredName', $any($event.target).value)">
+              </div>
+              <div class="col-4 col-sm-3">
+                <label class="form-label small" for="edCode">Country code</label>
+                <input id="edCode" class="form-control" placeholder="+91" [value]="editForm().mobileCountryCode"
+                       (input)="updateEditField('mobileCountryCode', $any($event.target).value)">
+              </div>
+              <div class="col-8 col-sm-5">
+                <label class="form-label small" for="edMobile">Mobile</label>
+                <input id="edMobile" class="form-control" [value]="editForm().mobileNumber"
+                       (input)="updateEditField('mobileNumber', $any($event.target).value)">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small" for="edEmployee">Employee number</label>
+                <input id="edEmployee" class="form-control" [value]="editForm().employeeNumber"
+                       (input)="updateEditField('employeeNumber', $any($event.target).value)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small" for="edDesignation">Designation</label>
+                <input id="edDesignation" class="form-control" [value]="editForm().designation"
+                       (input)="updateEditField('designation', $any($event.target).value)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small" for="edLocation">Work location</label>
+                <input id="edLocation" class="form-control" [value]="editForm().workLocation"
+                       (input)="updateEditField('workLocation', $any($event.target).value)">
+              </div>
+
+              <!-- The API requires a reason on every profile change, so it is a field, not an
+                   afterthought. It is what makes the audit trail answer "why", not just "what". -->
+              <div class="col-12">
+                <label class="form-label small" for="edReason">Reason for this change *</label>
+                <textarea id="edReason" class="form-control" rows="2"
+                          placeholder="For example: corrected the spelling of the surname at the user's request."
+                          [(ngModel)]="reason" name="editReason"></textarea>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeDialog()">Cancel</button>
+              <button type="button" class="btn btn-primary flex-grow-1" [disabled]="busy()" (click)="saveEdit()">
+                {{ busy() ? 'Saving…' : 'Save changes' }}
+              </button>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ===== Suspend ===== -->
+      @if (dialog() === 'suspend') {
+        <div class="p-5">
+          <div class="text-center mb-4">
+            <div class="ud-dialog-icon ud-dialog-icon-warning mx-auto mb-3"><i class="ri-forbid-2-line"></i></div>
+            <h5 class="mb-2">Suspend {{ selected()?.displayName }}?</h5>
+            <p class="text-muted mb-0">
+              They will be signed out of every device immediately and will not be able to sign in.
+              They can ask for the suspension to be lifted from the sign-in screen.
+            </p>
+          </div>
+
+          @if (errorMessage()) {
+            <div class="alert alert-danger small">{{ errorMessage() }}</div>
+          }
+
+          <label class="form-label small" for="suspendReason">Reason (recorded in the audit trail) *</label>
+          <textarea id="suspendReason" class="form-control mb-4" rows="3"
+                    placeholder="Why is this account being suspended?"
+                    [(ngModel)]="reason" name="suspendReason"></textarea>
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeDialog()">Cancel</button>
+            <button type="button" class="btn btn-warning flex-grow-1" [disabled]="busy()" (click)="confirmSuspend()">
+              {{ busy() ? 'Suspending…' : 'Suspend account' }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- ===== Reactivate ===== -->
+      @if (dialog() === 'reactivate') {
+        <div class="p-5">
+          <div class="text-center mb-4">
+            <div class="ud-dialog-icon ud-dialog-icon-success mx-auto mb-3"><i class="ri-play-circle-line"></i></div>
+            <h5 class="mb-2">Reactivate {{ selected()?.displayName }}?</h5>
+            <p class="text-muted mb-0">They will be able to sign in again straight away.</p>
+          </div>
+
+          @if (errorMessage()) {
+            <div class="alert alert-danger small">{{ errorMessage() }}</div>
+          }
+
+          <label class="form-label small" for="reactivateReason">Reason (recorded in the audit trail) *</label>
+          <textarea id="reactivateReason" class="form-control mb-4" rows="3"
+                    placeholder="Why is access being restored?"
+                    [(ngModel)]="reason" name="reactivateReason"></textarea>
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeDialog()">Cancel</button>
+            <button type="button" class="btn btn-success flex-grow-1" [disabled]="busy()" (click)="confirmReactivate()">
+              {{ busy() ? 'Reactivating…' : 'Reactivate account' }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- ===== Delete / deactivate ===== -->
+      @if (dialog() === 'delete') {
+        <div class="p-5">
+          <div class="text-center mb-4">
+            <div class="ud-dialog-icon ud-dialog-icon-danger mx-auto mb-3"><i class="ri-delete-bin-line"></i></div>
+
+            <!-- The three cases are genuinely different, so the wording is too. -->
+            <h5 class="mb-2">
+              @if (isHardDelete()) {
+                Delete this draft?
+              } @else if (isPendingInvite(selected()!)) {
+                Withdraw the invitation for {{ selected()?.displayName }}?
+              } @else {
+                Deactivate {{ selected()?.displayName }}?
+              }
+            </h5>
+
+            <p class="text-muted mb-0">
+              @if (isHardDelete()) {
+                This draft was never invited, so it can be erased completely. This cannot be undone.
+              } @else if (isPendingInvite(selected()!)) {
+                The invitation is still open, so it will be withdrawn and the link will stop working.
+                The account can be invited again later.
+              } @else {
+                The account is closed and every session is revoked. The record and its history are
+                <strong>kept</strong>, because an audit trail with gaps in it is not an audit trail.
+              }
+            </p>
+          </div>
+
+          @if (errorMessage()) {
+            <div class="alert alert-danger small">{{ errorMessage() }}</div>
+          }
+
+          <label class="form-label small" for="deleteReason">Reason (recorded in the audit trail) *</label>
+          <textarea id="deleteReason" class="form-control mb-3" rows="2"
+                    [(ngModel)]="reason" name="deleteReason"></textarea>
+
+          <!-- Typing the name is a deliberate speed bump on an action that is hard to reverse. -->
+          <label class="form-label small" for="deleteConfirm">
+            Type <strong>{{ selected()?.displayName }}</strong> to confirm
+          </label>
+          <input id="deleteConfirm" class="form-control mb-4" autocomplete="off"
+                 [ngModel]="deleteConfirmation()" (ngModelChange)="deleteConfirmation.set($event)" name="deleteConfirm">
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeDialog()">Cancel</button>
+            <button type="button" class="btn btn-danger flex-grow-1" [disabled]="busy() || !canConfirmDelete()" (click)="confirmDelete()">
+              {{
+                busy()
+                  ? 'Working…'
+                  : isHardDelete()
+                    ? 'Delete draft'
+                    : isPendingInvite(selected()!)
+                      ? 'Withdraw invitation'
+                      : 'Deactivate account'
+              }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- ===== Send invitation ===== -->
+      @if (dialog() === 'invite') {
+        <div class="p-5">
+          <div class="text-center mb-4">
+            <div class="ud-dialog-icon ud-dialog-icon-primary mx-auto mb-3"><i class="ri-mail-send-line"></i></div>
+            <h5 class="mb-2">Send an invitation to {{ selected()?.displayName }}?</h5>
+            <p class="text-muted mb-0">
+              They receive an e-mail with an activation link. Any earlier link stops working at once.
+            </p>
+          </div>
+
+          @if (errorMessage()) {
+            <div class="alert alert-danger small">{{ errorMessage() }}</div>
+          }
+
+          <label class="form-label small" for="welcomeMessage">Welcome message (optional)</label>
+          <textarea id="welcomeMessage" class="form-control mb-4" rows="3"
+                    placeholder="Anything you would like them to read before they start."
+                    [(ngModel)]="welcomeMessage" name="welcomeMessage"></textarea>
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" (click)="closeDialog()">Cancel</button>
+            <button type="button" class="btn btn-primary flex-grow-1" [disabled]="busy()" (click)="confirmInvite()">
+              {{ busy() ? 'Sending…' : 'Send invitation' }}
+            </button>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
+}

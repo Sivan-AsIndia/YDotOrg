@@ -1,0 +1,2 @@
+/*! For license information please see dark-green.src.js.LICENSE.txt */
+"use strict";import H from"../../Core/Globals.js";import DarkGreenTheme from"../../Extensions/Themes/DarkGreen.js";H.theme=DarkGreenTheme.options,DarkGreenTheme.apply();export default H;

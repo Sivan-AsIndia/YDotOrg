@@ -1,0 +1,504 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+
+
+  <!-- ============ TASK HEADER (§4.8.1 Task header) — one primary action: Request correction ============ -->
+  <header class="rcr-task-header" aria-labelledby="rcr-title">
+    <div class="rcr-header-text">
+      <h1 class="rcr-title" id="rcr-title">{{ pageTitle }}</h1>
+      <p class="rcr-subtitle">{{ pageSubtitle }}</p>
+     
+    </div>
+
+    <div class="rcr-header-actions">
+   
+
+  <div class="rcr-menu-wrap">
+               <button type="button" class="btn btn-outline-secondary btn-sm me-2" (click)="toggleFiltersVisible()" [attr.aria-expanded]="filtersVisible()">
+      <svg class="rcr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+      {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
+      @if (activeFilterSummary().length) { <span class="rcr-count">{{ activeFilterSummary().length }}</span> }
+    </button>
+
+            <!-- <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleOverflow()" [attr.aria-expanded]="overflowOpen()" aria-haspopup="menu">
+              More Actions
+              <svg class="rcr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            @if (overflowOpen()) {
+              <div class="rcr-menu" role="menu" aria-label="More actions">
+                @if (reviewAllowed(r)) { <button type="button" class="rcr-menu-item" role="menuitem" (click)="openReview(r)">Review difference</button> }
+                @if (approveAllowed(r)) { <button type="button" class="rcr-menu-item" role="menuitem" (click)="requestApprove(r)">Approve reissue</button> }
+                @if (deliverAllowed(r)) { <button type="button" class="rcr-menu-item" role="menuitem" (click)="requestDeliver(r)">Deliver corrected receipt</button> }
+                @if (rejectAllowed(r)) { <button type="button" class="rcr-menu-item rcr-menu-danger" role="menuitem" (click)="requestReject(r)">Reject request</button> }
+              </div>
+            } -->
+          </div>
+
+      <!-- Primary action — Request correction (§4.8.3) -->
+      @if (requestCorrectionAllowed()) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="openRequestDialog()">
+          <svg class="rcr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+          Request correction
+        </button>
+      }
+    </div>
+  </header>
+
+
+  <!-- ============ FILTERS PANEL — shown only when the Filters button is used ============ -->
+  @if (filtersVisible()) {
+  <section class="rcr-filters-card" aria-label="Search and filters">
+ 
+    <div class="rcr-filter-grid">
+      <!-- Date range over Requested at (§4.8.1) -->
+      <div class="rcr-field" [class.rcr-field-invalid]="rangeInvalid()">
+        <span class="rcr-field-label">Date Range </span>
+        <div class="rcr-range">
+          <span class="rcr-input-wrap">
+            <input type="date" class="rcr-input" [ngModel]="rangeStart()" (ngModelChange)="rangeStart.set($event); currentPage.set(1)" aria-label="Requested from date" />
+          </span>
+          <span class="rcr-range-sep" aria-hidden="true">→</span>
+          <span class="rcr-input-wrap">
+            <input type="date" class="rcr-input" [ngModel]="rangeEnd()" (ngModelChange)="rangeEnd.set($event); currentPage.set(1)" aria-label="Requested to date" />
+          </span>
+        </div>
+      </div>
+
+      <!-- Correction Type (§4.8.2 Correction category) -->
+      <label class="rcr-field">
+        <span class="rcr-field-label">Correction Type</span>
+        <span class="rcr-select-wrap">
+          <select class="rcr-select" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event); currentPage.set(1)" aria-label="Correction type">
+            <option value="">All Types</option>
+            @for (c of categoryOptions; track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+          <svg class="rcr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <!-- Status (§4.8.1) -->
+      <label class="rcr-field">
+        <span class="rcr-field-label">Status</span>
+        <span class="rcr-select-wrap">
+          <select class="rcr-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); currentPage.set(1)" aria-label="Status">
+            <option value="">All Statuses</option>
+            @for (s of statusOptions; track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <svg class="rcr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <!-- Receipt No. (§4.4.2 Receipt reference) -->
+      <label class="rcr-field">
+        <span class="rcr-field-label">Receipt No.</span>
+        <span class="rcr-input-wrap">
+          <input type="search" class="rcr-input" placeholder="Search receipt no…" [ngModel]="receiptFilter()" (ngModelChange)="receiptFilter.set($event); currentPage.set(1)" aria-label="Receipt number" />
+          <svg class="rcr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+
+      <!-- Donor -->
+      <label class="rcr-field">
+        <span class="rcr-field-label">Donor</span>
+        <span class="rcr-input-wrap">
+          <input type="search" class="rcr-input" placeholder="Search donor name…" [ngModel]="donorFilter()" (ngModelChange)="donorFilter.set($event); currentPage.set(1)" aria-label="Donor name" />
+          <svg class="rcr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </span>
+      </label>
+    </div>
+
+
+
+    <!-- Active-filter summary + saved filter (§4.8.1) -->
+    <div class="rcr-active-row">
+      <span class="rcr-active-label">Active filters:</span>
+      @for (chip of activeFilterSummary(); track chip.key) {
+        <span class="rcr-chip">
+          {{ chip.label }}
+          <button type="button" class="rcr-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </span>
+      } @empty {
+        <span class="rcr-active-none">None applied</span>
+      }
+      @if (activeFilterSummary().length) {
+        <button type="button" class="rcr-link" (click)="clearFilters()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
+          Clear all
+        </button>
+      }
+
+      <span class="rcr-active-spacer"></span>
+
+     
+
+      <button type="button" class="btn btn-primary btn-sm" (click)="applyFilters()" [disabled]="!filterAllowed()">Apply filters</button>
+    </div>
+  </section>
+  }
+
+
+  <!-- ============ WORK AREA: two-region layout (§4.8.5 Desktop) ============ -->
+  <div class="rcr-work" [class.rcr-work-full]="!detailOpen()">
+
+    <!-- ---------- MAIN WORK: correction requests table (§4.8.1 Main work) ---------- -->
+    <section class="rcr-main" aria-labelledby="rcr-list-heading">
+      <h2 id="rcr-list-heading" class="rcr-visually-hidden">Receipt correction requests</h2>
+
+      @if (filteredRecords().length === 0) {
+        <!-- EMPTY (§4.8.4) -->
+        <div class="rcr-state-block">
+          <p class="rcr-state-title">No requests match this scope and filter.</p>
+          <p class="rcr-state-body">Zero results come from the current filters, not a global zero. Adjust the date range,
+            correction type, status, receipt number or donor, or reset filters to continue.</p>
+          <div class="rcr-state-actions">
+            <button type="button" class="rcr-btn rcr-btn-outline rcr-btn-sm" (click)="clearFilters()">Reset filters</button>
+          </div>
+        </div>
+      } @else {
+        <div class="rcr-table-scroll">
+          <table class="rcr-table">
+            <thead>
+              <tr>
+                <th scope="col">Request ID</th>
+                <th scope="col">Correction Type</th>
+                <th scope="col">Receipt No.</th>
+                <th scope="col">Donor</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="rcr-col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of pagedRecords(); track r.requestReference) {
+                <tr [class.rcr-row-selected]="isSelected(r.requestReference)" >
+                  <td class="rcr-cell-id">{{ r.requestReference }}</td>
+                  <td>{{ r.correctionCategory }}</td>
+                  <td class="rcr-cell-receipt">{{ r.receiptReference }}</td>
+                  <td>{{ r.donorName }}</td>
+                  <td><span class="rcr-badge rcr-badge-sm" [class]="statusClass(r.status)">{{ r.status }}</span></td>
+                  <td class="rcr-col-actions" (click)="$event.stopPropagation()">
+                    <div class="rcr-row-actions">
+                      @if (reviewAllowed(r)) {
+                        <button type="button" class="rcr-icon-btn" title="Review difference" (click)="openReview(r)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                      }
+                      @if (approveAllowed(r)) {
+                        <button type="button" class="rcr-icon-btn rcr-icon-success" title="Approve reissue" (click)="requestApprove(r)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                        </button>
+                      }
+                      @if (deliverAllowed(r)) {
+                        <button type="button" class="rcr-icon-btn rcr-icon-info" title="Deliver corrected receipt" (click)="requestDeliver(r)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+                        </button>
+                      }
+                      @if (rejectAllowed(r)) {
+                        <button type="button" class="rcr-icon-btn rcr-icon-danger" title="Reject request" (click)="requestReject(r)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="rcr-pager">
+          <span class="rcr-pager-info">Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filteredRecords().length }} requests</span>
+          <div class="rcr-pager-controls">
+            <button type="button" class="rcr-page-btn" (click)="prevPage()" [disabled]="currentPage() <= 1" aria-label="Previous page">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            @for (p of pageNumbers(); track p) {
+              <button type="button" class="rcr-page-btn" [class.rcr-page-active]="currentPage() === p" (click)="goToPage(p)" [attr.aria-current]="currentPage() === p ? 'page' : null">{{ p }}</button>
+            }
+            <button type="button" class="rcr-page-btn" (click)="nextPage()" [disabled]="currentPage() >= totalPages()" aria-label="Next page">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- ---------- SECONDARY PANEL: Request Details (§4.8.1 Decision/review + Related and history + Persistent outcome) ---------- -->
+    @if (detailOpen()) {
+    <aside class="rcr-detail" aria-label="Request details">
+      @if (selectedRecord(); as r) {
+          <div class="rcr-detail-head">
+            <div class="rcr-detail-id">
+              <span class="rcr-detail-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
+              </span>
+              <h2 class="rcr-detail-title">Request Details</h2>
+            </div>
+            <button type="button" class="rcr-close-panel" title="Close panel" (click)="closeSelectedRow()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+
+        <div class="rcr-detail-body">
+          <!-- Record identity + Correction (§4.4.2) -->
+          <dl class="rcr-kv">
+            <div><dt>Request ID</dt><dd>{{ r.requestReference }}</dd></div>
+            <div><dt>Correction Type</dt><dd>{{ r.correctionCategory }}</dd></div>
+            <div><dt>Receipt No.</dt><dd>{{ r.receiptReference }}</dd></div>
+            <div><dt>Donor</dt><dd>{{ r.donorName }}</dd></div>
+            <div><dt>Donation reference</dt><dd>{{ r.donationReference }}</dd></div>
+            <!-- <div><dt>Current value</dt><dd>{{ r.currentValue }}</dd></div>
+            <div><dt>Proposed value</dt><dd>{{ r.proposedValue }}</dd></div> -->
+            <!-- <div><dt>Current version</dt><dd>v{{ r.currentVersion }}</dd></div> -->
+            @if (r.newReceiptReference) {
+              <div><dt>Reissued receipt no.</dt><dd>{{ r.newReceiptReference }}</dd></div>
+            }
+            <div><dt>Delivery channel</dt><dd>{{ r.deliveryChannel }}</dd></div>
+            <!-- <div><dt>Approver</dt><dd>{{ r.approver }}</dd></div> -->
+            <!-- <div><dt>Status</dt><dd><span class="rcr-badge rcr-badge-sm" [class]="statusClass(r.status)">{{ r.status }}</span></dd></div> -->
+            <div><dt>Requested At</dt><dd>{{ r.requestedAtLabel }} · IST</dd></div>
+          </dl>
+
+          <!-- Reason (Confidential — visible only within record scope and purpose; §4.8.2) -->
+          <h3 class="rcr-group-title">Reason </h3>
+          <p class="rcr-reason">{{ r.reason }}</p>
+
+          <!-- Supporting evidence (Confidential; status shown separately; §4.8.2) -->
+          <h3 class="rcr-group-title">Supporting evidence </h3>
+          @if (r.supportingEvidence.length) {
+            <ul class="rcr-plain-list" role="list">
+              @for (e of r.supportingEvidence; track e.name) {
+                <li class="rcr-ev-item">
+                  <span class="rcr-ev-name">{{ e.name }}</span>
+                  <!-- <span class="rcr-ev-status">{{ e.status }}</span> -->
+                  <button type="button" class="rcr-ev-download" (click)="downloadEvidence(e, $event)" [attr.aria-label]="'Download ' + e.name" [title]="'Download ' + e.name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="rcr-empty-line">No supporting evidence attached.</p>
+          }
+
+          <!-- Available actions on this record (§4.8.3) -->
+          <div class="rcr-detail-actions">
+            <!-- @if (reviewAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openReview1(r)">Review difference</button> } -->
+            @if (approveAllowed(r)) { <button type="button" class="btn btn-primary btn-sm" (click)="requestApprove(r)">Approve</button> }
+            <!-- @if (deliverAllowed(r)) { <button type="button" class="btn btn-primary btn-sm" (click)="requestDeliver(r)">Deliver corrected receipt</button> } -->
+            @if (rejectAllowed(r)) { <button type="button" class="btn btn-danger btn-sm" (click)="requestReject(r)">Reject</button> }
+          </div>
+
+        </div>
+      }
+    </aside>
+    }
+  </div>
+
+
+  <!-- ============ REQUEST CORRECTION — primary form (§4.8.3 Request correction) ============ -->
+  @if (requestDialogOpen()) {
+    <div class="rcr-modal-backdrop" (click)="closeRequestDialog()">
+      <div class="rcr-modal" role="dialog" aria-modal="true" aria-labelledby="rcr-request-title" (click)="$event.stopPropagation()">
+        <h2 id="rcr-request-title" class="rcr-modal-title">Request correction</h2>
+        <p class="rcr-modal-lead">Correct eligible receipt information through a controlled version. The original receipt is retained in the audit trail; a new receipt number is issued only after approval.</p>
+
+        <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !receiptValid()">
+          <label class="rcr-field-label" for="rcr-f-receipt">Receipt No</label>
+          <input id="rcr-f-receipt" class="rcr-input"  [ngModel]="formReceipt()" (ngModelChange)="formReceipt.set($event)" placeholder="e.g. REC-2025-00024" />
+          @if (requestSubmitted() && !receiptValid()) { <p class="rcr-field-hint rcr-field-error" role="status">Enter Receipt No.</p> }
+        </div>
+
+        <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !categoryValid()">
+          <label class="rcr-field-label" for="rcr-f-category">Correction Type </label>
+          <span class="rcr-select-wrap">
+            <select id="rcr-f-category" class="rcr-select" [ngModel]="formCategory()" (ngModelChange)="formCategory.set($event)">
+              <option value="">Select a correction type…</option>
+              @for (c of categoryOptions; track c) { <option [value]="c">{{ c }}</option> }
+            </select>
+            <svg class="rcr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+          @if (requestSubmitted() && !categoryValid()) { <p class="rcr-field-hint rcr-field-error" role="status">Enter Correction Type.</p> }
+        </div>
+
+        <div class="rcr-modal-grid">
+          <div class="rcr-field">
+            <label class="rcr-field-label" for="rcr-f-current">Current value</label>
+            <input id="rcr-f-current" class="rcr-input" [ngModel]="formCurrentValue()" (ngModelChange)="formCurrentValue.set($event)" placeholder="Value on the issued receipt" />
+          </div>
+          <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !proposedValid()">
+            <label class="rcr-field-label" for="rcr-f-proposed">Proposed value</label>
+            <input id="rcr-f-proposed" class="rcr-input" [ngModel]="formProposedValue()" (ngModelChange)="formProposedValue.set($event)" placeholder="Corrected value" />
+            @if (requestSubmitted() && !proposedValid()) { <p class="rcr-field-hint rcr-field-error" role="status">Enter Proposed value.</p> }
+          </div>
+        </div>
+
+        <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !reasonValid()">
+          <label class="rcr-field-label" for="rcr-f-reason">Reason </label>
+          <textarea id="rcr-f-reason" class="rcr-input rcr-textarea" rows="3" [ngModel]="formReason()" (ngModelChange)="formReason.set($event)" [attr.maxlength]="reasonMax" placeholder="Record why this receipt is being corrected…"></textarea>
+          <p class="rcr-field-hint" [class.rcr-field-error]="requestSubmitted() && !reasonValid()" role="status">
+            @if (requestSubmitted() && !reasonValid()) { Review Reason. The value does not meet the stated format or range. }
+            {{ formReasonCount() }} / {{ reasonMax }} characters (minimum {{ reasonMin }})
+          </p>
+        </div>
+
+        <div class="rcr-field">
+          <label class="rcr-field-label" for="rcr-f-evidence">Supporting evidence </label>
+          <div class="rcr-upload" [class.rcr-upload-has-file]="formEvidence()" (click)="triggerEvidenceUpload($event)" (keydown.enter)="triggerEvidenceUpload($event)" (keydown.space)="triggerEvidenceUpload($event)" tabindex="0" role="button" aria-label="Attach supporting evidence file">
+            <input #evidenceFileInput id="rcr-f-evidence" class="rcr-file-input" type="file" aria-hidden="true" tabindex="-1" (change)="onEvidenceSelected($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" />
+            @if (!formEvidence()) {
+              <span class="rcr-upload-icon" aria-hidden="true">📎</span>
+              <span class="rcr-upload-text">Attach supporting evidence file</span>
+              <span class="rcr-upload-hint">PDF, images or documents · max 10 MB</span>
+            } @else {
+              <span class="rcr-upload-chip">
+                <span class="rcr-upload-chip-name">{{ formEvidence() }}</span>
+                <span class="rcr-upload-chip-size">{{ formEvidenceSize() }}</span>
+                <button type="button" class="rcr-upload-chip-remove" (click)="clearEvidence($event)" aria-label="Remove attached file">×</button>
+              </span>
+              <span class="rcr-upload-status">Uploaded · pending scan</span>
+            }
+          </div>
+        </div>
+
+        <!-- <div class="rcr-modal-grid">
+          <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !approverValid()">
+            <label class="rcr-field-label" for="rcr-f-approver">Approver</label>
+            <span class="rcr-select-wrap">
+              <select id="rcr-f-approver" class="rcr-select" [ngModel]="formApprover()" (ngModelChange)="formApprover.set($event)">
+                <option value="">Select an approver…</option>
+                @for (a of approverOptions; track a) { <option [value]="a">{{ a }}</option> }
+              </select>
+              <svg class="rcr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+            @if (requestSubmitted() && !approverValid()) { <p class="rcr-field-hint rcr-field-error" role="status">Enter Approver.</p> }
+          </div>
+          <div class="rcr-field" [class.rcr-field-invalid]="requestSubmitted() && !channelValid()">
+            <label class="rcr-field-label" for="rcr-f-channel">Delivery channel </label>
+            <span class="rcr-select-wrap">
+              <select id="rcr-f-channel" class="rcr-select" [ngModel]="formChannel()" (ngModelChange)="formChannel.set($event)">
+                <option value="">Select a channel…</option>
+                @for (c of channelOptions; track c) { <option [value]="c">{{ c }}</option> }
+              </select>
+              <svg class="rcr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+            @if (requestSubmitted() && !channelValid()) { <p class="rcr-field-hint rcr-field-error" role="status">Enter Delivery channel.</p> }
+          </div>
+        </div> -->
+
+        <div class="rcr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeRequestDialog()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="submitRequest()">Request correction</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ REVIEW DIFFERENCE — before/after review (§4.8.3 Review difference) ============ -->
+  @if (reviewDialogOpen() && reviewTarget()) {
+    <div class="rcr-modal-backdrop" (click)="closeReview()">
+      <div class="rcr-modal" role="dialog" aria-modal="true" aria-labelledby="rcr-review-title" (click)="$event.stopPropagation()">
+        <h2 id="rcr-review-title" class="rcr-modal-title">Review difference</h2>
+        <p class="rcr-modal-lead">Before-and-after values, effective permission, reason and resulting state for {{ reviewTarget()!.requestReference }}.</p>
+        <div class="rcr-diff">
+          <div class="rcr-diff-col">
+            <span class="rcr-diff-label">Before (current value)</span>
+            <span class="rcr-diff-value">{{ reviewTarget()!.currentValue }}</span>
+          </div>
+          <span class="rcr-diff-arrow" aria-hidden="true">→</span>
+          <div class="rcr-diff-col rcr-diff-after">
+            <span class="rcr-diff-label">After (proposed value)</span>
+            <span class="rcr-diff-value">{{ reviewTarget()!.proposedValue }}</span>
+          </div>
+        </div>
+        <dl class="rcr-kv">
+          <div><dt>Correction Type</dt><dd>{{ reviewTarget()!.correctionCategory }}</dd></div>
+          <div><dt>Receipt No.</dt><dd>{{ reviewTarget()!.receiptReference }}</dd></div>
+          <div><dt>Reason</dt><dd>{{ reviewTarget()!.reason }}</dd></div>
+          <div><dt>Resulting state</dt><dd>{{ reviewTarget()!.status }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="rcr-modal-actions">
+          <button type="button" class="btn btn-primary btn-sm" (click)="closeReview()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ APPROVE REISSUE — high-risk confirm (§4.8.6 High-risk action) ============ -->
+  @if (approveDialogOpen() && approveTarget()) {
+    <div class="rcr-modal-backdrop" (click)="closeApprove()">
+      <div class="rcr-modal" role="dialog" aria-modal="true" aria-labelledby="rcr-approve-title" (click)="$event.stopPropagation()">
+        <h2 id="rcr-approve-title" class="rcr-modal-title">Confirm Approve reissue</h2>
+        <p class="rcr-modal-lead">Review the affected record, consequence, reason and effective time. Approval reserves a new receipt number; the original receipt remains in the audit trail.</p>
+        <dl class="rcr-kv">
+          <div><dt>Affected record</dt><dd>{{ approveTarget()!.requestReference }} · {{ approveTarget()!.correctionCategory }}</dd></div>
+          <div><dt>Before</dt><dd>{{ approveTarget()!.status }} · {{ approveTarget()!.currentValue }}</dd></div>
+          <div><dt>After</dt><dd>Approved · corrected value {{ approveTarget()!.proposedValue }}</dd></div>
+          <div><dt>Consequence</dt><dd>A new receipt number is reserved and becomes ready to deliver via {{ approveTarget()!.deliveryChannel }}.</dd></div>
+          <div><dt>Reason</dt><dd>{{ approveTarget()!.reason }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="rcr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeApprove()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmApprove()">Approve reissue</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ DELIVER CORRECTED RECEIPT — confirm (§4.8.3 Deliver corrected receipt) ============ -->
+  @if (deliverDialogOpen() && deliverTarget()) {
+    <div class="rcr-modal-backdrop" (click)="closeDeliver()">
+      <div class="rcr-modal" role="dialog" aria-modal="true" aria-labelledby="rcr-deliver-title" (click)="$event.stopPropagation()">
+        <h2 id="rcr-deliver-title" class="rcr-modal-title">Deliver corrected receipt</h2>
+        <p class="rcr-modal-lead">Deliver the reissued receipt to the donor. The committed local result and the downstream delivery are shown as separate outcomes.</p>
+        <dl class="rcr-kv">
+          <div><dt>Affected record</dt><dd>{{ deliverTarget()!.requestReference }}</dd></div>
+          <div><dt>Reissued receipt no.</dt><dd>{{ deliverTarget()!.newReceiptReference }}</dd></div>
+          <div><dt>Delivery channel</dt><dd>{{ deliverTarget()!.deliveryChannel }}</dd></div>
+          <div><dt>After</dt><dd>Completed · original retained in audit trail</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="rcr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDeliver()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmDeliver()">Deliver corrected receipt</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ REJECT REQUEST — danger / confirmation (§4.8.3 Reject request) ============ -->
+  @if (rejectDialogOpen() && rejectTarget()) {
+    <div class="rcr-modal-backdrop" (click)="closeReject()">
+      <div class="rcr-modal" role="dialog" aria-modal="true" aria-labelledby="rcr-reject-title" (click)="$event.stopPropagation()">
+        <h2 id="rcr-reject-title" class="rcr-modal-title">Reject request</h2>
+        <p class="rcr-modal-lead">Rejecting this request preserves linked history and leaves the original receipt unchanged. Provide a named reason to continue.</p>
+        <dl class="rcr-kv">
+          <div><dt>Affected record</dt><dd>{{ rejectTarget()!.requestReference }} · {{ rejectTarget()!.correctionCategory }}</dd></div>
+          <div><dt>Before</dt><dd>{{ rejectTarget()!.status }}</dd></div>
+          <div><dt>After</dt><dd>Rejected · original receipt unchanged</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="rcr-field" [class.rcr-field-invalid]="rejectSubmitted() && !rejectReasonValid()">
+          <label class="rcr-field-label" for="rcr-reject-reason">Reason <span class="rcr-req">required</span></label>
+          <textarea id="rcr-reject-reason" class="rcr-input rcr-textarea" rows="3" [ngModel]="rejectReason()" (ngModelChange)="rejectReason.set($event)" [attr.maxlength]="reasonMax" placeholder="Record why this request is being rejected…"></textarea>
+          <p class="rcr-field-hint" [class.rcr-field-error]="rejectSubmitted() && !rejectReasonValid()" role="status">
+            @if (rejectSubmitted() && !rejectReasonValid()) { Enter Reason. }
+            {{ rejectReasonCount() }} / {{ reasonMax }} characters (minimum {{ reasonMin }})
+          </p>
+        </div>
+        <div class="rcr-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeReject()">Keep request</button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmReject()">Reject request</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</main>

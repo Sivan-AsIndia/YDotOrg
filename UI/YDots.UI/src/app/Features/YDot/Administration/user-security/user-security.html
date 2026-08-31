@@ -1,0 +1,367 @@
+<main class="app-wrapper">
+    <div class="container-fluid mb-5">
+
+        <!-- Page Header -->
+        <div class="sec-header">
+            <div class="sec-header-text">
+                <button class="btn btn-sm btn-outline-secondary mb-2" (click)="goBack()">
+                    <i class="ri-arrow-left-line me-1"></i> Back to Profile
+                </button>
+                <h2 class="sec-title">User Security</h2>
+                <p class="sec-subtitle">Review security posture, devices, sessions and perform recovery actions</p>
+            </div>
+            <div class="sec-reviewed-tag">
+                <span class="sec-reviewed-dot"></span>
+                Last reviewed <span class="sec-mono">24 Jul 2026</span>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        @if (loading()) {
+            <div class="sec-state">
+                <div class="sec-spinner" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="sec-state-text">Loading security data...</p>
+            </div>
+        } @else if (loadError()) {
+            <div class="sec-state">
+                <p class="sec-error-text">Failed to load security data.</p>
+                <button class="sec-btn sec-btn--primary" (click)="retry()">Retry</button>
+            </div>
+        } @else {
+            @let d = data();
+
+            <div class="sec-grid">
+
+                <!-- LEFT COLUMN -->
+                <div class="sec-col-stack">
+
+                    <!-- User Identity Dossier -->
+                    <div class="sec-card">
+                        <div class="sec-dossier-top">
+                            <div class="sec-avatar">{{ (d?.user?.displayName || '?').charAt(0) }}</div>
+                            <div>
+                                <h4 class="sec-identity-name">{{ d?.user?.displayName }}</h4>
+                                <span class="sec-identity-ref">{{ userReference() || d?.user?.reference }}</span>
+                            </div>
+                        </div>
+                        <div class="sec-ledger">
+                            <div class="sec-ledger-row">
+                                <span class="sec-ledger-label">Password Last Changed</span>
+                                <span class="sec-ledger-value">{{ d?.user?.passwordLastChanged }}</span>
+                            </div>
+                            <div class="sec-ledger-row">
+                                <span class="sec-ledger-label">MFA Requirement</span>
+                                <span class="sec-tag sec-tag--good">{{ d?.user?.mfaRequirement }}</span>
+                            </div>
+                            <div class="sec-ledger-row">
+                                <span class="sec-ledger-label">Recovery Codes</span>
+                                <span class="sec-tag sec-tag--warn">{{ d?.user?.recoveryCodeStatus }}</span>
+                            </div>
+                            <div class="sec-ledger-row">
+                                <span class="sec-ledger-label">Risk Flags</span>
+                                <span class="sec-tag sec-tag--good">{{ d?.user?.riskFlags }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Actions -->
+                    <div class="sec-card">
+                        <div class="sec-card-head">
+                            <h5 class="sec-card-title">
+                                <i class="uil uil-shield-exclamation"></i>Security Actions
+                            </h5>
+                        </div>
+                        <div class="sec-actions">
+                            <button class="sec-action-row" (click)="confirmAction('requirePasswordReset')" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--warn"><i class="uil uil-key-skeleton"></i></span>
+                                <span class="sec-action-label">Require Password Reset</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                            <button class="sec-action-row" (click)="confirmAction('revokeAllSessions')" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--critical"><i class="uil uil-sign-out-alt"></i></span>
+                                <span class="sec-action-label">Revoke All Sessions</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                            <button class="sec-action-row" (click)="confirmAction('resetMfa')" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--info"><i class="uil uil-shield-exclamation"></i></span>
+                                <span class="sec-action-label">Reset MFA</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                            @if (canUnlock()) {
+                            <button class="sec-action-row" (click)="confirmAction('unlockAccount')" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--positive"><i class="uil uil-lock-open-alt"></i></span>
+                                <span class="sec-action-label">Unlock Account</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                            }
+                            <button class="sec-action-row" (click)="scrollToDevices()" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--neutral"><i class="uil uil-devices"></i></span>
+                                <span class="sec-action-label">Remove Trusted Device</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                            <button class="sec-action-row" (click)="confirmAction('exportSecurityEvidence')" [disabled]="actionProcessing()">
+                                <span class="sec-action-icon sec-action-icon--dark"><i class="uil uil-file-export"></i></span>
+                                <span class="sec-action-label">Export Security Evidence</span>
+                                <i class="uil uil-angle-right-b sec-action-chevron"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Verified Contacts -->
+                    <div class="sec-card">
+                        <div class="sec-card-head">
+                            <h5 class="sec-card-title">
+                                <i class="uil uil-check-circle"></i>Verified Contacts
+                            </h5>
+                        </div>
+                        <div class="sec-contacts">
+                            @for (contact of d?.verifiedContacts; track contact.value) {
+                                <div class="sec-contact-row">
+                                    <div class="sec-contact-left">
+                                        <i class="uil {{ contact.icon }} sec-contact-icon"></i>
+                                        <span class="sec-contact-value">{{ contact.value }}</span>
+                                    </div>
+                                    <span class="sec-tag sec-tag--good">{{ contact.status }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- RIGHT COLUMN -->
+                <div class="sec-col-stack">
+
+                    <!-- MFA Methods -->
+                    <div class="sec-card">
+                        <div class="sec-card-head">
+                            <h5 class="sec-card-title">
+                                <i class="uil uil-shield"></i>Enrolled MFA Methods
+                            </h5>
+                            <span class="sec-card-count">{{ d?.mfaMethods?.length }} Active</span>
+                        </div>
+                        <div class="sec-card-body--flush">
+                            <div class="table-responsive">
+                                <table class="sec-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Method</th>
+                                            <th>Status</th>
+                                            <th>Enrolled On</th>
+                                            <th>Last Used</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (mfa of d?.mfaMethods; track mfa.method) {
+                                            <tr>
+                                                <td><i class="uil {{ mfa.icon }} sec-row-icon {{ mfa.iconColor }}"></i>{{ mfa.method }}</td>
+                                                <td><span class="sec-tag sec-tag--good">{{ mfa.status }}</span></td>
+                                                <td class="sec-mono">{{ mfa.enrolledOn }}</td>
+                                                <td class="sec-mono" [class.sec-td-muted]="!mfa.lastUsed">{{ mfa.lastUsed || '—' }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Sessions -->
+                    <div class="sec-card">
+                        <div class="sec-card-head">
+                            <h5 class="sec-card-title">
+                                <i class="uil uil-laptop"></i>Active Sessions
+                            </h5>
+                            <span class="sec-card-count">{{ d?.activeSessions?.length }} Active</span>
+                        </div>
+                        <div class="sec-card-body--flush">
+                            <div class="table-responsive">
+                                <table class="sec-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Device</th>
+                                            <th>Browser</th>
+                                            <th>IP Address</th>
+                                            <th>Last Active</th>
+                                            <th class="sec-td-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (session of d?.activeSessions; track session.id) {
+                                            <tr>
+                                                <td><i class="uil {{ session.deviceIcon }} sec-row-icon"></i>{{ session.device }}</td>
+                                                <td>{{ session.browser }}</td>
+                                                <td><span class="sec-code">{{ session.ipAddress }}</span></td>
+                                                <td class="sec-mono">{{ session.lastActive }}</td>
+                                                <td class="sec-td-right">
+                                                    <button class="btn btn-primary btn-sm" (click)="confirmAction('revokeSession', session)" [disabled]="actionProcessing()">
+                                                        <i class="uil uil-times-circle"></i> Revoke
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trusted Devices + Failed Sign-ins -->
+                    <div class="sec-split-row">
+                        <div class="sec-card" id="trusted-devices">
+                            <div class="sec-card-head">
+                                <h5 class="sec-card-title">
+                                    <i class="uil uil-server"></i>Trusted Devices
+                                </h5>
+                            </div>
+                            <div class="sec-card-body--flush">
+                                <div class="table-responsive">
+                                    <table class="sec-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Device</th>
+                                                <th>Type</th>
+                                                <th>Trusted On</th>
+                                                <th>Expiry</th>
+                                                <th class="sec-td-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (device of d?.trustedDevices; track device.id) {
+                                                <tr>
+                                                    <td><i class="uil {{ device.deviceIcon }} sec-row-icon"></i>{{ device.device }}</td>
+                                                    <td>{{ device.type }}</td>
+                                                    <td class="sec-mono">{{ device.trustedOn }}</td>
+                                                    <td class="sec-mono">{{ device.expiry }}</td>
+                                                    <td class="sec-td-right">
+                                                        <button class="btn btn-primary btn-sm btn btn-primary btn-sm--icon" (click)="confirmAction('removeTrustedDevice', device)" [disabled]="actionProcessing()">
+                                                            <i class="uil uil-trash-alt"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sec-card">
+                            <div class="sec-card-head">
+                                <h5 class="sec-card-title">
+                                    <i class="uil uil-exclamation-triangle"></i>Failed Sign-ins
+                                </h5>
+                            </div>
+                            <div class="sec-stat-trio">
+                                <div class="sec-stat">
+                                    <div class="sec-stat-value sec-stat-value--critical">{{ d?.failedSignins?.last24Hours }}</div>
+                                    <div class="sec-stat-label">24 Hours</div>
+                                </div>
+                                <div class="sec-stat">
+                                    <div class="sec-stat-value sec-stat-value--warn">{{ d?.failedSignins?.last7Days }}</div>
+                                    <div class="sec-stat-label">7 Days</div>
+                                </div>
+                                <div class="sec-stat">
+                                    <div class="sec-stat-value sec-stat-value--neutral">{{ d?.failedSignins?.total }}</div>
+                                    <div class="sec-stat-label">Total</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Security Events -->
+                    <div class="sec-card">
+                        <div class="sec-card-head">
+                            <h5 class="sec-card-title">
+                                <i class="uil uil-history"></i>Recent Security Events
+                            </h5>
+                        </div>
+                        <div class="sec-card-body--flush">
+                            <div class="table-responsive">
+                                <table class="sec-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Event</th>
+                                            <th>Details</th>
+                                            <th>Date/Time</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (event of d?.recentEvents; track event.dateTime) {
+                                            <tr>
+                                                <td><i class="uil {{ event.icon }} sec-row-icon {{ event.iconColor }}"></i>{{ event.event }}</td>
+                                                <td class="sec-td-muted">{{ event.details }}</td>
+                                                <td class="sec-mono">{{ event.dateTime }}</td>
+                                                <td><span class="sec-tag sec-tag--neutral">{{ event.status }}</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        }
+    </div>
+</main>
+
+<!-- Confirmation Modal -->
+@if (showSecurityModal()) {
+    <div class="sec-modal-overlay" (click)="closeModal()">
+        <div class="sec-modal" (click)="$event.stopPropagation()">
+            <div class="sec-modal-head">
+                <h5>
+                    <i class="uil uil-shield-exclamation"></i>
+                    {{ modalTitle() }}
+                </h5>
+                <button type="button" class="sec-modal-close" (click)="closeModal()">
+                    <i class="uil uil-times"></i>
+                </button>
+            </div>
+            <div class="sec-modal-body">
+                <div class="sec-modal-alert" role="alert">
+                    <i class="uil uil-info-circle"></i>
+                    <p>{{ modalMessage() }}</p>
+                </div>
+
+                <form [formGroup]="securityActionForm">
+                    <label for="securityActionReason" class="sec-modal-label">
+                        Reason <span class="sec-req">*</span>
+                    </label>
+                    <textarea
+                        class="sec-modal-textarea"
+                        id="securityActionReason"
+                        formControlName="reason"
+                        rows="3"
+                        placeholder="Provide a detailed reason for this security action (10-1000 characters)..."
+                        [class.is-invalid]="securityActionForm.controls.reason.invalid && securityActionForm.controls.reason.touched">
+                    </textarea>
+                    @if (securityActionForm.controls.reason.invalid && securityActionForm.controls.reason.touched) {
+                        <div class="sec-modal-error">
+                            @if (securityActionForm.controls.reason.errors?.['required']) { Reason is required. }
+                            @if (securityActionForm.controls.reason.errors?.['minlength']) { Reason must be at least 10 characters ({{ securityActionForm.controls.reason.value?.length || 0 }}/10). }
+                            @if (securityActionForm.controls.reason.errors?.['maxlength']) { Reason cannot exceed 1000 characters. }
+                        </div>
+                    }
+                    <div class="sec-modal-counter">{{ securityActionForm.controls.reason.value?.length || 0 }}/1000</div>
+                </form>
+            </div>
+            <div class="sec-modal-foot">
+                <button type="button" class="sec-btn--ghost btn btn-sm " (click)="closeModal()" [disabled]="actionProcessing()">Cancel</button>
+                <button type="button" class="sec-btn--danger btn btn-sm " (click)="executeAction()" [disabled]="actionProcessing()">
+                    @if (actionProcessing()) {
+                        <span class="sec-spin-sm"></span>
+                        Processing...
+                    } @else {
+                        <i class="uil uil-check-circle"></i> Confirm &amp; Execute
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}

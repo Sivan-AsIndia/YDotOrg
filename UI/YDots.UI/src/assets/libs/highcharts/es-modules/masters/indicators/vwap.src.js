@@ -1,0 +1,2 @@
+/*! For license information please see vwap.src.js.LICENSE.txt */
+"use strict";import Highcharts from"../../Core/Globals.js";import"../../Stock/Indicators/VWAP/VWAPIndicator.js";export default Highcharts;
