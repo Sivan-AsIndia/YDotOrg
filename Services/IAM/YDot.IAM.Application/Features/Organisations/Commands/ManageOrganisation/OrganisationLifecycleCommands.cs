@@ -151,6 +151,33 @@ public sealed class OrganisationLifecycleCommandHandler(
         var isResubmission = tenant.Status == TenantStatus.Rejected;
         var target = isResubmission ? TenantStatus.Resubmitted : TenantStatus.Submitted;
 
+        // ---- THE STATE COMES FIRST -------------------------------------------------------------
+        //
+        // The profile and document checks below used to run before anything asked whether this
+        // Organisation could be submitted AT ALL, and the result was a genuinely misleading
+        // refusal. An Organisation still in Invited - the invitation sent, not yet accepted -
+        // cannot move to Submitted from any state machine's point of view, but it was told
+        //
+        //     "Attach your registration certificate before submitting for approval.
+        //      No documents have been uploaded yet."
+        //
+        // which names a fixable-looking problem that is not the reason. Somebody chasing it
+        // uploads the certificate, submits again, and is then told the real answer for the first
+        // time. Worse, they reasonably conclude the upload did not work.
+        //
+        // `CanTransitionTo` is a pure check - it changes nothing - so asking it here costs
+        // nothing and TransitionAsync below still asks it again along with the version check.
+        if (!tenant.CanTransitionTo(target))
+        {
+            var allowed = Tenant.AllowedTransitionsFrom(tenant.Status);
+
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                allowed.Count == 0
+                    ? $"An organisation that is {OrganisationMappingConfig.DescribeStatus(tenant.Status).ToLowerInvariant()} cannot be submitted."
+                    : $"An organisation that is {OrganisationMappingConfig.DescribeStatus(tenant.Status).ToLowerInvariant()} "
+                      + $"can only move to: {string.Join(", ", allowed.Select(OrganisationMappingConfig.DescribeStatus))}."));
+        }
+
         // The profile is enforced HERE rather than on every save, so a half-finished profile
         // can be parked and returned to.
         var outstanding = OrganisationMappingConfig.OutstandingProfileFields(tenant);

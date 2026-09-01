@@ -307,3 +307,23 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 
 @media (max-width: 1080px) { .wizard-body { grid-template-columns: 1fr; } .work-side { position: static; flex-direction: row; flex-wrap: wrap; } .work-side > .card { flex: 1 1 260px; } }
 @media (max-width: 720px) { .campaign-wizard { padding: 18px 16px 96px; } .task-header-main { flex-direction: column; } .task-actions { width: 100%; flex-wrap: wrap; } .page-title { font-size: 30px; } .field-grid { grid-template-columns: 1fr; } .review-groups-grid { column-count: 1; } .review-list > div, .review-list.compact > div { grid-template-columns: 1fr; gap: 4px; } .stepper { overflow-x: auto; } .stepper ol { min-width: 620px; } .work-side { flex-direction: column; } .step-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; padding: 12px 16px; margin: 0; background: rgba(244, 241, 234, 0.96); border-top: 1px solid var(--border); flex-wrap: wrap; } .step-nav .btn { flex: 1 1 0; } .step-nav-right { width: 100%; } .cw-modal.cw-modal-lg { max-width: 100%; } }
+/* ============================================================================================
+   REVIEW RECAP — the two rich-text fields.
+
+   Public description runs to 2,000 characters and Terms and notice to 20,000. Printed whole into
+   a recap cell they push every other group off the screen, so the cell shows the first few lines
+   and "Read more" opens the popup that already exists for them (openFieldPreview).
+   ============================================================================================ */
+.review-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.review-readmore {
+  padding: 2px 0;
+  font-size: 12px;
+}

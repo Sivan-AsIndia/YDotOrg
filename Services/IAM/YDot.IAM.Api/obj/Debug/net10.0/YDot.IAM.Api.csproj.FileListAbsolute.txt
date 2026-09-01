@@ -360,7 +360,6 @@ D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\stati
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\staticwebassets.development.json
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\staticwebassets.build.endpoints.json
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\swae.build.ex.cache
-D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\YDot.IAM.6C1EC8F3.Up2Date
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\YDot.IAM.Api.dll
 D:\Permaspace\Phase1\YDots\src\Services\IAM\YDot.IAM.Api\obj\Debug\net10.0\refint\YDot.IAM.Api.dll

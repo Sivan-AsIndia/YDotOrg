@@ -72,4 +72,18 @@ export interface ReadinessCheck {
   notes?: string;
   /** Always `Pending` on create; derived thereafter. */
   status: ReadinessCheckStatus;
+
+  /**
+   * The blocker currently open on this check, if there is one.
+   *
+   * CARRIED AS THE SERVER SENT IT, id included. The readiness screen resolves a blocker by id,
+   * and without this it had none: it inferred "blocked" from the check's notes text and then
+   * used the CHECK's id as the blocker id, which the resolve endpoint answers 404 to.
+   */
+  openBlocker?: {
+    readonly id: string;
+    readonly note: string;
+    readonly ownerUserId: string;
+    readonly createdAtUtc: string;
+  };
 }

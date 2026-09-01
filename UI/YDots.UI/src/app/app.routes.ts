@@ -77,6 +77,7 @@ import { DashboardComponent } from './Features/YDot/dashboard/dashboard';
 import { anonymousOnlyGuard, authGuard } from './Shared/guards/auth.guard';
 import {
   organisationContextGuard,
+  platformScopeGuard,
   requirePermission,
   superAdminGuard,
 } from './Shared/guards/permission.guard';
@@ -349,12 +350,18 @@ export const routes: Routes = [
       // Global scope claim - and requirePermission handles that: hasAnyPermission short-circuits
       // on isSuperAdmin, exactly as the server short-circuits its own permission lookup. So these
       // read as "SuperAdmin only" without hard-coding the role.
-      { path: 'administration/organisation/directory', component: OrganisationDirectoryComponent, canActivate: [requirePermission('platform.organisations.view')] },
+      //
+      // THEY ALSO CARRY platformScopeGuard, which steps back out of any Organisation the session
+      // is standing in. These four are platform screens; reaching one while the token still names
+      // an Organisation is what left a TenantAdmin sidebar sitting beside "every organisation on
+      // the platform". The guard is on the ROUTE rather than on the links that lead here on
+      // purpose - a link can be fixed, but the Back button and a bookmark cannot.
+      { path: 'administration/organisation/directory', component: OrganisationDirectoryComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.view')] },
       { path: 'administration/organisation/details', component: OrganisationDetailComponent, canActivate: [requirePermission('iam.organisation.view')] },
       { path: 'administration/organisation/details/:id', component: OrganisationDetailComponent, canActivate: [requirePermission('iam.organisation.view')] },
-      { path: 'administration/organisation/setup-wizard', component: OrganisationSetupWizardComponent, canActivate: [requirePermission('platform.organisations.create')] },
-      { path: 'administration/organisation/registration-verification', component: RegistrationVerificationComponent, canActivate: [requirePermission('platform.organisations.review')] },
-      { path: 'administration/organisation/registration-verification/:id', component: RegistrationVerificationComponent, canActivate: [requirePermission('platform.organisations.review')] },
+      { path: 'administration/organisation/setup-wizard', component: OrganisationSetupWizardComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.create')] },
+      { path: 'administration/organisation/registration-verification', component: RegistrationVerificationComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.review')] },
+      { path: 'administration/organisation/registration-verification/:id', component: RegistrationVerificationComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.review')] },
 
       // The organisation's own settings live on the detail screen, which opens on that tab.
       // A separate component would duplicate the loading, the version handling and the form.
@@ -384,27 +391,28 @@ export const routes: Routes = [
       // Platform.
       //
       // These are genuinely global — they have no meaning inside a single organisation — so
-      // they are gated on scope rather than on a permission code.
+      // they are gated on scope rather than on a permission code, and platformScopeGuard steps
+      // back out of any Organisation on the way in. See the Organisation block above.
       // =========================================================================
       {
         path: 'platform/business-unit',
         component: BusinessUnitComponent,
-        canActivate: [superAdminGuard],
+        canActivate: [platformScopeGuard, superAdminGuard],
       },
       {
         path: 'platform/permission-catalogue',
         component: PermissionCatalogueComponent,
-        canActivate: [superAdminGuard],
+        canActivate: [platformScopeGuard, superAdminGuard],
       },
       {
         path: 'platform/menu-catalogue',
         component: MenuCatalogueComponent,
-        canActivate: [superAdminGuard],
+        canActivate: [platformScopeGuard, superAdminGuard],
       },
       {
         path: 'platform/audit',
         component: AuditTrailComponent,
-        canActivate: [superAdminGuard],
+        canActivate: [platformScopeGuard, superAdminGuard],
       },
 
       // ===== Finance pages =====

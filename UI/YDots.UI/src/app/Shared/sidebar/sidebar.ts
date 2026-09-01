@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
+import { Component, OnDestroy, computed, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { LayoutService } from '../../Service/layout-service';
@@ -20,6 +20,12 @@ import { NavigationService } from '../services/navigation.service';
  * markup in the theme, so the template handles them explicitly rather than recursing — which
  * also means a fourth level, if one ever appeared, would be visibly missing rather than silently
  * flattened.
+ *
+ * IT NO LONGER FETCHES ANYTHING ON MOUNT. It used to load the tree when it found the menu empty,
+ * which is a rule that reads sensibly and is wrong in the one case that matters: after an
+ * Organisation switch the menu is not empty, it is FULL — of the previous Organisation's items —
+ * so the condition was false and the stale tree stayed. Loading is `NavigationService`'s job now,
+ * keyed to the Organisation rather than to emptiness. This component renders what it is given.
  */
 @Component({
   selector: 'app-sidebar',
@@ -28,7 +34,7 @@ import { NavigationService } from '../services/navigation.service';
   templateUrl: './sidebar.html',
   styleUrl: './sidebar.css',
 })
-export class SidebarComponent implements OnInit, OnDestroy {
+export class SidebarComponent implements OnDestroy {
   readonly layoutService = inject(LayoutService);
   readonly navigation = inject(NavigationService);
   private readonly tokens = inject(AuthTokenService);
@@ -42,17 +48,6 @@ export class SidebarComponent implements OnInit, OnDestroy {
   /** Shown in the sidebar footer so a root user always knows whose data they are looking at. */
   readonly organisationName = computed(() => this.tokens.organisationName());
   readonly isActingInOrganisation = computed(() => this.tokens.isActingInOrganisation());
-
-  ngOnInit(): void {
-    // Only when there is nothing yet: the shell loads it on sign-in and again after every
-    // Organisation switch, and re-fetching on each render would be a request per navigation.
-    if (this.navigation.menu().length === 0) {
-      this.navigation.load().pipe(takeUntil(this.destroy$)).subscribe({
-        // Failure is handled through the service's `failed` signal, which the template renders.
-        error: () => undefined,
-      });
-    }
-  }
 
   ngOnDestroy(): void {
     this.destroy$.next();

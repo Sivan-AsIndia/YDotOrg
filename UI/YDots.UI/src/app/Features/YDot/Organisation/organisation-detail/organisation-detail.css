@@ -1678,3 +1678,9 @@
 .org-alert.is-info i {
   color: var(--org-blue);
 }
+
+/* The inline format hint for PAN and GSTIN, in the same red the field errors already use. */
+.org-field-hint--error {
+  color: var(--danger, #c1443a);
+  font-weight: 600;
+}

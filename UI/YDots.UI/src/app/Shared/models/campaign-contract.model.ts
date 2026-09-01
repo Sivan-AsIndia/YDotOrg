@@ -52,19 +52,37 @@ export type CampaignStatus =
  */
 export type LifecycleActivation = 'manual' | 'auto';
 
-export type TrackingAssetType = 'qrCode' | 'shortLink' | 'utmLink' | 'posterCode' | 'smsLink';
+/**
+ * The tracking asset kinds the API accepts.
+ *
+ * THESE ARE THE SERVER'S OWN FOUR — `TrackingAssetType` is QRCode, ShortLink, UTMLink,
+ * LandingPage. This union carried 'posterCode' and 'smsLink', which exist nowhere on the server,
+ * and omitted 'landingPage', which does: anything sent as one of the two invented values was
+ * refused by model binding before a handler saw it, and a landing page could not be expressed
+ * at all.
+ */
+export type TrackingAssetType = 'qrCode' | 'shortLink' | 'utmLink' | 'landingPage';
 
 export type TrackingAssetStatus = 'draft' | 'submitted' | 'approved' | 'active' | 'inactive';
 
 export type ReadinessCheckStatus = 'pending' | 'passed' | 'failed';
 
+/**
+ * The readiness categories the API accepts.
+ *
+ * THE SERVER'S ENUM IS Content, Budget, Tracking, Payment, Template, Consent. This union named
+ * four categories that do not exist on it — compliance, attribution, communications, operations —
+ * so four of the six categories a person could choose on the checklist screen were translated
+ * into values the API rejects. Creating a Tracking, Template, Consent or Budget check answered
+ * 400 "Some of the details are not valid"; only Content and Payment ever worked.
+ */
 export type ReadinessCheckCategory =
   | 'content'
-  | 'compliance'
+  | 'budget'
+  | 'tracking'
   | 'payment'
-  | 'attribution'
-  | 'communications'
-  | 'operations';
+  | 'template'
+  | 'consent';
 
 export type CampaignLifecycleActionType =
   | 'submit'
@@ -177,6 +195,8 @@ export interface CampaignListItem {
   /** How far through its own window the campaign is. Null before it starts. */
   elapsedPercent: number | null;
   ownerCount: number;
+  /** The accountable owners, by IAM user id, so the register can name them rather than count them. */
+  ownerIds: string[];
   trackingAssetCount: number;
   /** Readiness checks still outstanding. Non-zero is why a launch button is refused. */
   outstandingCheckCount: number;
@@ -516,6 +536,8 @@ export interface ReadinessCheckListItem {
   hasOpenBlocker: boolean;
   /** True when this one check is what stands between the campaign and a launch. */
   blocksLaunch: boolean;
+  /** The blockers raised against this check — the only place the screen can get an id to resolve one. */
+  blockers: ReadinessBlocker[];
   version: number;
 }
 

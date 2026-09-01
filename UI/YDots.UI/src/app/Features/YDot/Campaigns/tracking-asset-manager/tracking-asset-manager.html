@@ -30,7 +30,9 @@
         {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
         @if (activeFilterSummary().length) { <span class="tam-count">{{ activeFilterSummary().length }}</span> }
       </button>
-      <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()" [disabled]="!generateAllowed()">
+      <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()"
+              [disabled]="!generateAllowed()"
+              [attr.title]="generateAllowed() ? null : generateDisabledReason()">
         <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         Create
       </button>
@@ -128,7 +130,7 @@
           @if (openMenu() === 'f-channel') {
             <ul class="tam-combo-list" role="listbox">
               <li role="option" [attr.aria-selected]="!channelFilter()"><button type="button" class="tam-combo-option" [class.is-selected]="!channelFilter()" (click)="channelFilter.set(''); closeMenu()">All channels</button></li>
-              @for (c of channelCatalogue; track c) {
+              @for (c of channelCatalogue(); track c) {
                 <li role="option" [attr.aria-selected]="channelFilter() === c"><button type="button" class="tam-combo-option" [class.is-selected]="channelFilter() === c" (click)="channelFilter.set(c); closeMenu()">{{ c }}</button></li>
               }
             </ul>
@@ -635,14 +637,14 @@
             <div class="tam-combo" [class.is-open]="openMenu() === 'g-channel'" appClickOutside (appClickOutside)="onClickOutside('g-channel')">
               <button id="g-channel" type="button" class="tam-combo-btn" (click)="toggleMenu('g-channel')"
                       role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-channel'">
-                <span class="tam-combo-value" [class.tam-combo-ph]="!gChannel()">{{ gChannel() || 'Select a channel…' }}</span>
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gChannel()">{{ gChannel() ? channelLabel(gChannel()) : 'Select a channel…' }}</span>
                 <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </button>
               @if (openMenu() === 'g-channel') {
                 <ul class="tam-combo-list" role="listbox">
                   <li role="option" [attr.aria-selected]="!gChannel()"><button type="button" class="tam-combo-option" [class.is-selected]="!gChannel()" (click)="gChannel.set(''); closeMenu()">Select a channel…</button></li>
-                  @for (c of channelCatalogue; track c) {
-                    <li role="option" [attr.aria-selected]="gChannel() === c"><button type="button" class="tam-combo-option" [class.is-selected]="gChannel() === c" (click)="gChannel.set(c); closeMenu()">{{ c }}</button></li>
+                  @for (c of channelChoices(); track c.ref) {
+                    <li role="option" [attr.aria-selected]="gChannel() === c.ref"><button type="button" class="tam-combo-option" [class.is-selected]="gChannel() === c.ref" (click)="gChannel.set(c.ref); closeMenu()">{{ c.label }}</button></li>
                   }
                 </ul>
               }
@@ -736,20 +738,50 @@
             </div>
           }
 
-          <!-- Source (required) — text input; sits directly below Asset type -->
+          <!-- Source (required) — CHOSEN FROM THE CATALOGUE, NOT TYPED.
+               This was a free-text box whose contents went straight into the create call as
+               `sourceId`, which the API declares as a Guid. Anything a person typed was refused
+               by model binding before a handler saw it, so no tracking asset could be created
+               from this form at all. -->
           <div class="tam-field" [class.tam-field-invalid]="missing('source')">
             <label class="tam-field-label" for="g-source">Source <span class="tam-req">*</span></label>
-            <input id="g-source" type="text" class="tam-input" [ngModel]="gSource()" (ngModelChange)="gSource.set($event)"
-                   placeholder="e.g. newsletter" />
-            @if (missing('source')) { <p class="tam-field-hint tam-field-error">Enter Source.</p> }
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-source'" appClickOutside (appClickOutside)="onClickOutside('g-source')">
+              <button id="g-source" type="button" class="tam-combo-btn" (click)="toggleMenu('g-source')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-source'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gSource()">{{ gSource() ? sourceLabel(gSource()) : 'Select a source…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-source') {
+                <ul class="tam-combo-list" role="listbox">
+                  <li role="option" [attr.aria-selected]="!gSource()"><button type="button" class="tam-combo-option" [class.is-selected]="!gSource()" (click)="gSource.set(''); closeMenu()">Select a source…</button></li>
+                  @for (o of sourceChoices(); track o.ref) {
+                    <li role="option" [attr.aria-selected]="gSource() === o.ref"><button type="button" class="tam-combo-option" [class.is-selected]="gSource() === o.ref" (click)="gSource.set(o.ref); closeMenu()">{{ o.label }}</button></li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (missing('source')) { <p class="tam-field-hint tam-field-error">Choose a source.</p> }
           </div>
 
-          <!-- Medium (required) — text input; sits directly below Channel -->
+          <!-- Medium (required) — chosen from the catalogue, for the same reason as Source. -->
           <div class="tam-field" [class.tam-field-invalid]="missing('medium')">
             <label class="tam-field-label" for="g-medium">Medium <span class="tam-req">*</span></label>
-            <input id="g-medium" type="text" class="tam-input" [ngModel]="gMedium()" (ngModelChange)="gMedium.set($event)"
-                   placeholder="e.g. email" />
-            @if (missing('medium')) { <p class="tam-field-hint tam-field-error">Enter Medium.</p> }
+            <div class="tam-combo" [class.is-open]="openMenu() === 'g-medium'" appClickOutside (appClickOutside)="onClickOutside('g-medium')">
+              <button id="g-medium" type="button" class="tam-combo-btn" (click)="toggleMenu('g-medium')"
+                      role="combobox" aria-haspopup="listbox" [attr.aria-expanded]="openMenu() === 'g-medium'">
+                <span class="tam-combo-value" [class.tam-combo-ph]="!gMedium()">{{ gMedium() ? mediumLabel(gMedium()) : 'Select a medium…' }}</span>
+                <svg class="tam-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              @if (openMenu() === 'g-medium') {
+                <ul class="tam-combo-list" role="listbox">
+                  <li role="option" [attr.aria-selected]="!gMedium()"><button type="button" class="tam-combo-option" [class.is-selected]="!gMedium()" (click)="gMedium.set(''); closeMenu()">Select a medium…</button></li>
+                  @for (o of mediumChoices(); track o.ref) {
+                    <li role="option" [attr.aria-selected]="gMedium() === o.ref"><button type="button" class="tam-combo-option" [class.is-selected]="gMedium() === o.ref" (click)="gMedium.set(o.ref); closeMenu()">{{ o.label }}</button></li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (missing('medium')) { <p class="tam-field-hint tam-field-error">Choose a medium.</p> }
           </div>
 
           <!-- Content tag (optional) — text input, left column -->
@@ -947,7 +979,7 @@
               @if (openMenu() === 'e-channel') {
                 <ul class="tam-combo-list" role="listbox">
                   <li role="option" [attr.aria-selected]="!editChannel()"><button type="button" class="tam-combo-option" [class.is-selected]="!editChannel()" (click)="editChannel.set(''); closeMenu()">Select a channel…</button></li>
-                  @for (c of channelCatalogue; track c) {
+                  @for (c of channelCatalogue(); track c) {
                     <li role="option" [attr.aria-selected]="editChannel() === c"><button type="button" class="tam-combo-option" [class.is-selected]="editChannel() === c" (click)="editChannel.set(c); closeMenu()">{{ c }}</button></li>
                   }
                 </ul>

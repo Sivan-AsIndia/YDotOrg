@@ -338,7 +338,6 @@ D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\stat
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\staticwebassets.development.json
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\staticwebassets.build.endpoints.json
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\swae.build.ex.cache
-D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\YDots.CA.55D69A2F.Up2Date
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\YDots.CAM.API.dll
 D:\Permaspace\Phase1\YDots\src\Services\CAM\YDots.CAM.API\obj\Debug\net10.0\refint\YDots.CAM.API.dll

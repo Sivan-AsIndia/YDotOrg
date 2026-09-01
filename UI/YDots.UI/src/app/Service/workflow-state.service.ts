@@ -3,6 +3,7 @@ import { MonoTypeOperatorFunction, forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { DonorApiService } from './donor-api.service';
 import { PeopleDirectoryService } from '../Shared/services/people-directory.service';
+import { OrganisationScopeService } from '../Shared/services/organisation-scope.service';
 import { apiErrorMessage } from '../Shared/models/api-response.model';
 import {
   DonorListItem,
@@ -197,6 +198,7 @@ interface WorkflowSnapshot {
 @Injectable({ providedIn: 'root' })
 export class WorkflowStateService {
   private readonly api = inject(DonorApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
   private readonly people = inject(PeopleDirectoryService);
   readonly donors = signal<WorkflowDonor[]>([]);
   readonly leads = signal<WorkflowLead[]>([]);
@@ -238,6 +240,30 @@ export class WorkflowStateService {
   private readonly donorVersionsByReference = new Map<string, number>();
 
   constructor() {
+    this.refresh();
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * Discarded FIRST: reloading alone would leave the previous Organisation's donors and leads
+   * readable on screen for the length of three round trips. See `OrganisationScopeService`.
+   */
+  private reloadForOrganisation(): void {
+    this.donors.set([]);
+    this.leads.set([]);
+    this.followUps.set([]);
+    this.communications.set([]);
+    this.removedLeadIds.set(new Set());
+    this.loadError.set(null);
+    this.leadIdsByReference.clear();
+    this.leadVersionsByReference.clear();
+    this.campaignIdsByName.clear();
+    this.followUpIdsByReference.clear();
+    this.followUpVersionsByReference.clear();
+    this.donorIdsByReference.clear();
+    this.donorVersionsByReference.clear();
     this.refresh();
   }
 

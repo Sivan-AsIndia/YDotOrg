@@ -14,6 +14,7 @@ import {
   TenantStatus,
 } from '../../../../Shared/models/iam-contract.model';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { NavigationService } from '../../../../Shared/services/navigation.service';
 import { OrganisationContextService } from '../../../../Shared/services/organisation-context.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 
@@ -45,6 +46,7 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly tokens = inject(AuthTokenService);
   private readonly organisationContext = inject(OrganisationContextService);
+  private readonly navigation = inject(NavigationService);
 
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
@@ -222,6 +224,13 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
    * caller's own user record is untouched — a root user has no Organisation of their own and
    * never acquires one by looking at somebody's data. After this the whole app is operating
    * inside that Organisation, which is why the shell shows an "acting as" banner.
+   *
+   * THIS WAS THE CALL SITE THAT FORGOT THE MENU. Of the three places that can switch Organisation
+   * this one changed the token and navigated away without reloading the navigation, so entering
+   * an Organisation from the directory left the PLATFORM sidebar standing beside that
+   * Organisation's dashboard. `select()` now fetches the new tree as part of the switch, which is
+   * also why the landing below can be the Organisation's own landing route rather than a
+   * hard-coded dashboard: an Organisation still onboarding wants its profile screen.
    */
   enter(organisation: OrganisationListItemResponse): void {
     if (!organisation.id) {
@@ -240,7 +249,7 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
             'Organisation selected',
             `You are now working inside ${organisation.name}.`,
             'success');
-          void this.router.navigate(['/app/dashboard']);
+          void this.router.navigateByUrl(this.navigation.landingRoute());
         },
         error: (error: unknown) => {
           this.switching.set(null);

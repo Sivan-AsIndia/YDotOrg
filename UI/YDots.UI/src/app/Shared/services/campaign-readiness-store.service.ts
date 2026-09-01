@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import { Blocker, CampaignReadinessRecord, ReadinessRequestState } from '../models/campaign-readiness.model';
 import { CampaignStoreService } from './campaign-store.service';
 import { ReadinessChecklistStoreService } from './readiness-checklist-store.service';
@@ -28,6 +29,7 @@ import { ReadinessChecklistStoreService } from './readiness-checklist-store.serv
 @Injectable({ providedIn: 'root' })
 export class CampaignReadinessStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
   private readonly campaigns = inject(CampaignStoreService);
   private readonly checklist = inject(ReadinessChecklistStoreService);
 
@@ -36,6 +38,24 @@ export class CampaignReadinessStoreService {
 
   readonly isLoading = signal(false);
   readonly loadError = signal<string | null>(null);
+
+  constructor() {
+    this.organisationScope.onOrganisationChange(() => this.discardForOrganisation());
+  }
+
+  /**
+   * Discards the cache when the Organisation changes.
+   *
+   * NOTHING IS RE-FETCHED HERE, unlike the stores that hold a working set: these records are
+   * loaded on demand for the campaign a screen is looking at, and after a switch there is no such
+   * campaign — the screen that wanted one has been navigated away from. Emptying the map is
+   * enough; whatever is opened next asks for itself. See `OrganisationScopeService`.
+   */
+  private discardForOrganisation(): void {
+    this.records.set({});
+    this.loadError.set(null);
+  }
+
 
   readonly snapshot = computed(() => this.records());
 
@@ -166,27 +186,46 @@ export class CampaignReadinessStoreService {
    * needs a check to hang from: if there is no check for the thing that is blocked, the blocker
    * has nothing to be resolved against.
    */
-  addBlocker(ref: string, blocker: Blocker): void {
+  addBlocker(ref: string, blocker: Blocker, onDone?: (outcome: {
+    readonly raised: boolean;
+    readonly error?: string;
+  }) => void): void {
     const checkId = blocker.dependencyKey;
     const owner = blocker.ownerRef || blocker.owner;
 
     const existing = this.checklist.checksFor(ref).some((check) => check.id === checkId);
 
+    // THE CALLER IS TOLD, and that is the point of `onDone`. The derived dependency cards —
+    // Budget, Tracking, Public content and the rest — pass their own key ('budget', 'tracking')
+    // as the dependency, and a key is not a readiness check id, so this branch is the one those
+    // cards always take. It set `loadError` and returned; the screen had already closed the
+    // dialog and announced "Blocker raised" on the line after the call, so the failure was
+    // invisible and the blocker simply did not exist.
     if (!existing) {
-      this.loadError.set(
-        'A blocker must be raised against a readiness check. Add a check for this dependency first.',
-      );
+      const message =
+        'A blocker must be raised against a readiness check. Add a check for this dependency '
+        + 'first, then raise the blocker against that check.';
+
+      this.loadError.set(message);
+      onDone?.({ raised: false, error: message });
       return;
     }
 
-    this.checklist.addBlocker(ref, checkId, owner, blocker.note);
-    this.load(ref);
+    this.checklist.addBlocker(ref, checkId, owner, blocker.note, (outcome) => {
+      this.load(ref);
+      onDone?.(outcome);
+    });
   }
 
   /** Resolves a blocker. It is closed with a resolution rather than removed - see the store above. */
-  removeBlocker(ref: string, blockerId: string): void {
-    this.checklist.resolveBlocker(ref, blockerId, 'Resolved from the readiness checklist.');
-    this.load(ref);
+  removeBlocker(ref: string, blockerId: string, onDone?: (outcome: {
+    readonly resolved: boolean;
+    readonly error?: string;
+  }) => void): void {
+    this.checklist.resolveBlocker(ref, blockerId, 'Resolved from the readiness checklist.', (outcome) => {
+      this.load(ref);
+      onDone?.(outcome);
+    });
   }
 
   // =========================================================================================
@@ -201,18 +240,27 @@ export class CampaignReadinessStoreService {
    * blocked".
    */
   private blockersFrom(ref: string): Blocker[] {
+    // READ FROM THE BLOCKER THE SERVER SENT, not inferred from the notes text.
+    //
+    // This used to select checks whose notes happened to start with the literal 'Blocked.' and
+    // then build a blocker whose `id` was the CHECK's id. Both halves were wrong. The prefix is
+    // a display convention this client applies itself, so it identified a blocker by a string it
+    // had just written; and the id it produced belongs to a readiness check, so
+    // POST /readiness-blockers/{id}/resolve — the call behind "Resolve blocker" — answered
+    // 404 "That blocker was not found" every time. A blocked check could never be unblocked, so
+    // the campaign it blocked could never launch.
     return this.checklist
       .checksFor(ref)
-      .filter((check) => (check.notes ?? '').startsWith('Blocked.'))
+      .filter((check) => !!check.openBlocker)
       .map((check) => ({
-        id: check.id,
+        id: check.openBlocker!.id,
         dependencyKey: check.id,
         dependencyLabel: check.name,
-        owner: check.ownerId ?? 'Unassigned',
-        ownerRef: check.ownerId ?? '',
-        note: (check.notes ?? '').replace(/^Blocked\.\s*/, ''),
-        createdByRef: check.ownerId ?? '',
-        createdAt: check.dueDate ?? '',
+        owner: check.openBlocker!.ownerUserId || check.ownerId || 'Unassigned',
+        ownerRef: check.openBlocker!.ownerUserId || check.ownerId || '',
+        note: check.openBlocker!.note,
+        createdByRef: check.openBlocker!.ownerUserId || '',
+        createdAt: check.openBlocker!.createdAtUtc,
       }));
   }
 

@@ -117,11 +117,13 @@ export class SelectOrganisationComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Steps into an Organisation and reloads the navigation.
+   * Steps into an Organisation.
    *
-   * The menu is Organisation-specific, so keeping the previous one would leave links that now
-   * lead nowhere. Landing goes to whichever route the new navigation names as its landing page,
-   * rather than always the dashboard: an Organisation still onboarding wants its profile screen.
+   * The menu is Organisation-specific, and `select()` does not complete until the new one has
+   * been fetched — see `OrganisationContextService` — so `landingRoute()` below is the chosen
+   * Organisation's landing route rather than whatever was on screen a moment ago. Landing there
+   * rather than always on the dashboard matters: an Organisation still onboarding wants its
+   * profile screen.
    */
   select(option: TenantOptionResponse): void {
     if (!option.tenantId || this.selecting()) {
@@ -136,25 +138,13 @@ export class SelectOrganisationComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.navigation.load().pipe(takeUntil(this.destroy$)).subscribe({
-            next: () => {
-              this.selecting.set(null);
-              this.toast.show(
-                'Organisation selected',
-                `You are now working inside ${option.name}.`,
-                'success');
+          this.selecting.set(null);
+          this.toast.show(
+            'Organisation selected',
+            `You are now working inside ${option.name}.`,
+            'success');
 
-              void this.router.navigateByUrl(
-                this.returnUrl ?? this.navigation.landingRoute());
-            },
-            error: () => {
-              // The switch itself worked; only the menu did not come back. The dashboard is a
-              // better landing than leaving somebody on the picker with a token they cannot see
-              // they now hold.
-              this.selecting.set(null);
-              void this.router.navigate(['/app/dashboard']);
-            },
-          });
+          void this.router.navigateByUrl(this.returnUrl ?? this.navigation.landingRoute());
         },
         error: (error: unknown) => {
           this.selecting.set(null);

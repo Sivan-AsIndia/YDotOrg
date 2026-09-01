@@ -304,7 +304,6 @@ D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\stat
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\staticwebassets.development.json
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\staticwebassets.build.endpoints.json
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\swae.build.ex.cache
-D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\YDots.DO.0177A318.Up2Date
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\YDots.DON.Api.dll
 D:\Permaspace\Phase1\YDots\src\Services\DON\YDots.DON.Api\obj\Debug\net10.0\refint\YDots.DON.Api.dll

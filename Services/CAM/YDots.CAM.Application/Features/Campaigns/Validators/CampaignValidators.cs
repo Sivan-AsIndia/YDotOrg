@@ -88,11 +88,13 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
     public CreateCampaignRequestValidator(
         Microsoft.Extensions.Options.IOptions<CampaignSettings> settings,
         IPeopleDirectory people,
-        ITenantContext tenant)
+        ITenantContext tenant,
+        IDateTimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(people);
         ArgumentNullException.ThrowIfNull(tenant);
+        ArgumentNullException.ThrowIfNull(clock);
 
         var maximumDurationDays = settings.Value.MaximumCampaignDurationDays;
 
@@ -116,8 +118,32 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
             .MaximumLength(250)
             .NoMarkup();
 
+        // ---- The start date ------------------------------------------------------------------
+        //
+        // A NEW CAMPAIGN MAY NOT START IN THE PAST, and nothing enforced that. The only rule here
+        // was "not the default value", the wizard's date input carried no `min`, and its own
+        // check asked only whether the field was non-empty - so a campaign could be created with
+        // a start date years gone. It was then born already elapsed: `ElapsedPercent` reads 100
+        // before anybody has activated it, the reminder that fires `DaysBeforeStart` before the
+        // start has a send date in the past, and an "auto-activate on the start date" campaign
+        // has a trigger that can never arrive.
+        //
+        // TODAY IS ALLOWED. Starting a campaign today is the ordinary case for one being set up
+        // this morning; only yesterday is wrong.
+        //
+        // COMPARED IN UTC, from the clock abstraction, because that is what the column stores.
+        // A tenant a day ahead of UTC could in principle be refused a start date that is still
+        // "today" for them - accepted deliberately over the alternative, which is a rule whose
+        // answer depends on which server evaluated it.
+        //
+        // THIS APPLIES TO CREATE ONLY. The update validator deliberately does NOT carry it: a
+        // campaign that has been running for a month must remain editable without its own
+        // historic start date being rejected on every save.
         RuleFor(request => request.StartDate)
-            .NotEqual(default(DateOnly)).WithMessage("Choose a start date.");
+            .NotEqual(default(DateOnly)).WithMessage("Choose a start date.")
+            .GreaterThanOrEqualTo(_ => clock.TodayUtc)
+            .WithMessage("The start date cannot be in the past.")
+            .When(request => request.StartDate != default);
 
         RuleFor(request => request.EndDate)
             .NotEqual(default(DateOnly)).WithMessage("Choose an end date.")

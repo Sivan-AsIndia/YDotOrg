@@ -1,6 +1,9 @@
 ﻿import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { DocumentSubmissionsComponent } from '../../../../Shared/document-submissions/document-submissions';
+import {
+  DocumentSubmissionsComponent,
+  DocumentSubmissionsMode,
+} from '../../../../Shared/document-submissions/document-submissions';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Observable, Subject, takeUntil } from 'rxjs';
@@ -158,6 +161,21 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
   /** True when this is the caller's own Organisation rather than one they are administering. */
   readonly isOwnOrganisation = computed(() => this.organisationId() === null);
 
+  /**
+   * Which side of the desk the Documents tab is drawn for.
+   *
+   * WITHOUT AN ID this is the Organisation's own screen, so the submissions component talks to
+   * `/organisations/mine/...` - an endpoint that carries no id and therefore cannot be pointed at
+   * anybody else. WITH AN ID it is the platform reviewer, and the review endpoints take that id.
+   *
+   * IT USED TO BE THE LITERAL 'tenant' IN THE TEMPLATE. A SuperAdmin opening
+   * /organisation/details/{id} has no Organisation selected, so `/organisations/mine/...` failed
+   * with 409 TENANT_SELECTION_REQUIRED and the tab rendered "Select an organisation to continue."
+   * above an upload box offering to start a submission on nobody's behalf.
+   */
+  readonly documentsMode = computed<DocumentSubmissionsMode>(() =>
+    this.isOwnOrganisation() ? 'tenant' : 'review');
+
   readonly permittedActions = computed(() => this.organisation()?.permittedActions ?? []);
 
   can(action: string): boolean {
@@ -168,6 +186,33 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
   readonly isProfileComplete = computed(() => this.organisation()?.isProfileComplete === true);
 
   readonly documents = computed(() => this.organisation()?.documents ?? []);
+
+  /**
+   * PAN and GSTIN, checked for SHAPE as they are typed.
+   *
+   * Both boxes previously carried a `maxlength` and nothing else, on either side: the server's
+   * validator asked only for a length too. They are the two identifiers a platform reviewer
+   * checks the registration certificate against, so a transposed character is an organisation
+   * approved against evidence that does not match its own record - and nothing downstream can
+   * tell. The same two patterns are enforced in
+   * `UpdateOrganisationProfileRequestValidator`; these exist so the correction happens while the
+   * person is still looking at the field.
+   *
+   * EMPTY IS VALID. Neither is a required profile field, so the rule applies to a value that has
+   * actually been entered.
+   */
+  private static readonly PanPattern = /^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
+  private static readonly GstPattern = /^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][0-9A-Za-z][Zz][0-9A-Za-z]$/;
+
+  readonly panValid = computed(() => {
+    const value = this.form().panNumber.trim();
+    return !value || OrganisationDetailComponent.PanPattern.test(value);
+  });
+
+  readonly gstValid = computed(() => {
+    const value = this.form().gstNumber.trim();
+    return !value || OrganisationDetailComponent.GstPattern.test(value);
+  });
 
   /**
    * Files belonging to no grouped submission.

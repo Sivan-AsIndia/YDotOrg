@@ -96,7 +96,9 @@ export class CampaignWizardComponent {
   /** Stable reference where applicable — a new configuration has none until saved. */
   protected readonly stableReference = signal<string | null>(null);
   /** Lifecycle state — a new configuration begins with no record, then Draft. */
-  protected readonly lifecycleState = signal<'No record' | 'Draft'>('No record');
+  // 'Submitted' is a state this wizard can genuinely be in: confirmSubmit leaves the campaign
+  // with its approver, and the header must say so rather than still calling it a draft.
+  protected readonly lifecycleState = signal<'No record' | 'Draft' | 'Submitted'>('No record');
   /** Owner is captured as a field below; the header echoes the accountable owner. */
   protected readonly operatingTimeZone = 'Asia/Kolkata · IST (UTC+05:30)';
   /** Freshness for the working configuration. */
@@ -288,8 +290,53 @@ export class CampaignWizardComponent {
   protected readonly startDate = signal('');
   // --- End date — date picker with time-zone label ---
   protected readonly endDate = signal('');
+
+  /**
+   * Today, as the `yyyy-MM-dd` an `<input type="date">` understands.
+   *
+   * BUILT FROM THE LOCAL PARTS, not from `toISOString()`. `toISOString` converts to UTC first, so
+   * anywhere east of Greenwich it returns YESTERDAY for the first few hours of every day — and a
+   * `min` one day early is a floor that does not hold on exactly the mornings somebody is most
+   * likely to be scheduling a campaign that starts today.
+   */
+  protected readonly todayIso = (() => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  })();
+
+  /**
+   * The floor under End date: the start, once one is chosen, and today until then.
+   *
+   * This is what greys out the impossible half of the end-date calendar. Without it the picker
+   * opened on the current month with every day selectable, so "the end cannot fall before the
+   * start" could only be discovered by choosing a date and being told off for it.
+   */
+  protected readonly endDateMin = computed(() => this.startDate() || this.todayIso);
+
+  /**
+   * A campaign may not START IN THE PAST.
+   *
+   * NEITHER SIDE ENFORCED THIS. The input carried no `min`, this computed only asked whether the
+   * field was non-empty, and the server's validator only refused the default value — so a
+   * campaign could be created with a start date years gone, and would then be counted as elapsed
+   * before it was ever activated. The rule is now stated here, on the input as `min`, and in the
+   * API validator, because a client-side floor is a courtesy and the server's is the rule.
+   *
+   * TODAY IS ALLOWED. "Starts today" is the ordinary case for a campaign somebody is setting up
+   * this morning; only yesterday is wrong.
+   */
+  protected readonly startDateValid = computed(() => {
+    const value = this.startDate();
+    return !!value && value >= this.todayIso;
+  });
+
+  /** True when a start date has been entered but falls before today. */
+  protected readonly startDateInPast = computed(
+    () => !!this.startDate() && this.startDate() < this.todayIso);
+
   /** Reject impossible ranges (end before start). */
-  protected readonly startDateValid = computed(() => !!this.startDate());
   protected readonly endDateValid = computed(() => {
     if (!this.endDate()) return false;
     if (!this.startDate()) return true;
@@ -418,6 +465,42 @@ export class CampaignWizardComponent {
     return v !== null && v >= 1 && v <= 30;
   });
   protected readonly reminderTimeValid = computed(() => !!this.reminderTime());
+
+  /**
+   * The reminder time as a person reads it: "02:30 PM", not "14:30".
+   *
+   * WHY THIS EXISTS. The control is `<input type="time">`, and a native time input renders in the
+   * BROWSER's locale - there is no attribute, and no CSS, that makes it show AM/PM. On a machine
+   * set to a 24-hour locale there is no meridiem anywhere on the field, and the Review recap
+   * printed the raw stored value, so "reminder at 09:00" and "reminder at 21:00" were told apart
+   * only by the reader's arithmetic. This is shown beside the field and in the recap so the
+   * meridiem is on screen whatever the browser does with the input itself.
+   *
+   * THE STORED VALUE IS UNCHANGED. It stays `HH:mm`, which is what the API's `reminderTime`
+   * takes; this is presentation only.
+   */
+  protected readonly reminderTimeDisplay = computed(() => this.formatTime12(this.reminderTime()));
+
+  protected formatTime12(value: string): string {
+    const match = /^(\d{1,2}):(\d{2})/.exec(value ?? '');
+
+    if (!match) {
+      return '\u2014';
+    }
+
+    const hours = Number(match[1]);
+    const minutes = match[2];
+
+    if (!Number.isFinite(hours) || hours < 0 || hours > 23) {
+      return '\u2014';
+    }
+
+    const meridiem = hours < 12 ? 'AM' : 'PM';
+    // 00:xx is 12 AM and 12:xx is 12 PM - the two the modulo alone gets wrong.
+    const twelve = hours % 12 === 0 ? 12 : hours % 12;
+
+    return `${String(twelve).padStart(2, '0')}:${minutes} ${meridiem}`;
+  }
 
   // --- Channels — searchable controlled choice from the approved catalogue ---
   //
@@ -1055,14 +1138,51 @@ export class CampaignWizardComponent {
 
   // ----- Submit -----
   protected readonly submitDialogOpen = signal(false);
+  /**
+   * Opens the submit confirmation, or explains why it will not.
+   *
+   * IT USED TO REFUSE IN SILENCE. `submitAllowed()` is three conditions - the submit permission,
+   * every required field captured, and not being in the no-access state - and this set the
+   * 'validation' state for all three. The validation banner only renders
+   * `@if (uiState() === 'validation' && !requiredComplete())`, so when the form WAS complete and
+   * the refusal came from the permission, Submit did nothing at all: no dialog, no banner, no
+   * toast, no console entry. The screen looked broken rather than refused, which is exactly how
+   * "I filled everything in and Submit does nothing" happens.
+   */
   protected requestSubmit(): void {
-    if (!this.submitAllowed()) {
-      // Missing required information routes to the validation state.
-      this.uiState.set('validation');
+    if (this.uiState() === 'no-access') {
       return;
     }
+
+    if (!this.requiredComplete()) {
+      // Missing required information routes to the validation state, which lists the fields.
+      this.uiState.set('validation');
+      this.markEveryStepAttempted();
+      this.toast.show(
+        'Some required information is missing',
+        `${this.remainingRequired().length} field(s) still needed: `
+        + `${this.remainingRequired().slice(0, 3).join(', ')}`
+        + `${this.remainingRequired().length > 3 ? '\u2026' : ''}`,
+        'warning');
+      return;
+    }
+
+    if (!this.permissions().submit) {
+      this.toast.show(
+        'Not permitted',
+        'Submitting a campaign for approval needs the cam.campaigns.submit permission. '
+        + 'Save it as a draft and ask somebody who holds that permission to submit it.',
+        'error');
+      return;
+    }
+
     this.actionsMenuOpen.set(false);
     this.submitDialogOpen.set(true);
+  }
+
+  /** Turns on the red highlighting for every step, so the missing fields are visible on each. */
+  private markEveryStepAttempted(): void {
+    this.stepAttempted.set(this.steps.map(() => true));
   }
   protected cancelSubmit(): void {
     this.submitDialogOpen.set(false);
@@ -1111,7 +1231,11 @@ export class CampaignWizardComponent {
       this.store.submitForApproval(ref, this.user.role(), this.user.reference());
 
       this.stableReference.set(ref);
-      this.lifecycleState.set('Draft');
+
+      // SUBMITTED, NOT DRAFT. This set the header's lifecycle state back to 'Draft' immediately
+      // after a successful submit, so the one screen that had just sent the campaign for approval
+      // was also the one screen still calling it a draft.
+      this.lifecycleState.set('Submitted');
       this.lastSaved.set('Today, just now · IST');
       this.successRef.set(ref);
       this.toast.show('Submitted for approval', `${ref} is with its approver.`, 'success');

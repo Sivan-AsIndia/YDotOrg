@@ -371,7 +371,6 @@ D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\stati
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\staticwebassets.development.json
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\staticwebassets.build.endpoints.json
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\swae.build.ex.cache
-D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\YDot.PAY.90ED65CD.Up2Date
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\YDot.PAY.Api.dll
 D:\Permaspace\Phase1\YDots\src\Services\PAY\YDot.PAY.Api\obj\Debug\net10.0\refint\YDot.PAY.Api.dll

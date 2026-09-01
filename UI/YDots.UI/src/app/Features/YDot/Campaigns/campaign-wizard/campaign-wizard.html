@@ -502,12 +502,21 @@
                         id="f-start"
                         type="date"
                         class="control"
+                        [min]="todayIso"
                         [ngModel]="startDate()"
                         (ngModelChange)="startDate.set($event)"
-                        [attr.aria-invalid]="wasAttempted(0) && !startDateValid() ? 'true' : null"
+                        [attr.aria-invalid]="
+                          !startDateValid() && (!!startDate() || wasAttempted(0)) ? 'true' : null
+                        "
                       />
-                      @if (wasAttempted(0) && !startDateValid()) {
-                        <p class="field-error">Enter Start date.</p>
+                      @if (!startDateValid() && (!!startDate() || wasAttempted(0))) {
+                        <p class="field-error">
+                          {{
+                            startDateInPast()
+                              ? 'Review Start date. A campaign cannot start before today.'
+                              : 'Enter Start date.'
+                          }}
+                        </p>
                       } @else {
                         <p class="field-hint">
                           When will this campaign go live? Interpreted as
@@ -526,6 +535,7 @@
                         id="f-end"
                         type="date"
                         class="control"
+                        [min]="endDateMin()"
                         [ngModel]="endDate()"
                         (ngModelChange)="endDate.set($event)"
                         [attr.aria-invalid]="
@@ -885,6 +895,11 @@
                           />
                           @if (wasAttempted(1) && !reminderTimeValid()) {
                             <p class="field-error">Enter Reminder time.</p>
+                          } @else if (reminderTime()) {
+                            <!-- A native time input renders in the BROWSER's locale, so on a
+                                 24-hour machine there is no AM/PM anywhere on the field and
+                                 09:00 and 21:00 look alike at a glance. This states it. -->
+                            <p class="field-hint">{{ reminderTimeDisplay() }}</p>
                           }
                         </div>
                       </div>
@@ -1309,24 +1324,11 @@
                       </dl>
                     </div>
 
-                    <!-- Publication & Notice recap — click to open a read/edit popup.
-                         Labels stack above their boxes and the boxes are enlarged so the
-                         section fills its column with no blank space. -->
-                    <div class="review-group">
-                      <h3 class="review-group-title">3. Publication &amp; Notice</h3>
-                      <dl class="review-list compact">
-                        <div>
-                          <dt>Public description</dt>
-                          <dd>{{ publicDescription().trim() || '—' }}</dd>
-                        </div>
-                        <div>
-                          <dt>Terms and notice</dt>
-                          <dd>{{ termsNotice().trim() || '—' }}</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <!-- Channels & Sources recap -->
+                    <!-- Channels & Sources recap — SECOND, because it is step 2.
+                         The three recap groups were laid out 1, 3, 2: Publication & Notice sat
+                         between Basic Information and Channels & Sources, so the numbered
+                         headings on the review screen ran out of order against the steps the
+                         person had just walked through. -->
                     <div class="review-group">
                       <h3 class="review-group-title">2. Channels &amp; Sources</h3>
                       <dl class="review-list compact">
@@ -1361,7 +1363,42 @@
                               Manual activate
                             }
                             · Reminder {{ reminderDaysBefore() }} day(s) before at
-                            {{ reminderTime() || '—' }}
+                            {{ reminderTimeDisplay() }}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <!-- Publication & Notice recap — READ MORE OPENS THE POPUP.
+                         The comment that used to sit here said "click to open a read/edit popup",
+                         and nothing in the markup did: both values were printed as plain
+                         interpolations, so a 2,000-character public description and a 20,000-
+                         character terms notice were dumped into a recap cell with no way to read
+                         them in full and no way to correct them without walking back to step 3.
+                         The popup itself already existed - `openFieldPreview` opens it, with a
+                         read view and an Edit toggle - and is what the Preview button on the
+                         Publication step uses. -->
+                    <div class="review-group">
+                      <h3 class="review-group-title">3. Publication &amp; Notice</h3>
+                      <dl class="review-list compact">
+                        <div>
+                          <dt>Public description</dt>
+                          <dd>
+                            <span class="review-clamp">{{ publicDescription().trim() || '—' }}</span>
+                            @if (hasFieldContent('description')) {
+                              <button type="button" class="link-btn review-readmore"
+                                      (click)="openFieldPreview('description')">Read more</button>
+                            }
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Terms and notice</dt>
+                          <dd>
+                            <span class="review-clamp">{{ termsNotice().trim() || '—' }}</span>
+                            @if (hasFieldContent('terms')) {
+                              <button type="button" class="link-btn review-readmore"
+                                      (click)="openFieldPreview('terms')">Read more</button>
+                            }
                           </dd>
                         </div>
                       </dl>

@@ -100,6 +100,19 @@ public sealed record ReadinessCheckListItemResponse(
     /// <summary>True when this check is one of the things standing between the campaign and launch.</summary>
     bool BlocksLaunch,
 
+    /// <summary>
+    /// The blockers raised against this check, open and resolved.
+    ///
+    /// ON THE LIST ROW, not only on the detail, because the checklist screen is where a blocker
+    /// is cleared and it had no id to clear one WITH. The row carried only <c>HasOpenBlocker</c>,
+    /// so the screen synthesised a blocker whose id was the CHECK's id - and
+    /// POST /readiness-blockers/{that id}/resolve answers 404 "That blocker was not found",
+    /// every time. A blocked check could be created and could never be unblocked.
+    ///
+    /// They are already loaded: the query behind this Includes them.
+    /// </summary>
+    IReadOnlyList<ReadinessBlockerResponse> Blockers,
+
     long Version);
 
 /// <summary>One check in full, with its blockers.</summary>

@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import {
   CampaignReadiness,
   ReadinessCheckCategory as ApiReadinessCategory,
@@ -11,6 +12,7 @@ import {
   ReadinessCheckStatus,
 } from '../models/campaign-readiness-checklist.model';
 import { CampaignStoreService } from './campaign-store.service';
+import { apiErrorMessage } from '../models/api-response.model';
 
 /**
  * The readiness checklist for a campaign.
@@ -38,6 +40,7 @@ import { CampaignStoreService } from './campaign-store.service';
 @Injectable({ providedIn: 'root' })
 export class ReadinessChecklistStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
   private readonly campaigns = inject(CampaignStoreService);
 
   /** The loaded checks, keyed by campaign reference. Empty until a campaign is loaded. */
@@ -56,6 +59,27 @@ export class ReadinessChecklistStoreService {
 
   /** Which campaign each check belongs to, so a write knows what to reload. */
   private readonly campaignRefByCheckId = new Map<string, string>();
+
+  constructor() {
+    this.organisationScope.onOrganisationChange(() => this.discardForOrganisation());
+  }
+
+  /**
+   * Discards the cache when the Organisation changes.
+   *
+   * NOTHING IS RE-FETCHED HERE, unlike the stores that hold a working set: these records are
+   * loaded on demand for the campaign a screen is looking at, and after a switch there is no such
+   * campaign — the screen that wanted one has been navigated away from. Emptying the map is
+   * enough; whatever is opened next asks for itself. See `OrganisationScopeService`.
+   */
+  private discardForOrganisation(): void {
+    this.checks.set({});
+    this.verdicts.set({});
+    this.loadError.set(null);
+    this.versionsByCheckId.clear();
+    this.campaignRefByCheckId.clear();
+  }
+
 
   checksFor(campaignRef: string): readonly ReadinessCheck[] {
     return this.checks()[campaignRef] ?? [];
@@ -225,7 +249,13 @@ export class ReadinessChecklistStoreService {
    * AT MOST ONE OPEN BLOCKER PER CHECK, enforced server-side. Two open blockers on one check means
    * two people each believing the other owns it.
    */
-  addBlocker(campaignRef: string, checkId: string, ownerUserId: string, note: string): void {
+  addBlocker(
+    campaignRef: string,
+    checkId: string,
+    ownerUserId: string,
+    note: string,
+    onDone?: (outcome: { readonly raised: boolean; readonly error?: string }) => void,
+  ): void {
     this.api
       .addReadinessBlocker(checkId, {
         ownerUserId,
@@ -233,15 +263,38 @@ export class ReadinessChecklistStoreService {
         expectedVersion: this.versionsByCheckId.get(checkId) ?? 0,
       })
       .subscribe({
-        next: () => this.load(campaignRef),
-        error: () => this.failed(campaignRef, 'The blocker could not be raised.'),
+        next: () => {
+          this.load(campaignRef);
+          onDone?.({ raised: true });
+        },
+        // THE SERVER'S OWN MESSAGE. A blocker is refused for reasons the person can act on -
+        // one is already open, the version is stale - and a fixed sentence threw all of that
+        // away. `onDone` exists so the calling screen stops announcing success unconditionally
+        // on the line after this call.
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The blocker could not be raised.');
+          this.failed(campaignRef, message);
+          onDone?.({ raised: false, error: message });
+        },
       });
   }
 
-  resolveBlocker(campaignRef: string, blockerId: string, resolutionNote: string): void {
+  resolveBlocker(
+    campaignRef: string,
+    blockerId: string,
+    resolutionNote: string,
+    onDone?: (outcome: { readonly resolved: boolean; readonly error?: string }) => void,
+  ): void {
     this.api.resolveReadinessBlocker(blockerId, { resolutionNote: resolutionNote || null }).subscribe({
-      next: () => this.load(campaignRef),
-      error: () => this.failed(campaignRef, 'The blocker could not be resolved.'),
+      next: () => {
+        this.load(campaignRef);
+        onDone?.({ resolved: true });
+      },
+      error: (error: unknown) => {
+        const message = apiErrorMessage(error, 'The blocker could not be resolved.');
+        this.failed(campaignRef, message);
+        onDone?.({ resolved: false, error: message });
+      },
     });
   }
 
@@ -264,6 +317,8 @@ export class ReadinessChecklistStoreService {
    * nothing verified an integration is worse than one labelled 'Manual confirmation'.
    */
   private toCheck(item: ReadinessCheckListItem): ReadinessCheck {
+    const openBlocker = (item.blockers ?? []).find((blocker) => !blocker.isResolved);
+
     return {
       id: item.id,
       name: item.checkName,
@@ -284,6 +339,18 @@ export class ReadinessChecklistStoreService {
         ? `Blocked. ${item.notes ?? ''}`.trim()
         : (item.notes ?? undefined),
 
+      // THE REAL BLOCKER, WITH ITS REAL ID. Everything downstream that clears a blocker needs
+      // one, and until the list projection carried the blockers there was none to pass — so the
+      // screen used the check's own id and the resolve call answered 404 every time.
+      openBlocker: openBlocker
+        ? {
+            id: openBlocker.id,
+            note: openBlocker.blockerNote,
+            ownerUserId: openBlocker.ownerUserId,
+            createdAtUtc: openBlocker.createdAtUtc,
+          }
+        : undefined,
+
       status: this.fromApiStatus(item.status),
     };
   }
@@ -295,27 +362,28 @@ export class ReadinessChecklistStoreService {
   /**
    * The screen's six categories onto the API's six.
    *
-   * THEY ARE NOT THE SAME SIX. The screen groups by launch dependency (Content, Budget, Tracking,
-   * Payment, Template, Consent); the API groups by who owns the check (content, compliance,
-   * payment, attribution, communications, operations). Budget has no obvious owner category and
-   * lands in operations, which is where a budget sign-off actually sits.
+   * THEY ARE THE SAME SIX, and the previous mapping said otherwise. It translated Tracking to
+   * 'attribution', Template to 'communications', Consent to 'compliance' and Budget to
+   * 'operations' — four names the server's `ReadinessCheckCategory` enum does not contain. The
+   * API refused all four with 400 "Some of the details are not valid", naming a field the person
+   * had filled in correctly; only Content and Payment could be created at all.
    */
   private toApiCategory(category: ReadinessCheckCategory): ApiReadinessCategory {
     switch (category) {
       case 'Content':
         return 'content';
+      case 'Budget':
+        return 'budget';
+      case 'Tracking':
+        return 'tracking';
       case 'Payment':
         return 'payment';
-      case 'Tracking':
-        return 'attribution';
       case 'Template':
-        return 'communications';
+        return 'template';
       case 'Consent':
-        return 'compliance';
-      case 'Budget':
-        return 'operations';
+        return 'consent';
       default:
-        return 'operations';
+        return 'content';
     }
   }
 
@@ -323,16 +391,16 @@ export class ReadinessChecklistStoreService {
     switch (category) {
       case 'content':
         return 'Content';
+      case 'budget':
+        return 'Budget';
+      case 'tracking':
+        return 'Tracking';
       case 'payment':
         return 'Payment';
-      case 'attribution':
-        return 'Tracking';
-      case 'communications':
+      case 'template':
         return 'Template';
-      case 'compliance':
+      case 'consent':
         return 'Consent';
-      case 'operations':
-        return 'Budget';
       default:
         return 'Content';
     }

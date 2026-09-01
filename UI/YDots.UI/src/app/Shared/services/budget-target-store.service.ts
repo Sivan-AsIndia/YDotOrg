@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, map, switchMap, tap, throwError } from 'rxjs';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import {
   BudgetPlanDetail,
   BudgetPlanListItem,
@@ -53,6 +54,7 @@ export interface PlanMutationResult {
 @Injectable({ providedIn: 'root' })
 export class BudgetTargetStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
   private readonly campaigns = inject(CampaignStoreService);
   private readonly people = inject(PeopleDirectoryService);
 
@@ -81,6 +83,25 @@ export class BudgetTargetStoreService {
   private readonly actionsByReference = new Map<string, readonly string[]>();
 
   constructor() {
+    this.refresh();
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * Discarded FIRST: reloading alone would leave the previous Organisation's rows readable on
+   * screen for the length of a round trip. See `OrganisationScopeService`.
+   */
+  private reloadForOrganisation(): void {
+    this.records.set([]);
+    this.serverTotal.set(0);
+    this.loadError.set(null);
+    this.idsByReference.clear();
+    this.versionsByReference.clear();
+    this.versionIds.clear();
+    this.versionStamps.clear();
+    this.actionsByReference.clear();
     this.refresh();
   }
 

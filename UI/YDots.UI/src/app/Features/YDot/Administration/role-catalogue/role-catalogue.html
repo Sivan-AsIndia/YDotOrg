@@ -59,7 +59,7 @@
           <div class="stat-card" [ngClass]="statCardClass(item.status)" role="listitem">
             <div class="stat-card__icon" aria-hidden="true"><i [ngClass]="statusIcon(item.status)"></i></div>
             <div class="stat-card__body">
-              <div class="stat-card__label">{{ item.status }} Roles</div>
+              <div class="stat-card__label">{{ item.label }} Roles</div>
               <div class="stat-card__value">{{ item.count }}</div>
             </div>
           </div>
@@ -92,12 +92,15 @@
             All
             <span class="rc-tab__count">{{ roleCounts().total }}</span>
           </button>
+          <!-- The tab SETS THE RAW STATUS and PRINTS THE LABEL. It used to do both with the
+               label, and applyFilters compares against the raw value, so the Draft tab matched
+               nothing and every newly created role looked as though it had not been saved. -->
           @for (item of statusBreakdown(); track item.status) {
             <button type="button" class="rc-tab" role="tab" [attr.aria-selected]="filterStatus() === item.status"
                     [ngClass]="statusTabClass(item.status)"
                     [class.rc-tab--active]="filterStatus() === item.status" (click)="filterStatus.set(item.status)">
               <i [ngClass]="statusIcon(item.status)" aria-hidden="true"></i>
-              {{ item.status }}
+              {{ item.label }}
               <span class="rc-tab__count">{{ item.count }}</span>
             </button>
           }

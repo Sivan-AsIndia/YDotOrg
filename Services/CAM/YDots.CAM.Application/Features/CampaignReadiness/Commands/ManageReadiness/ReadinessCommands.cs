@@ -158,10 +158,29 @@ public sealed class ReadinessCommandHandler(
 
         var check = loaded.Value!;
 
-        if (check.Status != ReadinessCheckStatus.Pending)
+        // ---- A FAILED CHECK IS NOT A DEAD END --------------------------------------------------
+        //
+        // This accepted Pending and nothing else, and a check recorded as Failed with no blocker
+        // against it had no way out of Failed at all. Its permitted actions were View and
+        // AddBlocker; Edit is refused on anything that is not Pending; Pass answered
+        // 409 "Only a Pending check can be passed"; and there was no blocker to resolve. The only
+        // escape was to raise a blocker on it and immediately resolve it, which is a workaround
+        // that also writes a fictional obstacle into the audit trail.
+        //
+        // That mattered because failing a check is the ordinary thing to do when the verification
+        // has not been done yet - and re-verifying it afterwards is the ordinary thing to do next.
+        // A campaign whose readiness check cannot leave Failed can never launch.
+        //
+        // APPROVED IS STILL NOT RE-SIGNABLE: passing an already-Passed check is a no-op dressed
+        // up as a decision, and it is refused below.
+        //
+        // THE BLOCKER RULE IS UNCHANGED and is what keeps this honest. A check with an open
+        // blocker cannot be passed from any state, so "raise a blocker, then pass it anyway" is
+        // still impossible; the blocker has to be resolved first, on the record, by somebody.
+        if (check.Status == ReadinessCheckStatus.Passed)
         {
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
-                $"Only a Pending check can be passed. This one is {check.Status}."));
+                "This check has already been passed."));
         }
 
         if (check.HasOpenBlockers)

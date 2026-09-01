@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import { CampaignRole } from '../../Service/current-user.service';
 import {
   CampaignDetail,
@@ -41,6 +42,7 @@ import { apiErrorMessage } from '../models/api-response.model';
 export class CampaignStoreService {
   private readonly notifications = inject(NotificationService);
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
 
   /**
    * The loaded page of campaigns.
@@ -102,6 +104,8 @@ export class CampaignStoreService {
   constructor() {
     this.refresh();
 
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+
     // A Scheduled, auto-activate campaign becomes Active when its start date arrives.
     //
     // IT NOW ASKS THE SERVER rather than flipping a local string. The previous version mutated
@@ -109,6 +113,21 @@ export class CampaignStoreService {
     // else. The sweep still runs on a timer because a campaign whose date passes while somebody
     // has the register open should appear active without a manual refresh.
     setInterval(() => this.refresh(), 60_000);
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * Discarded FIRST: reloading alone would leave the previous Organisation's rows readable on
+   * screen for the length of a round trip. See `OrganisationScopeService`.
+   */
+  private reloadForOrganisation(): void {
+    this.records.set([]);
+    this.serverTotal.set(0);
+    this.loadError.set(null);
+    this.idsByCode.clear();
+    this.versionsByCode.clear();
+    this.refresh();
   }
 
   /**
@@ -402,9 +421,26 @@ export class CampaignStoreService {
         this.submitForApproval(ref, 'Campaign Manager', '');
         return;
       case 'Approved':
-      case 'Scheduled':
         this.approveCampaign(ref, '');
         return;
+
+      // SCHEDULED IS NOT A TRANSITION ANYBODY RUNS. It is where approval leaves a campaign whose
+      // lifecycle activation is automatic, so it is reached by approving a SUBMITTED campaign and
+      // never from Approved. Routing it to approve() sent an already-approved campaign back to an
+      // endpoint that only accepts Submitted, which answered 409 and left the screen unchanged.
+      case 'Scheduled': {
+        const current = this.get(ref);
+
+        if (current?.status === 'Submitted') {
+          this.approveCampaign(ref, '');
+          return;
+        }
+
+        this.loadError.set(
+          'A campaign is scheduled by approving it while its activation is set to automatic. '
+          + 'It cannot be moved to Scheduled from here.');
+        return;
+      }
       case 'Active': {
         const current = this.get(ref);
         if (current?.status === 'Paused') {
@@ -511,7 +547,16 @@ export class CampaignStoreService {
       name: item.name,
       purpose: existing?.purpose ?? '',
       status: this.toDisplayStatus(item.status),
-      ownerReference: existing?.ownerReference ?? '',
+
+      // THE OWNERS COME FROM THE SERVER NOW. This read `existing?.ownerReference ?? ''`, and
+      // `existing` only exists for a campaign this browser created in the current session - so
+      // after any page load the reference was the empty string, which every owner card resolves
+      // to 'Unassigned'. Every campaign on the register showed as unowned, however many owners
+      // had been chosen for it in the wizard. The server's own list projection now carries the
+      // ids; `existing` remains the fallback for the optimistic row that has not been refreshed
+      // yet, and only when the server sent nothing.
+      ownerReference: item.ownerIds?.[0] ?? existing?.ownerReference ?? '',
+      ownerReferences: item.ownerIds?.length ? [...item.ownerIds] : existing?.ownerReferences,
       startDate: item.startDate,
       endDate: item.endDate,
       targetAmount: item.targetAmount,

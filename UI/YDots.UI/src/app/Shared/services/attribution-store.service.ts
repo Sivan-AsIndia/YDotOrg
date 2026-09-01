@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import {
   AttributionDetail,
   AttributionListItem,
@@ -34,6 +35,7 @@ import { DonationRecord } from '../models/attribution.model';
 @Injectable({ providedIn: 'root' })
 export class AttributionStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
 
   /** The loaded donations. Empty until the first response - never seeded. */
   private readonly records = signal<readonly DonationRecord[]>([]);
@@ -60,6 +62,26 @@ export class AttributionStoreService {
   private readonly actionsByReference = new Map<string, readonly string[]>();
 
   constructor() {
+    this.refresh();
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * DISCARD FIRST, RELOAD SECOND, and the order is the point. Reloading alone would leave the
+   * previous Organisation's rows on the screen for the length of a round trip — visible, readable
+   * and wrong. Clearing first shows an empty state for that moment instead, which is honest about
+   * what is known. See `OrganisationScopeService` for why this is a notification rather than
+   * something the switcher calls.
+   */
+  private reloadForOrganisation(): void {
+    this.records.set([]);
+    this.rows.set([]);
+    this.serverTotal.set(0);
+    this.loadError.set(null);
+    this.idsByReference.clear();
+    this.actionsByReference.clear();
     this.refresh();
   }
 

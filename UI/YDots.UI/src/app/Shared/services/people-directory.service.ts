@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { UserDirectoryApiService } from '../../Service/user-directory-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import { UserSearchFilter } from '../models/user-directory.model';
 
 /**
@@ -63,6 +64,7 @@ const AVATAR_TONES = ['meadow', 'gold', 'blue', 'plum', 'coral', 'teal'] as cons
 @Injectable({ providedIn: 'root' })
 export class PeopleDirectoryService {
   private readonly api = inject(UserDirectoryApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
 
   private readonly people = signal<readonly PersonOption[]>([]);
 
@@ -81,6 +83,19 @@ export class PeopleDirectoryService {
   readonly assignable = computed(() => this.people().filter((person) => person.isActive));
 
   constructor() {
+    this.refresh();
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * Discarded FIRST: reloading alone would leave the previous Organisation's rows readable on
+   * screen for the length of a round trip. See `OrganisationScopeService`.
+   */
+  private reloadForOrganisation(): void {
+    this.people.set([]);
+    this.loadError.set(null);
     this.refresh();
   }
 

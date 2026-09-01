@@ -295,7 +295,10 @@ export class DocumentSubmissionsComponent implements OnInit {
    * should offer; the server refuses it either way.
    */
   canDiscard(submission: DocumentSubmission): boolean {
-    return !this.isReview() && submission.status === 'Draft';
+    // COMPARED CASE-INSENSITIVELY because the API serialises the status in camelCase - 'draft',
+    // not 'Draft'. The exact comparison against 'Draft' never matched, so the Discard button
+    // never appeared and an empty submission opened by mistake could not be withdrawn.
+    return !this.isReview() && submission.status?.toLowerCase() === 'draft';
   }
 
   /** Withdraws a draft. Asks first: it takes any attached files with it. */

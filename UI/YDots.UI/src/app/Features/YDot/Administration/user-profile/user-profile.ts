@@ -311,14 +311,23 @@ export class UserProfileComponent {
     this.showMoreMenu.set(false);
   }
 
+  /**
+   * Opens the edit dialog on this screen.
+   *
+   * IT USED TO NAVIGATE TO /administration/access/create-user, carrying the record in the
+   * router's `state`. Create-user reads no such state - it has no `editMode`, no `userData`, and
+   * no reference to `history.state` anywhere - so Edit profile left the profile and presented an
+   * empty CREATE form. Filling it in would have made a second user rather than editing this one.
+   *
+   * The dialog it should have opened is already in this component's template, already bound to
+   * `editForm`, and already saved by `saveProfile()` through PUT /users/{id}. Nothing needed
+   * building; the navigation simply had to stop.
+   */
   openEditModal(): void {
     const d = this.data();
     if (!d) return;
     this.editForm.set({ displayName: d.displayName, email: d.loginEmail, mobile: d.mobileNumber, department: d.department, designation: d.designation, manager: d.manager });
-    // Navigate to create-user page in edit mode, passing all user details for binding
-    this.router.navigate(['/app/administration/access/create-user'], {
-      state: { userData: d, editMode: true }
-    });
+    this.showEditModal.set(true);
     this.showMoreMenu.set(false);
   }
   closeEditModal(): void { this.showEditModal.set(false); }

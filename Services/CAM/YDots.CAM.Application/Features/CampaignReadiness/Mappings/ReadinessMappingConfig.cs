@@ -67,6 +67,9 @@ public static class ReadinessMappingConfig
             DescribeStatus(check.Status),
             check.HasOpenBlockers,
             check.BlocksLaunch,
+            [.. check.Blockers
+                .OrderByDescending(blocker => blocker.CreatedAtUtc)
+                .Select(blocker => blocker.ToResponse())],
             check.Version);
     }
 
@@ -193,23 +196,31 @@ public static class ReadinessMappingConfig
             actions.Add("View");
         }
 
-        // Only a Pending check may be edited or judged. Re-opening a decided check goes through
-        // raising a blocker instead, which leaves a record of WHY it was re-opened.
-        if (check.Status == ReadinessCheckStatus.Pending)
+        // Only a Pending check may be EDITED. Changing what a check asks for after somebody has
+        // judged it would rewrite the question the answer was given to.
+        if (check.Status == ReadinessCheckStatus.Pending && hasPermission(PermissionCodes.ReadinessEdit))
         {
-            if (hasPermission(PermissionCodes.ReadinessEdit))
-            {
-                actions.Add("Edit");
-            }
+            actions.Add("Edit");
+        }
 
-            // Passing is blocked while a blocker is open: signing off a check somebody has
-            // flagged as blocked is exactly what the blocker exists to prevent.
+        // A VERDICT MAY BE RECORDED ON ANYTHING NOT ALREADY PASSED, which is Pending and Failed.
+        //
+        // This offered Pass on Pending alone, and a check failed without a blocker on it then had
+        // no route back: not Edit (Pending only), not Pass (Pending only), and no blocker to
+        // resolve. Its only listed action was AddBlocker - raise an obstacle that does not exist
+        // in order to clear it again. Failing a check is what somebody does when the verification
+        // has not been done yet, so passing it once it HAS been done is the next ordinary step.
+        //
+        // Passing is still blocked while a blocker is open: signing off a check somebody has
+        // flagged as blocked is exactly what the blocker exists to prevent.
+        if (check.Status != ReadinessCheckStatus.Passed)
+        {
             if (hasPermission(PermissionCodes.ReadinessPass) && !check.HasOpenBlockers)
             {
                 actions.Add("Pass");
             }
 
-            if (hasPermission(PermissionCodes.ReadinessFail))
+            if (check.Status != ReadinessCheckStatus.Failed && hasPermission(PermissionCodes.ReadinessFail))
             {
                 actions.Add("Fail");
             }

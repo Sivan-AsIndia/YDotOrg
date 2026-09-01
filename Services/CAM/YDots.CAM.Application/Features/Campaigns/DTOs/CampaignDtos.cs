@@ -119,6 +119,18 @@ public sealed record CampaignListItemResponse(
     int? ElapsedPercent,
 
     int OwnerCount,
+
+    /// <summary>
+    /// The campaign's accountable owners, by IAM user id.
+    ///
+    /// ON THE LIST PROJECTION, not only on the detail, because the register draws an owner column
+    /// and had nothing to draw it from. With only a COUNT here, every row on the campaign register
+    /// and every owner card on the campaign detail read "Unassigned" after a page load, whatever
+    /// had been chosen in the wizard - the names only appeared for as long as the browser still
+    /// held the record it had just created in memory.
+    /// </summary>
+    IReadOnlyList<Guid> OwnerIds,
+
     int TrackingAssetCount,
 
     /// <summary>Required readiness checks not yet passed. Non-zero means it cannot launch.</summary>

@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 import { CampaignDetail, CampaignHistoryEntry } from '../models/campaign-contract.model';
 import { CloseRequestRecord, LifecycleHistoryEntry } from '../models/pause-resume.model';
 import { CampaignStoreService } from './campaign-store.service';
@@ -30,6 +31,7 @@ import { PeopleDirectoryService } from './people-directory.service';
 @Injectable({ providedIn: 'root' })
 export class CloseRequestStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
   private readonly campaigns = inject(CampaignStoreService);
   private readonly people = inject(PeopleDirectoryService);
 
@@ -38,6 +40,25 @@ export class CloseRequestStoreService {
 
   readonly isLoading = signal(false);
   readonly loadError = signal<string | null>(null);
+
+  constructor() {
+    this.organisationScope.onOrganisationChange(() => this.discardForOrganisation());
+  }
+
+  /**
+   * Discards the cache when the Organisation changes.
+   *
+   * NOTHING IS RE-FETCHED HERE, unlike the stores that hold a working set: these records are
+   * loaded on demand for the campaign a screen is looking at, and after a switch there is no such
+   * campaign — the screen that wanted one has been navigated away from. Emptying the map is
+   * enough; whatever is opened next asks for itself. See `OrganisationScopeService`.
+   */
+  private discardForOrganisation(): void {
+    this.records.set({});
+    this.historyByRef.set({});
+    this.loadError.set(null);
+  }
+
 
   readonly snapshot = computed(() => this.records());
 

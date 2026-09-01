@@ -99,6 +99,21 @@ export class CampaignReadinessChecklistComponent {
     return this.people.name(ref);
   }
 
+  /** A blocker's raised-at instant as a person reads it. The API sends a full ISO timestamp. */
+  protected raisedWhen(value: string): string {
+    if (!value) {
+      return '—';
+    }
+
+    const when = new Date(value);
+
+    return Number.isNaN(when.getTime())
+      ? value
+      : when.toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+  }
+
   // ================= Effective permissions =================
   protected readonly permissions = computed(() => ({
     view: this.currentUser.hasPermission('cam.readiness.view'),
@@ -631,14 +646,40 @@ export class CampaignReadinessChecklistComponent {
       createdByRef: this.currentUserRef(),
       createdAt: this.lastRefresh(),
     };
-    this.readinessStore.addBlocker(this.campaignRef, blocker);
-    this.blockerDialogOpen.set(false);
-    this.showSuccess(this.campaignRef, `Blocker on ${label}`, 'Resolve the blocker or Validate readiness');
+    // THE DIALOG CLOSES AND THE SUCCESS IS ANNOUNCED ONLY IF THE BLOCKER WAS ACTUALLY RAISED.
+    //
+    // Both used to happen on the next two lines, unconditionally, while the request was still in
+    // flight — and the request is refused outright for every DERIVED dependency card (Budget,
+    // Tracking, Public content, …) because their keys are 'budget'/'tracking', not readiness
+    // check ids, and a blocker has to hang off a check. So the screen said "Blocker raised",
+    // closed, and left no blocker anywhere: not on the launch panel, not on the server, not on
+    // the next page load.
+    this.readinessStore.addBlocker(this.campaignRef, blocker, (outcome) => {
+      if (!outcome.raised) {
+        this.toast.show(
+          'Blocker not raised',
+          outcome.error ?? 'The blocker could not be raised.',
+          'error');
+        return;
+      }
+
+      this.blockerDialogOpen.set(false);
+      this.showSuccess(this.campaignRef, `Blocker on ${label}`, 'Resolve the blocker or Validate readiness');
+    });
   }
   protected removeBlocker(id: string): void {
     if (!this.permissions().assignBlocker) return;
-    this.readinessStore.removeBlocker(this.campaignRef, id);
-    this.syncSnapshot();
+
+    this.readinessStore.removeBlocker(this.campaignRef, id, (outcome) => {
+      this.syncSnapshot();
+
+      this.toast.show(
+        outcome.resolved ? 'Blocker resolved' : 'Blocker not resolved',
+        outcome.resolved
+          ? 'The check is pending verification again.'
+          : (outcome.error ?? 'The blocker could not be resolved.'),
+        outcome.resolved ? 'success' : 'error');
+    });
   }
 
   // ================= Request approval =================

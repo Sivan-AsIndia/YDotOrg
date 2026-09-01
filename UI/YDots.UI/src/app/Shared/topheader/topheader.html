@@ -118,11 +118,25 @@
                                     </div>
                                 }
 
+                                <!--
+                                    Manage organisations is a PLATFORM screen. Reaching it from
+                                    inside an Organisation used to leave the token — and therefore
+                                    the sidebar — pointing at that Organisation while the page
+                                    listed every Organisation on the platform. The route's guard
+                                    steps back out on the way in; this says so before the click
+                                    rather than after it.
+                                -->
                                 <div class="card-footer border-top">
-                                    <a routerLink="/app/administration/organisation/directory"
-                                       class="fw-medium small">
-                                        Manage organisations
-                                    </a>
+                                    <button type="button"
+                                            class="dropdown-item px-0 fw-medium small"
+                                            (click)="manageOrganisations()">
+                                        <span class="d-block text-start">Manage organisations</span>
+                                        @if (isActingInOrganisation()) {
+                                            <small class="text-muted d-block text-start">
+                                                Leaves {{ currentOrganisation() }}
+                                            </small>
+                                        }
+                                    </button>
                                 </div>
                             </div>
                         </div>

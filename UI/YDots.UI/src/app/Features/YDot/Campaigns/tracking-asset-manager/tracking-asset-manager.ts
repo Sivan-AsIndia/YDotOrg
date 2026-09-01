@@ -10,6 +10,13 @@ import { TrackingAssetStoreService } from '../../../../Shared/services/tracking-
 import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
 import { CurrentUserService } from '../../../../Shared/services/current-user.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
+import { CampaignApiService } from '../../../../Service/campaign-api.service';
+
+/** One row of a CAM reference catalogue: the id the API takes, and the name a person reads. */
+interface CatalogueOption {
+  readonly ref: string;
+  readonly label: string;
+}
 
 
 @Component({
@@ -21,6 +28,7 @@ import { ToastService } from '../../../../Shared/services/toast.service';
 export class TrackingAssetManagerComponent {
   private readonly store = inject(TrackingAssetStoreService);
   private readonly campaignStore = inject(CampaignStoreService);
+  private readonly campaignApi = inject(CampaignApiService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly toast = inject(ToastService);
 
@@ -59,8 +67,21 @@ export class TrackingAssetManagerComponent {
     replace: this.currentUser.hasPermission('cam.tracking-assets.edit'),
   }));
 
-  /** Lifecycle states in which the Generate primary action is permitted. */
-  private readonly generatePermittedStates = ['Active'];
+  /**
+   * THE GENERATE GATE. This is why nobody could create a tracking asset.
+   *
+   * It used to be `private readonly generatePermittedStates = ['Active'];`, checked against
+   * `this.lifecycleState` - the register's own header state. That header was removed when the
+   * invented record above it went ('TAM-2025-0001 Active - Owner: Sophie Bennett'), and
+   * `lifecycleState` was left behind as the empty string. `[''].includes` of `'Active'` is false,
+   * so `generateAllowed()` was FALSE FOR EVERY USER, IN EVERY ORGANISATION, ALWAYS - and the
+   * Create button was permanently disabled with no explanation and no tooltip. Both roles that
+   * tried this hit the same wall.
+   *
+   * A REGISTER HAS NO LIFECYCLE STATE. The gate is the permission, which is what actually
+   * decides this: `cam.tracking-assets.create`, the same code the API checks on the way in.
+   */
+  private readonly inGenerateState = () => true;
 
   // ================= Context and filters =================
 
@@ -90,15 +111,64 @@ export class TrackingAssetManagerComponent {
   ];
   protected readonly assetTypeFilter = signal<string>('');
 
-  /** Channel — searchable controlled choice; effective approved catalogue. */
-  protected readonly channelCatalogue: readonly string[] = [
-    'Website',
-    'Facebook',
-    'Instagram',
-    'Email',
-    'YouTube',
-    'Offline',
-  ];
+  /**
+   * Channel, source and medium — THE CAM CATALOGUES, BY ID.
+   *
+   * WHAT WAS HERE. Six hard-coded channel LABELS ('Website', 'Facebook', 'Instagram', 'Email',
+   * 'YouTube', 'Offline'), and Source and Medium as free-text boxes. All three went straight into
+   * the create call as `channelId`, `sourceId` and `mediumId`, which the API declares as Guids -
+   * so every Generate refused with
+   *
+   *     400  The JSON value could not be converted to CreateTrackingAssetRequest
+   *
+   * before any handler ran. No tracking asset could be created from this screen by anybody.
+   * Three of the six labels were not channels at all on the server side either: Facebook,
+   * Instagram and YouTube are SOURCES beneath the Social Media channel.
+   *
+   * These now hold `{ ref, label }` where `ref` is the row's Guid, which is what the API takes,
+   * and `label` is what the person reads.
+   */
+  protected readonly channelChoices = signal<readonly CatalogueOption[]>([]);
+  protected readonly sourceChoices = signal<readonly CatalogueOption[]>([]);
+  protected readonly mediumChoices = signal<readonly CatalogueOption[]>([]);
+
+  /** The channel names, for the filter row — which matches on the stored label, not on an id. */
+  protected readonly channelCatalogue = computed<readonly string[]>(() =>
+    this.channelChoices().map((choice) => choice.label));
+
+  protected channelLabel(ref: string): string {
+    return this.channelChoices().find((choice) => choice.ref === ref)?.label ?? ref;
+  }
+
+  protected sourceLabel(ref: string): string {
+    return this.sourceChoices().find((choice) => choice.ref === ref)?.label ?? ref;
+  }
+
+  protected mediumLabel(ref: string): string {
+    return this.mediumChoices().find((choice) => choice.ref === ref)?.label ?? ref;
+  }
+
+  /** Reads the three catalogues once. An empty list is reported rather than left unexplained. */
+  private loadReferenceCatalogues(): void {
+    this.campaignApi.getReferenceData().subscribe({
+      next: (reference) => {
+        // ACTIVE ROWS ONLY: a retired channel is one the API refuses on the way back in, so
+        // offering it produces a selection the create call rejects.
+        this.channelChoices.set(
+          reference.channels.filter((c) => c.isActive).map((c) => ({ ref: c.id, label: c.name })));
+        this.sourceChoices.set(
+          reference.sources.filter((c) => c.isActive).map((c) => ({ ref: c.id, label: c.name })));
+        this.mediumChoices.set(
+          reference.mediums.filter((c) => c.isActive).map((c) => ({ ref: c.id, label: c.name })));
+      },
+      error: () =>
+        this.toast.show(
+          'Reference lists unavailable',
+          'The channel, source and medium lists could not be loaded. Reload the page to try again.',
+          'error'),
+    });
+  }
+
   protected readonly channelFilter = signal<string>('');
 
   /** Asset status — search-select using only current catalogue values. */
@@ -203,14 +273,6 @@ export class TrackingAssetManagerComponent {
     }
     return chips;
   });
-
-  /** A campaign's channel/source label doesn't always match this page's own catalogue values
-   *  1:1 (the two catalogues were built for different screens) — alias the ones that clearly
-   *  correspond so auto-fill from a selected campaign still lands on a valid option. */
-  private readonly channelAlias: Readonly<Record<string, string>> = {
-    'On-ground event': 'Offline',
-    'Social media': 'Instagram',
-  };
 
   // ================= Campaign selector =================
   /** Scope-aware searchable selector with identity preview — reads live from
@@ -479,12 +541,16 @@ export class TrackingAssetManagerComponent {
 
   // ================= Actions, eligibility and result =================
 
-  private readonly inGenerateState = () => this.generatePermittedStates.includes(this.lifecycleState);
-
-  /** Generate — primary; appears only when role, permission, scope, state and dependencies allow. */
+  /** Generate — primary; offered when the caller holds the create permission. */
   protected readonly generateAllowed = computed(
     () => this.permissions().generate && this.inGenerateState() && this.uiState() !== 'no-access',
   );
+
+  /** Why Create is unavailable, so a disabled primary action is never silent. */
+  protected readonly generateDisabledReason = computed(() =>
+    this.permissions().generate
+      ? ''
+      : 'Creating a tracking asset needs the cam.tracking-assets.create permission.');
   /** Submit — a Draft asset is submitted for approval (moves Draft → Submitted). */
   protected submitAllowed(asset: TrackingAsset | null): boolean {
     return !!asset && asset.assetStatus === 'Draft';
@@ -589,25 +655,37 @@ export class TrackingAssetManagerComponent {
     this.gCampaign.set(ref);
     const rec = this.campaignStore.get(ref);
     if (!rec) return;
-    // The NAME, not the id: `channels` holds the API's Guids, and this prefill matches against
-    // this screen's own channel labels.
-    const firstChannel = rec.channelNames?.[0];
-    if (firstChannel) {
-      const mapped = this.channelCatalogue.includes(firstChannel) ? firstChannel : this.channelAlias[firstChannel];
-      if (mapped) {
-        this.gChannel.set(mapped);
-        // Asset type is left for the person to choose — it is not auto-derived from the
-        // selected campaign or channel.
-      }
+
+    // THE ID, NOT THE NAME. `rec.channels` holds the API's Guids, which is exactly what the
+    // picker and the create call both want now. The old prefill took `channelNames[0]` and tried
+    // to match it against this screen's own hard-coded label list, falling through an alias map
+    // when it did not - so it either set a label the API cannot accept or set nothing at all.
+    const firstChannel = rec.channels?.[0];
+    if (firstChannel && this.channelChoices().some((choice) => choice.ref === firstChannel)) {
+      this.gChannel.set(firstChannel);
+      // Asset type is left for the person to choose - it is not auto-derived from the
+      // selected campaign or channel.
     }
-    if (rec.sources?.length) this.gSource.set(rec.sources[0]);
+
+    const firstSource = rec.sources?.[0];
+    if (firstSource && this.sourceChoices().some((choice) => choice.ref === firstSource)) {
+      this.gSource.set(firstSource);
+    }
+
     if (rec.startDate) this.gActiveFrom.set(rec.startDate);
     if (rec.endDate) this.gActiveTo.set(rec.endDate);
   }
 
   /** On-ground events happen in more than one physical place for the same campaign, so each place
    *  gets its own separate QR/link — this is what lets the team see which place is contributing most. */
-  protected readonly isOnGround = computed(() => this.gChannel() === 'Offline');
+  /**
+   * On-ground events run in several physical places, so each place gets its own asset.
+   *
+   * MATCHED ON THE CHANNEL'S NAME rather than on the literal 'Offline' the picker used to hold,
+   * because the picker now holds the channel's id. The seeded CAM channel for this is 'Offline'.
+   */
+  protected readonly isOnGround = computed(
+    () => this.channelLabel(this.gChannel()).toLowerCase() === 'offline');
   protected readonly gPlaces = signal<
     readonly {
       readonly id: string;
@@ -852,7 +930,8 @@ export class TrackingAssetManagerComponent {
       const places = this.gPlaces().filter((p) => p.label.trim() && p.destination.trim());
       const dup = places.some((p) =>
         this.records().some(
-          (r) => r.destination.trim().toLowerCase() === p.destination.trim().toLowerCase() && r.channel === this.gChannel(),
+          (r) => r.destination.trim().toLowerCase() === p.destination.trim().toLowerCase()
+            && r.channel === this.channelLabel(this.gChannel()),
         ),
       );
       if (dup) {
@@ -861,6 +940,9 @@ export class TrackingAssetManagerComponent {
         return;
       }
       const refs: string[] = [];
+      let pending = places.length;
+      let firstError: string | undefined;
+
       for (const p of places) {
         const asset = this.buildAsset(p.destination.trim(), {
           label: p.label.trim(),
@@ -868,34 +950,69 @@ export class TrackingAssetManagerComponent {
           state: p.state,
           customFields: p.customFields,
         });
-        this.store.create(asset);
         refs.push(asset.trackingReference);
+
+        this.store.create(asset, (outcome) => {
+          if (!outcome.created) {
+            firstError ??= outcome.error;
+          }
+
+          pending -= 1;
+
+          if (pending === 0) {
+            this.announceGenerated(refs, firstError);
+          }
+        });
       }
+
       this.generatedReferences.set(refs);
       this.generatedReference.set(refs[0] ?? '');
-    } else {
-      // A tracking asset with the same destination + channel already exists → duplicate handling.
-      const dup = this.records().some(
-        (r) =>
-          r.destination.trim().toLowerCase() === this.gDestination().trim().toLowerCase() &&
-          r.channel === this.gChannel(),
-      );
-      if (dup) {
-        this.generateDialogOpen.set(false);
-        this.uiState.set('duplicate');
-        return;
-      }
-      const asset = this.buildAsset(this.gDestination().trim());
-      this.store.create(asset);
-      this.generatedReferences.set([asset.trackingReference]);
-      this.generatedReference.set(asset.trackingReference);
+      return;
+    }
+
+    // A tracking asset with the same destination + channel already exists → duplicate handling.
+    const dup = this.records().some(
+      (r) =>
+        r.destination.trim().toLowerCase() === this.gDestination().trim().toLowerCase() &&
+        r.channel === this.channelLabel(this.gChannel()),
+    );
+    if (dup) {
+      this.generateDialogOpen.set(false);
+      this.uiState.set('duplicate');
+      return;
+    }
+
+    const asset = this.buildAsset(this.gDestination().trim());
+    this.generatedReferences.set([asset.trackingReference]);
+    this.generatedReference.set(asset.trackingReference);
+
+    this.store.create(asset, (outcome) =>
+      this.announceGenerated([asset.trackingReference], outcome.created ? undefined : outcome.error));
+  }
+
+  /**
+   * Says what actually happened.
+   *
+   * THE OUTCOME IS ANNOUNCED AFTER THE SERVER HAS ANSWERED. This used to close the dialog and
+   * toast "Tracking asset created" on the line after `store.create()`, while the request was
+   * still in flight - and every one of those requests was refused, because the form sent labels
+   * and free text where the API takes Guids. The screen reported success, listed a reference the
+   * browser had invented, and the register was empty on the next load with nothing anywhere
+   * saying why.
+   */
+  private announceGenerated(refs: readonly string[], error?: string): void {
+    if (error) {
+      this.toast.show('Tracking asset not created', error, 'error');
+      this.uiState.set('validation');
+      return;
     }
 
     this.generateDialogOpen.set(false);
-    const refs = this.generatedReferences();
     this.toast.show(
       'Tracking asset created',
-      refs.length > 1 ? `Created ${refs.length} assets: ${refs.join(', ')}.` : `${refs[0]} created as ${this.gAssetStatus()}.`,
+      refs.length > 1
+        ? `Created ${refs.length} assets: ${refs.join(', ')}.`
+        : `${refs[0]} created as ${this.gAssetStatus()}.`,
       'success',
     );
     this.uiState.set('ready');
@@ -1177,6 +1294,10 @@ export class TrackingAssetManagerComponent {
   }
 
   constructor() {
+    // The channel, source and medium lists the Generate form offers. Read once, from the API,
+    // so every option carries the id the create call actually needs.
+    this.loadReferenceCatalogues();
+
     // No access must hide the record, fields, counts, actions and search — never a disabled-only
     // affordance. Reacts live to a session/permission change (e.g. via the
     // shared CurrentUserService switcher on another CAM screen).

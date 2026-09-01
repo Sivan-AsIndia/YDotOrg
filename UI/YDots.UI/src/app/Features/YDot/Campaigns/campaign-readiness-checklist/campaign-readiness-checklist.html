@@ -369,7 +369,10 @@
               <div class="crc-blocker-main">
                 <span class="crc-blocker-dep">{{ b.dependencyLabel }}</span>
                 <span class="crc-blocker-note">{{ b.note }}</span>
-                <span class="crc-blocker-meta">Owner {{ b.owner }} · raised {{ b.createdAt }}</span>
+                <!-- The owner as a NAME and the date as a DATE. Both now come from the server's
+                     own blocker record, which carries a user id and an ISO instant; printing them
+                     raw put a Guid and a timestamp with microseconds on the screen. -->
+                <span class="crc-blocker-meta">Owner {{ ownerName(b.ownerRef) }} · raised {{ raisedWhen(b.createdAt) }}</span>
               </div>
               @if (permissions().assignBlocker) {
                 <button type="button" class="crc-blocker-remove" (click)="removeBlocker(b.id)" aria-label="Resolve blocker">Resolve</button>

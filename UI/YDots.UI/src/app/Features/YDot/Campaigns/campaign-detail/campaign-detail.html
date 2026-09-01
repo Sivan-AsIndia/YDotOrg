@@ -255,10 +255,16 @@
             </div>
           }
 
-          <!-- Payments: this campaign's donations, as a table -->
+          <!-- Payments: this campaign's donations, read live from the payments service -->
           @if (activeTab() === 'payments') {
             <div role="tabpanel" aria-label="Payments">
-              <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: donations, cols: ['Donation', 'Channel · Method', 'Date'] }"></ng-container>
+              @if (donationsLoading()) {
+                <p class="cd-state-note">Loading this campaign's donations…</p>
+              } @else if (donationsError()) {
+                <p class="cd-state-note">{{ donationsError() }}</p>
+              } @else {
+                <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: donations(), cols: ['Donation', 'Source · Method', 'Received'] }"></ng-container>
+              }
             </div>
           }
         </div>

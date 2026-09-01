@@ -180,7 +180,32 @@ public sealed class CampaignLifecycleCommandHandler(
 
         var now = clock.UtcNow;
 
-        campaign.Status = CampaignStatus.Approved;
+        // ---- Approved, or Scheduled ------------------------------------------------------------
+        //
+        // SCHEDULED WAS UNREACHABLE. The state existed on the enum, the mapper described it
+        // ("Scheduled - goes live on its start date"), the read service counted it and Activate
+        // accepted it - but no handler anywhere ever assigned it, so no campaign was ever in it.
+        // The visible consequence was on the campaign detail: an Approved campaign offered a
+        // "Schedule" button which routed back to this very endpoint, and this endpoint refuses
+        // anything that is not Submitted. Pressing it answered
+        // 409 "Only a Submitted campaign can be approved. This one is Approved."
+        //
+        // A campaign set to activate AUTOMATICALLY is the one that has somewhere to wait: it goes
+        // live on its start date without anybody pressing anything, so between approval and that
+        // date it is Scheduled rather than merely Approved. One set to activate MANUALLY has
+        // nothing to wait for - somebody activates it - so it stays Approved.
+        //
+        // ONLY WHILE THE START DATE IS STILL AHEAD. An auto-activate campaign approved on or
+        // after its own start date has no future trigger to wait for, so parking it in Scheduled
+        // would be parking it somewhere nothing will ever move it out of. It stays Approved, and
+        // Activate is offered.
+        var target =
+            campaign.LifecycleActivation == LifecycleActivation.Auto
+            && campaign.StartDate > DateOnly.FromDateTime(now.UtcDateTime)
+                ? CampaignStatus.Scheduled
+                : CampaignStatus.Approved;
+
+        campaign.Status = target;
         campaign.ApprovedByUserId = currentUser.UserId;
         campaign.ApprovedAtUtc = now;
 
@@ -190,7 +215,12 @@ public sealed class CampaignLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await BuildOutcomeAsync(campaign, "Campaign approved.", cancellationToken);
+        return await BuildOutcomeAsync(
+            campaign,
+            target == CampaignStatus.Scheduled
+                ? "Campaign approved. It is scheduled to go live on its start date."
+                : "Campaign approved.",
+            cancellationToken);
     }
 
     // =====================================================================================

@@ -129,18 +129,38 @@
     // ===== NEW: extra widget card — count of built-in/system roles =====
     systemRoleCount = computed(() => (this.data()?.roles ?? []).filter(r => r.isSystemRole).length);
 
+    /**
+     * The state tabs and stat cards: one entry per state present in the data.
+     *
+     * IT CARRIES BOTH NAMES, and that is the fix. It used to key on `statusDisplay` alone -
+     * 'Draft', 'In use', 'Retired' - and the tab handed that display string to `filterStatus`,
+     * which `applyFilters` compares against `role.status`, the RAW value: 'draft', 'active',
+     * 'inactive'. 'Draft' never equals 'draft', so selecting the Draft tab filtered every role
+     * away. A role created as a draft - which is the only way this screen creates one - was
+     * therefore invisible on the one tab meant to list it, and looked as though it had not been
+     * saved at all.
+     *
+     * `status` is now the raw value the filter compares, `label` is what the tab prints.
+     */
     statusBreakdown = computed(() => {
       const items = this.data()?.roles ?? [];
-      const counts = new Map<string, number>();
+      const counts = new Map<string, { label: string; count: number }>();
+
       for (const r of items) {
-        const state = r.statusDisplay ?? r.status ?? 'Unknown';
-        counts.set(state, (counts.get(state) ?? 0) + 1);
+        const status = r.status ?? 'unknown';
+        const label = r.statusDisplay ?? r.status ?? 'Unknown';
+        const existing = counts.get(status);
+
+        counts.set(status, { label, count: (existing?.count ?? 0) + 1 });
       }
+
       // Stable, readable order: the states people care about first, then anything else.
-      const priority: Record<string, number> = { 'In use': 0, Draft: 1, Retired: 2 };
+      const priority: Record<string, number> = { active: 0, draft: 1, inactive: 2 };
+
       return Array.from(counts.entries())
-        .map(([status, count]) => ({ status, count }))
-        .sort((a, b) => (priority[a.status] ?? 99) - (priority[b.status] ?? 99) || a.status.localeCompare(b.status));
+        .map(([status, entry]) => ({ status, label: entry.label, count: entry.count }))
+        .sort((a, b) =>
+          (priority[a.status] ?? 99) - (priority[b.status] ?? 99) || a.label.localeCompare(b.label));
     });
 
     // Maps any approvalState string to a consistent visual bucket so new/unexpected

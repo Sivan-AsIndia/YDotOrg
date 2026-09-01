@@ -25,8 +25,9 @@ import { ToastService } from '../services/toast.service';
  * -------------------------
  * Only a root user sees it, because only a root user has anything to switch between. Choosing an
  * Organisation asks the SERVER to re-issue the access token against it; there is no client-side
- * setting that could be flipped instead. The switcher then reloads the navigation, because what
- * a person may see genuinely differs between Organisations.
+ * setting that could be flipped instead. The new navigation is fetched as part of that switch —
+ * see `OrganisationContextService` — because what a person may see genuinely differs between
+ * Organisations, and leaving the reload to each caller is what let one of them forget.
  *
  * And selecting an Organisation does not change who the person is. A root user has no
  * Organisation of their own and never acquires one by looking at somebody's data — which is why
@@ -102,8 +103,11 @@ export class TopheaderComponent implements OnDestroy {
   /**
    * Steps into an Organisation.
    *
-   * The navigation is reloaded straight afterwards because the menu is Organisation-specific:
-   * keeping the previous one would show links that now lead nowhere.
+   * `select()` does not complete until the new Organisation's navigation is in hand, so
+   * `landingRoute()` below is the NEW Organisation's landing route rather than the previous
+   * one's. A menu that could not be fetched does not fail the switch — the token has already
+   * changed by then — so the fallback is simply whatever the service last knew, which is the
+   * dashboard.
    */
   switchTo(option: TenantOptionResponse): void {
     if (!option.tenantId || this.switchingTo()) {
@@ -117,23 +121,12 @@ export class TopheaderComponent implements OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.navigation.load().pipe(takeUntil(this.destroy$)).subscribe({
-            next: () => {
-              this.switchingTo.set(null);
-              this.toast.show(
-                'Organisation selected',
-                `You are now working inside ${option.name}.`,
-                'success');
-              void this.router.navigate([this.navigation.landingRoute()]);
-            },
-            error: () => {
-              // The switch itself worked; only the menu did not come back. Sending the person to
-              // the dashboard is better than leaving them on a page from the previous
-              // Organisation with a stale sidebar.
-              this.switchingTo.set(null);
-              void this.router.navigate(['/app/dashboard']);
-            },
-          });
+          this.switchingTo.set(null);
+          this.toast.show(
+            'Organisation selected',
+            `You are now working inside ${option.name}.`,
+            'success');
+          void this.router.navigate([this.navigation.landingRoute()]);
         },
         error: (error: unknown) => {
           this.switchingTo.set(null);
@@ -166,28 +159,33 @@ export class TopheaderComponent implements OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.navigation.load().pipe(takeUntil(this.destroy$)).subscribe({
-            next: () => {
-              this.leaving.set(false);
-              this.toast.show(
-                'Back at platform level',
-                'You are no longer working inside an organisation.',
-                'success');
-              void this.router.navigate(['/app/administration/organisation/directory']);
-            },
-            error: () => {
-              // Leaving worked; only the menu did not come back. The directory is still the right
-              // destination, and a refresh will rebuild the sidebar.
-              this.leaving.set(false);
-              void this.router.navigate(['/app/administration/organisation/directory']);
-            },
-          });
+          this.leaving.set(false);
+          this.toast.show(
+            'Back at platform level',
+            'You are no longer working inside an organisation.',
+            'success');
+          void this.router.navigate(['/app/administration/organisation/directory']);
         },
         error: (error: unknown) => {
           this.leaving.set(false);
           this.toast.show('Could not leave the organisation', apiErrorMessage(error), 'error');
         },
       });
+  }
+
+  /**
+   * The "Manage organisations" item at the foot of the switcher.
+   *
+   * IT USED TO BE A PLAIN LINK, and that is how the reported bug was reached most easily: click
+   * it from inside TEN001 and you arrive at a screen listing every Organisation on the platform,
+   * with TEN001's TenantAdmin menu still down the left-hand side and the token still naming
+   * TEN001. The route now carries `platformScopeGuard`, which steps out of the Organisation on the
+   * way in, so a plain link would in fact be correct again — but a person clicking this deserves
+   * to be told it will leave, rather than discovering it from the sidebar afterwards. Hence a
+   * button with a subtitle rather than an anchor.
+   */
+  manageOrganisations(): void {
+    void this.router.navigate(['/app/administration/organisation/directory']);
   }
 
   /** Whether this Organisation can be worked in, or only reviewed. */

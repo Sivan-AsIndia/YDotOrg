@@ -57,13 +57,48 @@ public sealed class OrganisationReadService(
             query = query.Where(tenant => tenant.Status == filter.Status.Value);
         }
 
-        // The review queue: everything sitting on SuperAdmin desk.
+        // ---- The review queue: everything sitting on the SuperAdmin's desk --------------------
+        //
+        // TWO KINDS OF WORK ARRIVE HERE, and this only ever listed one of them.
+        //
+        //   1. An ORGANISATION submitted for approval, which moves the tenant's own status to
+        //      Submitted / Resubmitted / UnderReview. That is what the three lines below match.
+        //
+        //   2. A DOCUMENT SUBMISSION sent for review. That is a separate object with its own
+        //      state machine, and sending one for review does NOT change the organisation's
+        //      status - by design, because an already-approved organisation can send a renewed
+        //      certificate without re-entering onboarding.
+        //
+        // So a grouped submission sat in Submitted, permanently, with nothing on any reviewer's
+        // screen pointing at it. The organisation's own Documents tab showed it waiting; the
+        // platform's review queue was empty. The only way to reach it was to already know the
+        // organisation's id and open its page directly.
+        //
+        // `GetPendingSubmissionCountsAsync` on ITenantRepository was written for exactly this and
+        // had no callers anywhere in the solution - the badge it exists to feed was never built.
+        //
+        // The document-submission arm is expressed as a subquery on the SAME query rather than a
+        // second round trip and a union in memory, so paging and sorting still apply to the whole
+        // queue rather than to half of it.
         if (filter.AwaitingReview == true)
         {
             query = query.Where(tenant =>
                 tenant.Status == TenantStatus.Submitted
                 || tenant.Status == TenantStatus.Resubmitted
-                || tenant.Status == TenantStatus.UnderReview);
+                || tenant.Status == TenantStatus.UnderReview
+                || context.TenantDocumentSubmissions
+                    // FILTERS OFF, and this is not optional. TenantDocumentSubmission is
+                    // ITenantOwned, so it carries an automatic "TenantId == the current one".
+                    // A SuperAdmin working the review queue has entered no Organisation, so the
+                    // current one is null and that filter matches NOTHING - the subquery would be
+                    // false for every row and the queue would look exactly as empty as before.
+                    // The route reaching this holds the platform review permission, which is what
+                    // authorises the cross-Organisation read.
+                    .IgnoreQueryFilters()
+                    .Any(submission =>
+                        submission.TenantId == tenant.Id
+                        && (submission.Status == TenantDocumentSubmissionStatus.Submitted
+                            || submission.Status == TenantDocumentSubmissionStatus.UnderReview)));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Country))
@@ -200,7 +235,14 @@ public sealed class OrganisationReadService(
             BusinessUnitId = businessUnitId,
             AwaitingReview = true,
             PageSize = 100,
+
             // Oldest first: the one that has been waiting longest is the one to look at.
+            //
+            // An Organisation whose only outstanding work is a DOCUMENT submission may never have
+            // been submitted itself and so has no SubmittedAtUtc. Those sort together at one end
+            // rather than interleaving by the date of the paperwork - accepted, because the queue
+            // is a list to work through rather than a strict age ranking, and the alternative is
+            // ordering organisations by a date that belongs to a different object.
             Sort = "submittedatutc asc"
         };
 

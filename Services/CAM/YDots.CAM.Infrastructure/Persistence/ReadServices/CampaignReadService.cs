@@ -44,7 +44,15 @@ public sealed class CampaignReadService(
             .Select(campaign => new
             {
                 Campaign = campaign,
-                OwnerCount = campaign.Owners.Count(),
+
+                // THE IDS, NOT JUST THE COUNT. The register needs to name the owners, and the
+                // entity's own Owners collection is empty here - this query does not Include it -
+                // so anything read from `campaign.Owners` downstream is silently zero or blank.
+                OwnerIds = campaign.Owners
+                    .OrderByDescending(owner => owner.IsPrimary)
+                    .Select(owner => owner.OwnerId)
+                    .ToList(),
+
                 TrackingAssetCount = campaign.TrackingAssets.Count(),
 
                 // The same predicate the launch gate uses, so the number the register shows and
@@ -60,7 +68,7 @@ public sealed class CampaignReadService(
 
         var items = rows
             .Select(row => row.Campaign.ToListItemResponse(
-                today, row.TrackingAssetCount, row.OutstandingCheckCount))
+                today, row.OwnerIds, row.TrackingAssetCount, row.OutstandingCheckCount))
             .ToList();
 
         return new PagedResponse<CampaignListItemResponse>(items, total, filter.Page, filter.PageSize);

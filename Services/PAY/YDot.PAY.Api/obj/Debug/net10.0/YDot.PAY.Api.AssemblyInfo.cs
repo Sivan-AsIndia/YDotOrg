@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("YDot.PAY.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+89999341f6baa27395f8c6c3f35be4406191185a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+508fa01f145cb00c3cf7e7d5d7fcc328a5115106")]
 [assembly: System.Reflection.AssemblyProductAttribute("YDot.PAY.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("YDot.PAY.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

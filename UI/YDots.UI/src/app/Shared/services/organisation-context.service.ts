@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, catchError, map, of, switchMap, tap } from 'rxjs';
 import { AuthApiService } from '../../Service/auth-api.service';
 import {
   SelectTenantResponse,
@@ -7,6 +7,7 @@ import {
   TenantOptionResponse,
 } from '../models/auth.model';
 import { AuthTokenService } from './auth-token.service';
+import { NavigationService } from './navigation.service';
 
 /**
  * Which Organisation the session is working inside, and how to change it.
@@ -30,11 +31,20 @@ import { AuthTokenService } from './auth-token.service';
  * never acquires one by looking at somebody's data — their user record is untouched by every call
  * below. Selecting sets the operating context for the session, which is a different thing from
  * ownership and is worth keeping separate.
+ *
+ * SWITCHING IS NOT DONE UNTIL THE NEW MENU IS IN HAND
+ * ---------------------------------------------------
+ * `select()` and `exitToPlatform()` do not complete on the new token. They complete once the
+ * navigation for the Organisation they moved to has been fetched, because every caller's next act
+ * is to send somebody to `landingRoute()` — a route that belongs to the tree they are waiting for.
+ * Leaving that to the caller is what produced the bug this addresses: three call sites, two that
+ * remembered to reload the menu and one that did not.
  */
 @Injectable({ providedIn: 'root' })
 export class OrganisationContextService {
   private readonly authApi = inject(AuthApiService);
   private readonly tokens = inject(AuthTokenService);
+  private readonly navigation = inject(NavigationService);
 
   /** The Organisations a global caller may step into. Empty for everybody else. */
   private readonly selectableState = signal<TenantOptionResponse[]>([]);
@@ -87,11 +97,11 @@ export class OrganisationContextService {
    *
    * The new token is stored by the auth service, so everything downstream — the interceptor, the
    * navigation call, every screen — is operating in the new Organisation from the next request
-   * onwards. Callers normally reload the navigation afterwards, because what a person may see
-   * differs between Organisations.
+   * onwards. The new navigation is then fetched before this completes, so a caller that lands on
+   * `landingRoute()` is landing on the route the NEW Organisation named.
    */
   select(tenantId: string): Observable<SelectTenantResponse> {
-    return this.authApi.selectOrganisation(tenantId);
+    return this.withNavigation(this.authApi.selectOrganisation(tenantId));
   }
 
   /**
@@ -101,7 +111,26 @@ export class OrganisationContextService {
    * there is nothing to leave otherwise.
    */
   exitToPlatform(): Observable<SelectTenantResponse> {
-    return this.authApi.exitOrganisation();
+    return this.withNavigation(this.authApi.exitOrganisation());
+  }
+
+  /**
+   * Chains the navigation reload onto a switch, and hands the switch's own answer back.
+   *
+   * THE MENU FAILING DOES NOT FAIL THE SWITCH. The token has already been re-issued by the time
+   * this runs; reporting an error would tell the caller the switch did not happen when it plainly
+   * did, and send them down an error path that leaves the session in the new Organisation with a
+   * screen insisting it is in the old one. A sidebar that could not be fetched is a sidebar the
+   * person can retry.
+   */
+  private withNavigation(
+    switching: Observable<SelectTenantResponse>): Observable<SelectTenantResponse> {
+    return switching.pipe(
+      switchMap((result) =>
+        this.navigation.load().pipe(
+          catchError(() => of(null)),
+          map(() => result))),
+    );
   }
 
   /** Whether an Organisation can actually be worked in, as opposed to merely reviewed. */

@@ -7,6 +7,9 @@ import {
 } from '../models/campaign-contract.model';
 import { ApprovalState, AssetStatus, TrackingAsset } from '../models/tracking-asset.model';
 import { CampaignApiService } from '../../Service/campaign-api.service';
+import { OrganisationScopeService } from './organisation-scope.service';
+import { CampaignStoreService } from './campaign-store.service';
+import { apiErrorMessage } from '../models/api-response.model';
 
 /**
  * The single shared source of truth for tracking assets.
@@ -36,6 +39,10 @@ import { CampaignApiService } from '../../Service/campaign-api.service';
 @Injectable({ providedIn: 'root' })
 export class TrackingAssetStoreService {
   private readonly api = inject(CampaignApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
+
+  /** Holds the code -> API id map. A tracking asset is created against the campaign's ID. */
+  private readonly campaigns = inject(CampaignStoreService);
 
   /**
    * The loaded assets.
@@ -63,6 +70,22 @@ export class TrackingAssetStoreService {
   private readonly versionsByReference = new Map<string, number>();
 
   constructor() {
+    this.refresh();
+    this.organisationScope.onOrganisationChange(() => this.reloadForOrganisation());
+  }
+
+  /**
+   * Everything here belongs to ONE Organisation, so a switch discards it and reloads.
+   *
+   * Discarded FIRST: reloading alone would leave the previous Organisation's rows readable on
+   * screen for the length of a round trip. See `OrganisationScopeService`.
+   */
+  private reloadForOrganisation(): void {
+    this.records.set([]);
+    this.serverTotal.set(0);
+    this.loadError.set(null);
+    this.idsByReference.clear();
+    this.versionsByReference.clear();
     this.refresh();
   }
 
@@ -120,13 +143,42 @@ export class TrackingAssetStoreService {
    * asset created without the ids resolved is one the form should not have submitted; the server
    * refuses it and the optimistic row is withdrawn.
    */
-  create(asset: TrackingAsset): void {
+  create(
+    asset: TrackingAsset,
+    onDone?: (outcome: { readonly created: boolean; readonly error?: string }) => void,
+  ): void {
+    // ---- THE CAMPAIGN GOES UP AS ITS ID -----------------------------------------------------
+    //
+    // `campaignRef` is the campaign's CODE - 'CAMP-2026-0004' - because that is the key every
+    // screen holds a campaign by. It went into `campaignId`, which the API declares as a Guid, so
+    // System.Text.Json refused the whole body with
+    //
+    //     400  The JSON value could not be converted to CreateTrackingAssetRequest
+    //
+    // before model binding finished. Nothing was ever created, from either the Campaign Manager's
+    // screen or the Organisation Administrator's, and the screen still said "Tracking asset
+    // created" because this method reported nothing back to it.
+    const campaignId = this.campaigns.apiId(asset.campaignRef);
+
+    if (!campaignId) {
+      const message =
+        'That campaign could not be identified. Reload the page and choose the campaign again.';
+
+      this.loadError.set(message);
+      onDone?.({ created: false, error: message });
+      return;
+    }
+
     this.records.update((current) => [asset, ...current]);
 
     this.api
       .createTrackingAsset({
-        campaignId: asset.campaignRef,
+        campaignId,
         assetType: this.toAssetType(asset.assetType),
+
+        // The channel, source and medium are ALREADY IDS: the Generate form now picks them from
+        // the CAM reference catalogues rather than from a hard-coded label list and two free-text
+        // boxes. See TrackingAssetManagerComponent.loadReferenceCatalogues.
         channelId: asset.channel,
         destination: asset.destination,
         sourceId: asset.source,
@@ -149,12 +201,21 @@ export class TrackingAssetStoreService {
           : null,
       })
       .subscribe({
-        next: () => this.refresh(),
-        error: () => {
+        next: () => {
+          this.refresh();
+          onDone?.({ created: true });
+        },
+        // THE SERVER'S OWN MESSAGE, and the caller is told. A create is refused for reasons a
+        // person can act on - a duplicate destination, a retired channel, a campaign that cannot
+        // take assets - and 'The tracking asset could not be created.' threw all of it away.
+        error: (error: unknown) => {
           this.records.update((current) =>
             current.filter((record) => record.trackingReference !== asset.trackingReference),
           );
-          this.loadError.set('The tracking asset could not be created.');
+
+          const message = apiErrorMessage(error, 'The tracking asset could not be created.');
+          this.loadError.set(message);
+          onDone?.({ created: false, error: message });
         },
       });
   }
@@ -330,7 +391,7 @@ export class TrackingAssetStoreService {
       // BLANK UNTIL APPROVED. See buildGeneratedUrl for why that matters.
       generatedUrl: item.trackingReference ? `${item.trackingReference}` : '',
 
-      isQr: item.assetType === 'qrCode' || item.assetType === 'posterCode',
+      isQr: item.assetType === 'qrCode',
 
       // The API records no test result: whether a link was manually checked is a client-side
       // note, so it survives from the loaded record rather than being invented here.
@@ -382,6 +443,13 @@ export class TrackingAssetStoreService {
     return isLive ? 'Active' : 'Paused';
   }
 
+  /**
+   * The screen's asset-type label onto the API's enum.
+   *
+   * THE API HAS FOUR: QRCode, ShortLink, UTMLink, LandingPage. This mapped 'Image' to
+   * 'posterCode', which the server does not define, and had no case for 'Landing Page' at all -
+   * so choosing Landing Page silently created a short link instead.
+   */
   private toAssetType(label: string): TrackingAssetType {
     switch (label) {
       case 'QR Code':
@@ -390,8 +458,8 @@ export class TrackingAssetStoreService {
         return 'shortLink';
       case 'UTM Link':
         return 'utmLink';
-      case 'Image':
-        return 'posterCode';
+      case 'Landing Page':
+        return 'landingPage';
       default:
         return 'shortLink';
     }
@@ -405,10 +473,8 @@ export class TrackingAssetStoreService {
         return 'Short Link';
       case 'utmLink':
         return 'UTM Link';
-      case 'posterCode':
-        return 'Image';
-      case 'smsLink':
-        return 'Short Link';
+      case 'landingPage':
+        return 'Landing Page';
       default:
         return 'Short Link';
     }

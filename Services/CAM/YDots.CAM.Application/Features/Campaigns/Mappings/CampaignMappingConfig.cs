@@ -157,10 +157,23 @@ public static class CampaignMappingConfig
     }
 
     /// <summary>One row of the register.</summary>
+    /// <param name="ownerIds">
+    /// The owners, PROJECTED BY THE READ SERVICE rather than read off the entity.
+    ///
+    /// The register's query is <c>AsNoTracking()</c> with no <c>Include</c> for the owners, so
+    /// <c>campaign.Owners</c> is an empty collection by the time this runs - which is why the
+    /// count this used to read from it was 0 on every row of every register, for every campaign,
+    /// however many owners it actually had.
+    /// </param>
     public static CampaignListItemResponse ToListItemResponse(
-        this Campaign campaign, DateOnly today, int trackingAssetCount, int outstandingCheckCount)
+        this Campaign campaign,
+        DateOnly today,
+        IReadOnlyList<Guid> ownerIds,
+        int trackingAssetCount,
+        int outstandingCheckCount)
     {
         ArgumentNullException.ThrowIfNull(campaign);
+        ArgumentNullException.ThrowIfNull(ownerIds);
 
         return new CampaignListItemResponse(
             campaign.Id,
@@ -176,7 +189,8 @@ public static class CampaignMappingConfig
             campaign.Status,
             DescribeStatus(campaign.Status),
             ElapsedPercent(campaign, today),
-            campaign.Owners.Count,
+            ownerIds.Count,
+            ownerIds,
             trackingAssetCount,
             outstandingCheckCount,
             campaign.UpdatedAtUtc,

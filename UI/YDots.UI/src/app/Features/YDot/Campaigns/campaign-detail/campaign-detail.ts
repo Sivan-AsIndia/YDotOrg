@@ -18,6 +18,9 @@ import { ToastService } from '../../../../Shared/services/toast.service';
 import { PauseResumeCloseCampaignComponent } from '../pause-resume-and-close-campaign/pause-resume-and-close-campaign';
 import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
 import { CampaignApiService } from '../../../../Service/campaign-api.service';
+import { PaymentApiService } from '../../../../Service/payment-api.service';
+import { MoneyResponse } from '../../../../Shared/models/payment.model';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 
 /** One named lifecycle transition offered from a given state. */
 interface LifecycleTransition {
@@ -35,7 +38,15 @@ interface LifecycleTransition {
 const PRIMARY_TRANSITION: Partial<Record<CampaignStatus, LifecycleTransition>> = {
   Draft: { key: 'primary', label: 'Submit', target: 'Submitted' },
   Submitted: { key: 'primary', label: 'Approve', target: 'Approved' },
-  Approved: { key: 'primary', label: 'Schedule', target: 'Scheduled' },
+
+  // APPROVED GOES TO ACTIVE, NOT TO SCHEDULED, and that is the shape of the server's state
+  // machine rather than a preference. `Scheduled` is where a campaign set to AUTO activation
+  // waits for its own start date, and approval is what puts it there — there is no separate
+  // "schedule" step for anybody to run. This offered one: it was labelled Schedule, it routed
+  // to the approve endpoint, and approve refuses anything that is not Submitted, so pressing it
+  // on an Approved campaign answered 409 every time. An approved campaign's permitted action on
+  // the server is Activate, which is what this now offers.
+  Approved: { key: 'primary', label: 'Activate', target: 'Active' },
   Scheduled: { key: 'primary', label: 'Activate', target: 'Active' },
   Active: { key: 'primary', label: 'Pause', target: 'Paused' },
   Paused: { key: 'primary', label: 'Resume', target: 'Active' },
@@ -91,6 +102,9 @@ export class CampaignDetailComponent {
   private readonly trackingStore = inject(TrackingAssetStoreService);
   private readonly budgetStore = inject(BudgetTargetStoreService);
   private readonly toast = inject(ToastService);
+
+  /** The payments service. This campaign's Payments tab reads its donations from it. */
+  private readonly payments = inject(PaymentApiService);
   /**
    * Owner names, resolved from IAM rather than from a map in this file.
    *
@@ -277,14 +291,107 @@ export class CampaignDetailComponent {
     }));
   });
 
-  /** Donations — read-only summary. No shared donations-ledger module
-   *  exists yet in this codebase to source this from; kept as record content. */
-  protected readonly donations: readonly HistoryRow[] = [
-    { primary: '₹5,000 · Ramesh Kumar', secondary: 'Website · UPI', meta: '12 May 2025, 11:20 AM' },
-    { primary: '₹2,500 · Anitha S', secondary: 'Facebook · Card', meta: '11 May 2025, 06:02 PM' },
-    { primary: '₹10,000 · Corporate — Zentra', secondary: 'Website · Bank transfer', meta: '10 May 2025, 09:40 AM' },
-  ];
-  protected readonly donationsCount = 1248;
+  /**
+   * This campaign's donations — THE REAL ONES, from the payments service.
+   *
+   * WHAT WAS HERE: three hard-coded rows compiled into the bundle. "₹5,000 · Ramesh Kumar",
+   * "₹2,500 · Anitha S", "₹10,000 · Corporate — Zentra", dated May 2025, with a headline
+   * count of 1,248 donations. Every campaign, in every organisation, showed the same three
+   * donations from the same three people and the same total — including a campaign created a
+   * minute earlier that had received nothing at all.
+   *
+   * That is worse than an empty tab in a way worth being exact about: a named donor and an
+   * amount on a campaign's Payments tab reads as a financial record. Somebody reconciling that
+   * campaign would be reading three invented transactions attributed to three invented people,
+   * and a fourth number, 1,248, attributed to nobody.
+   *
+   * It is now GET /donations?campaignId={id} — the payments register's own endpoint, filtered to
+   * this campaign, permission-checked and organisation-scoped server-side like every other read.
+   * A campaign with no donations shows the empty state, which is the truth.
+   */
+  protected readonly donations = signal<readonly HistoryRow[]>([]);
+  protected readonly donationsCount = signal(0);
+  protected readonly donationsLoading = signal(false);
+  protected readonly donationsError = signal<string | null>(null);
+
+  /**
+   * Reads this campaign's donations.
+   *
+   * A PAGE OF TWENTY, ordered by the API. The tab is a summary beside the campaign, not the
+   * payments register — the full ledger is that screen's job — so it shows the most recent and
+   * reports the true total beside them.
+   */
+  private loadDonations(): void {
+    const campaignId = this.store.apiId(this.reference);
+
+    if (!campaignId) {
+      this.donations.set([]);
+      this.donationsCount.set(0);
+      return;
+    }
+
+    this.donationsLoading.set(true);
+    this.donationsError.set(null);
+
+    this.payments.searchDonations({ campaignId, page: 1, pageSize: 20 }).subscribe({
+      next: (page) => {
+        this.donations.set(
+          (page.items ?? []).map((donation) => ({
+            primary: `${this.money(donation.amount)} · ${donation.donorName || 'Anonymous donor'}`,
+            secondary: [donation.sourceType as string | null, donation.methodType as string | null]
+              .filter((part): part is string => !!part)
+              .join(' · ') || donation.statusDescription,
+            meta: this.donationWhen(donation.donatedAtUtc),
+          })),
+        );
+
+        this.donationsCount.set(page.totalCount ?? 0);
+        this.donationsLoading.set(false);
+      },
+
+      // REPORTED, NOT SWALLOWED INTO AN EMPTY LIST. "No donations" and "the payments service did
+      // not answer" are different facts, and only one of them is a reason to stop chasing a
+      // missing donation.
+      error: (error: unknown) => {
+        this.donations.set([]);
+        this.donationsCount.set(0);
+        this.donationsLoading.set(false);
+        this.donationsError.set(
+          apiErrorMessage(error, 'This campaign\u2019s donations could not be loaded.'));
+      },
+    });
+  }
+
+  /** An amount as its own currency prints it, rather than as a bare number. */
+  private money(amount: MoneyResponse | null | undefined): string {
+    if (!amount) {
+      return '—';
+    }
+
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: amount.currencyCode || 'INR',
+        maximumFractionDigits: 2,
+      }).format(amount.amount ?? 0);
+    } catch {
+      return `${amount.currencyCode ?? ''} ${amount.amount ?? 0}`.trim();
+    }
+  }
+
+  private donationWhen(value: string | null | undefined): string {
+    if (!value) {
+      return '—';
+    }
+
+    const when = new Date(value);
+
+    return Number.isNaN(when.getTime())
+      ? '—'
+      : when.toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+  }
 
   /** Documents — Confidential; visible only within record scope and purpose. */
   protected readonly documents: readonly HistoryRow[] = [
@@ -462,15 +569,21 @@ export class CampaignDetailComponent {
   /** Donations in scope — modelled as backend-fetched: re-reading it stamps a fresh refreshed time. */
   protected readonly donationsScopeFetching = signal(false);
   protected readonly scopedTotals = computed(
-    () => `${this.donationsCount.toLocaleString('en-IN')} donations in scope · refreshed ${this.lastRefresh()}`,
+    () => `${this.donationsCount().toLocaleString('en-IN')} donations in scope · refreshed ${this.lastRefresh()}`,
   );
-  /** Re-fetch the donations-in-scope total from the backend (simulated) and stamp the refreshed time. */
+
+  /**
+   * Re-reads this campaign's donations.
+   *
+   * IT ACTUALLY RE-READS THEM NOW. This was a 400 ms `setTimeout` that stamped a fresh
+   * "refreshed" time onto a list that had not changed and could not change, because the list was
+   * a constant — so pressing Refresh made the invented figures look freshly confirmed.
+   */
   protected refreshDonationsScope(): void {
     this.donationsScopeFetching.set(true);
-    setTimeout(() => {
-      this.lastRefresh.set(this.nowLabel());
-      this.donationsScopeFetching.set(false);
-    }, 400);
+    this.loadDonations();
+    this.lastRefresh.set(this.nowLabel());
+    this.donationsScopeFetching.set(false);
   }
 
   protected clearFilters(): void {

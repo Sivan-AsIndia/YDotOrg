@@ -80,8 +80,35 @@ public sealed class UpdateOrganisationProfileRequestValidator
         RuleFor(request => request.LegalName).MaximumLength(250);
         RuleFor(request => request.RegistrationNumber).MaximumLength(100);
         RuleFor(request => request.TaxIdentificationNumber).MaximumLength(100);
-        RuleFor(request => request.PanNumber).MaximumLength(20);
-        RuleFor(request => request.GstNumber).MaximumLength(30);
+        // ---- PAN and GSTIN have a SHAPE, and nothing checked it ---------------------------------
+        //
+        // Both fields accepted any 20 or 30 characters. They are the two identifiers on the
+        // profile that a reviewer verifies a registration certificate AGAINST, so a typo in
+        // either is not a cosmetic problem: it is an organisation approved on evidence that does
+        // not match what was recorded, and neither the reviewer's screen nor any later report has
+        // any way to notice.
+        //
+        // PAN is ten characters: five letters, four digits, one letter. The fourth letter is the
+        // holder type (C company, P person, T trust, ...), and a charity's PAN is usually a T or
+        // an A - deliberately NOT enforced here, because refusing a valid PAN whose fourth letter
+        // this validator did not expect is worse than accepting an unusual one.
+        //
+        // GSTIN is fifteen: two state-code digits, the ten-character PAN, one entity digit, the
+        // letter Z, and a checksum character. The checksum is NOT computed here - the format is
+        // what catches the typo that matters, and a checksum implementation that drifts from the
+        // official algorithm rejects real numbers.
+        //
+        // BOTH ARE OPTIONAL. Neither is in OutstandingProfileFields, so an organisation that has
+        // not got one submits without it; the rule applies only to a value that was entered.
+        RuleFor(request => request.PanNumber)
+            .Matches("^[A-Za-z]{5}[0-9]{4}[A-Za-z]$")
+            .WithMessage("A PAN is ten characters: five letters, four digits, then a letter - for example ABCDE1234F.")
+            .When(request => !string.IsNullOrWhiteSpace(request.PanNumber));
+
+        RuleFor(request => request.GstNumber)
+            .Matches("^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][0-9A-Za-z][Zz][0-9A-Za-z]$")
+            .WithMessage("A GSTIN is fifteen characters - for example 22ABCDE1234F1Z5.")
+            .When(request => !string.IsNullOrWhiteSpace(request.GstNumber));
         RuleFor(request => request.OrganisationType).MaximumLength(100);
         RuleFor(request => request.Description).MaximumLength(2000);
         RuleFor(request => request.WebsiteUrl).MaximumLength(500);
