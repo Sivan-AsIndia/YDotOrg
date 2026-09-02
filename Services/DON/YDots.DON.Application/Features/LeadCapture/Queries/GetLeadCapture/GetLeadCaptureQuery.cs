@@ -88,8 +88,20 @@ public sealed class GetLeadCaptureQueryHandler(
     }
 
     /// <summary>
-    /// Which buttons the screen may draw. Permission and record state both matter: Submit only
-    /// appears once something is saved, and Delete unused draft only while it is still a draft.
+    /// Which buttons the screen may draw. Permission and record state both matter, but only
+    /// where the action genuinely needs a record: Deduplicate has nothing to compare and Delete
+    /// unused draft has nothing to remove until one exists.
+    ///
+    /// SUBMIT IS NOT ONE OF THOSE. It was withheld until <c>lead</c> was non-null, and on a blank
+    /// form that is every first-time capture - so the one screen whose stated purpose is "capture
+    /// a lead and send it to the Lead Queue" offered no way to send it, and the only caller who
+    /// ever saw the button was someone re-opening a draft. The screen's Submit saves first and
+    /// submits the record it just created, so the question this answers is whether the CALLER may
+    /// submit, not whether a row happens to exist yet.
+    ///
+    /// It matters that this is answered honestly rather than inferred client-side: an APPROVER
+    /// holds <c>save</c> (an Edit) and not <c>submit</c> (a Submit), so anything that treats Save
+    /// as evidence of Submit draws them a button the endpoint refuses.
     /// </summary>
     private IReadOnlyList<string> BuildPermittedActions(LeadDetailResponse? lead)
     {
@@ -105,7 +117,7 @@ public sealed class GetLeadCaptureQueryHandler(
             actions.Add("Deduplicate");
         }
 
-        if (currentUser.HasPermission(PermissionCodes.LeadCaptureSubmit) && lead is not null)
+        if (currentUser.HasPermission(PermissionCodes.LeadCaptureSubmit))
         {
             actions.Add("Submit");
         }

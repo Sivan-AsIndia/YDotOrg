@@ -9,6 +9,7 @@ using YDots.DON.Application.Common.Services;
 using YDots.DON.Application.Common.Settings;
 using YDots.DON.Application.DTOs;
 using YDots.DON.Application.Features.Leads.DTOs;
+using YDots.DON.Application.Features.LeadCapture.DTOs;
 using YDots.DON.Application.Features.Leads.Mappings;
 using YDots.DON.Domain.Entities;
 using YDots.DON.Domain.Enums;
@@ -31,6 +32,16 @@ public sealed record SubmitLeadCommand(Guid LeadId, TransitionRequest Request);
 public sealed record DeleteLeadDraftCommand(Guid LeadId, ReasonRequest Request);
 
 /// <summary>
+/// SCR-DON-002 Bulk upload. Creates many leads from an uploaded file's rows.
+///
+/// THE DOCUMENT ASKS FOR IT BY NAME - Lead Capture "also shows a Bulk upload leads area" - and
+/// the screen had no endpoint behind that area at all: `importBulkUpload()` carried the comment
+/// "TODO: wire to the bulk-import API" and set the status to Imported after a 600ms timer, so a
+/// person could upload two hundred leads, see "Imported", and have created nothing.
+/// </summary>
+public sealed record BulkImportLeadsCommand(BulkLeadImportRequest Request);
+
+/// <summary>
 /// The lead capture write side, including the embedded consent block.
 ///
 /// Consent is written as real Consent rows, one per permitted channel, not as a flag on the
@@ -51,6 +62,15 @@ public sealed class LeadCaptureCommandHandler(
     IOptions<DonorSettings> donorSettings)
 {
     private const string SubmitEndpoint = "POST /api/v1/donors/lead-capture/{id}/submit";
+
+    /// <summary>
+    /// The most leads one upload may carry.
+    ///
+    /// A BOUND RATHER THAN A LIMIT ANYBODY WILL HIT. It exists so a mis-generated file of a
+    /// million rows fails immediately with a sentence, rather than holding a database
+    /// transaction open until the request times out.
+    /// </summary>
+    private const int MaximumBulkImportRows = 1000;
 
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -423,5 +443,178 @@ public sealed class LeadCaptureCommandHandler(
         return currentUser.Scope.IsOwnRecordsOnly && lead.OwnerUserId != currentUser.UserId
             ? Error.NotFound("That lead was not found inside your scope.")
             : null;
+    }
+
+    /// <summary>
+    /// Creates a lead per row, reporting each one separately.
+    ///
+    /// PARTIAL SUCCESS IS THE NORMAL CASE. A file of two hundred leads with three bad rows should
+    /// create a hundred and ninety-seven and name the three; refusing the whole file would make
+    /// somebody fix a spreadsheet by trial and error. So each row is validated on its own and a
+    /// rejection never stops the ones after it.
+    ///
+    /// ONE SaveChanges FOR THE FILE, not one per row. Two hundred round trips would take long
+    /// enough for the request to time out, and a row rejected for a bad campaign is rejected
+    /// before anything is added rather than rolled back afterwards.
+    /// </summary>
+    public async Task<Result<BulkLeadImportResponse>> HandleAsync(
+        BulkImportLeadsCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var request = command.Request;
+
+        if (request.Rows.Count == 0)
+        {
+            return Result.Failure<BulkLeadImportResponse>(Error.Validation(
+                "The uploaded file contained no rows.",
+                [new ValidationError(nameof(request.Rows), "Add at least one lead row.")]));
+        }
+
+        if (request.Rows.Count > MaximumBulkImportRows)
+        {
+            return Result.Failure<BulkLeadImportResponse>(Error.Validation(
+                $"A bulk upload takes at most {MaximumBulkImportRows} leads at a time. The file had {request.Rows.Count}.",
+                [new ValidationError(nameof(request.Rows), "Split the file and upload it in parts.")]));
+        }
+
+        // THE CAMPAIGN LIST IS FETCHED ONCE. A row names a campaign the way a person typed it, so
+        // every row needs the same lookup - doing it per row would be one query each.
+        var campaigns = await campaignRepository.GetActiveAsync(currentUser.OrganisationId, cancellationToken);
+
+        var byCode = campaigns
+            .GroupBy(campaign => campaign.Code.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var byName = campaigns
+            .GroupBy(campaign => campaign.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var defaultCampaign = request.DefaultCampaignId is Guid defaultId
+            ? campaigns.FirstOrDefault(campaign => campaign.Id == defaultId)
+            : null;
+
+        var defaultSource = string.IsNullOrWhiteSpace(request.DefaultSource)
+            ? "Bulk Upload"
+            : request.DefaultSource.Trim();
+
+        var results = new List<BulkLeadImportRowResult>(request.Rows.Count);
+        var imported = 0;
+
+        foreach (var row in request.Rows)
+        {
+            var firstName = row.FirstName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(firstName))
+            {
+                results.Add(new BulkLeadImportRowResult(row.RowNumber, false, null,
+                    "First name is required."));
+                continue;
+            }
+
+            // A LEAD NOBODY CAN CONTACT IS NOT A LEAD. The same rule the single-capture form
+            // enforces: at least one of mobile or e-mail.
+            if (string.IsNullOrWhiteSpace(row.MobileNumber) && string.IsNullOrWhiteSpace(row.EmailAddress))
+            {
+                results.Add(new BulkLeadImportRowResult(row.RowNumber, false, null,
+                    "Give a mobile number or an e-mail address so the lead can be contacted."));
+                continue;
+            }
+
+            var campaign = ResolveCampaign(row.CampaignNameOrCode, byCode, byName) ?? defaultCampaign;
+
+            if (campaign is null)
+            {
+                results.Add(new BulkLeadImportRowResult(row.RowNumber, false, null,
+                    string.IsNullOrWhiteSpace(row.CampaignNameOrCode)
+                        ? "No campaign was given and no default campaign was chosen for the upload."
+                        : $"Campaign '{row.CampaignNameOrCode.Trim()}' was not found among your active campaigns."));
+                continue;
+            }
+
+            if (campaign.Status == CampaignStatus.Closed)
+            {
+                results.Add(new BulkLeadImportRowResult(row.RowNumber, false, null,
+                    $"Campaign {campaign.Code} is closed and cannot accept new leads."));
+                continue;
+            }
+
+            var reference = await referenceNumbers.NextLeadReferenceAsync(cancellationToken);
+
+            var lead = new CreateLeadRequest
+            {
+                FirstName = firstName,
+                LastName = row.LastName?.Trim(),
+                MobileNumber = row.MobileNumber?.Trim(),
+                EmailAddress = row.EmailAddress?.Trim(),
+                PreferredLanguage = row.PreferredLanguage?.Trim(),
+                City = row.City?.Trim(),
+                CampaignId = campaign.Id,
+                Source = string.IsNullOrWhiteSpace(row.Source) ? defaultSource : row.Source.Trim(),
+                Notes = row.Notes?.Trim(),
+            }.ToEntity(reference, currentUser.OrganisationId);
+
+            lead.OwnerUserId = null;
+            lead.OwnerName = null;
+            lead.SlaState = LeadMappingConfig.CalculateSlaState(lead.NextActionDueUtc, clock.UtcNow, _settings);
+
+            // UPLOADED LEADS ARE NOT DRAFTS. The document's flow sends them straight to the Lead
+            // Work Queue for assignment - a draft would be invisible there, which is the opposite
+            // of why somebody uploads a file.
+            lead.IsDraft = false;
+
+            leadRepository.Add(lead);
+            imported++;
+
+            results.Add(new BulkLeadImportRowResult(row.RowNumber, true, reference, null));
+        }
+
+        if (imported > 0)
+        {
+            await auditWriter.WriteAsync(
+                new AuditEntry(AuditActionCodes.LeadCreated, nameof(Lead), Guid.Empty, AuditResult.Succeeded,
+                    $"Bulk upload created {imported} of {request.Rows.Count} leads."),
+                cancellationToken);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var rejected = results.Count(result => !result.Imported);
+
+        return Result.Success(new BulkLeadImportResponse(
+            request.Rows.Count,
+            imported,
+            rejected,
+            results,
+            rejected == 0
+                ? $"All {imported} leads were created."
+                : $"{imported} of {request.Rows.Count} leads were created. {rejected} rows were rejected and are listed below."));
+    }
+
+    /// <summary>
+    /// Finds the campaign a row names.
+    ///
+    /// CODE FIRST, THEN NAME, AND NEITHER IS FUZZY. An earlier version of the assignment board
+    /// matched campaign names word-by-word by prefix, which could resolve "Clean Water 2026" to
+    /// the wrong campaign entirely. A row that does not match exactly is rejected and named, so
+    /// the person fixes their spreadsheet rather than discovering months later that two hundred
+    /// leads were attributed to the wrong appeal.
+    /// </summary>
+    private static Campaign? ResolveCampaign(
+        string? nameOrCode,
+        IReadOnlyDictionary<string, Campaign> byCode,
+        IReadOnlyDictionary<string, Campaign> byName)
+    {
+        if (string.IsNullOrWhiteSpace(nameOrCode))
+        {
+            return null;
+        }
+
+        var key = nameOrCode.Trim();
+
+        return byCode.TryGetValue(key, out var byCodeMatch)
+            ? byCodeMatch
+            : byName.TryGetValue(key, out var byNameMatch) ? byNameMatch : null;
     }
 }

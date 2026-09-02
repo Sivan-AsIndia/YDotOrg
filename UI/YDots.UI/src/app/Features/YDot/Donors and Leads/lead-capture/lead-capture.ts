@@ -1,8 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { DonLookupItem } from '../../../../Shared/models/donor-contract.model';
 import { Router } from '@angular/router';
+import { map, switchMap } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ConfirmModalComponent } from '../../../../Shared/components/confirm-modal/confirm-modal';
 import {
@@ -10,23 +9,18 @@ import {
   LeadCaptureData,
   ConfirmDialogConfig,
 } from '../../../../Shared/models/donors-leads.model';
-import { WorkflowStateService } from '../../../../Service/workflow-state.service';
-import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
-import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
+import { DonorApiService } from '../../../../Service/donor-api.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
-import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
+import { createXlsx, createZip, readXlsxRows } from '../../../../Shared/services/spreadsheet';
+import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-response.model';
+import {
+  BulkLeadImportRow,
+  BulkLeadImportRowResult,
+  CreateLeadRequest,
+  DonLookupItem,
+  LeadCaptureResponse,
+} from '../../../../Shared/models/donor-contract.model';
 
-
-/**
- * The campaign statuses a lead may be captured against.
- *
- * THIS LIST MIRRORS `CampaignProjection.OfferableStatuses` ON THE SERVER, and the two must stay
- * in step. DON only mirrors CAM campaigns in these states into its own `don_campaigns` table,
- * and `don_leads.campaign_id` has a foreign key to that table — so a campaign outside this set
- * simply has no row for a lead to point at.
- */
-const LEAD_CAPTURABLE_CAMPAIGN_STATUSES: readonly string[] = ['Active', 'Approved', 'Paused'];
 
 export interface MobileNumberEntry {
   readonly id: string;
@@ -79,14 +73,6 @@ export interface LeadCaptureFormFields {
   addressDetails: string;
   leadSource: string;
   campaign: string;
-  /**
-   * The accountable owner's API id.
-   *
-   * THE SCREEN HAD NO OWNER FIELD AT ALL and both save paths sent the literal 'Unassigned', so
-   * a capturer could never hand a lead to the fundraiser who should work it. The server fell
-   * back to the caller, which is a reasonable default but not a choice anybody made.
-   */
-  ownerUserId: string;
   sourceDetails: string;
   collectConsent: boolean;
   consent: ConsentFields;
@@ -111,110 +97,50 @@ interface BulkUploadState {
   invalidRecords: number;
 }
 
-/**
- * The screen's copy, its action contract and its field contract.
- *
- * PRESENTATION STAYS; DATA GOES. Labels, permission codes and confirmation wording are the same
- * for every organisation and are decided here. The scope line, the refresh time, the consent-state
- * catalogue and the campaign list came out of the same JSON file and are not the same for
- * everybody - the scope in particular read "YDot Foundation - Tamil Nadu" whoever was looking, and
- * a screen that tells you the wrong scope is worse than one that tells you none.
- */
-const SCREEN = {
-  title: 'Lead capture',
-  purpose: 'Create a minimum-data lead with source evidence and consent context.',
-  primaryAction: 'Save',
-  viewPermission: 'don.lead-capture.view',
-  primaryUsers: ['Fundraiser', 'System integration'] as readonly string[],
-} as const;
-
-const SAVED_FILTERS: readonly string[] = ['All drafts (Default)', 'Ready to submit', 'Incomplete'];
-
-const FIELD_CONTRACTS: readonly {
-  label: string;
-  control: string;
-  required: boolean;
-  visibility: string;
-}[] = [
-  { label: "First name or known name", control: "text", required: true, visibility: "Internal" },
-  { label: "Last name", control: "text", required: false, visibility: "Internal" },
-  { label: "Mobile number", control: "telephone", required: false, visibility: "Restricted" },
-  { label: "Email address", control: "email", required: false, visibility: "Restricted" },
-  { label: "Preferred language", control: "select", required: false, visibility: "Internal" },
-  { label: "City or geography", control: "text", required: false, visibility: "Internal" },
-  { label: "Campaign", control: "searchable-select", required: true, visibility: "Internal" },
-  { label: "Source", control: "text", required: true, visibility: "Internal" },
-  { label: "Consent state", control: "select", required: false, visibility: "Internal" },
-  { label: "Consent evidence", control: "file", required: false, visibility: "Confidential" },
-  { label: "Notes", control: "textarea", required: false, visibility: "Confidential" },
-  { label: "Preferred contact time", control: "datetime", required: false, visibility: "Restricted" },
-  { label: "Duplicate candidates", control: "readonly", required: false, visibility: "Internal" },
-  { label: "Lead reference", control: "readonly", required: false, visibility: "Internal" }
-];
-
-const ACTIONS: readonly {
-  id: string;
-  label: string;
-  placement: string;
-  permission: string;
-  allowedState: string;
-  result: string;
-  requiresReason?: boolean;
-  typedConfirm?: boolean;
-}[] = [
-  {
-    id: "save",
-    label: "Save",
-    placement: "primary",
-    permission: "don.lead-capture.save",
-    allowedState: "No record / Draft",
-    result: "Save one draft, preserve values, show stable reference and indicate remaining required information.",
-  },
-  {
-    id: "deduplicate",
-    label: "Deduplicate",
-    placement: "workflow",
-    permission: "don.lead-capture.deduplicate",
-    allowedState: "Permitted lifecycle state",
-    result: "Refresh or change only the authorised record in effective scope and show the confirmed result without relying on a toast alone.",
-  },
-  {
-    id: "submit",
-    label: "Submit",
-    placement: "workflow",
-    permission: "don.lead-capture.submit",
-    allowedState: "Permitted lifecycle state",
-    result: "Execute idempotently; show stable reference, accepted/committed result, pending dependency and safe next action.",
-  },
-  {
-    id: "deleteDraft",
-    label: "Delete unused draft",
-    placement: "danger",
-    permission: "don.lead-capture.delete-draft",
-    allowedState: "Draft with no downstream reference",
-    result: "Require named reason and consequence preview; preserve linked history; confirm the resulting lifecycle state persistently.",
-    requiresReason: true,
-    typedConfirm: true,
-  }
-];
+interface ScreenData {
+  readonly screen: {
+    readonly viewId: string;
+    readonly title: string;
+    readonly route: string;
+    readonly purpose: string;
+    readonly primaryAction: string;
+    readonly viewPermission: string;
+    readonly primaryUsers: readonly string[];
+    readonly scope: string;
+    readonly lastRefresh: string;
+  };
+  readonly permissions: Record<string, boolean>;
+  readonly draftReference: string;
+  readonly status: string;
+  readonly fields: LeadCaptureData['fields'];
+  readonly duplicateCandidates: readonly string[];
+  readonly campaignOptions: readonly { reference: string; label: string; context: string }[];
+  readonly languages: readonly string[];
+  readonly consentStates: readonly string[];
+  readonly savedFilters: readonly string[];
+  readonly fieldContracts: readonly {
+    label: string;
+    control: string;
+    required: boolean;
+    visibility: string;
+  }[];
+  readonly actions: readonly {
+    id: string;
+    label: string;
+    placement: string;
+    permission: string;
+    allowedState: string;
+    result: string;
+    requiresReason?: boolean;
+    typedConfirm?: boolean;
+  }[];
+}
 
 /**
  * SCR-DON-002 — Lead capture.
  * Create a minimum-data lead with source evidence, multi-mobile contact
  * capture, an immutable email, togglable consent, and CSV/XLSX bulk import.
  */
-/**
- * What a caller may do on this screen.
- *
- * NAMED RATHER THAN A BARE RECORD, so a template asking for a capability that does not exist is a
- * compile error rather than a silently-false condition that hides a button forever.
- */
-interface LeadCapturePermissions {
-  readonly deleteDraft: boolean;
-  readonly save: boolean;
-  readonly submit: boolean;
-}
-
 @Component({
   selector: 'app-lead-capture',
   imports: [CommonModule, FormsModule, ConfirmModalComponent],
@@ -222,112 +148,59 @@ interface LeadCapturePermissions {
   styleUrl: './lead-capture.css',
 })
 export class LeadCaptureComponent {
-  constructor() {
-    // The form opens with India already selected, so load its states now. Without this the
-    // country box reads "India" while the state box beneath it sits empty until somebody
-    // re-picks the country it is already showing.
-    this.geo.selectCountry('India');
-
-    this.loadFormConfiguration();
-  }
-
   private readonly router = inject(Router);
-  private readonly workflow = inject(WorkflowStateService);
-  /** Shared campaign store — the SAME source of truth used by Campaign
-   *  Register, so campaigns created there appear in this dropdown too. */
-  private readonly campaignStore = inject(CampaignStoreService);
-  private readonly people = inject(PeopleDirectoryService);
+  private readonly api = inject(DonorApiService);
   private readonly toast = inject(ToastService);
 
   /**
-   * The people a lead can be made somebody's responsibility.
+   * The screen's own chrome.
    *
-   * ACTIVE STAFF IN THE CALLER'S OWN SCOPE, from the shared IAM directory - the same list the
-   * assignment board offers, so a lead captured to a person here can be reassigned to that same
-   * person there without the two screens disagreeing about who exists.
+   * A SIGNAL, NOT A CONSTANT FROM A JSON FILE. `lead-capture.json` supplied the title, the
+   * campaign list, the languages and - most consequentially - a `permissions` map that said what
+   * this caller could do. A file compiled into the bundle has one answer for everybody, so the
+   * Submit button was drawn for an APPROVER who holds no `don.lead-capture.submit` and would be
+   * refused by the endpoint.
    */
-  protected readonly ownerOptions = computed(() => this.people.assignable());
+  protected readonly screen = signal({
+    viewId: 'SCR-DON-002',
+    title: 'Lead capture',
+    route: '/app/fundraising/relationships/lead-capture',
+    purpose: 'Capture a new lead and its consent, then send it to the Lead Queue.',
+    scope: '',
+    lastRefresh: '',
+  });
 
-  /** The chosen owner's display name, which is what the lead row shows. */
-  protected readonly selectedOwnerName = computed(
-    () => this.people.get(this.fields().ownerUserId)?.name ?? '',
-  );
-  private readonly donorApi = inject(DonorApiService);
+  protected readonly permissions = signal<Record<string, boolean>>({
+    view: false,
+    save: false,
+    submit: false,
+    deduplicate: false,
+  });
 
-  /** Page copy and contracts. Presentation - see the note on SCREEN. */
-  protected readonly screen = SCREEN;
-  protected readonly savedFilters = SAVED_FILTERS;
-  protected readonly fieldContracts = FIELD_CONTRACTS;
-  protected readonly actions = ACTIONS;
+  /** The current privacy-notice version, recorded against any consent captured here. */
+  protected readonly currentNoticeVersion = signal('');
 
-  /**
-   * What the server decides: the consent-state catalogue, the scope and the refresh time.
-   *
-   * THE CONSENT STATES MATTER MOST OF THE THREE. They used to be four fixed strings in the
-   * bundle, and a lead saved against a state the organisation does not actually use is a lead
-   * whose consent position cannot be acted on afterwards.
-   */
-  protected readonly consentStateOptions = signal<readonly DonLookupItem[]>([]);
-  protected readonly activeScope = signal('');
-  protected readonly lastRefresh = signal('');
-  protected readonly draftReference = signal('');
-  protected readonly status = signal('');
+  /** Granted / Withdrawn / Not provided, as the API's catalogue lists them. */
+  protected readonly consentStateOptions = signal<readonly string[]>([]);
 
-
-  /**
-   * The form's server-side configuration.
-   *
-   * IT IS THE SAME ENDPOINT THE SAVE GOES TO, which is the point: the consent states offered here
-   * are exactly the ones that endpoint will accept. A catalogue compiled into the bundle can drift
-   * from the server's without anybody noticing until a save is refused.
-   */
-  private loadFormConfiguration(): void {
-    this.donorApi.getLeadCaptureForm().subscribe({
-      next: (response) => {
-        this.consentStateOptions.set(response.consentStateOptions ?? []);
-        this.activeScope.set(response.activeScope ?? '');
-        this.draftReference.set(response.lead?.leadReference ?? '');
-        this.status.set(response.lead?.status ?? '');
-        this.lastRefresh.set(
-          new Date().toLocaleString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        );
-      },
-
-      // Nothing is substituted. An empty consent dropdown is a visible problem; a plausible-looking
-      // wrong one is not.
-      error: () => {
-        this.consentStateOptions.set([]);
-        this.activeScope.set('');
-        this.lastRefresh.set('');
-      },
-    });
-  }
+  /** The saved lead, once there is one. Its id and version drive Update and Submit. */
+  protected readonly savedLeadId = signal<string | null>(null);
+  protected readonly savedLeadVersion = signal<number>(0);
+  protected readonly savedLeadReference = signal<string>('');
 
   // ---------------------------------------------------------------------
   // Static option sets
   // ---------------------------------------------------------------------
   /**
-   * The language options, from the GlobalMaster catalogue.
+   * Filled from the API's `languageOptions`. Empty until it answers.
    *
-   * WHAT THIS REPLACES: a static a bundled `languages` array falling back to the four literals
-   * `['English', 'Tamil', 'Hindi', 'Malayalam']`. A fundraiser in Hyderabad could not record a
-   * Telugu-speaking lead, and nothing in the platform could add one without a rebuild.
-   *
-   * NAMES RATHER THAN CULTURE CODES, deliberately. A lead's `language` is stored as a display
-   * string and rendered straight back out by the work queue and My Leads, so binding to "ta-IN"
-   * would show a culture code where a fundraiser expects "Tamil". This is the same choice the
-   * cascade makes for country, state and city, and for the same reason.
-   *
-   * The list narrows to the selected country's languages once one is chosen — India is picked by
-   * default below — and falls back to the whole catalogue when it has none mapped.
+   * VALUE AND LABEL, NOT LABEL ALONE. This held only the labels, and the select therefore used
+   * the label as its option value - so the form posted `preferredLanguage: "English (India)"`
+   * while `SupportedLanguages.IsSupported` on the API compares against the codes ("en-IN").
+   * Every save failed the moment a language was chosen, and a language HAD to be chosen because
+   * this screen makes the field required.
    */
-  protected readonly languageOptions = computed(() => this.geo.languageNames());
+  protected readonly languageOptions = signal<readonly DonLookupItem[]>([]);
 
   protected readonly leadSourceOptions: readonly string[] = [
     'Website',
@@ -346,35 +219,16 @@ export class LeadCaptureComponent {
    * campaigns are hidden; entries are de-duplicated by name so a seed option
    * and a store campaign sharing a name appear only once.
    */
-  protected readonly campaignDropdownOptions = computed<
+  /**
+   * The campaigns a lead may be captured against.
+   *
+   * THE API'S LIST, WHICH IS ALREADY SCOPED. The old version concatenated a seed array from the
+   * JSON file with the campaign store's records and de-duplicated by lower-cased name, so a
+   * campaign belonging to another organisation could appear if the two happened to share a name.
+   */
+  protected readonly campaignDropdownOptions = signal<
     readonly { reference: string; label: string; context: string }[]
-  >(() => {
-    const seedOptions: readonly { reference: string; label: string; context: string }[] = [];
-    const storeCampaigns = this.campaignStore
-      .all()
-
-      // ONLY CAMPAIGNS A LEAD CAN ACTUALLY BE CAPTURED AGAINST.
-      //
-      // DON keeps its own `don_campaigns` table, which `don_leads.campaign_id` points at, and
-      // CampaignProjection mirrors CAM's campaigns into it keyed by the same id - but only
-      // those in Active, Approved or Paused. A campaign nobody has approved yet is not
-      // something to take donor interest against, so it is not mirrored, so a lead naming it
-      // has no row to reference and the save is refused.
-      //
-      // This filter used to exclude only Cancelled and Closed, which meant every Draft and
-      // Submitted campaign was offered here and every one of them was a dead end.
-      .filter((campaign) => LEAD_CAPTURABLE_CAMPAIGN_STATUSES.includes(campaign.status))
-      .map((campaign) => ({
-        reference: campaign.code,
-        label: campaign.name,
-        context: campaign.status,
-      }));
-    const seenNames = new Set(seedOptions.map((option) => option.label.trim().toLowerCase()));
-    return [
-      ...seedOptions,
-      ...storeCampaigns.filter((campaign) => !seenNames.has(campaign.label.trim().toLowerCase())),
-    ];
-  });
+  >([]);
 
   protected readonly recognitionOptions: readonly ('Anonymous' | 'Recognised')[] = [
     'Anonymous',
@@ -389,32 +243,117 @@ export class LeadCaptureComponent {
     { reference: 'CHN-PHONE', label: 'Phone call' },
   ];
 
-  /**
-   * Approved administrative geography, live from the GlobalMaster catalogue.
-   *
-   * WHAT THIS REPLACES: `countryOptions = ['India']` — a country dropdown with exactly one
-   * option, so a lead from anywhere else could not be recorded at all — plus eleven of India's
-   * states and a six-state city map, all compiled into the bundle.
-   *
-   * THE "APPROVED CATALOGUE" IS NOW THE MASTER CATALOGUE, which is what it was always meant to
-   * be. Serviceability below still means "this city is one we hold a record for"; the difference
-   * is that the record is the one an administrator maintains on the Masters screen rather than a
-   * literal in this file that nobody could change without a release.
-   */
-  protected readonly geo = createGeoCascade();
-
-  protected readonly countryOptions = computed(() => this.geo.countryNames());
-  protected readonly stateOptions = computed(() => this.geo.stateNames());
+  /** Approved administrative geography — country and state catalogues. */
+  protected readonly countryOptions: readonly string[] = ['India'];
+  protected readonly stateOptions: readonly string[] = [
+    'Tamil Nadu',
+    'Karnataka',
+    'Kerala',
+    'Andhra Pradesh',
+    'Telangana',
+    'Puducherry',
+    'Maharashtra',
+    'Delhi',
+    'Gujarat',
+    'West Bengal',
+  ];
+  /** Approved cities per state; states without an entry have none approved yet. */
+  private readonly APPROVED_CITY_CATALOG: Readonly<Record<string, readonly string[]>> = {
+    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem'],
+    'Karnataka': ['Bengaluru', 'Mysuru', 'Mangaluru'],
+    'Kerala': ['Kochi', 'Thiruvananthapuram', 'Kozhikode'],
+    'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada'],
+    'Telangana': ['Hyderabad', 'Warangal'],
+    'Puducherry': ['Puducherry'],
+  };
 
   private readonly MAX_MOBILE_ENTRIES = 5;
   private readonly MAX_BULK_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
   private readonly ALLOWED_BULK_EXTENSIONS = ['.csv', '.xlsx'];
+
+  /**
+   * The bulk-upload template: its columns, and one filled-in row.
+   *
+   * THE HEADERS ARE THE ONES THE PARSER LOOKS FOR. `columnOf` matches on the name with spaces
+   * and punctuation stripped, so "First name" finds `firstname` — which means these labels and
+   * that matcher have to be changed together, and are next to each other for that reason.
+   *
+   * ONE SAMPLE ROW, NOT THREE. It exists to show the shape of each column — a mobile number with
+   * no spaces, a campaign named the way the campaign list names it. More rows only mean more to
+   * delete before the person types their own, and a row left behind by accident is a lead
+   * nobody meant to create.
+   */
+  private readonly BULK_TEMPLATE_HEADERS: readonly string[] = [
+    'First name',
+    'Last name',
+    'Mobile',
+    'Email',
+    'Preferred language',
+    'City',
+    'Campaign',
+    'Source',
+    'Notes',
+  ];
+
+  private readonly BULK_TEMPLATE_SAMPLE: readonly string[] = [
+    'Anita',
+    'Raman',
+    '9876543210',
+    'anita.raman@example.com',
+    'Tamil',
+    'Chennai',
+    'CMP-2026-001',
+    'Event',
+    'Met at the Chennai donor meet. Asked to be called after 6pm.',
+  ];
   private readonly MAX_EVIDENCE_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
   private readonly ALLOWED_EVIDENCE_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
 
   private readonly NAME_PATTERN = /^[A-Za-z\s]+$/;
-  private readonly MOBILE_PATTERN = /^[0-9]{10,15}$/;
-  private readonly EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  /**
+   * E.164, and it has to be E.164 BECAUSE THAT IS WHAT THE SERVER ACCEPTS.
+   *
+   * This used to be /^[0-9]{10,15}$/ - bare digits, no plus - while `PrimaryPhoneValue` on the
+   * API side matches ^\+[1-9]\d{7,14}$. The two rules had no overlap at all, so the form was
+   * unsubmittable in both directions: typing the placeholder's own "+91 98765 43210" failed the
+   * browser check, and typing "9876543210" passed it and then came back as a 400 from the
+   * validation filter. That 400 is the "Review the highlighted fields before continuing."
+   * message, which is why the screen could complain without marking anything.
+   */
+  private readonly MOBILE_PATTERN = /^\+[1-9]\d{7,14}$/;
+
+  /** What a person is allowed to TYPE, before normalisation - digits, spaces, dashes, brackets. */
+  private readonly MOBILE_INPUT_PATTERN = /^\+?[0-9][0-9\s()-]{6,20}$/;
+
+  /**
+   * Bare local numbers get the default prefix rather than a rejection.
+   *
+   * The rest of this screen already assumes +91 (see `maskedContactRestrictionPhone`), as does
+   * the country-code default on Create user, so a ten-digit number typed without a prefix is
+   * completed rather than refused. Anything typed WITH a prefix is left exactly as typed.
+   */
+  private readonly DEFAULT_DIALLING_CODE = '+91';
+
+  /** Matches `EmailValue` on the API, which requires a top-level domain of two or more. */
+  private readonly EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  /**
+   * The single definition of "the number as the API will store it".
+   *
+   * Mirrors `PrimaryPhoneValue.Normalise` on the server: separators go, the prefix stays. Both
+   * the validator and `buildLeadRequest` run through here so the value that was checked is the
+   * value that is sent.
+   */
+  private normaliseMobile(raw: string): string {
+    const compact = raw.replace(/[\s()-]/g, '').trim();
+
+    if (!compact) {
+      return '';
+    }
+
+    return compact.startsWith('+') ? compact : `${this.DEFAULT_DIALLING_CODE}${compact}`;
+  }
 
   // ---------------------------------------------------------------------
   // Page / UI state
@@ -422,24 +361,6 @@ export class LeadCaptureComponent {
   protected readonly uiState = signal<UiState>('ready');
   protected readonly confirmConfig = signal<ConfirmDialogConfig | null>(null);
   protected readonly activeActionId = signal('');
-  private readonly tokens = inject(AuthTokenService);
-
-  /**
-   * What this caller may actually do.
-   *
-   * THE SIX HARD-CODED `true`s ARE GONE. They lived in this screen's JSON page data, so every
-   * button on the screen was drawn for everybody who could reach it - a read-only reviewer saw the
-   * same controls as the person who owns the work, and found out which ones they were not allowed
-   * to press by pressing them.
-   *
-   * The server enforces these codes whatever this object says; reading them here is what stops the
-   * screen offering an action the API will refuse.
-   */
-  protected readonly permissions = computed<LeadCapturePermissions>(() => ({
-    deleteDraft: this.tokens.hasAnyPermission('don.lead-capture.delete-draft'),
-    save: this.tokens.hasAnyPermission('don.lead-capture.save'),
-    submit: this.tokens.hasAnyPermission('don.lead-capture.submit'),
-  }));
 
   // ---------------------------------------------------------------------
   // Form state
@@ -459,7 +380,9 @@ export class LeadCaptureComponent {
   // ---------------------------------------------------------------------
   // Geography — approved-catalogue lookups
   // ---------------------------------------------------------------------
-  protected readonly approvedCities = computed(() => this.geo.cityNames());
+  protected readonly approvedCities = computed(
+    () => this.APPROVED_CITY_CATALOG[this.fields().geoState] ?? [],
+  );
 
   /** Serviceability is verified against the approved city list, separately from the free-text address. */
   protected readonly serviceability = computed<'serviceable' | 'unconfirmed' | null>(() => {
@@ -501,6 +424,59 @@ export class LeadCaptureComponent {
   protected readonly isBulkUploadOpen = signal(false);
   protected readonly bulkUpload = signal<BulkUploadState>(this.createInitialBulkUpload());
 
+  /** Set when the panel is opened on top of a part-typed form, so the person picks one. */
+  protected readonly bulkBlockedByForm = signal(false);
+
+  // ---------------------------------------------------------------------
+  // ONE SCREEN, TWO WAYS IN — AND THEY MUST NOT RUN AT ONCE
+  //
+  // "Submit lead" at the bottom of the page submits the ONE lead typed into the form. It has
+  // never had anything to do with the uploaded file: the file is sent by its own button inside
+  // the bulk panel. Nothing said so, though, and the two sat on the same page with a single
+  // obvious-looking submit button at the end of it — so an Initiator who typed a lead AND
+  // attached a file could reasonably press Submit expecting both, and get one lead and a
+  // silently discarded file. Pressing both buttons instead created the typed lead a second time,
+  // as a duplicate of a row already in the sheet.
+  //
+  // The fix is to make the screen hold one mode at a time. Staging a file locks the form;
+  // starting the form makes the panel ask which one is meant. Each path keeps its own button,
+  // and each button now says what it submits.
+  // ---------------------------------------------------------------------
+
+  /** A file is attached and not yet imported: the form is not the thing being submitted. */
+  protected readonly isBulkStaged = computed(() =>
+    ['parsing', 'ready', 'importing'].includes(this.bulkUpload().status),
+  );
+
+  /**
+   * Whether anything has been typed into the individual form.
+   *
+   * Country is left out on purpose — it is pre-filled with India, so counting it would make an
+   * untouched form look started and put the bulk panel behind a prompt every time.
+   */
+  protected readonly hasFormInput = computed(() => {
+    const f = this.fields();
+
+    return (
+      !!this.savedLeadId()
+      || [
+        f.firstName,
+        f.lastName,
+        f.displayName,
+        f.email,
+        f.preferredLanguage,
+        f.geoState,
+        f.geoCity,
+        f.addressDetails,
+        f.leadSource,
+        f.campaign,
+        f.sourceDetails,
+      ].some((value) => value.trim().length > 0)
+      || f.mobiles.some((mobile) => mobile.value.trim().length > 0)
+      || f.collectConsent
+    );
+  });
+
   // =======================================================================
   // Initialisation helpers
   // =======================================================================
@@ -535,11 +511,17 @@ export class LeadCaptureComponent {
     return { id: this.generateId(), value: '', isPrimary };
   }
 
+  /**
+   * A blank form.
+   *
+   * IT USED TO ARRIVE PRE-FILLED. `lead-capture.json` carried a `fields` block with a first name,
+   * a last name and a location, so every person opening Create Lead was greeted by somebody
+   * else's half-typed details and had to clear them before typing their own.
+   */
   private createInitialFields(): LeadCaptureFormFields {
-    const base: Partial<Record<string, unknown>> = {};
     return {
-      firstName: typeof base?.['firstName'] === 'string' ? (base['firstName'] as string) : '',
-      lastName: typeof base?.['lastName'] === 'string' ? (base['lastName'] as string) : '',
+      firstName: '',
+      lastName: '',
       displayName: '',
       mobiles: [this.createEmptyMobile(true)],
       email: '',
@@ -547,10 +529,9 @@ export class LeadCaptureComponent {
       geoCountry: 'India',
       geoState: '',
       geoCity: '',
-      addressDetails: typeof base?.['location'] === 'string' ? (base['location'] as string) : '',
+      addressDetails: '',
       leadSource: '',
       campaign: '',
-      ownerUserId: '',
       sourceDetails: '',
       collectConsent: false,
       consent: this.createEmptyConsent(),
@@ -656,15 +637,7 @@ export class LeadCaptureComponent {
   // =======================================================================
   protected onGeoCountryChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
-
-    // Changing the country invalidates BOTH boxes beneath it. Clearing only the city is how a
-    // lead ends up in Tamil Nadu, Australia - the state box still reads as filled in, so nothing
-    // on screen looks wrong.
-    this.fields.update((f) => ({ ...f, geoCountry: value, geoState: '', geoCity: '' }));
-    this.clearError('geoCountry');
-    this.clearError('geoState');
-    this.clearError('geoCity');
-    this.geo.selectCountry(value);
+    this.updateField('geoCountry', value);
   }
 
   protected onGeoStateChange(event: Event): void {
@@ -673,7 +646,6 @@ export class LeadCaptureComponent {
     this.fields.update((f) => ({ ...f, geoState: value, geoCity: '' }));
     this.clearError('geoState');
     this.clearError('geoCity');
-    this.geo.selectState(value);
   }
 
   protected onGeoCityChange(event: Event): void {
@@ -717,6 +689,12 @@ export class LeadCaptureComponent {
   protected onConsentCheckbox(key: keyof ConsentFields, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     this.updateConsent(key, checked as ConsentFields[typeof key]);
+
+    // Ticking any channel answers the "choose at least one channel" rule, so the message goes
+    // as soon as it is satisfied rather than surviving until the next submit.
+    if (key === 'emailConsent' || key === 'smsConsent' || key === 'whatsappConsent' || key === 'phoneConsent') {
+      this.clearError('consentChannels');
+    }
   }
 
   protected onRecognitionChange(event: Event): void {
@@ -840,18 +818,28 @@ export class LeadCaptureComponent {
     }
 
     // Mobile numbers (at least one, all populated ones must be valid + unique)
+    //
+    // CHECKED IN THE NORMALISED FORM, which is the form that gets sent. Duplicate detection runs
+    // on it too, so "+91 98765 43210" and "9876543210" are correctly seen as the same number
+    // instead of being saved twice.
     const populatedMobiles = f.mobiles.filter((m) => m.value.trim().length > 0);
     if (populatedMobiles.length === 0) {
       errs['mobiles'] = 'At least one mobile number is required.';
     } else {
-      const invalidEntry = populatedMobiles.find((m) => !this.MOBILE_PATTERN.test(m.value.trim()));
+      const invalidEntry = populatedMobiles.find(
+        (m) =>
+          !this.MOBILE_INPUT_PATTERN.test(m.value.trim())
+          || !this.MOBILE_PATTERN.test(this.normaliseMobile(m.value)),
+      );
       if (invalidEntry) {
-        errs['mobiles'] = 'Enter a valid mobile number (10-15 digits, numbers only).';
+        errs['mobiles'] =
+          'Enter the number in international format, for example +91 98765 43210. '
+          + 'A 10-digit number without a prefix is treated as +91.';
       } else {
         const seen = new Set<string>();
         let hasDuplicate = false;
         for (const m of populatedMobiles) {
-          const v = m.value.trim();
+          const v = this.normaliseMobile(m.value);
           if (seen.has(v)) {
             hasDuplicate = true;
             break;
@@ -887,10 +875,7 @@ export class LeadCaptureComponent {
     }
     if (!f.geoCity) {
       errs['geoCity'] = 'City is required.';
-    } else if (this.approvedCities().length && !this.approvedCities().includes(f.geoCity)) {
-      // Only enforced when the catalogue actually HOLDS cities for the selected state. A state
-      // whose cities have not been seeded yet would otherwise reject every possible answer and
-      // leave the form permanently unsubmittable.
+    } else if (!this.approvedCities().includes(f.geoCity)) {
       errs['geoCity'] = 'Select a city from the approved list.';
     }
 
@@ -900,7 +885,14 @@ export class LeadCaptureComponent {
     }
 
     // Source details
-    if (f.sourceDetails.length > 500) {
+    //
+    // OPTIONAL, BUT NOT OPTIONALLY SHORT. It is sent as `notes`, and the API's rule is
+    // .Length(10, 2000) applied only when the value is non-empty - so leaving it blank is fine
+    // and typing "Booth" is a 400. The rule is stated here rather than discovered on submit.
+    const sourceDetails = f.sourceDetails.trim();
+    if (sourceDetails.length > 0 && sourceDetails.length < 10) {
+      errs['sourceDetails'] = 'Use at least 10 characters, or leave this blank.';
+    } else if (f.sourceDetails.length > 500) {
       errs['sourceDetails'] = 'Source details cannot exceed 500 characters.';
     }
 
@@ -924,6 +916,21 @@ export class LeadCaptureComponent {
       // Channel — effective approved catalogue only.
       if (!f.consent.channelRef) {
         errs['channelRef'] = 'Select a channel.';
+      }
+
+      // THE CHECKBOXES, NOT THE DROPDOWN, ARE WHAT THE API READS. `channelRef` is a single
+      // select that is never sent; the request carries the four booleans, and
+      // LeadConsentRequestValidator refuses a consent block with none of them set. This screen
+      // validated the dropdown and ignored the checkboxes, so ticking nothing produced a 400
+      // whose message ("Choose at least one channel...") arrived keyed to `consent.emailConsent`
+      // and was then discarded. Checked here, in the same words the server uses.
+      if (
+        !f.consent.emailConsent
+        && !f.consent.smsConsent
+        && !f.consent.whatsappConsent
+        && !f.consent.phoneConsent
+      ) {
+        errs['consentChannels'] = 'Choose at least one channel, or turn Collect consent off.';
       }
 
       // Consent state — current catalogue values; Granted depends on attached evidence.
@@ -954,11 +961,13 @@ export class LeadCaptureComponent {
       // Contact restrictions — required only when the channel/consent/policy requires them.
       if (this.showContactRestriction()) {
         const phone = f.consent.contactRestrictionPhone.trim();
-        const digits = phone.replace(/\D/g, '');
         if (!phone) {
           errs['contactRestrictionPhone'] = 'A contact restriction number is required.';
-        } else if (!this.MOBILE_PATTERN.test(digits)) {
-          errs['contactRestrictionPhone'] = 'Enter a valid number in international format.';
+        } else if (
+          !this.MOBILE_INPUT_PATTERN.test(phone)
+          || !this.MOBILE_PATTERN.test(this.normaliseMobile(phone))
+        ) {
+          errs['contactRestrictionPhone'] = 'Enter a valid number in international format, for example +91 98765 43210.';
         }
       }
 
@@ -976,203 +985,370 @@ export class LeadCaptureComponent {
     return errs;
   }
 
+  /**
+   * Server field paths translated into this form's error keys.
+   *
+   * The API answers a failed save with one row per bad field - `mobileNumber`,
+   * `consent.purpose` - and this screen threw every one of them away: both error handlers
+   * called `apiErrorMessage` and nothing called `apiFieldErrors`. That is why the banner could
+   * say "Check the highlighted fields" with nothing highlighted anywhere on the page: the
+   * sentence naming the problem existed, and the screen dropped it one function before display.
+   *
+   * The names differ on purpose - the form groups five mobile inputs under `mobiles` and calls
+   * the API's `notes` "Source details" - so the mapping is explicit rather than assumed.
+   */
+  private static readonly SERVER_FIELD_MAP: Readonly<Record<string, string>> = {
+    firstName: 'firstName',
+    lastName: 'lastName',
+    mobileNumber: 'mobiles',
+    emailAddress: 'email',
+    preferredLanguage: 'preferredLanguage',
+    city: 'geoCity',
+    geographyCode: 'geoState',
+    campaignId: 'campaign',
+    source: 'leadSource',
+    notes: 'sourceDetails',
+    'consent.purpose': 'purpose',
+    'consent.consentSource': 'leadSource',
+    'consent.consentNotes': 'consentNotes',
+    'consent.consentEvidenceReference': 'evidence',
+    'consent.emailConsent': 'consentChannels',
+  };
+
+  /**
+   * Anything the map does not cover, so a new server rule cannot go silent.
+   *
+   * A rule added on the API that this form has no control for would otherwise reproduce the
+   * exact bug above. It is shown in the banner instead of being lost.
+   */
+  protected readonly unmappedServerErrors = signal<readonly string[]>([]);
+
+  /** Puts a rejected save's field errors onto the controls that produced them. */
+  private applyServerErrors(error: unknown): void {
+    const fieldErrors = apiFieldErrors(error);
+    const mapped: Record<string, string> = {};
+    const unmapped: string[] = [];
+
+    for (const [path, message] of Object.entries(fieldErrors)) {
+      const key = LeadCaptureComponent.SERVER_FIELD_MAP[path];
+
+      if (key) {
+        mapped[key] = message;
+      } else {
+        unmapped.push(message);
+      }
+    }
+
+    this.unmappedServerErrors.set(unmapped);
+
+    if (Object.keys(mapped).length > 0) {
+      this.errors.update((existing) => ({ ...existing, ...mapped }));
+    }
+  }
+
   // =======================================================================
   // Primary actions
   // =======================================================================
   /**
-   * Saves the capture as a draft.
+   * Builds the API's create body from the form.
    *
-   * IT NOW ACTUALLY SAVES ONE. This method validated, locked the e-mail field, set the state to
-   * 'success' and returned - it made no API call and wrote to no store, while its own comment
-   * said "The record is now persisted as a draft". Nothing was persisted, so the draft was gone
-   * on the next navigation and anybody who used Save draft rather than Submit lost the lead
-   * entirely, with a success banner confirming it had been kept.
-   *
-   * A DRAFT IS NOT SUBMITTED, deliberately: it stays out of the work queue until Submit
-   * promotes it. That is the difference between the two buttons.
+   * THE CAMPAIGN GOES AS AN ID. The form's `campaign` field holds the reference a person picked
+   * from the dropdown; the API's `campaignId` is a Guid, and sending the label returns a 400
+   * before the handler runs.
    */
-  protected saveDraft(): void {
-    const errs = this.validate();
-    this.errors.set(errs);
-    if (Object.keys(errs).length > 0) {
-      this.uiState.set('validation');
-      this.focusFirstError(errs);
-      return;
+  private buildLeadRequest(): CreateLeadRequest | null {
+    const form = this.fields();
+    const campaign = this.campaignDropdownOptions().find(
+      (option) => option.reference === form.campaign || option.label === form.campaign,
+    );
+
+    if (!campaign) {
+      return null;
     }
 
-    const form = this.fields();
     const primaryMobile =
       form.mobiles.find((mobile) => mobile.isPrimary)?.value ?? form.mobiles[0]?.value ?? '';
-    const name = form.displayName.trim() || `${form.firstName} ${form.lastName}`.trim();
 
-    this.workflow.addLead(
-      {
-        name,
-        mobile: primaryMobile,
-        email: form.email,
-        source: form.leadSource || 'Manual',
-        campaign: form.campaign,
+    return {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim() || null,
+      // E.164 OR NOTHING. `PrimaryPhoneValue` is the server's rule and it does not guess.
+      mobileNumber: this.normaliseMobile(primaryMobile) || null,
+      emailAddress: form.email.trim() || null,
+      preferredLanguage: form.preferredLanguage || null,
+      city: form.geoCity || null,
+      geographyCode: form.geoState || null,
+      campaignId: this.campaignIdByReference.get(campaign.reference) ?? campaign.reference,
+      source: form.leadSource || 'Manual',
+      notes: form.sourceDetails.trim() || null,
 
-        // THE CHOSEN OWNER, not the literal 'Unassigned' this used to send. The name is what the
-        // queue shows; the id is what every ownership query and the caller's own-records scope
-        // actually match on, so both travel. Left blank, the server still defaults to the caller.
-        owner: this.selectedOwnerName() || 'Unassigned',
-        ownerUserId: form.ownerUserId || null,
-        stage: 'New',
-        language: form.preferredLanguage || 'English',
-        lastActivity: 'Lead captured',
-        lastContactOutcome: 'No contact yet',
-        contactRestricted: form.collectConsent ? form.consent.doNotContact : false,
-      },
-      {
-        submit: false,
-        onDone: (outcome) => {
-          if (!outcome.saved) {
-            this.reportRefusal(outcome.error, 'The draft could not be saved.');
-            return;
+      // CONSENT TRAVELS WITH THE CREATE, not after it. The server writes one Consent row per
+      // permitted channel, which is what makes the Consent Centre and the follow-up planner's
+      // channel check read from a single source rather than from a flag on the lead.
+      consent: form.collectConsent
+        ? {
+            collectConsent: true,
+            emailConsent: form.consent.emailConsent,
+            smsConsent: form.consent.smsConsent,
+            whatsAppConsent: form.consent.whatsappConsent,
+            phoneCallConsent: form.consent.phoneConsent,
+            consentSource: form.consent.evidenceFileName || form.leadSource || null,
+            consentNotes: form.consent.consentNotes.trim() || null,
+            purpose: form.consent.purpose || null,
           }
-
-          // The record is now persisted as a draft — the email becomes immutable.
-          this.emailLocked.set(true);
-          if (form.collectConsent) {
-            this.consentStateAtLastSave.set(form.consent.consentState);
-          }
-          this.uiState.set('success');
-        },
-      },
-    );
+        : null,
+    };
   }
 
-  protected submitLead(): void {
-    const errs = this.validate();
-    this.errors.set(errs);
-    if (Object.keys(errs).length > 0) {
-      this.uiState.set('validation');
-      this.focusFirstError(errs);
+  /**
+   * Save - creates the lead, or updates the one already created.
+   *
+   * IT REALLY SAVES NOW. The old version set `emailLocked` and a 'success' banner and called
+   * nothing, so a person could fill the form, see "saved", close the tab and lose everything.
+   */
+  protected saveDraft(): void {
+    if (this.rejectWhileBulkStaged()) {
       return;
     }
 
-    const form = this.fields();
-    const primaryMobile = form.mobiles.find((mobile) => mobile.isPrimary)?.value ?? form.mobiles[0]?.value ?? '';
-    const name = form.displayName.trim() || `${form.firstName} ${form.lastName}`.trim();
-    // NO 'Unassigned campaign' FALLBACK. That string was sent as the request's `campaignId`,
-    // which the API declares as a Guid, so it guaranteed a 400 for every lead captured without
-    // a campaign chosen. A campaign is required, `validate()` enforces it, and inventing a
-    // placeholder here only moved the failure somewhere harder to see.
-    // The outcome is handled entirely in `onDone` — including the refusal to build a request at
-    // all, which reports through the same callback — so the returned optimistic row is not
-    // needed here.
-    this.workflow.addLead(
-      {
-        name,
-        mobile: primaryMobile,
-        email: form.email,
-        source: form.leadSource || 'Manual',
-        campaign: form.campaign,
+    const errs = this.validate();
+    this.errors.set(errs);
+    this.unmappedServerErrors.set([]);
+    if (Object.keys(errs).length > 0) {
+      this.uiState.set('validation');
+      return;
+    }
 
-        // THE CHOSEN OWNER, not the literal 'Unassigned' this used to send. The name is what the
-        // queue shows; the id is what every ownership query and the caller's own-records scope
-        // actually match on, so both travel. Left blank, the server still defaults to the caller.
-        owner: this.selectedOwnerName() || 'Unassigned',
-        ownerUserId: form.ownerUserId || null,
-        stage: 'New',
-        language: form.preferredLanguage || 'English',
-        lastActivity: 'Lead captured',
-        lastContactOutcome: 'No contact yet',
-        contactRestricted: form.collectConsent ? form.consent.doNotContact : false,
+    const request = this.buildLeadRequest();
+    if (!request) {
+      this.errors.set({ ...errs, campaign: 'Choose a campaign from the list.' });
+      this.uiState.set('validation');
+      return;
+    }
+
+    this.saving.set(true);
+    const existingId = this.savedLeadId();
+
+    const call = existingId
+      ? this.api.updateLead(existingId, { ...request, expectedVersion: this.savedLeadVersion() })
+      : this.api.saveLead(request);
+
+    call.subscribe({
+      next: (lead) => {
+        this.saving.set(false);
+        this.savedLeadId.set(lead.id);
+        this.savedLeadVersion.set(lead.version);
+        this.savedLeadReference.set(lead.leadReference);
+
+        // THE E-MAIL BECOMES IMMUTABLE ONCE THE RECORD EXISTS, because it is the key the
+        // donation flow matches on when deciding whether a payment converts this lead.
+        this.emailLocked.set(true);
+        if (this.fields().collectConsent) {
+          this.consentStateAtLastSave.set(this.fields().consent.consentState);
+        }
+        this.uiState.set('success');
+        this.toast.show('Lead saved', `${lead.leadReference} was saved.`, 'success');
       },
-      {
-        // SUBMIT, not just save. A saved lead is a draft, and the work queue shows no drafts.
-        submit: true,
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.applyServerErrors(error);
+        this.uiState.set('validation');
+        this.toast.show('Lead not saved', apiErrorMessage(error), 'error');
+      },
+    });
+  }
 
-        // NAVIGATE ONLY ONCE THE SERVER HAS THE LEAD. This screen used to navigate on the next
-        // line, so a capture rejected with a 400 still landed on the work queue and simply
-        // showed no new row.
-        onDone: (outcome) => {
-          if (!outcome.saved) {
-            this.reportRefusal(outcome.error, 'The lead could not be submitted.');
-            return;
-          }
+  /**
+   * Submit - saves, then promotes the draft into the Lead Queue.
+   *
+   * TWO CALLS, IN ORDER. `save` creates the record and `submit` moves it out of draft; the
+   * document's flow is "enter the details, save the record; the saved lead appears in the Lead
+   * Work Queue list", and a draft never appears there.
+   */
+  protected submitLead(): void {
+    if (this.rejectWhileBulkStaged()) {
+      return;
+    }
 
+    const errs = this.validate();
+    this.errors.set(errs);
+    this.unmappedServerErrors.set([]);
+    if (Object.keys(errs).length > 0) {
+      this.uiState.set('validation');
+      return;
+    }
+
+    const request = this.buildLeadRequest();
+    if (!request) {
+      this.errors.set({ ...errs, campaign: 'Choose a campaign from the list.' });
+      this.uiState.set('validation');
+      return;
+    }
+
+    this.saving.set(true);
+    const existingId = this.savedLeadId();
+
+    const save = existingId
+      ? this.api.updateLead(existingId, { ...request, expectedVersion: this.savedLeadVersion() })
+      : this.api.saveLead(request);
+
+    save
+      .pipe(
+        switchMap((lead) => {
+          this.savedLeadId.set(lead.id);
+          this.savedLeadVersion.set(lead.version);
+          this.savedLeadReference.set(lead.leadReference);
+          // THE REASON IS THE AUDIT ENTRY. Submitting is what moves a lead out of draft and into
+          // somebody's work queue, and the trail should say why rather than just when.
+          return this.api
+            .submitLead(lead.id, {
+              reason: 'Captured and submitted to the Lead Queue from Lead Capture.',
+              expectedVersion: lead.version,
+            })
+            .pipe(
+            map(() => lead),
+          );
+        }),
+      )
+      .subscribe({
+        next: (lead) => {
+          this.saving.set(false);
           this.emailLocked.set(true);
           this.isSubmitted.set(true);
-          if (form.collectConsent) {
-            this.consentStateAtLastSave.set(form.consent.consentState);
+          if (this.fields().collectConsent) {
+            this.consentStateAtLastSave.set(this.fields().consent.consentState);
           }
           this.uiState.set('success');
+          this.toast.show('Lead created', `${lead.leadReference} is now in the Lead Queue.`, 'success');
 
-          // THE SERVER'S LEAD REFERENCE, which is what the work queue keys its rows on. The
-          // provisional id this method holds is replaced by the refresh, so navigating with it
-          // highlighted nothing.
+          // THE API'S ID, NOT A MINTED ONE, so the queue opens the row that was actually saved.
           this.router.navigate(['/app/fundraising/relationships/lead-work-queue'], {
-            queryParams: { createdLeadId: outcome.reference },
+            queryParams: { createdLeadId: lead.id },
           });
         },
-      },
+        error: (error: unknown) => {
+          this.saving.set(false);
+          this.applyServerErrors(error);
+          this.uiState.set('validation');
+          this.toast.show('Lead not submitted', apiErrorMessage(error), 'error');
+        },
+      });
+  }
+
+  /**
+   * Stops "Submit lead" and "Save draft" from running while a file is staged.
+   *
+   * THE BUTTONS ARE ALREADY DISABLED in that state — this is the same rule stated where the
+   * write happens, because a disabled button is a hint and not a guarantee: the form can also be
+   * submitted with the Enter key, and `(ngSubmit)` reaches this method either way.
+   */
+  private rejectWhileBulkStaged(): boolean {
+    if (!this.isBulkStaged()) {
+      return false;
+    }
+
+    this.toast.show(
+      'Finish the upload first',
+      'A file is attached. Import it with the button in the bulk upload panel, or remove the file '
+      + 'to go back to entering one lead by hand.',
+      'warning',
     );
+
+    return true;
+  }
+
+  protected readonly saving = signal(false);
+
+  /**
+   * The dropdown shows a code; the API wants the id.
+   *
+   * Both come back together from `getLeadCaptureForm`, so this map is filled once rather than
+   * being reconstructed by matching one string against another at save time.
+   */
+  private readonly campaignIdByReference = new Map<string, string>();
+
+  constructor() {
+    this.loadForm();
+  }
+
+  /**
+   * One call fills the whole form's context.
+   *
+   * IT ALSO DECIDES WHICH BUTTONS EXIST. `permittedActions` is where the three-role model reaches
+   * this screen: an APPROVER holds no `don.lead-capture.save` or `.submit`, so neither button is
+   * drawn for them. Nothing here names a role, and the endpoints re-check every code.
+   */
+  private loadForm(): void {
+    this.uiState.set('loading');
+
+    this.api.getLeadCaptureForm().subscribe({
+      next: (response: LeadCaptureResponse) => {
+        this.campaignIdByReference.clear();
+        for (const option of response.campaignOptions) {
+          // `description` carries the campaign code; `value` is the Guid.
+          this.campaignIdByReference.set(option.description ?? option.value, option.value);
+        }
+
+        this.campaignDropdownOptions.set(
+          response.campaignOptions.map((option: DonLookupItem) => ({
+            reference: option.description ?? option.value,
+            label: option.label,
+            context: option.description ?? '',
+          })),
+        );
+
+        this.languageOptions.set(response.languageOptions);
+        this.consentStateOptions.set(response.consentStateOptions.map((option) => option.label));
+        this.currentNoticeVersion.set(response.currentNoticeVersion);
+
+        // VERBS, AS THE API ANSWERS THEM, AND NOTHING INFERRED FROM THEM. `submit` used to fall
+        // back to `Save`, because the endpoint withheld 'Submit' until a draft existed and a
+        // blank form would otherwise have drawn no Submit button at all. The endpoint now answers
+        // 'Submit' on the caller's permission, so the fallback is gone - and it had to go: an
+        // APPROVER holds `don.lead-capture.save` and not `.submit`, so reading Save as Submit
+        // drew them a button that 403s.
+        const permitted = response.permittedActions ?? [];
+        this.permissions.set({
+          view: permitted.length > 0,
+          save: permitted.includes('Save'),
+          submit: permitted.includes('Submit'),
+          deduplicate: permitted.includes('Deduplicate'),
+        });
+
+        this.screen.update((current) => ({
+          ...current,
+          scope: response.activeScope,
+          lastRefresh: new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+          }),
+        }));
+
+        this.uiState.set('ready');
+      },
+      error: (error: unknown) => {
+        this.uiState.set('dependency-failure');
+        this.toast.show('Lead capture unavailable', apiErrorMessage(error), 'error');
+      },
+    });
   }
 
   protected cancelForm(): void {
     this.router.navigate(['/app/fundraising/relationships/lead-work-queue']);
   }
 
-  /**
-   * Reports a refusal that came from the SERVER.
-   *
-   * IT IS NOT A VALIDATION FAILURE AND MUST NOT LOOK LIKE ONE. Both save paths used to set the
-   * validation state on any refusal, which drew "Check the highlighted fields. Some information
-   * is missing or invalid" over a form where `errors()` was empty and no control carried an
-   * invalid marker - so the person was told to correct something and given no way to discover
-   * what. The server said why; that is what is shown.
-   */
-  private reportRefusal(error: string | undefined, fallback: string): void {
-    this.uiState.set('ready');
-    this.toast.show('Lead not saved', error?.trim() || fallback, 'error');
-  }
-
-  /**
-   * Puts the caret on the first control the validator objected to.
-   *
-   * The banner tells somebody to check the highlighted fields; this is what takes them to the
-   * first one, on a form long enough that the offending control is usually off screen.
-   */
-  private focusFirstError(errs: Record<string, string>): void {
-    const first = Object.keys(errs)[0];
-    if (!first) {
-      return;
-    }
-
-    queueMicrotask(() => {
-      const element = document.getElementById(first);
-      element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      element?.focus({ preventScroll: true });
-    });
-  }
-
   // =======================================================================
   // Generic confirm-dialog actions (reserved for permissioned page actions
   // sourced from the screen's action contract, e.g. void/reassign flows).
   // =======================================================================
-  protected openAction(actionId: string): void {
-    const action = ACTIONS.find((a) => a.id === actionId);
-    if (!action) {
-      return;
-    }
-    this.activeActionId.set(actionId);
-    this.confirmConfig.set({
-      title: `Confirm ${action.label}`,
-      message: action.result,
-      confirmLabel: action.label,
-      cancelLabel: 'Cancel',
-      tone: action.placement === 'danger' ? 'danger' : 'primary',
-      requireReason: !!action.requiresReason,
-      reasonLabel: 'Reason',
-      reasonMin: 10,
-      reasonMax: 2000,
-      typedConfirm: !!action.typedConfirm,
-      affectedRecord: `${this.draftReference()} · ${this.fields().displayName || this.fields().firstName}`,
-      effectiveTime: this.lastRefresh(),
-    });
+  /**
+   * REMOVED - it was driven by an `actions` array in the JSON file.
+   *
+   * The dialog rendered whatever label and result text the file listed, and `onConfirm` set the
+   * page to 'success' without calling anything. Save and Submit are this screen's only writes and
+   * both now go to the API directly.
+   */
+  protected openAction(_actionId: string): void {
+    return;
   }
 
   protected onConfirm(_reason: string): void {
@@ -1190,13 +1366,105 @@ export class LeadCaptureComponent {
   // Bulk upload (CSV / XLSX only)
   // =======================================================================
   protected openBulkUpload(): void {
-    this.bulkUpload.set(this.createInitialBulkUpload());
     this.isBulkUploadOpen.set(true);
+
+    // ASKED, NOT DECIDED. Either answer is reasonable — the person may have started typing and
+    // then remembered they have the sheet, or may have opened the panel by mistake — and the one
+    // thing that must not happen is the typed lead being thrown away without being mentioned.
+    if (this.hasFormInput()) {
+      this.bulkBlockedByForm.set(true);
+      return;
+    }
+
+    this.bulkBlockedByForm.set(false);
+    this.bulkUpload.set(this.createInitialBulkUpload());
   }
 
   protected closeBulkUpload(): void {
     this.isBulkUploadOpen.set(false);
+    this.bulkBlockedByForm.set(false);
     this.bulkUpload.set(this.createInitialBulkUpload());
+  }
+
+  /** "Use the file" — the typed form is cleared and the upload takes over. */
+  protected discardFormForBulk(): void {
+    this.resetForm();
+    this.bulkBlockedByForm.set(false);
+    this.bulkUpload.set(this.createInitialBulkUpload());
+  }
+
+  /** "Keep what I typed" — the panel closes again and the form is untouched. */
+  protected keepFormAndCloseBulk(): void {
+    this.bulkBlockedByForm.set(false);
+    this.isBulkUploadOpen.set(false);
+  }
+
+  /** Detaches a staged file, which unlocks the individual form again. */
+  protected clearBulkFile(): void {
+    this.parsedBulkRows.set([]);
+    this.bulkResults.set([]);
+    this.bulkUpload.set(this.createInitialBulkUpload());
+  }
+
+  /**
+   * Empties the form back to a blank capture.
+   *
+   * A DRAFT ALREADY SAVED IS NOT DELETED — it stays in the Lead Work Queue, which is why the
+   * prompt says so. Deleting it silently here would lose work that the person has explicitly
+   * saved, and this is a "which of the two am I doing" question, not a delete.
+   */
+  private resetForm(): void {
+    this.fields.set(this.createInitialFields());
+    this.errors.set({});
+    this.savedLeadId.set(null);
+    this.savedLeadVersion.set(0);
+    this.savedLeadReference.set('');
+    this.consentStateAtLastSave.set('');
+    this.emailLocked.set(false);
+    this.isSubmitted.set(false);
+    this.uiState.set('ready');
+  }
+
+  /**
+   * Downloads the template as a ZIP holding both formats, each with the same single sample row.
+   *
+   * IT USED TO BE A LINK TO A FILE THAT WAS NEVER THERE. The button was
+   * `<a href="assets/templates/lead-bulk-upload-template.csv" download>`, and no such asset has
+   * ever existed in the build — so the dev server answered with the SPA's `index.html`, the
+   * browser saved that under the requested name, and the download shelf showed
+   * "lead-bulk-upload-template.htm — File wasn't available on site". Anyone who opened it got the
+   * application's HTML shell where the columns should have been.
+   *
+   * BOTH FORMATS IN ONE ARCHIVE, because the uploader accepts either and a person who works in
+   * Excel should not have to convert a CSV first — nor should the one who works in a text editor
+   * be handed a workbook. They carry identical columns, so whichever is filled in parses the
+   * same way.
+   *
+   * BUILT HERE RATHER THAN SHIPPED AS A STATIC ASSET. The column names have to agree with
+   * `columnOf` below or the upload is rejected as "needs a First name column", and a checked-in
+   * file drifts from the parser the first time a column is renamed. This one cannot.
+   */
+  protected downloadBulkTemplate(): void {
+    const grid = [[...this.BULK_TEMPLATE_HEADERS], [...this.BULK_TEMPLATE_SAMPLE]];
+    const encoder = new TextEncoder();
+
+    const csv = grid
+      .map((row) => row.map((value) => '"' + value.replace(/"/g, '""') + '"').join(','))
+      .join('\r\n');
+
+    const archive = createZip([
+      // A BOM, so Excel opens the CSV as UTF-8 rather than as the local codepage — without it a
+      // name with an accent in it arrives mangled and the lead is created under the wrong name.
+      { name: 'lead-bulk-upload-template.csv', data: encoder.encode('﻿' + csv) },
+      { name: 'lead-bulk-upload-template.xlsx', data: createXlsx(grid, 'Leads') },
+    ]);
+
+    const url = URL.createObjectURL(archive);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'lead-bulk-upload-template.zip';
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   protected onBulkFileSelected(event: Event): void {
@@ -1244,75 +1512,299 @@ export class LeadCaptureComponent {
     if (name.endsWith('.csv')) {
       this.parseCsvPreview(file);
     } else {
-      // .xlsx workbooks are parsed server-side; the client validates and
-      // stages the file, then hands off to the import endpoint.
-      this.bulkUpload.update((s) => ({ ...s, status: 'ready' }));
+      this.parseXlsxPreview(file);
     }
   }
 
+  /**
+   * Reads an uploaded workbook.
+   *
+   * IT USED TO READ NOTHING. The branch was a comment saying ".xlsx workbooks are parsed
+   * server-side" followed by `status = 'ready'` — but nothing is parsed server-side, the file
+   * itself is never sent, and no rows had been collected. The panel therefore showed
+   * "0 Records / 0 Valid / 0 Errors" above a button reading "Import 0 leads", and pressing it
+   * returned immediately because `rows.length === 0`. Half the formats the picker advertises did
+   * nothing at all, silently.
+   *
+   * The grid goes through the same column matching as the CSV, so a workbook and a CSV with the
+   * same columns import identically.
+   */
+  private parseXlsxPreview(file: File): void {
+    readXlsxRows(file)
+      .then((grid) => this.ingestGrid(grid))
+      .catch((error: unknown) => {
+        this.bulkUpload.update((state) => ({
+          ...state,
+          status: 'error',
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : 'Could not read that workbook. Try saving it as CSV and uploading that.',
+        }));
+      });
+  }
+
+  /**
+   * Parses the file and KEEPS the rows.
+   *
+   * THE OLD VERSION COUNTED AND THREW THEM AWAY. It reported "197 valid, 3 invalid" from a column
+   * count and then discarded everything it had read, so the import step had nothing to send -
+   * which is why it was a `setTimeout` rather than a request.
+   *
+   * A HEADER ROW IS REQUIRED, and the columns are found by name rather than by position. A file
+   * whose columns are in a different order is the ordinary case when somebody exports from
+   * another system, and matching by position would silently put e-mail addresses in the city
+   * column.
+   */
   private parseCsvPreview(file: File): void {
     const reader = new FileReader();
+
     reader.onload = () => {
-      const text = String(reader.result ?? '');
-      const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-      if (lines.length <= 1) {
-        this.bulkUpload.update((s) => ({
-          ...s,
-          status: 'invalid',
-          errorMessage: 'The file has no data rows.',
-        }));
-        return;
-      }
-      const headerColumnCount = lines[0].split(',').length;
-      const dataRows = lines.slice(1);
-      let validCount = 0;
-      let invalidCount = 0;
-      for (const row of dataRows) {
-        const columns = row.split(',');
-        const firstColumn = (columns[0] ?? '').trim();
-        if (columns.length === headerColumnCount && firstColumn.length > 0) {
-          validCount += 1;
-        } else {
-          invalidCount += 1;
-        }
-      }
-      this.bulkUpload.update((s) => ({
-        ...s,
-        status: 'ready',
-        totalRecords: dataRows.length,
-        validRecords: validCount,
-        invalidRecords: invalidCount,
-      }));
+      const text = String(reader.result ?? '')
+        // Excel writes a UTF-8 BOM, and it lands on the first header — "﻿First name" does
+        // not match "firstname", so the file was refused for having no First name column.
+        .replace(/^﻿/, '');
+
+      // NOT FILTERED HERE. Blank lines are skipped by `ingestGrid`, which still counts them, so
+      // an error naming row 58 means row 58 of the spreadsheet the person is looking at.
+      this.ingestGrid(text.split(/\r?\n/).map((line) => this.splitCsvLine(line)));
     };
+
     reader.onerror = () => {
-      this.bulkUpload.update((s) => ({
-        ...s,
+      this.bulkUpload.update((state) => ({
+        ...state,
         status: 'error',
         errorMessage: 'Could not read the file. Please try again.',
       }));
     };
+
     reader.readAsText(file);
   }
 
-  protected importBulkUpload(): void {
-    if (this.bulkUpload().status !== 'ready') {
+  /**
+   * Turns a parsed grid — from either format — into rows, and reports the count.
+   *
+   * A HEADER ROW IS REQUIRED, and the columns are found by name rather than by position. A file
+   * whose columns are in a different order is the ordinary case when somebody exports from
+   * another system, and matching by position would silently put e-mail addresses in the city
+   * column.
+   */
+  private ingestGrid(grid: readonly (readonly string[])[]): void {
+    const isBlank = (row: readonly string[]) =>
+      row.every((value) => String(value ?? '').trim().length === 0);
+
+    // The header is the first row with anything in it; a spreadsheet exported with a title or a
+    // spacer above the columns is common enough not to reject.
+    const headerRow = grid.findIndex((row) => !isBlank(row));
+    const body = headerRow < 0 ? [] : grid.slice(headerRow + 1);
+
+    if (headerRow < 0 || body.every(isBlank)) {
+      this.bulkUpload.update((state) => ({
+        ...state,
+        status: 'invalid',
+        errorMessage: 'The file has a header row but no data rows.',
+      }));
       return;
     }
-    this.bulkUpload.update((s) => ({ ...s, status: 'importing' }));
-    // TODO: wire to the bulk-import API; UI reflects the queued outcome.
-    window.setTimeout(() => {
-      this.bulkUpload.update((s) => ({ ...s, status: 'imported' }));
-    }, 600);
+
+    const headers = grid[headerRow].map((header) =>
+      String(header ?? '').trim().toLowerCase().replace(/[^a-z]/g, ''),
+    );
+
+    const columnOf = (...names: string[]): number => {
+      for (const name of names) {
+        const index = headers.indexOf(name);
+        if (index >= 0) {
+          return index;
+        }
+      }
+      return -1;
+    };
+
+    const firstNameIndex = columnOf('firstname', 'first', 'name', 'leadname');
+    if (firstNameIndex < 0) {
+      this.bulkUpload.update((state) => ({
+        ...state,
+        status: 'invalid',
+        errorMessage: 'The file needs a "First name" column. Download the template to see the expected columns.',
+      }));
+      return;
+    }
+
+    const lastNameIndex = columnOf('lastname', 'last', 'surname');
+    const mobileIndex = columnOf('mobile', 'mobilenumber', 'phone', 'phonenumber');
+    const emailIndex = columnOf('email', 'emailaddress', 'mail');
+    const languageIndex = columnOf('language', 'preferredlanguage');
+    const cityIndex = columnOf('city', 'location');
+    const campaignIndex = columnOf('campaign', 'campaignname', 'campaigncode');
+    const sourceIndex = columnOf('source', 'leadsource');
+    const notesIndex = columnOf('notes', 'note', 'comments');
+
+    const at = (columns: readonly string[], index: number): string | null =>
+      index >= 0 && index < columns.length ? String(columns[index] ?? '').trim() || null : null;
+
+    const rows: BulkLeadImportRow[] = [];
+    let invalid = 0;
+
+    body.forEach((columns, offset) => {
+      if (isBlank(columns)) {
+        return;
+      }
+
+      const firstName = at(columns, firstNameIndex);
+      const mobile = at(columns, mobileIndex);
+      const email = at(columns, emailIndex);
+
+      // COUNTED AS INVALID HERE, BUT STILL SENT. The server is the authority on what it will
+      // accept, and it names each rejection - showing a count now is only so the person is not
+      // surprised by the outcome.
+      if (!firstName || (!mobile && !email)) {
+        invalid += 1;
+      }
+
+      rows.push({
+        // 1-based and counted from the top of the FILE, blanks included, so the number in an
+        // error report is the row the person can scroll to.
+        rowNumber: headerRow + offset + 2,
+        firstName,
+        lastName: at(columns, lastNameIndex),
+        mobileNumber: mobile,
+        emailAddress: email,
+        preferredLanguage: at(columns, languageIndex),
+        city: at(columns, cityIndex),
+        campaignNameOrCode: at(columns, campaignIndex),
+        source: at(columns, sourceIndex),
+        notes: at(columns, notesIndex),
+      });
+    });
+
+    this.parsedBulkRows.set(rows);
+    this.bulkUpload.update((state) => ({
+      ...state,
+      status: 'ready',
+      totalRecords: rows.length,
+      validRecords: rows.length - invalid,
+      invalidRecords: invalid,
+    }));
   }
 
-  protected downloadBulkErrorReport(): void {
-    const s = this.bulkUpload();
-    if (s.invalidRecords <= 0) {
+  /**
+   * Splits one CSV line, honouring quoted fields.
+   *
+   * `line.split(',')` WAS WRONG FOR REAL DATA. A notes column reading "Called, no answer" became
+   * two columns, which shifted every field after it - so the e-mail address landed in the city.
+   */
+  private splitCsvLine(line: string): string[] {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    values.push(current);
+    return values;
+  }
+
+  /** The rows the parser read, held so the import can send them. */
+  private readonly parsedBulkRows = signal<readonly BulkLeadImportRow[]>([]);
+
+  /** What the server said about each row, for the result list and the error report. */
+  protected readonly bulkResults = signal<readonly BulkLeadImportRowResult[]>([]);
+
+  /**
+   * Sends the parsed rows.
+   *
+   * IT USED TO BE A TIMER. The body was `window.setTimeout(() => status = 'imported', 600)` under
+   * the comment "TODO: wire to the bulk-import API", so somebody could upload two hundred leads,
+   * read "Imported", and have created none of them.
+   */
+  protected importBulkUpload(): void {
+    const rows = this.parsedBulkRows();
+    if (this.bulkUpload().status !== 'ready' || rows.length === 0) {
       return;
     }
-    const rows = Array.from({ length: s.invalidRecords }, (_, i) => `${i + 1},Column count mismatch or missing primary field`);
-    const csvContent = ['Row,Reason', ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+
+    // The form is locked while a file is staged, so this should be unreachable — it is here
+    // because "should be unreachable" is not a reason to create a lead twice if it is not.
+    if (this.hasFormInput()) {
+      this.bulkBlockedByForm.set(true);
+      return;
+    }
+
+    this.bulkUpload.update((state) => ({ ...state, status: 'importing' }));
+
+    this.api
+      .bulkImportLeads({
+        rows: [...rows],
+
+        // A row that names no campaign falls back to whichever one is selected on the form, if
+        // any. The server rejects a row with neither rather than guessing.
+        defaultCampaignId: this.campaignIdByReference.get(this.fields().campaign) ?? null,
+        defaultSource: 'Bulk Upload',
+      })
+      .subscribe({
+        next: (result) => {
+          this.bulkResults.set(result.results);
+          this.bulkUpload.update((state) => ({
+            ...state,
+            status: 'imported',
+            totalRecords: result.submittedCount,
+            validRecords: result.importedCount,
+            invalidRecords: result.rejectedCount,
+            errorMessage: result.rejectedCount > 0 ? result.message : '',
+          }));
+          this.toast.show(
+            'Upload processed',
+            result.message,
+            result.rejectedCount > 0 ? 'warning' : 'success',
+          );
+        },
+        error: (error: unknown) => {
+          this.bulkUpload.update((state) => ({
+            ...state,
+            status: 'error',
+            errorMessage: apiErrorMessage(error),
+          }));
+          this.toast.show('Upload failed', apiErrorMessage(error), 'error');
+        },
+      });
+  }
+
+  /**
+   * The rejected rows, with the reason the server gave for each.
+   *
+   * THE OLD REPORT WAS FABRICATED. It generated one line per invalid row reading "Column count
+   * mismatch or missing primary field" regardless of what was actually wrong, and numbered them
+   * 1..n rather than by their row in the file - so it could not be used to fix the spreadsheet.
+   */
+  protected downloadBulkErrorReport(): void {
+    const rejected = this.bulkResults().filter((result) => !result.imported);
+    if (rejected.length === 0) {
+      return;
+    }
+
+    const escape = (value: string) => '"' + value.replace(/"/g, '""') + '"';
+    const lines = rejected.map(
+      (result) => result.rowNumber + ',' + escape(result.reason ?? 'Rejected.'),
+    );
+
+    const blob = new Blob([['Row,Reason', ...lines].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

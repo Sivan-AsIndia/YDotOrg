@@ -109,3 +109,23 @@ export type ReasonRequest = ApiReasonRequest;
  */
 /** Editing a user. An alias of the generated contract. */
 export type UpdateUserRequest = ApiUpdateUserRequest;
+
+/**
+ * Editing MY OWN profile — `PUT /api/v1/my-profile`.
+ *
+ * DELIBERATELY NARROWER THAN {@link UpdateUserRequest}, and the missing fields are the point.
+ * An administrator may move somebody's department, manager, account category, access window and
+ * MFA requirement; a person editing their own record may not, because each of those is a
+ * statement about their place in the organisation rather than about them. The server's request
+ * record carries the same five fields, so a field that is not here cannot be reached at all.
+ */
+export interface UpdateMyProfileRequest {
+  expectedVersion: number;
+  displayName?: string | null;
+  mobileCountryCode?: string | null;
+  mobileNumber?: string | null;
+  designation?: string | null;
+  preferredCulture?: string | null;
+  timeZone?: string | null;
+  reason?: string | null;
+}

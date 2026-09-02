@@ -305,6 +305,23 @@ public sealed class DonDbSeeder(
                 RefreshedAtUtc = now,
                 CreatedByUserId = SystemUserId
             },
+            // RECONCILED IS DELIBERATELY LESS THAN RECEIVED, and that gap is the whole reason the
+            // stage exists. Received is what the gateway reported; reconciled is what the bank
+            // confirmed. Seeding them equal would draw a panel that looks right and teaches
+            // nobody what the two columns are for - here one payment of 10,000 has been reported
+            // but has not yet cleared.
+            new DonorDonationSummary
+            {
+                Donor = individual,
+                OrganisationId = OrganisationId,
+                Stage = DonationStage.Reconciled,
+                Currency = "INR",
+                TotalAmount = 115000m,
+                TransactionCount = 4,
+                AsAtUtc = now.Date,
+                RefreshedAtUtc = now,
+                CreatedByUserId = SystemUserId
+            },
             new DonorDonationSummary
             {
                 Donor = individual,
@@ -365,6 +382,15 @@ public sealed class DonDbSeeder(
                 Source = "Education appeal event",
                 ConsentState = ConsentState.Granted,
                 Status = LeadStatus.New,
+
+                // THE THREE SEEDED LEADS SPAN THE RANGE ON PURPOSE. Every column the queue draws
+                // - temperature, potential, health - is worth nothing as a demonstration if all
+                // three rows read Cold/Low/0, which is what the migration's backfill leaves
+                // behind. This one is new and unworked: cold, and low until somebody learns
+                // otherwise.
+                Temperature = LeadTemperature.Cold,
+                DonationPotential = DonationPotential.Low,
+
                 NextAction = "Introduction call",
                 NextActionDueUtc = now.AddDays(2),
                 SlaState = SlaState.OnTrack,
@@ -384,6 +410,13 @@ public sealed class DonDbSeeder(
                 Source = "Website enquiry form",
                 ConsentState = ConsentState.NotProvided,
                 Status = LeadStatus.Assigned,
+
+                // Warm and Medium: a website enquiry is a person who came looking, so they are
+                // warmer than a cold list - but consent is NotProvided and the follow-up is
+                // already overdue, which is what keeps the health score low.
+                Temperature = LeadTemperature.Warm,
+                DonationPotential = DonationPotential.Medium,
+
                 OwnerUserId = SystemUserId,
                 OwnerName = _seed.SystemUserDisplayName,
                 TeamCode = "SOUTH",
@@ -406,6 +439,14 @@ public sealed class DonDbSeeder(
                 Source = "Referral from an existing donor",
                 ConsentState = ConsentState.Granted,
                 Status = LeadStatus.Nurture,
+
+                // Hot and High: referred by an existing donor, consented, and they asked for the
+                // call back themselves. This is the row that shows the two readings are
+                // INDEPENDENT of the pipeline stage - Nurture is not a late stage, and this lead
+                // is still the most promising of the three.
+                Temperature = LeadTemperature.Hot,
+                DonationPotential = DonationPotential.High,
+
                 OwnerUserId = SystemUserId,
                 OwnerName = _seed.SystemUserDisplayName,
                 TeamCode = "SOUTH",

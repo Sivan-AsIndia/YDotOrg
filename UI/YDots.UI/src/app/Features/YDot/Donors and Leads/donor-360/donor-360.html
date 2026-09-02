@@ -66,47 +66,19 @@
         </div>
       </header>
 
-      <!-- ============================================================ -->
-      <!-- PREVIEW / ACCESS SIMULATOR BAR -->
-      <!-- ============================================================ -->
-      <div class="preview-bar">
-        <span class="chip-dark">PREVIEW</span>
-        <span class="preview-label">ROLE</span>
-        <select
-          class="role-select"
-          aria-label="Preview as role"
-          [ngModel]="selectedRole()"
-          (ngModelChange)="setRole($any($event))">
-          @for (role of roles; track role) {
-            <option [value]="role">{{ role }}</option>
-          }
-        </select>
+      <!--
+        THE ACCESS SIMULATOR IS GONE.
 
-        <span class="preview-label preview-label-scope">SCOPE</span>
-        <div class="scope-pills">
-          @for (unit of scopeUnits; track unit) {
-            <span class="scope-pill" [class.scope-pill-active]="isInScope(unit)">{{ unit }}</span>
-          }
-        </div>
+        It let anybody pick a role from a dropdown - "Fundraiser", "Data Steward", "Read-only
+        guest" - and re-rendered the screen as though they held it. Three problems, all real:
+        the roles no longer exist (the catalogue is TENANT_ADMIN, INITIATOR and APPROVER); the
+        permissions came from a map compiled into the bundle rather than from the token; and
+        picking a more privileged role unmasked donor contact details in the browser, because
+        the masking was a client-side ternary rather than the server withholding the value.
 
-        <button type="button" class="states-toggle" (click)="toggleStates()" [attr.aria-expanded]="statesOpen()">
-          <span class="chevron" [class.chevron-open]="statesOpen()">▸</span> STATES
-        </button>
-      </div>
-
-      @if (statesOpen()) {
-        <div class="states-panel">
-          @for (item of scenarios; track item.id) {
-            <button
-              type="button"
-              class="state-chip"
-              [class.state-chip-active]="scenario() === item.id"
-              (click)="setScenario(item.id)">
-              {{ item.label }}
-            </button>
-          }
-        </div>
-      }
+        Permissions now come from the API's `permittedActions` for this caller and this record,
+        and a masked field is masked because the server sent it that way.
+      -->
 
       <!-- ============================================================ -->
       <!-- STATE-DRIVEN BODY -->
@@ -273,7 +245,7 @@
               <div class="snapshot-card">
                 <div class="snapshot-row">
                   <span>Open follow-ups</span>
-                  <span class="snapshot-value">{{ followUps.length }}</span>
+                  <span class="snapshot-value">{{ followUps().length }}</span>
                 </div>
                 <div class="snapshot-row">
                   <span>Overdue follow-ups</span>
@@ -441,7 +413,7 @@
                     }
                   </ul>
                 } @else {
-                  <p class="empty-row">No promises recorded.</p>
+                  <p class="empty-row">No promises() recorded.</p>
                 }
               </div>
             }
@@ -453,12 +425,12 @@
                   <button type="button" class="btn btn-outline-primary btn-sm" (click)="openCommunicationHistory()">View full communication history</button>
                 </div>
 
-                @if (conversations.length) {
+                @if (conversations().length) {
                   <div class="table-scroll">
                     <table class="data-table">
                       <thead><tr><th>ID</th><th>Channel</th><th>Summary</th><th>Date</th><th class="text-end">Owner</th></tr></thead>
                       <tbody>
-                        @for (c of conversations; track c.id) {
+                        @for (c of conversations(); track c.id) {
                           @if (matchesSearch(c.id, c.channel, c.summary, c.owner)) {
                             <tr>
                               <td class="mono cell-id">{{ c.id }}</td>
@@ -485,9 +457,9 @@
                   <button type="button" class="btn btn-primary btn-sm" [disabled]="!canFollowUp()" (click)="openFollowUpPlanner()">Create Follow-Up</button>
                 </div>
 
-                @if (followUps.length) {
+                @if (followUps().length) {
                   <ul class="simple-list">
-                    @for (f of followUps; track f.id) {
+                    @for (f of followUps(); track f.id) {
                       @if (matchesSearch(f.id, f.title, f.owner, f.status)) {
                         <li>
                           <span class="mono cell-id">{{ f.id }}</span>
@@ -530,7 +502,7 @@
                     </table>
                   </div>
                 } @else {
-                  <p class="empty-row">No documents uploaded.</p>
+                  <p class="empty-row">No documents() uploaded.</p>
                 }
 
                 <h3 class="subsection-title">Duplicate links</h3>
@@ -595,9 +567,9 @@
             <!-- ACTIVITY HISTORY -->
             @if (activeTab() === 'activity') {
               <div class="tab-panel">
-                @if (activity().length) {
+                @if (activity.length) {
                   <ol class="timeline">
-                    @for (a of activity(); track a.id) {
+                    @for (a of activity; track a.id) {
                       @if (matchesSearch(a.actor, a.action)) {
                         <li class="timeline-item">
                           <span class="timeline-dot" aria-hidden="true"></span>
@@ -640,21 +612,23 @@
             <textarea rows="3" [ngModel]="correctReason()" (ngModelChange)="correctReason.set($any($event))" name="correctReason"></textarea>
             @if (correctErrors()['reason']) { <span class="field-error">{{ correctErrors()['reason'] }}</span> }
           </label>
+          <!-- A PICKER, NOT A TEXT BOX. Whatever this field holds is sent as
+               `relationshipOwnerUserId`, which is a Guid — so the free-text version could only
+               ever succeed if somebody typed one by hand, and its own default ("Unassigned")
+               made every save fail with "The request could not be read". -->
           <label class="field">
             <span class="field-label">Relationship owner</span>
-            <select
-              [ngModel]="correctOwnerRef()"
-              (ngModelChange)="correctOwnerRef.set($any($event))"
-              name="correctOwner"
-            >
-              <option value="">Choose an owner…</option>
+            <select [ngModel]="correctOwner()" (ngModelChange)="correctOwner.set($any($event))" name="correctOwner">
+              <option value="">Unassigned</option>
               @for (person of ownerOptions(); track person.reference) {
                 <option [value]="person.reference">
-                  {{ person.name }}@if (person.context) { &mdash; {{ person.context }} }
+                  {{ person.name }}@if (person.context) { · {{ person.context }} }
                 </option>
               }
             </select>
-            @if (correctErrors()['owner']) { <span class="field-error">{{ correctErrors()['owner'] }}</span> }
+            @if (people.isLoading()) { <span class="field-hint">Loading colleagues…</span> }
+            @else if (people.loadError()) { <span class="field-error">{{ people.loadError() }}</span> }
+            @else if (ownerOptions().length === 0) { <span class="field-hint">No colleagues are available to own this relationship.</span> }
           </label>
         </div>
         <footer class="dialog-footer">
@@ -695,21 +669,37 @@
           <h2 id="intent-title">Create intent</h2>
           <button type="button" class="notice-close" aria-label="Close dialog" (click)="closeAction()">✕</button>
         </header>
+        <!-- THE FIELDS THE ENDPOINT ACTUALLY TAKES. This asked for Full name and Source, which
+             the donor on screen already has, and sent neither anywhere. What it records is a
+             pledge: an amount, a currency, an optional date and a note. -->
         <div class="dialog-body">
+          <p class="dialog-note">
+            Records a pledge against this donor. It is not a payment request — the donor pays
+            through their own donation link.
+          </p>
           <label class="field">
-            <span class="field-label">Full name</span>
-            <input type="text" [ngModel]="intentName()" (ngModelChange)="intentName.set($any($event))" name="intentName" />
-            @if (intentErrors()['name']) { <span class="field-error">{{ intentErrors()['name'] }}</span> }
+            <span class="field-label">Amount</span>
+            <input type="number" min="1" step="1" [ngModel]="intentAmount()" (ngModelChange)="intentAmount.set($any($event))" name="intentAmount" />
+            @if (intentErrors()['amount']) { <span class="field-error">{{ intentErrors()['amount'] }}</span> }
           </label>
           <label class="field">
-            <span class="field-label">Source</span>
-            <input type="text" [ngModel]="intentSource()" (ngModelChange)="intentSource.set($any($event))" name="intentSource" />
-            @if (intentErrors()['source']) { <span class="field-error">{{ intentErrors()['source'] }}</span> }
+            <span class="field-label">Currency</span>
+            <input type="text" maxlength="3" [ngModel]="intentCurrency()" (ngModelChange)="intentCurrency.set($any($event))" name="intentCurrency" />
+            @if (intentErrors()['currency']) { <span class="field-error">{{ intentErrors()['currency'] }}</span> }
+          </label>
+          <label class="field">
+            <span class="field-label">Expected by <span class="field-optional">(optional)</span></span>
+            <input type="date" [ngModel]="intentDueDate()" (ngModelChange)="intentDueDate.set($any($event))" name="intentDueDate" />
+          </label>
+          <label class="field">
+            <span class="field-label">Notes</span>
+            <textarea rows="3" [ngModel]="intentNotes()" (ngModelChange)="intentNotes.set($any($event))" name="intentNotes"></textarea>
+            @if (intentErrors()['notes']) { <span class="field-error">{{ intentErrors()['notes'] }}</span> }
           </label>
         </div>
         <footer class="dialog-footer">
           <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeAction()">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm">Save draft</button>
+          <button type="submit" class="btn btn-primary btn-sm">Record pledge</button>
         </footer>
       </form>
     }

@@ -32,6 +32,9 @@ public sealed record ResolveReadinessBlockerCommand(Guid BlockerId, ResolveReadi
 /// <summary>Sends a campaign back to Draft from the readiness screen.</summary>
 public sealed record ReturnCampaignToDraftCommand(Guid CampaignId, ReturnCampaignToDraftRequest Request);
 
+/// <summary>Removes a Pending check from a campaign's checklist.</summary>
+public sealed record DeleteReadinessCheckCommand(Guid CheckId, ReadinessVerdictRequest Request);
+
 /// <summary>
 /// The campaign readiness checklist.
 ///
@@ -367,13 +370,20 @@ public sealed class ReadinessCommandHandler(
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
-        // Only from Submitted or Approved. A campaign that is already live has donations
-        // against it, and dropping it back to Draft would let its target and dates be edited
-        // underneath money that has already been taken.
-        if (campaign.Status is not (CampaignStatus.Submitted or CampaignStatus.Approved))
+        // Only before it goes live. A campaign that is already Active has donations against it,
+        // and dropping it back to Draft would let its target and dates be edited underneath money
+        // that has already been taken.
+        //
+        // SCHEDULED IS INCLUDED, and it has to be. Approving a campaign now leaves it Scheduled
+        // rather than Approved, so without this a returned-to-draft was unreachable for exactly
+        // the campaigns the readiness screen is looking at - and a scheduled campaign is the one
+        // most worth being able to pull back, because it is about to go live by itself.
+        if (campaign.Status is not (CampaignStatus.Submitted
+                                    or CampaignStatus.Approved
+                                    or CampaignStatus.Scheduled))
         {
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
-                $"Only a Submitted or Approved campaign can be returned to Draft. "
+                "Only a Submitted, Approved or Scheduled campaign can be returned to Draft. "
                 + $"This one is {campaign.Status}."));
         }
 
@@ -385,6 +395,20 @@ public sealed class ReadinessCommandHandler(
         campaign.SubmittedAtUtc = null;
         campaign.ApprovedByUserId = null;
         campaign.ApprovedAtUtc = null;
+
+        // A lifecycle row as well as an audit row, so the history tab shows the campaign coming
+        // back beside the submission that sent it - the two halves of one conversation.
+        await campaigns.AddLifecycleActionAsync(
+            new CampaignLifecycleAction
+            {
+                CampaignId = campaign.Id,
+                ActionType = CampaignLifecycleActionType.ReturnToDraft,
+                ActionStatus = CampaignLifecycleActionStatus.Completed,
+                EffectiveAtUtc = clock.UtcNow,
+                DetailedReason = command.Request.Reason.Trim(),
+                RequestedByUserId = currentUser.UserId
+            },
+            cancellationToken);
 
         await audit.WriteAsync(
             ReadinessAuditActionCodes.ReturnedToDraft, nameof(Campaign), campaign.Id,
@@ -400,6 +424,60 @@ public sealed class ReadinessCommandHandler(
     // =====================================================================================
     // Shared
     // =====================================================================================
+
+    /// <summary>
+    /// Removes a check from the checklist.
+    ///
+    /// PENDING ONLY, and that restriction is the whole point. A passed or failed check carries
+    /// somebody's verdict - the record that a person looked at the payment configuration and said
+    /// what they found - and deleting the check would destroy the answer along with the question.
+    /// A check that turned out not to apply is removed before anyone judges it; one that has been
+    /// judged and turned out to be wrong is re-opened by raising a blocker, which leaves a trail.
+    ///
+    /// A CHECK WITH BLOCKERS ON IT STAYS TOO. A blocker is somebody recording an obstacle against
+    /// this campaign; deleting the check under it would take the obstacle out of the checklist
+    /// without anyone having resolved it.
+    /// </summary>
+    public async Task<Result<OutcomeResponse>> HandleAsync(
+        DeleteReadinessCheckCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var loaded = await LoadCheckAsync(
+            command.CheckId, command.Request.ExpectedVersion, cancellationToken);
+
+        if (loaded.IsFailure)
+        {
+            return Result.Failure<OutcomeResponse>(loaded.Error!);
+        }
+
+        var check = loaded.Value!;
+
+        if (check.Status != ReadinessCheckStatus.Pending)
+        {
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                $"Only a Pending check can be deleted. This one is {check.Status}, so it carries "
+                + "a verdict that would be destroyed with it."));
+        }
+
+        if (check.Blockers.Count > 0)
+        {
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                "This check has blockers raised against it. Resolve them before removing it."));
+        }
+
+        await audit.WriteAsync(
+            ReadinessAuditActionCodes.Deleted, nameof(CampaignReadinessCheck), check.Id,
+            command.Request.Notes, cancellationToken);
+
+        // Built while the check is still readable; the row goes on save.
+        var outcome = BuildOutcome(check, "Readiness check deleted.");
+
+        readiness.Remove(check);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return outcome;
+    }
 
     private async Task<Result<CampaignReadinessCheck>> LoadCheckAsync(
         Guid checkId, long expectedVersion, CancellationToken cancellationToken)

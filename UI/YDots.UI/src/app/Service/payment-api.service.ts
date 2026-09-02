@@ -34,6 +34,8 @@ import {
   PaginationRequest,
   ReceiptDetail,
   ReceiptListItem,
+  ReceiptRegisterFilter,
+  ReceiptRegisterResponse,
   ReceiptSearchFilter,
   ReconcileDonationRequest,
   RecordOfflineDonationRequest,
@@ -341,6 +343,21 @@ export class PaymentApiService {
   searchReceipts(filter: ReceiptSearchFilter): Observable<PagedResponse<ReceiptListItem>> {
     return this.http
       .get<ApiResponse<PagedResponse<ReceiptListItem>>>(`${this.staff}/receipts`, {
+        params: this.toParams(filter),
+      })
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * The Receipt Register - rows and totals in one call.
+   *
+   * NOT `searchReceipts`. That one lists receipts, so a finance user can correct or void one.
+   * This is the document's register: it includes failed payments, which have no receipt, because
+   * the screen reports what happened to every payment rather than which documents exist.
+   */
+  getReceiptRegister(filter: ReceiptRegisterFilter): Observable<ReceiptRegisterResponse> {
+    return this.http
+      .get<ApiResponse<ReceiptRegisterResponse>>(`${this.staff}/receipts/register`, {
         params: this.toParams(filter),
       })
       .pipe(map((response) => response.data!));

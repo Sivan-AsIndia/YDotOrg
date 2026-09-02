@@ -136,6 +136,23 @@
         </div>
 
         @if (editing()) {
+          <!-- WHAT IS STILL YOURS TO CHANGE, once the platform has approved the Organisation.
+               The identity fields below are what the reviewer checked the registration
+               certificate against; the server drops them from a save after approval, so they are
+               drawn locked rather than accepting typing it will discard. -->
+          @if (isProfileRestricted()) {
+            <p class="org-note org-note--info">
+              <i class="ri-lock-line"></i>
+              This organisation has been approved, so its registered details are fixed. You can
+              still update the <strong>contact e-mail</strong>, <strong>telephone</strong> and
+              <strong>address</strong>. To correct a registered detail, contact the platform team —
+              it has to be re-verified against your documents.
+            </p>
+          }
+
+          <!-- Verified identity. Locked as one block: these are the fields the approval was
+               granted against, and they are meaningless individually. -->
+          <fieldset class="org-fieldset" [disabled]="isProfileRestricted()">
           <div class="org-grid org-grid-2">
             <div class="org-field">
               <label class="org-field-label" for="d-name">Name</label>
@@ -208,12 +225,16 @@
                       [ngModel]="form().description"
                       (ngModelChange)="update('description', $event)"></textarea>
           </div>
+          </fieldset>
 
           <h4 class="org-doc-subheading">Contact</h4>
           <div class="org-grid org-grid-2">
             <div class="org-field">
               <label class="org-field-label" for="d-contact-name">Contact person</label>
+              <!-- The named signatory, not a way of reaching the Organisation — it is part of
+                   what was verified, so it locks with the rest of the identity fields. -->
               <input id="d-contact-name" type="text" class="org-input" maxlength="200"
+                     [disabled]="!canEditField('contactPersonName')"
                      [ngModel]="form().contactPersonName"
                      (ngModelChange)="update('contactPersonName', $event)">
             </div>
@@ -241,6 +262,7 @@
             <div class="org-field">
               <label class="org-field-label" for="d-website">Website</label>
               <input id="d-website" type="url" class="org-input" maxlength="256"
+                     [disabled]="!canEditField('websiteUrl')"
                      [ngModel]="form().websiteUrl" (ngModelChange)="update('websiteUrl', $event)">
             </div>
           </div>

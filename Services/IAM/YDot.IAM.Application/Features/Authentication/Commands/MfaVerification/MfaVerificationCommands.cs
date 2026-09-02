@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -283,23 +283,64 @@ public sealed class MfaVerificationCommandHandler(
 /// Carries the freshly minted trusted-device token from the handler out to the API layer,
 /// which writes it into an HttpOnly cookie.
 ///
-/// An AsyncLocal rather than a return value because the token is a side effect of ONE branch
+/// An ambient slot rather than a return value because the token is a side effect of ONE branch
 /// of a flow whose response type is already shared with three other branches. Threading an
 /// optional token through <c>SignInResponse</c> would put a secret in the response body of
 /// every sign-in, which is precisely where it must not be — JavaScript can read a body, and
 /// the whole point of the HttpOnly cookie is that it cannot.
+///
+/// WHY THE BOX, AND WHY <see cref="Begin"/> IS NOT OPTIONAL. This was a bare
+/// <c>AsyncLocal&lt;string?&gt;</c> that the handler assigned and the controller read back, and
+/// that can never work: an async method captures the execution context on entry and RESTORES it
+/// when it returns, so an AsyncLocal written inside the callee is invisible to the caller
+/// afterwards. The value flowed down and was thrown away on the way back, so the trusted-device
+/// cookie was never written and no browser was ever actually remembered — the row was created,
+/// the cookie was not, and the next sign-in had nothing to present.
+///
+/// Holding a MUTABLE BOX in the AsyncLocal inverts that. The controller calls <see cref="Begin"/>
+/// in its own frame, so the box reference flows DOWN into the handler; the handler mutates the
+/// box's contents rather than the AsyncLocal itself, and the controller reads the change back out
+/// of the object it still holds.
 /// </summary>
 public static class TrustedDeviceTokenAccessor
 {
-    private static readonly AsyncLocal<string?> Current = new();
+    private sealed class Slot
+    {
+        public string? Token { get; set; }
+    }
 
-    public static void Set(string? token) => Current.Value = token;
+    private static readonly AsyncLocal<Slot?> Current = new();
+
+    /// <summary>
+    /// Opens a slot for this request. Called by the API action BEFORE the handler runs; without
+    /// it <see cref="Set"/> has nowhere to write and the token is silently dropped.
+    /// </summary>
+    public static void Begin() => Current.Value = new Slot();
+
+    public static void Set(string? token)
+    {
+        var slot = Current.Value;
+
+        if (slot is not null)
+        {
+            slot.Token = token;
+        }
+    }
 
     /// <summary>Reads and clears, so a token cannot leak into a later request on the same thread.</summary>
     public static string? Take()
     {
-        var value = Current.Value;
+        var slot = Current.Value;
+
+        if (slot is null)
+        {
+            return null;
+        }
+
+        var value = slot.Token;
+        slot.Token = null;
         Current.Value = null;
+
         return value;
     }
 }

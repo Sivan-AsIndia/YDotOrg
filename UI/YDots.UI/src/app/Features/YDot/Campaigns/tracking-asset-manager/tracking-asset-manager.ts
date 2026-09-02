@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
 import { ClickOutsideDirective } from '../../../../Shared/directives/click-outside';
 import { UiState, HistoryRow } from '../../../../Shared/models/campaign.model';
@@ -31,6 +32,7 @@ export class TrackingAssetManagerComponent {
   private readonly campaignApi = inject(CampaignApiService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly toast = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
 
   // ================= Task header =================
   protected readonly pageTitle = 'Tracking asset manager';
@@ -63,7 +65,17 @@ export class TrackingAssetManagerComponent {
     generate: this.currentUser.hasPermission('cam.tracking-assets.create'),
     test: this.currentUser.hasPermission('cam.tracking-assets.view'),
     approve: this.currentUser.hasPermission('cam.tracking-assets.approve'),
+    activate: this.currentUser.hasPermission('cam.tracking-assets.activate'),
+
+    // THE DISABLE PAIR. An Initiator holds request-disable and an Approver holds the decision;
+    // `disable` used to be the only one of the two, so the maker's Disable click went to the
+    // approver's endpoint and answered 403.
+    requestDisable: this.currentUser.hasPermission('cam.tracking-assets.request-disable'),
     disable: this.currentUser.hasPermission('cam.tracking-assets.deactivate'),
+
+    // DELETE-DRAFT USED TO BORROW `disable`, so discarding your own unused draft required the
+    // right to take live assets down.
+    deleteDraft: this.currentUser.hasPermission('cam.tracking-assets.delete-draft'),
     replace: this.currentUser.hasPermission('cam.tracking-assets.edit'),
   }));
 
@@ -101,6 +113,20 @@ export class TrackingAssetManagerComponent {
 
   /** Search — scope-aware search over reference, destination and campaign. */
   protected readonly searchTerm = signal('');
+
+  /**
+   * The campaign this screen is scoped to, when it was opened from one.
+   *
+   * THE MANAGER IS REACHED FROM A CAMPAIGN NOW rather than from the sidebar, so it has to be able
+   * to answer "the assets for THIS campaign" and say which campaign that is. Campaign detail's
+   * "Tracking assets" button carries the code in `?campaign=`; opened without one the screen is
+   * the whole register, exactly as before.
+   */
+  protected readonly campaignFilter = signal(this.route.snapshot.queryParamMap.get('campaign') ?? '');
+  protected readonly campaignFilterName = computed(() => {
+    const ref = this.campaignFilter();
+    return ref ? this.campaignOf(ref).name || ref : '';
+  });
 
   /** Asset type — searchable controlled choice; effective approved catalogue. */
   protected readonly assetTypeCatalogue: readonly string[] = [
@@ -172,7 +198,8 @@ export class TrackingAssetManagerComponent {
   protected readonly channelFilter = signal<string>('');
 
   /** Asset status — search-select using only current catalogue values. */
-  protected readonly statusCatalogue: readonly AssetStatus[] = ['Draft', 'Submitted', 'Approved', 'Active', 'Inactive', 'Paused', 'Disabled'];
+  protected readonly statusCatalogue: readonly AssetStatus[] =
+    ['Draft', 'Submitted', 'Approved', 'Active', 'Disable requested', 'Inactive', 'Paused', 'Disabled'];
   protected readonly statusFilter = signal<AssetStatus | ''>('');
 
   /** Active from / Active to — date range in the operating time zone. */
@@ -248,6 +275,9 @@ export class TrackingAssetManagerComponent {
   /** Active-filter summary chips, qualified by scope. */
   protected readonly activeFilterSummary = computed(() => {
     const chips: { key: string; label: string }[] = [];
+    if (this.campaignFilter()) {
+      chips.push({ key: 'campaign', label: `Campaign: ${this.campaignFilterName()}` });
+    }
     if (this.assetTypeFilter()) {
       chips.push({ key: 'assetType', label: `Asset type: ${this.assetTypeFilter()}` });
     }
@@ -299,6 +329,7 @@ export class TrackingAssetManagerComponent {
   /** The filtered asset set for the current scope and filters. */
   protected readonly visibleRecords = computed(() => {
     const q = this.searchTerm().trim().toLowerCase();
+    const campaign = this.campaignFilter();
     const type = this.assetTypeFilter();
     const channel = this.channelFilter();
     const status = this.statusFilter();
@@ -309,6 +340,7 @@ export class TrackingAssetManagerComponent {
     }
 
     return this.records().filter((r) => {
+      if (campaign && r.campaignRef !== campaign) return false;
       if (
         q &&
         !(
@@ -561,6 +593,22 @@ export class TrackingAssetManagerComponent {
     if (asset.assetStatus !== 'Draft') return `Submit is only available while this asset is a Draft, not ${asset.assetStatus}.`;
     return '';
   }
+
+  /**
+   * Whether this session may EVER submit, regardless of the asset in front of it.
+   *
+   * SEPARATE FROM `submitAllowed` ON PURPOSE, and the same split runs through every action on
+   * this screen. A missing PERMISSION means the action is not this person's to take and the item
+   * is not rendered; an incompatible STATE means it is theirs but not yet, and the item is
+   * rendered disabled with a sentence saying why. Greying out a verb a role will never hold
+   * teaches people to ignore greyed-out things.
+   */
+  protected readonly canEverSubmit = computed(() => this.currentUser.hasPermission('cam.tracking-assets.submit'));
+  protected readonly canEverApprove = computed(() => this.permissions().approve);
+  protected readonly canEverActivate = computed(() => this.permissions().activate);
+  protected readonly canEverRequestDisable = computed(() => this.permissions().requestDisable);
+  protected readonly canEverDisable = computed(() => this.permissions().disable);
+  protected readonly canEverEdit = computed(() => this.permissions().replace);
   /** True when the current session created this asset — the one condition that blocks Approve
    *  even for an otherwise-eligible independent approver. */
   protected isOwnAsset(asset: TrackingAsset | null): boolean {
@@ -582,24 +630,70 @@ export class TrackingAssetManagerComponent {
     if (asset.assetStatus !== 'Submitted' && asset.approvalState !== 'Pending review') {
       return 'Approve is only available while this asset is Submitted or Pending review.';
     }
-    if (!this.permissions().approve) {
-      return 'Approve requires the authorised independent approver permission.';
-    }
     if (this.isOwnAsset(asset)) {
       return `This value cannot be approved by its creator (${this.currentUserName()}). An independent approver who did not create this asset must decide.`;
     }
     return '';
   }
-  /** Disable — compatible current state only. */
-  protected disableAllowed(asset: TrackingAsset | null): boolean {
-    return !!asset && this.permissions().disable && (asset.assetStatus === 'Active' || asset.assetStatus === 'Paused');
+  /**
+   * Activate — the step between Approved and live.
+   *
+   * WITHOUT IT THE LIFECYCLE STOPPED AT APPROVED. `PermittedActionsFor` on the server offers
+   * Activate from exactly this state and nothing in the client ever called it, so an approved
+   * asset stayed approved: it had a reference and a generated URL, and it resolved nothing,
+   * because `IsLiveAt` requires the status to be Active.
+   */
+  protected activateAllowed(asset: TrackingAsset | null): boolean {
+    return !!asset && this.permissions().activate && asset.assetStatus === 'Approved';
   }
-  /** Why Disable is unavailable — explains permission or an incompatible current state. */
+  /** Why Activate is unavailable — explains permission or an incompatible current state. */
+  protected activateDisabledReason(asset: TrackingAsset | null): string {
+    if (!asset) return '';
+    if (asset.assetStatus !== 'Approved') {
+      return `Activate is only available once this asset is Approved, not ${asset.assetStatus}.`;
+    }
+    return '';
+  }
+  /**
+   * Request disable — the maker asking for a live asset to be taken down.
+   *
+   * A REQUEST, NOT THE ACT. Disabling an asset stops a printed QR code resolving, so it is a
+   * decision somebody else makes. This moves the asset to "Disable requested", and it goes on
+   * resolving scans until an approver decides - nothing about asking should change what a
+   * donor's scan does.
+   */
+  protected requestDisableAllowed(asset: TrackingAsset | null): boolean {
+    return !!asset && this.permissions().requestDisable
+      && (asset.assetStatus === 'Active' || asset.assetStatus === 'Paused');
+  }
+  protected requestDisableDisabledReason(asset: TrackingAsset | null): string {
+    if (!asset) return '';
+    if (asset.assetStatus === 'Disable requested') {
+      return 'A disable request is already waiting for an approver on this asset.';
+    }
+    if (asset.assetStatus !== 'Active' && asset.assetStatus !== 'Paused') {
+      return `A disable can only be requested for a live asset, not one that is ${asset.assetStatus}.`;
+    }
+    return '';
+  }
+
+  /** Disable — the approver's decision, on a live asset or one already carrying a request. */
+  protected disableAllowed(asset: TrackingAsset | null): boolean {
+    return !!asset && this.permissions().disable
+      && (asset.assetStatus === 'Active'
+        || asset.assetStatus === 'Paused'
+        || asset.assetStatus === 'Disable requested');
+  }
+  /**
+   * Why Disable is unavailable.
+   *
+   * IT NO LONGER EXPLAINS A MISSING PERMISSION, because a caller without the permission is not
+   * shown the item at all. What is left is the state, which is worth saying.
+   */
   protected disableDisabledReason(asset: TrackingAsset | null): string {
     if (!asset) return '';
-    if (!this.permissions().disable) return 'Disable requires the tracking-asset-manager Disable permission.';
-    if (asset.assetStatus !== 'Active' && asset.assetStatus !== 'Paused') {
-      return `Disable is only available from Active or Paused, not ${asset.assetStatus}.`;
+    if (!this.disableAllowed(asset)) {
+      return `Disable is only available for a live asset, not one that is ${asset.assetStatus}.`;
     }
     return '';
   }
@@ -610,13 +704,18 @@ export class TrackingAssetManagerComponent {
   /** Why Edit is unavailable — explains permission or that only a Draft can be edited. */
   protected editDisabledReason(asset: TrackingAsset | null): string {
     if (!asset) return '';
-    if (!this.permissions().replace) return 'Edit requires the tracking-asset-manager edit permission.';
     if (asset.assetStatus !== 'Draft') return `Edit is only available while this asset is a Draft, not ${asset.assetStatus}.`;
     return '';
   }
-  /** Delete unused draft — Draft with no downstream reference only. */
+  /**
+   * Delete unused draft — a Draft with nothing pointing at it.
+   *
+   * ON ITS OWN PERMISSION NOW. It tested `permissions().disable`, so discarding your own unused
+   * draft required the right to take LIVE assets down - which an Initiator does not hold, and
+   * which has nothing to do with a draft that has never been activated.
+   */
   protected canDeleteDraft(asset: TrackingAsset): boolean {
-    return asset.assetStatus === 'Draft' && !asset.hasDownstreamReference && this.permissions().disable;
+    return asset.assetStatus === 'Draft' && !asset.hasDownstreamReference && this.permissions().deleteDraft;
   }
 
   // ----- Row overflow menu -----
@@ -632,8 +731,12 @@ export class TrackingAssetManagerComponent {
   protected readonly gAssetType = signal<string>(''); // required
   protected readonly gDestination = signal<string>(''); // required
   protected readonly gCampaign = signal<string>(''); // required
-  protected readonly gChannel = signal<string>(''); // optional
-  protected readonly gAssetStatus = signal<AssetStatus>('Draft'); // catalogue value
+  protected readonly gChannel = signal<string>(''); // required
+  // REQUIRED, AND NO LONGER PRE-ANSWERED. It started on 'Draft', so somebody who never touched
+  // the field created a Draft asset without choosing to - and a Draft asset resolves no scans, so
+  // a QR code could be printed against one that was never going to work. Empty means the person
+  // has to pick, and errorSummary() refuses the form until they do.
+  protected readonly gAssetStatus = signal<AssetStatus | ''>('');
   protected readonly gSource = signal<string>(''); // conditional
   protected readonly gMedium = signal<string>(''); // conditional
   protected readonly gContentTag = signal<string>(''); // optional
@@ -684,8 +787,20 @@ export class TrackingAssetManagerComponent {
    * MATCHED ON THE CHANNEL'S NAME rather than on the literal 'Offline' the picker used to hold,
    * because the picker now holds the channel's id. The seeded CAM channel for this is 'Offline'.
    */
+  /**
+   * Whether this asset carries PLACES: a QR code, on the Offline channel.
+   *
+   * BOTH HALVES, NOT JUST THE CHANNEL. This tested the channel alone, so choosing Offline with a
+   * Short Link opened the Places section and demanded a place for it - and a place describes
+   * where a printed thing was put, which a link does not have. The server's rule is the pair, so
+   * a short link on Offline that reached it with places was refused outright: "Places apply to an
+   * offline QR code only."
+   */
   protected readonly isOnGround = computed(
-    () => this.channelLabel(this.gChannel()).toLowerCase() === 'offline');
+    () =>
+      this.gAssetType().toLowerCase() === 'qr code' &&
+      this.channelLabel(this.gChannel()).toLowerCase() === 'offline',
+  );
   protected readonly gPlaces = signal<
     readonly {
       readonly id: string;
@@ -700,10 +815,19 @@ export class TrackingAssetManagerComponent {
   private placeFieldSeq = 1;
   /** City/State are never typed by hand — they are fetched from the selected campaign's own
    *  City / State (captured at campaign creation in the Wizard), the same source of truth every
-   *  other page reads from. */
+   *  other page reads from.
+   *
+   *  THE NAMES, NOT THE IDS. `CampaignRecord.city` and `.region` hold the API's Guids, because
+   *  that is what the create and update bodies require; the readable values live alongside them
+   *  in `cityName` and `regionName`. Reading the id fields here put two raw Guids into the City
+   *  and State boxes of the Generate form. Nothing downstream is affected — these two boxes are
+   *  display only, and the server derives a placement's geography from the campaign itself. */
   private currentCampaignLocation(): { readonly city: string; readonly state: string } {
     const rec = this.campaignStore.get(this.gCampaign());
-    return { city: rec?.city ?? '', state: rec?.region ?? '' };
+    return {
+      city: rec?.cityName ?? '',
+      state: rec?.regionName ?? rec?.regionLabel ?? '',
+    };
   }
   protected addPlace(): void {
     this.placeSeq += 1;
@@ -762,18 +886,24 @@ export class TrackingAssetManagerComponent {
     if (this.isOnGround()) return this.gPlaces().some((p) => p.destination.trim());
     return !!this.gDestination().trim();
   });
-  /** A non-persisting preview of the reference this asset type would receive (pure — safe to call live). */
-  protected previewReferenceFor(assetType: string): string {
-    return assetType ? this.store.nextReference(assetType) : '';
-  }
-  protected previewUrlFor(assetType: string, reference: string): string {
-    return reference ? this.store.buildGeneratedUrl(reference, assetType === 'QR Code') : '';
+  /**
+   * WHAT A PREVIEW CAN HONESTLY SHOW, which is the destination and not the tracking link.
+   *
+   * The tracking reference and the short URL that carries it are allocated by the SERVER, and
+   * only on approval — that is what makes a printed code recoverable. So the preview used to ask
+   * `nextReference()` for a placeholder ('QR-PENDING-271381'), hand it to `buildGeneratedUrl()`,
+   * and get back an empty string, because that function looks up an asset that does not exist
+   * yet. Two things followed on screen: an empty white square where the QR belonged, and a
+   * fabricated reference presented as though it were the one the asset would receive.
+   *
+   * The preview now encodes THE DESTINATION the person typed, and says so. That is a real QR of
+   * a real URL — scannable here, and the same page the live tracking link will redirect to.
+   */
+  protected previewUrlFor(assetType: string, destination: string): string {
+    return destination.trim();
   }
   /** Single-destination preview (every asset type except an on-ground multi-place one). */
-  protected readonly previewReference = computed(() => this.previewReferenceFor(this.gAssetType()));
-  protected readonly previewUrl = computed(() =>
-    this.previewUrlFor(this.gAssetType(), this.previewReference()),
-  );
+  protected readonly previewUrl = computed(() => this.gDestination().trim());
   private previewQrMatrix(url: string): ReturnType<typeof generateQrMatrix> | null {
     if (!url) return null;
     const value = url.startsWith('http') ? url : `https://${url}`;
@@ -789,14 +919,9 @@ export class TrackingAssetManagerComponent {
     const size = m.length + 8;
     return `0 0 ${size} ${size}`;
   }
-  /** Per-place preview reference/URL — each place gets a distinct reference so they never collide,
-   *  even though none of them are persisted until Generate is confirmed. */
-  protected placePreviewReference(index: number): string {
-    const base = this.previewReferenceFor(this.gAssetType());
-    return base ? `${base}${index > 0 ? `-P${index + 1}` : ''}` : '';
-  }
+  /** Per-place preview — each place has its own destination, so each gets its own QR. */
   protected placePreviewUrl(index: number): string {
-    return this.previewUrlFor(this.gAssetType(), this.placePreviewReference(index));
+    return this.gPlaces()[index]?.destination.trim() ?? '';
   }
 
   protected readonly gRangeInvalid = computed(() => {
@@ -849,6 +974,7 @@ export class TrackingAssetManagerComponent {
     if (this.missing('campaign')) errs.push({ key: 'g-campaign', label: 'Enter Campaign.' });
     if (this.missing('source')) errs.push({ key: 'g-source', label: 'Enter Source.' });
     if (this.missing('medium')) errs.push({ key: 'g-medium', label: 'Enter Medium.' });
+    if (!this.gAssetStatus()) errs.push({ key: 'g-assetStatus', label: 'Enter Asset status.' });
     if (this.missing('activeFrom')) errs.push({ key: 'g-activeFrom', label: 'Enter Active from.' });
     if (this.gRangeInvalid())
       errs.push({ key: 'g-activeTo', label: 'Review Active to. The value does not meet the stated format or range.' });
@@ -862,7 +988,8 @@ export class TrackingAssetManagerComponent {
     this.gDestination.set('');
     this.gCampaign.set('');
     this.gChannel.set('');
-    this.gAssetStatus.set('Draft');
+    // Reset to unanswered, not to Draft — the person picks.
+    this.gAssetStatus.set('');
     this.gSource.set('');
     this.gMedium.set('');
     this.gContentTag.set('');
@@ -902,7 +1029,9 @@ export class TrackingAssetManagerComponent {
       lastTestResult: 'Not tested',
       approvalState: this.gAssetStatus() === 'Submitted' ? 'Pending review' : 'Not required',
       usageCount: 0,
-      assetStatus: this.gAssetStatus(),
+      // Non-empty by the time this runs: buildAsset is only reached from confirmGenerate, which
+      // returns early while errorSummary() still reports a missing Asset status.
+      assetStatus: this.gAssetStatus() || 'Draft',
       hasDownstreamReference: false,
       createdByRef: this.currentUserRef(),
       version: 1,
@@ -1073,21 +1202,107 @@ export class TrackingAssetManagerComponent {
     this.approveDialogOpen.set(false);
     this.approveTarget.set(null);
   }
-  /** Record decision, independent authority, reason, effective version, time and resulting state. */
+  /**
+   * Record decision, independent authority, reason, effective version, time and resulting state.
+   *
+   * APPROVE LANDS ON APPROVED. It used to write `assetStatus: 'Active'`, which described a state
+   * the server does not move to on approval - `/approve` sets Approved, and Active is a separate
+   * transition with its own permission. The optimistic row therefore flashed Active for the
+   * length of the round trip and then corrected itself, and the toast said the asset was live
+   * when nothing had gone live. Activate is offered next, as its own action.
+   */
   protected confirmApprove(): void {
     if (!this.approveReasonValid()) return;
     const target = this.approveTarget();
     if (target) {
       this.store.update(target.trackingReference, {
         approvalState: 'Approved',
-        assetStatus: target.assetStatus === 'Submitted' ? 'Active' : target.assetStatus,
+        assetStatus: 'Approved',
         approvedByRef: this.currentUserRef(),
         approvedAt: this.lastRefresh(),
       });
     }
     this.approveDialogOpen.set(false);
     this.approveTarget.set(null);
-    if (target) this.toast.show('Asset approved', `${target.trackingReference} approved.`, 'success');
+    if (target) {
+      this.toast.show(
+        'Asset approved',
+        `${target.trackingReference} is Approved. Activate it to make it live.`,
+        'success',
+      );
+    }
+    this.uiState.set('ready');
+  }
+
+  // ================= Activate action =================
+  protected readonly activateDialogOpen = signal(false);
+  protected readonly activateTarget = signal<TrackingAsset | null>(null);
+
+  protected requestActivate(asset: TrackingAsset): void {
+    this.openRowMenu.set(null);
+    if (!this.activateAllowed(asset)) return;
+    if (this.isStaleSinceOpened(asset)) {
+      this.uiState.set('conflict');
+      return;
+    }
+    this.activateTarget.set(asset);
+    this.activateDialogOpen.set(true);
+  }
+  protected cancelActivate(): void {
+    this.activateDialogOpen.set(false);
+    this.activateTarget.set(null);
+  }
+  /** Bring an approved asset live — Approved to Active, after which it resolves scans and clicks. */
+  protected confirmActivate(): void {
+    const target = this.activateTarget();
+    this.activateDialogOpen.set(false);
+    this.activateTarget.set(null);
+    if (!target) return;
+    this.store.update(target.trackingReference, { assetStatus: 'Active' });
+    this.toast.show('Asset activated', `${target.trackingReference} is now Active.`, 'success');
+    this.uiState.set('ready');
+  }
+
+  // ================= Request disable action =================
+  protected readonly requestDisableDialogOpen = signal(false);
+  protected readonly requestDisableTarget = signal<TrackingAsset | null>(null);
+  protected readonly requestDisableReason = signal('');
+  protected readonly requestDisableReasonMin = 10;
+  protected readonly requestDisableReasonMax = 2000;
+  protected readonly requestDisableReasonValid = computed(() => {
+    const len = this.requestDisableReason().trim().length;
+    return len >= this.requestDisableReasonMin && len <= this.requestDisableReasonMax;
+  });
+  protected readonly requestDisableReasonCount = computed(() => this.requestDisableReason().trim().length);
+
+  protected askForDisable(asset: TrackingAsset): void {
+    this.openRowMenu.set(null);
+    if (!this.requestDisableAllowed(asset)) return;
+    if (this.isStaleSinceOpened(asset)) {
+      this.uiState.set('conflict');
+      return;
+    }
+    this.requestDisableTarget.set(asset);
+    this.requestDisableReason.set('');
+    this.requestDisableDialogOpen.set(true);
+  }
+  protected cancelRequestDisable(): void {
+    this.requestDisableDialogOpen.set(false);
+    this.requestDisableTarget.set(null);
+  }
+  /** Raise the request. The asset stays live until an approver decides it. */
+  protected confirmRequestDisable(): void {
+    if (!this.requestDisableReasonValid()) return;
+    const target = this.requestDisableTarget();
+    this.requestDisableDialogOpen.set(false);
+    this.requestDisableTarget.set(null);
+    if (!target) return;
+    this.store.update(target.trackingReference, { assetStatus: 'Disable requested' });
+    this.toast.show(
+      'Disable requested',
+      `${target.trackingReference} stays live until an approver decides the request.`,
+      'success',
+    );
     this.uiState.set('ready');
   }
 
@@ -1247,6 +1462,7 @@ export class TrackingAssetManagerComponent {
   }
   /** Clearing a filter is explicit and returns focus predictably. */
   protected clearFilters(): void {
+    this.campaignFilter.set('');
     this.searchTerm.set('');
     this.assetTypeFilter.set('');
     this.channelFilter.set('');
@@ -1261,6 +1477,9 @@ export class TrackingAssetManagerComponent {
   protected removeFilterChip(key: string): void {
     this.currentPage.set(1);
     switch (key) {
+      case 'campaign':
+        this.campaignFilter.set('');
+        break;
       case 'assetType':
         this.assetTypeFilter.set('');
         break;
@@ -1315,12 +1534,11 @@ export class TrackingAssetManagerComponent {
     // typed by hand — keep them in sync whenever the campaign changes or the channel
     // switches to on-ground (Offline), covering either order the person fills the form in.
     effect(() => {
-      const campaignRef = this.gCampaign();
+      // Both are read for their dependency as much as their value: the effect has to re-run when
+      // the campaign changes and when the channel becomes on-ground, in either order.
       const onGround = this.isOnGround();
+      const { city, state } = this.currentCampaignLocation();
       if (!onGround) return;
-      const rec = this.campaignStore.get(campaignRef);
-      const city = rec?.city ?? '';
-      const state = rec?.region ?? '';
       untracked(() => this.gPlaces.update((list) => list.map((p) => ({ ...p, city, state }))));
     });
   }
@@ -1364,6 +1582,7 @@ export class TrackingAssetManagerComponent {
       case 'Approved':
         return 'tam-badge-active';
       case 'Submitted':
+      case 'Disable requested':
         return 'tam-badge-submitted';
       case 'Paused':
         return 'tam-badge-paused';

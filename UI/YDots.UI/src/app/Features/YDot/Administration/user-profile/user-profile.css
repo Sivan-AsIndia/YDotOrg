@@ -91,6 +91,12 @@
 .status-pill.status-active { background: var(--success-soft); color: var(--success); }
 .status-pill.status-active .dot { background: var(--success-dot); }
 .status-pill.status-neutral { background: var(--surface-alt); color: var(--muted); border: 1px solid var(--border); text-transform: none; font-weight: 600; }
+/* Suspended, deactivated, withdrawn, expired - and invited, which is not yet an account.
+   The header used to paint all of them with the green "active" pill. */
+.status-pill.status-danger { background: var(--danger-soft); color: var(--danger); }
+.status-pill.status-danger .dot { background: var(--danger); }
+.status-pill.status-warning { background: var(--warning-soft); color: var(--warning); }
+.status-pill.status-warning .dot { background: var(--warning-dot); }
 
 .profile-header-card p.text-muted {
   font-family: var(--font-mono);

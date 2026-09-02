@@ -12,7 +12,18 @@ public static class TrackingAssetAuditActionCodes
 
     public const string Activated = "TRACKING_ASSET_ACTIVATED";
 
+    public const string DisableRequested = "TRACKING_ASSET_DISABLE_REQUESTED";
+
     public const string Deactivated = "TRACKING_ASSET_DEACTIVATED";
+
+    /// <summary>
+    /// An unused DRAFT asset was destroyed.
+    ///
+    /// The audit row outlives the asset, deliberately: this is the only delete in the module, and
+    /// a record that something was removed - by whom, and for what stated reason - is what makes
+    /// it safe to offer at all.
+    /// </summary>
+    public const string DraftDeleted = "TRACKING_ASSET_DRAFT_DELETED";
 
     /// <summary>
     /// A CSV of the tracking assets left the system.

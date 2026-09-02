@@ -370,6 +370,7 @@
                           "
                           [innerHTML]="purposeSeed()"
                           (input)="syncEditor(purposeBody)"
+                          (paste)="handlePaste($event, purposeBody)"
                           data-placeholder="Describe the controlled purpose of this campaign…"
                         ></div>
                       </div>
@@ -1078,6 +1079,7 @@
                           [style.lineHeight]="descLineHeight()"
                           [innerHTML]="descSeed()"
                           (input)="syncDescription(descBody)"
+                          (paste)="handlePaste($event, descBody)"
                           data-placeholder="Public-facing description (published only through a separately approved publication field)…"
                         ></div>
                       </div>
@@ -1260,6 +1262,7 @@
                           [style.lineHeight]="termsLineHeight()"
                           [innerHTML]="termsSeed()"
                           (input)="syncEditor(termsBody)"
+                          (paste)="handlePaste($event, termsBody)"
                           data-placeholder="Terms and notice — donor-facing terms, disclaimers and legal notices…"
                         ></div>
                       </div>
@@ -1436,7 +1439,9 @@
                   <span></span>
                 }
                 <div class="step-nav-right">
-                  @if (isLastStep()) {
+                  <!-- The PERMISSION decides whether the button exists; the campaign's state
+                       and the form's completeness decide whether it is usable. -->
+                  @if (isLastStep() && permissions().saveDraft) {
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm"
@@ -1453,7 +1458,7 @@
                   >
                     <span aria-hidden="true">✕</span> Discard
                   </button>
-                  @if (isLastStep()) {
+                  @if (isLastStep() && permissions().submit) {
                     <button
                       type="button"
                       class="btn btn-primary btn-sm"
@@ -1462,7 +1467,7 @@
                     >
                       Submit <span aria-hidden="true">→</span>
                     </button>
-                  } @else {
+                  } @else if (!isLastStep()) {
                     <button type="button" class="btn btn-primary btn-sm" (click)="nextStep()">
                       Next Step <span aria-hidden="true">→</span>
                     </button>
@@ -1822,6 +1827,7 @@
                     [style.lineHeight]="popupLineHeight()"
                     [innerHTML]="popupSeed()"
                     (input)="syncEditor(previewBody)"
+                    (paste)="handlePaste($event, previewBody)"
                   ></div>
                 </div>
                 @if (field === 'terms') {

@@ -1,4 +1,4 @@
-using YDot.IAM.Application.Common.Abstractions.Persistence;
+﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Models;
 using YDot.IAM.Application.Common.Results;
@@ -40,7 +40,11 @@ public sealed class NavigationQueryHandler(
         GetNavigationQuery query, CancellationToken cancellationToken)
     {
         var menu = await menuBuilder.BuildForCurrentUserAsync(cancellationToken);
-        var landing = await menuBuilder.ResolveLandingRouteAsync(cancellationToken);
+
+        // The landing route is read OFF the tree just built rather than built again. This used
+        // to call ResolveLandingRouteAsync, which assembles the whole tree a second time, so
+        // the one request every screen makes first did all of its work twice.
+        var landing = menuBuilder.ResolveLandingRoute(menu);
 
         return Result.Success(new NavigationResponse(
             menu,

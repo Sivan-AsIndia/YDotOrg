@@ -8,7 +8,7 @@
         <div class="div-noaccess" role="alert">
           <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13 13l14 14M27 13L13 27" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <h2>You don't have access to this record</h2>
-          <p>Ask your administrator for the <code>{{ screen.viewPermission }}</code> permission, or return to the donor record.</p>
+          <p>Ask your administrator for the <code>don.donor-identity-verification.view</code> permission, or return to the donor record.</p>
           <button type="button" class="btn btn-outline-primary btn-sm" (click)="backToDonor()">Back to donor</button>
         </div>
       } @else {
@@ -17,12 +17,12 @@
       <header class="div-header">
         <div class="div-header-titles">
           <h1 class="div-title">
-            {{ screen.title }}
-            <span class="div-info-btn" tabindex="0" role="img" [attr.aria-label]="screen.purpose" [title]="screen.purpose">
+            Donor identity verification
+            <span class="div-info-btn" tabindex="0" role="img" aria-label="Confirm the donor is who they say they are before releasing their record." title="Confirm the donor is who they say they are before releasing their record.">
               <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="10" y1="9" x2="10" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="6.3" r="0.9" fill="currentColor"/></svg>
             </span>
           </h1>
-          <p class="div-subtitle">{{ screen.purpose }}</p>
+          <p class="div-subtitle">Confirm the donor is who they say they are before releasing their record.</p>
       
         </div>
 
@@ -30,7 +30,7 @@
           <div class="div-filter-wrap">
           
             <div id="savedFilterMenu" popover class="div-filter-menu" role="listbox" [attr.aria-label]="'Saved filters'">
-              @for (option of savedFilters; track option) {
+              @for (option of savedFilters(); track option) {
                 <button
                   type="button"
                   role="option"
@@ -62,7 +62,7 @@
           @if (permissions()['sendChallenge']) {
             <button type="button" class="btn btn-primary btn-sm div-primary-action" (click)="openAction('sendChallenge')">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              {{ screen.primaryAction }}
+              Send challenge
             </button>
           }
         </div>
@@ -145,11 +145,11 @@
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 9l2.5 2.5L13 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="div-banner-body">
             <span>Recorded locally — the case-management sync failed.</span>
-            <p class="div-banner-sub">{{ dependencyNote() }} Support reference {{ supportCorrelationId() }}.</p>
+            <p class="div-banner-sub">{{ resultPanel()?.dependency || 'No pending dependency.' }} Support reference {{ verificationReference() || '—' }}.</p>
           </div>
           <div class="div-banner-actions">
-            <button type="button" class="btn btn-sm btn-outline-primary" (click)="retryDependencySync()">Retry sync</button>
-            <a class="btn btn-sm div-btn-ghost" href="mailto:donor-support@ydotfoundation.org?subject=Sync%20failure%20{{ supportCorrelationId() }}">Contact support</a>
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="reload()">Retry sync</button>
+            <a class="btn btn-sm div-btn-ghost" href="mailto:donor-support@ydotfoundation.org?subject=Sync%20failure%20{{ verificationReference() || '—' }}">Contact support</a>
           </div>
         </div>
       }
@@ -176,7 +176,7 @@
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 6a5.5 5.5 0 10-1 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
           </div>
-          <div class="div-kpi-value">{{ attemptsUsed() }} <span class="div-kpi-value-of">of {{ maximumAttempts() }}</span></div>
+          <div class="div-kpi-value">{{ attemptsUsed() }} <span class="div-kpi-value-of">of {{ maxAttempts() }}</span></div>
           <p class="div-kpi-caption">Channel {{ currentChannel() }}</p>
         </div>
 
@@ -246,9 +246,9 @@
           @if (activeTab() === 'overview') {
             <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" class="div-tabpanel">
               <div class="div-progress-row">
-                <span class="div-progress-label">Attempt {{ attemptsUsed() }} of {{ maximumAttempts() }}</span>
-                <div class="div-progress-track" role="progressbar" [attr.aria-valuenow]="attemptsUsed()" aria-valuemin="0" [attr.aria-valuemax]="maximumAttempts()">
-                  <div class="div-progress-fill" [style.width.%]="(attemptsUsed() / maximumAttempts()) * 100"></div>
+                <span class="div-progress-label">Attempt {{ attemptsUsed() }} of {{ maxAttempts() }}</span>
+                <div class="div-progress-track" role="progressbar" [attr.aria-valuenow]="attemptsUsed()" aria-valuemin="0" [attr.aria-valuemax]="maxAttempts()">
+                  <div class="div-progress-fill" [style.width.%]="(attemptsUsed() / maxAttempts()) * 100"></div>
                 </div>
               </div>
 
@@ -497,13 +497,11 @@
                       </tr>
                     </thead>
                     <tbody>
-                      @for (rec of relatedRecords(); track rec.reference) {
-                        <tr>
-                          <td data-label="Type">{{ rec.type }}</td>
-                          <td data-label="Reference"><span class="div-cell-strong">{{ rec.reference }}</span></td>
-                          <td data-label="Status">{{ rec.status }}</td>
-                        </tr>
-                      }
+                  <!--
+                    RELATED RECORDS REMOVED. The list came from `relatedRecords` in the JSON file
+                    and named records that did not exist. Donor 360 is the screen that shows what
+                    a donor is actually linked to.
+                  -->
                     </tbody>
                   </table>
                 </div>
@@ -514,7 +512,7 @@
                   </div>
                   <div class="div-detail-row">
                     <dt>Support correlation</dt>
-                    <dd>{{ supportCorrelationId() }}</dd>
+                    <dd>{{ verificationReference() || '—' }}</dd>
                   </div>
                 </dl>
               </div>
@@ -525,7 +523,7 @@
           @if (activeTab() === 'actions') {
             <div id="panel-actions" role="tabpanel" aria-labelledby="tab-actions" class="div-tabpanel">
               <div class="div-action-grid">
-                @for (action of actions; track action.id) {
+                @for (action of visibleActions(); track action.id) {
                   <div class="div-action-card" [class.is-danger]="action.placement === 'danger'">
                     <div class="div-action-head">
                       <span class="div-action-label">{{ action.label }}</span>
@@ -537,9 +535,6 @@
                     <div class="div-action-tags">
                       @if (action.requiresReason) {
                         <span class="div-tag">Reason required</span>
-                      }
-                      @if (action.typedConfirm) {
-                        <span class="div-tag">Typed confirmation</span>
                       }
                     </div>
                     <button
@@ -592,7 +587,7 @@
             </div>
             <div class="div-side-row">
               <dt>Attempts</dt>
-              <dd>{{ attemptsUsed() }} of {{ maximumAttempts() }}</dd>
+              <dd>{{ attemptsUsed() }} of {{ maxAttempts() }}</dd>
             </div>
             <div class="div-side-row">
               <dt>Expiry time</dt>
@@ -620,7 +615,7 @@
           <div class="div-side-section">
             <h3>Available channels</h3>
             <div class="div-channel-list">
-              @for (ch of channelOptions(); track ch) {
+              @for (ch of channels(); track ch) {
                 <span class="div-channel-pill" [class.is-active]="ch === currentChannel()">{{ ch }}</span>
               }
             </div>

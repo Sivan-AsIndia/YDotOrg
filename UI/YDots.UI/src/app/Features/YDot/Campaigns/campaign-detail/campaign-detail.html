@@ -27,19 +27,37 @@
       </div>
     </div>
 
-    <!-- One primary action, plus Export — appears when role, permission, scope, state and dependencies allow -->
+    <!-- Manage lifecycle, Tracking assets and Export are the three standing actions; the maker
+         verb (Submit / Approve / Complete closure) joins them for the states that have one.
+         Each appears when role, permission, scope, state and dependencies allow. -->
     <div class="cd-header-actions">
-      @if (exportAllowed()) {
-        <button type="button" class="cd-btn cd-btn-outline" (click)="exportThisCampaign()" aria-label="Export this campaign">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>
-          Export
-        </button>
-      }
       @if (operateAllowed()) {
         <button type="button" class="cd-btn cd-btn-primary" (click)="runPrimaryLifecycle()"
                 [attr.aria-label]="primaryActionLabel() + ' — operate according to lifecycle'">
           <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
           {{ primaryActionLabel() }}
+        </button>
+      }
+      <!-- Manage lifecycle — opens Pause / Resume / Close as a right-edge off-canvas panel -->
+      @if (lifecycleAllowed()) {
+        <button type="button" class="cd-btn" [class.cd-btn-primary]="!operateAllowed()" [class.cd-btn-outline]="operateAllowed()"
+                (click)="openLifecycle()" aria-label="Manage lifecycle — pause, resume and close campaign">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+          Manage lifecycle
+        </button>
+      }
+      <!-- Tracking assets — the Tracking Asset Manager, scoped to this campaign -->
+      @if (trackingAssetsAllowed()) {
+        <button type="button" class="cd-btn cd-btn-outline" (click)="openTrackingAssets()"
+                aria-label="Open tracking assets for this campaign">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.8" cy="7.8" r="1.4"/></svg>
+          Tracking assets
+        </button>
+      }
+      @if (exportAllowed()) {
+        <button type="button" class="cd-btn cd-btn-outline" (click)="exportThisCampaign()" aria-label="Export this campaign">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>
+          Export
         </button>
       }
       <!-- Edit — opens the Campaign Wizard pre-filled with this record; Draft campaigns only -->
@@ -146,17 +164,24 @@
 
       <!-- Read-only summary — reference/name/status already shown in the task header above,
            so this card surfaces every other field captured in the Wizard: Purpose, Owner(s),
-           Fund/programme, Date range, Target & Budget, Currency, Channel, Location, Lifecycle
-           activation, Public description, Terms & notice. -->
+           Fund/programme, Date range, Channel, Location, Lifecycle activation,
+           Public description, Terms & notice.
+
+           TARGET & BUDGET IS NOT HERE. The Target & Budget module is on hold, no wizard step
+           collects either figure, and the row printed a hard "₹0 target" on every campaign in
+           the system - a number nobody entered, presented as though somebody had. -->
       <section class="cd-card">
         <div class="cd-card-head"><h2 class="cd-card-title">Campaign summary</h2></div>
         <p class="cd-purpose">{{ fundProgramme() }}</p>
         <dl class="cd-facts">
-          <div class="cd-fact"><dt>Owner</dt><dd>{{ ownersLabel() }} · <span class="mono">{{ ownerRef() }}</span> · {{ ownerRole() }}</dd></div>
+          <!-- THE OWNER'S NAME, REFERENCE AND ROLE — assembled in the component so an unknown
+               part takes its separator with it. The middle value used to be `ownerRef()`, the
+               API's Guid. CURRENCY IS NOT HERE: the campaign carries one because the API
+               requires one, but no wizard step asks for it and nothing on this screen shows an
+               amount, so the row only ever restated a default. -->
+          <div class="cd-fact"><dt>Owner</dt><dd>{{ ownerLine() }}</dd></div>
           <div class="cd-fact"><dt>Purpose</dt><dd>{{ purpose() }}</dd></div>
           <div class="cd-fact"><dt>Date range</dt><dd>{{ formatDate(launchDate()) }} — {{ formatDate(endDate()) }}</dd></div>
-          <div class="cd-fact"><dt>Target &amp; Budget</dt><dd class="cd-amount">{{ targetBudgetLabel() }}</dd></div>
-          <div class="cd-fact"><dt>Currency</dt><dd>{{ currencyLabel() }}</dd></div>
           <div class="cd-fact"><dt>Channel</dt><dd>{{ channelsLabel() }}</dd></div>
           <div class="cd-fact"><dt>Location</dt><dd>{{ locationLabel() }}</dd></div>
           <div class="cd-fact"><dt>Lifecycle activation</dt><dd>{{ activationLabel() }}</dd></div>
@@ -195,58 +220,11 @@
         </nav>
 
         <div class="cd-tabpanel">
-          <!-- Targets: Targets + Target and reconciled progress, as a table -->
-          @if (activeTab() === 'targets') {
-            <div role="tabpanel" aria-label="Targets">
-              <div class="cd-table-scroll">
-                <table class="cd-table">
-                  <thead><tr><th>Field</th><th>Value</th></tr></thead>
-                  <tbody>
-                    <tr><td>Target</td><td class="cd-amount">{{ formatAmount(targetsAmount()) }}</td></tr>
-                    <tr><td>Reconciled progress</td><td class="cd-amount">{{ formatAmount(reconciledAmount()) }}</td></tr>
-                    <tr><td>Progress to target</td><td>{{ progressPercent() }}%</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="cd-meter" role="img" [attr.aria-label]="progressPercent() + ' percent of target reconciled'">
-                <div class="cd-meter-fill" [style.width.%]="progressPercent()"></div>
-              </div>
-            </div>
-          }
-
-          <!-- Budget: this campaign's approved budget plans, as a table — shows how the total
-               budget is split into allocation types, each portion's share and how it is used -->
-          @if (activeTab() === 'budget') {
-            <div role="tabpanel" aria-label="Budget">
-              @if (budgetPlans().length) {
-                <div class="cd-table-scroll">
-                  <table class="cd-table">
-                    <thead><tr><th>Allocation type</th><th>Budget</th><th>Share</th><th>How it's used</th><th>Target</th><th>Variance</th></tr></thead>
-                    <tbody>
-                      @for (p of budgetPlans(); track p.budgetCategory) {
-                        <tr>
-                          <td>{{ p.budgetCategory }}</td>
-                          <td class="cd-amount">{{ formatAmount(p.budgetAmount) }}</td>
-                          <td>
-                            <span class="cd-share-bar" role="img" [attr.aria-label]="budgetShare(p.budgetAmount) + ' percent of total budget'">
-                              <span class="cd-share-fill" [style.width.%]="budgetShare(p.budgetAmount)"></span>
-                            </span>
-                            <span class="cd-share-pct">{{ budgetShare(p.budgetAmount) }}%</span>
-                          </td>
-                          <td class="cd-usage">{{ p.assumptions || '—' }}</td>
-                          <td class="cd-amount">{{ formatAmount(p.targetAmount) }}</td>
-                          <td>{{ p.variance || '—' }}</td>
-                        </tr>
-                      }
-                      <tr class="cd-table-total"><td>Total</td><td class="cd-amount">{{ formatAmount(budgetAmount()) }}</td><td>100%</td><td colspan="3"></td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              } @else {
-                <p class="cd-state-note">No approved budget plan for this campaign in scope — this is not a global zero.</p>
-              }
-            </div>
-          }
+          <!-- TARGETS AND BUDGET PANELS REMOVED. Both read from the Budget & Target Plans
+               module, which is on hold: the Targets panel showed a target of zero with a
+               progress meter permanently at 0%, and the Budget panel showed "No approved budget
+               plan" for every campaign because no plan can be created. Two tabs that could only
+               ever report nothing. -->
 
           <!-- Tracking: this campaign's tracking assets, as a table -->
           @if (activeTab() === 'tracking') {
@@ -279,6 +257,19 @@
       <section class="cd-card cd-side-card">
         <div class="cd-card-head"><h2 class="cd-card-title">Related &amp; history</h2></div>
         <div class="cd-side-body">
+          <!-- AN EMPTY TRAIL SAYS SO. The list rendered nothing at all when the history came back
+               empty or the call failed, so the panel was a heading over blank space and there was
+               no way to tell "nothing has happened yet" from "this did not load". -->
+          @if (activityError()) {
+            <p class="cd-state-note">{{ activityError() }}</p>
+          } @else if (activityLoading()) {
+            <p class="cd-state-note">Loading this campaign's history…</p>
+          } @else if (recentActivity().length === 0) {
+            <p class="cd-state-note">
+              Nothing recorded against this campaign yet. Approvals, edits and lifecycle changes
+              appear here as they happen.
+            </p>
+          }
           <ul class="cd-activity">
             @for (a of recentActivity(); track a.title + a.time) {
               <li class="cd-activity-row">

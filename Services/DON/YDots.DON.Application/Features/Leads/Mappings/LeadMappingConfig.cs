@@ -1,3 +1,4 @@
+using YDots.DON.Domain.Services;
 using YDots.DON.Application.Common.Constants;
 using YDots.DON.Application.Common.Services;
 using YDots.DON.Application.Common.Settings;
@@ -63,21 +64,46 @@ public static class LeadMappingConfig
         }
     }
 
-    public static LeadListItemResponse ToListItemResponse(this Lead lead, bool canSeeContact) =>
+    /// <summary>
+    /// One grid row.
+    ///
+    /// <paramref name="now"/> IS PASSED IN RATHER THAN READ FROM THE CLOCK because health decays
+    /// with time: its recency component would otherwise be whatever it was when the record was
+    /// last written, so a lead nobody has touched for a month would still show the score it had
+    /// the day somebody last saved it. Taking the instant from the caller also keeps every row on
+    /// one page scored against the same moment.
+    ///
+    /// THE CONTACT COLUMNS OBEY THE SAME MASK as the combined preview - <c>ContactMasking</c> is
+    /// given <paramref name="canSeeContact"/> exactly as before. Splitting one masked string into
+    /// three fields would be a data leak if the split forgot the mask, so neither branch here
+    /// touches the raw value directly.
+    /// </summary>
+    public static LeadListItemResponse ToListItemResponse(
+        this Lead lead,
+        bool canSeeContact,
+        DateTimeOffset now) =>
         new(
             lead.Id,
             lead.LeadReference,
             BuildContactPreview(lead, canSeeContact),
+            BuildDisplayName(lead),
+            ContactMasking.Phone(lead.MobileNumber, canSeeContact),
+            ContactMasking.Email(lead.EmailAddress, canSeeContact),
             lead.Campaign?.Name,
             lead.OwnerUserId,
             lead.OwnerName,
             lead.Status.ToString(),
             lead.Source,
+            lead.Temperature.ToString(),
+            lead.DonationPotential.ToString(),
+            LeadHealth.Calculate(lead, now),
             lead.NextAction,
             lead.NextActionDueUtc,
             lead.SlaState.ToString(),
             lead.LastContactOutcome.ToString(),
             lead.PreferredLanguage,
+            lead.Status == LeadStatus.Converted || lead.ConvertedDonorId is not null,
+            lead.ConvertedDonorId,
             lead.UpdatedAtUtc ?? lead.CreatedAtUtc,
             lead.Version,
             !canSeeContact,

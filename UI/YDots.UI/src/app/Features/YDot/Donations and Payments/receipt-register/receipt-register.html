@@ -1,5 +1,5 @@
 <main class="app-wrapper">
-<div class="rr-page" [attr.data-ui-state]="effectiveUiState()">
+<div class="rr-page" [attr.data-ui-state]="uiState()">
 
   <!-- ============ TASK HEADER (4.5.1 Task header) ============ -->
   <header class="rr-task-header" aria-labelledby="rr-title">
@@ -19,12 +19,6 @@
         {{ filtersOpen() ? 'Hide Filters' : 'Filters' }}
         @if (activeFilterSummary().length) { <span class="rr-count">{{ activeFilterSummary().length }}</span> }
       </button>
-      @if (generateAllowed()) {
-        <button type="button" class="btn btn-primary btn-sm" (click)="openGenerateDialog()">
-          <svg class="rr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          Generate
-        </button>
-      }
     </div>
   </header>
 
@@ -205,22 +199,22 @@
               <dd>
                 @if (record()!.receiptReference) {
                   {{ record()!.receiptReference }}
-                  <button type="button" class="rr-copy-icon" (click)="copyToClipboard(record()!.receiptReference!)" [attr.aria-label]="'Copy receipt reference'" [title]="copiedField() === record()!.receiptReference ? 'Copied' : 'Copy receipt reference'">
-                    @if (copiedField() === record()!.receiptReference) {
+                  <button type="button" class="rr-copy-icon" (click)="copyToClipboard('receipt', record()!.receiptReference)" [attr.aria-label]="'Copy receipt reference'" [title]="copiedField() === 'receipt' ? 'Copied' : 'Copy receipt reference'">
+                    @if (copiedField() === 'receipt') {
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                     } @else {
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
                     }
                   </button>
-                } @else { <span class="rr-muted">Not yet issued</span> }
+                } @else { <span class="rr-muted">No receipt - this payment failed</span> }
               </dd>
             </div>
-            <div class="rr-fact"><dt>Receipt version</dt><dd>{{ record()!.receiptVersion ?? '—' }}</dd></div>
+            <div class="rr-fact"><dt>Status</dt><dd><span class="rr-badge rr-inline-badge" [class]="issueStateClass(record()!.issueState)">{{ record()!.issueState }}</span></dd></div>
             <div class="rr-fact"><dt>Donation reference</dt>
               <dd>
                 {{ record()!.donationReference }}
-                <button type="button" class="rr-copy-icon" (click)="copyToClipboard(record()!.donationReference)" [attr.aria-label]="'Copy donation reference'" [title]="copiedField() === record()!.donationReference ? 'Copied' : 'Copy donation reference'">
-                  @if (copiedField() === record()!.donationReference) {
+                <button type="button" class="rr-copy-icon" (click)="copyToClipboard('donation', record()!.donationReference)" [attr.aria-label]="'Copy donation reference'" [title]="copiedField() === 'donation' ? 'Copied' : 'Copy donation reference'">
+                  @if (copiedField() === 'donation') {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                   } @else {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
@@ -234,13 +228,6 @@
             <div class="rr-fact"><dt>time</dt><dd>{{ record()!.issuedTime ?? '—' }}</dd></div>
             <!-- <div class="rr-fact"><dt>Issue state</dt><dd><span class="rr-badge rr-inline-badge" [class]="issueStateClass(record()!.issueState)">{{ record()!.issueState }}</span></dd></div> -->
             <!-- <div class="rr-fact"><dt>Delivery state</dt><dd><span class="rr-badge rr-inline-badge" [class]="deliveryStateClass(record()!.deliveryState)">{{ record()!.deliveryState }}</span></dd></div> -->
-            @if (record()!.voidOrCorrectionLink) {
-              <div class="rr-fact"><dt>Void or correction link</dt>
-                <dd>
-                  <button type="button" class="rr-link" (click)="selectRecord(record()!.voidOrCorrectionLink!)">{{ record()!.voidOrCorrectionLink }}</button>
-                </dd>
-              </div>
-            }
           </dl>
 
           <!-- Delivery history: read-only, progressive disclosure (4.5.2 Delivery history) -->
@@ -268,11 +255,8 @@
             @if (resendAllowed()) {
               <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openResendDialog()">Resend</button>
             }
-            @if (voidReissueAllowed()) {
-              <button type="button" class="btn btn-primary btn-sm" (click)="openVoidDialog()">Void / Reissue through approval</button>
-            }
-            @if (!resendAllowed() && !voidReissueAllowed() && !generateAllowed()) {
-              <span class="rr-hint">No action is available for this record's current state.</span>
+            @if (!resendAllowed()) {
+              <span class="rr-hint">No action is available for this record. A failed payment has no receipt to resend.</span>
             }
           </div>
         </section>
@@ -305,27 +289,6 @@
     </ul>
   </ng-template>
 
-  <!-- ============ GENERATE DIALOG (4.5.3 Generate) ============ -->
-  @if (generateDialogOpen() && record()) {
-    <div class="rr-modal-backdrop" (click)="cancelGenerate()">
-      <div class="rr-modal" role="dialog" aria-modal="true" aria-labelledby="rr-generate-title" (click)="$event.stopPropagation()">
-        <h2 class="rr-modal-title" id="rr-generate-title">Confirm Generate</h2>
-        <p class="rr-modal-lead">Review the affected record, consequence and effective time. This refreshes or changes only the authorised record in effective scope.</p>
-        <dl class="rr-facts rr-modal-facts">
-          <div class="rr-fact"><dt>Affected record</dt><dd>{{ record()!.donationReference }}</dd></div>
-          <div class="rr-fact"><dt>Donor</dt><dd>{{ record()!.donorSnapshot }}</dd></div>
-          <div class="rr-fact"><dt>Amount and currency</dt><dd>{{ formatAmount(record()!.amount, record()!.currency) }}</dd></div>
-          <div class="rr-fact"><dt>Consequence</dt><dd>Issue state {{ record()!.issueState }} → Success</dd></div>
-          <div class="rr-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
-        </dl>
-        <div class="rr-modal-actions">
-          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelGenerate()">Cancel</button>
-          <button type="button" class="btn btn-primary btn-sm" (click)="confirmGenerate()">Confirm</button>
-        </div>
-      </div>
-    </div>
-  }
-
   <!-- ============ HIGH-RISK CONFIRM: Resend (4.5.3 + 4.5.6 High-risk action) ============ -->
   @if (resendDialogOpen() && record()) {
     <div class="rr-modal-backdrop" (click)="cancelResend()">
@@ -336,18 +299,8 @@
         <dl class="rr-facts rr-modal-facts">
           <div class="rr-fact"><dt>Affected record</dt><dd>{{ record()!.receiptReference }}</dd></div>
           <div class="rr-fact"><dt>Consequence</dt><dd>Delivery state {{ record()!.deliveryState }} → Delivered</dd></div>
-          <div class="rr-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
+          <div class="rr-fact"><dt>Effective time</dt><dd>{{ effectiveTime() }}</dd></div>
         </dl>
-
-        <!-- Resend channel — date/date-time picker with time-zone label (4.5.2 Resend channel, conditional) -->
-        <label class="rr-modal-field">
-          <span class="rr-field-label">Resend channel </span>
-          <input type="datetime-local" class="rr-input" [ngModel]="resendChannelDate()" (ngModelChange)="resendChannelDate.set($event)"
-                 (blur)="resendChannelTouched.set(true)" [attr.aria-invalid]="resendChannelTouched() && !resendChannelValid()" />
-          @if (resendChannelTouched() && !resendChannelValid()) {
-            <span class="rr-field-error" role="alert">Enter Resend channel.</span>
-          } 
-        </label>
 
         <label class="rr-modal-field">
           <span class="rr-field-label">Reason </span>
@@ -362,52 +315,7 @@
 
         <div class="rr-modal-actions">
           <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelResend()">Cancel</button>
-          <button type="button" class="btn btn-primary btn-sm" (click)="confirmResend()" [disabled]="!resendReasonValid() || !resendChannelValid()">Confirm</button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- ============ PRIMARY DECISION: Void/reissue through approval (4.5.3) ============ -->
-  @if (voidDialogOpen() && record()) {
-    <div class="rr-modal-backdrop" (click)="cancelVoid()">
-      <div class="rr-modal" role="dialog" aria-modal="true" aria-labelledby="rr-void-title" (click)="$event.stopPropagation()">
-        <h2 class="rr-modal-title" id="rr-void-title">Confirm Void/reissue through approval</h2>
-        <p class="rr-modal-lead">Review the affected record, consequence, reason and effective time. Linked history is preserved.</p>
-
-        <!-- Issue state — radio decision according to mode (4.5.2 Issue state) -->
-        <div class="rr-radio-group" role="radiogroup" aria-label="Resulting decision">
-          <label class="rr-radio">
-            <input type="radio" name="voidMode" [checked]="voidMode() === 'void'" (change)="voidMode.set('void')" />
-            Void — no replacement receipt is issued
-          </label>
-          <label class="rr-radio">
-            <input type="radio" name="voidMode" [checked]="voidMode() === 'reissue'" (change)="voidMode.set('reissue')" />
-            Reissue — a corrected receipt is issued and linked
-          </label>
-        </div>
-
-        <dl class="rr-facts rr-modal-facts">
-          <div class="rr-fact"><dt>Affected record</dt><dd>{{ record()!.receiptReference }}</dd></div>
-          <div class="rr-fact"><dt>Consequence</dt><dd>Issue state {{ record()!.issueState }} → {{ proposedIssueState() }}</dd></div>
-          <div class="rr-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
-        </dl>
-
-        <!-- Correction reason — Confidential, structured textarea with character counter (4.5.2 Correction reason) -->
-        <label class="rr-modal-field">
-          <span class="rr-field-label">Correction reason <span class="rr-conf-tag">Confidential</span> <span class="rr-req">required</span></span>
-          <textarea class="rr-textarea" rows="3" [ngModel]="correctionReason()" (ngModelChange)="correctionReason.set($event)"
-                    (blur)="correctionReasonTouched.set(true)" placeholder="Record the named reason for this void or reissue…"
-                    [attr.aria-invalid]="correctionReasonTouched() && !correctionReasonValid()"></textarea>
-        
-          @if (correctionReasonTouched() && !correctionReasonValid()) {
-            <span class="rr-field-error" role="alert">Enter Correction reason. Provide between {{ correctionReasonMin }} and {{ correctionReasonMax }} characters.</span>
-          }
-        </label>
-
-        <div class="rr-modal-actions">
-          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelVoid()">Cancel</button>
-          <button type="button" class="btn btn-primary btn-sm" (click)="confirmVoid()" [disabled]="!correctionReasonValid()">Confirm</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmResend()" [disabled]="!resendReasonValid()">Confirm</button>
         </div>
       </div>
     </div>

@@ -64,7 +64,7 @@ export class NotificationService {
       body: 'Educate a Child 2025 (CAMP-2025-0011) is now live.',
       time: 'Yesterday, 04:05 PM',
       read: false,
-      toRole: 'Campaign Manager',
+      toRole: 'Approver',
     },
     {
       id: 'seed-1',
@@ -155,7 +155,7 @@ export class NotificationService {
       if (campaign.managerReference) {
         this.push({ kind: event, title, body, toRef: campaign.managerReference });
       } else {
-        this.push({ kind: event, title, body, toRole: 'Campaign Manager' });
+        this.push({ kind: event, title, body, toRole: 'Approver' });
       }
     }
   }

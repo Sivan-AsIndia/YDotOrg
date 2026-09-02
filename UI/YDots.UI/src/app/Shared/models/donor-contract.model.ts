@@ -96,6 +96,30 @@ export interface DonorListItem {
   relationshipOwnerName: string | null;
   updatedAtUtc: string;
   version: number;
+
+  /**
+   * Contact and giving, for the columns the Donor List shows.
+   *
+   * MASKED BY THE SERVER unless the caller holds don.donors.view-sensitive-contact, and
+   * `isContactMasked` says which. Never unmask either in the browser.
+   */
+  mobileNumber: string | null;
+  emailAddress: string | null;
+  campaignName: string | null;
+  lastDonationAmount: number | null;
+  lastDonationAtUtc: string | null;
+  /** RECEIVED ONLY. Pledged money has not arrived and is not counted here. */
+  lifetimeGiving: number;
+  currency: string;
+  /** Overdue | Due Today | Tomorrow | None - recomputed on every read. */
+  followUpStatus: string;
+  /** Verified | Pending | Failed | Expired. */
+  verificationStatus: string;
+  /** Granted | Partial | Withdrawn | Not provided. */
+  consentStatus: string;
+  /** A consent has expired or been withdrawn, so the permitted channels have changed. */
+  consentReviewRequired: boolean;
+  isContactMasked: boolean;
 }
 
 export interface DonorDetail {
@@ -214,20 +238,51 @@ export interface LeadListItem {
   leadReference: string;
   /** Name plus a partial contact. Masked unless the caller holds the sensitive-contact permission. */
   nameAndContactPreview: string;
+  /** Display name on its own, for the grid's Lead Name column. */
+  name: string;
+  /** Masked by the SERVER unless the caller holds don.donors.view-sensitive-contact. */
+  mobileNumber: string | null;
+  /** Masked on the same rule as mobileNumber. Never unmask either in the browser. */
+  emailAddress: string | null;
   campaignName: string | null;
   ownerUserId: string | null;
   ownerName: string | null;
   status: string;
   source: string | null;
+  /** Cold | Warm | Hot. With donationPotential this replaces formal qualification. */
+  temperature: string;
+  /** Low | Medium | High. A band, never a rupee amount. */
+  donationPotential: string;
+  /** 0-100, recomputed server-side on every read so its recency component is never stale. */
+  healthScore: number;
   nextAction: string | null;
   nextActionDueUtc: string | null;
   slaState: string;
   lastContactOutcome: string;
   preferredLanguage: string;
+  /** True once a donation converted this lead; the queue drops it and the Donor List gains it. */
+  isConverted: boolean;
+  /** The donor this lead became, so a row can link straight through to Donor 360. */
+  convertedDonorId: string | null;
   updatedAtUtc: string;
   version: number;
   isContactMasked: boolean;
   permittedActions: string[];
+}
+
+/**
+ * The six summary cards on the lead work queue.
+ *
+ * COUNTED SERVER-SIDE OVER THE WHOLE SCOPE. Do not recompute these from `leads.items` - that is
+ * one page, so the cards would disagree with themselves every time somebody paged.
+ */
+export interface LeadQueueSummary {
+  totalLeads: number;
+  unassignedLeads: number;
+  assignedLeads: number;
+  hotLeads: number;
+  convertedLeads: number;
+  highDonationPotential: number;
 }
 
 export interface LeadConsentSummary {
@@ -330,6 +385,12 @@ export interface LeadWorkQueueResponse {
   contactOutcomeOptions: DonLookupItem[];
   /** Counts per status, for the tabs across the top. Server-side, so they cover every page. */
   statusCounts: Record<string, number>;
+  /** The summary cards, scope-wide. See LeadQueueSummary. */
+  summary: LeadQueueSummary;
+  /** Cold / Warm / Hot, for the temperature filter. */
+  temperatureOptions: DonLookupItem[];
+  /** Low / Medium / High, for the donation-potential filter. */
+  donationPotentialOptions: DonLookupItem[];
   permittedActions: string[];
   activeFilterSummary: string;
   activeScope: string;
@@ -346,6 +407,21 @@ export interface LeadWorkQueueFilter {
   campaignId?: string | null;
   ownerUserId?: string | null;
   slaState?: string | null;
+  temperature?: string | null;
+  donationPotential?: string | null;
+  /** Owner-scoped view: the server resolves this to the caller, which is what My Leads is. */
+  onlyMine?: boolean | null;
+  /**
+   * Unassigned | Assigned - the Lead Queue's own tabs.
+   *
+   * NOT THE SAME QUESTION AS ownerUserId, which asks "whose?". A null ownerUserId means "do not
+   * filter by owner", so it cannot express "has no owner" at all.
+   */
+  assignmentState?: 'Unassigned' | 'Assigned' | null;
+  /** The Converted Leads tab. Converted leads are hidden from the queue by default. */
+  isConverted?: boolean | null;
+  /** The Recently Added tab, which is a different ordering rather than a filter. */
+  newestFirst?: boolean | null;
   preferredLanguage?: string | null;
   lastContactOutcome?: string | null;
   dueFromUtc?: string | null;
@@ -1168,4 +1244,115 @@ export function canPerformDonorAction(
   return !!record?.permittedActions?.some(
     (candidate) => candidate.toLowerCase() === action.toLowerCase(),
   );
+}
+
+/**
+ * One row of an uploaded lead file.
+ *
+ * EVERY FIELD IS A STRING, INCLUDING THE CAMPAIGN. A spreadsheet holds what somebody typed, not
+ * what the database holds - the campaign arrives as "Clean Water 2026" rather than as a Guid.
+ * Resolving it, and rejecting a row that names a campaign nobody has, is the server's job.
+ */
+export interface BulkLeadImportRow {
+  /** 1-based, as the person sees it in their spreadsheet, so an error names a row they can find. */
+  rowNumber: number;
+  firstName?: string | null;
+  lastName?: string | null;
+  mobileNumber?: string | null;
+  emailAddress?: string | null;
+  preferredLanguage?: string | null;
+  city?: string | null;
+  campaignNameOrCode?: string | null;
+  source?: string | null;
+  notes?: string | null;
+}
+
+export interface BulkLeadImportRequest {
+  rows: BulkLeadImportRow[];
+  /** Used when a row leaves the campaign blank. */
+  defaultCampaignId?: string | null;
+  defaultSource?: string | null;
+}
+
+export interface BulkLeadImportRowResult {
+  rowNumber: number;
+  imported: boolean;
+  leadReference: string | null;
+  reason: string | null;
+}
+
+/**
+ * The outcome of the whole file.
+ *
+ * PARTIAL SUCCESS IS THE NORMAL CASE. A file of two hundred leads with three bad rows creates a
+ * hundred and ninety-seven and names the three.
+ */
+export interface BulkLeadImportResponse {
+  submittedCount: number;
+  importedCount: number;
+  rejectedCount: number;
+  results: BulkLeadImportRowResult[];
+  message: string;
+}
+
+// =========================================================================================
+// Communication Timeline
+// =========================================================================================
+
+/**
+ * One line of the timeline.
+ *
+ * `notes` IS NULL WHEN MASKED, not blank-string-masked. A call note records what a donor said
+ * about their circumstances, which is more revealing than the phone number beside it, so the
+ * server withholds it entirely rather than sending a redacted version.
+ */
+export interface CommunicationTimelineEntry {
+  id: string;
+  interactionType: string;
+  channel: string | null;
+  /** Incoming | Outgoing | Internal - derived server-side from the outcome. */
+  direction: string;
+  occurredAtUtc: string;
+  outcome: string;
+  summary: string;
+  notes: string | null;
+  performedByName: string | null;
+  isNotesMasked: boolean;
+}
+
+/**
+ * The Communication Timeline for a lead, or for the donor it became.
+ *
+ * IT SPANS THE CONVERSION. Interactions recorded before conversion carry the lead id and those
+ * after carry the donor id; the server merges both, which is what makes the document's promise
+ * that "the converted donor retains the existing owner and Communication Timeline history" true
+ * on screen.
+ */
+export interface CommunicationTimelineResponse {
+  screenId: string;
+  route: string;
+  leadId: string | null;
+  leadReference: string | null;
+  donorId: string | null;
+  donorReference: string | null;
+  displayName: string;
+  mobileNumber: string | null;
+  emailAddress: string | null;
+  campaignName: string | null;
+  source: string | null;
+  preferredLanguage: string;
+  ownerName: string | null;
+  status: string;
+  temperature: string;
+  donationPotential: string;
+  healthScore: number;
+  entries: CommunicationTimelineEntry[];
+  temperatureOptions: DonLookupItem[];
+  donationPotentialOptions: DonLookupItem[];
+  interactionTypeOptions: DonLookupItem[];
+  outcomeOptions: DonLookupItem[];
+  permittedActions: string[];
+  isContactMasked: boolean;
+  activeScope: string;
+  state: string;
 }

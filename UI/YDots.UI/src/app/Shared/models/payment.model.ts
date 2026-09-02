@@ -1,3 +1,5 @@
+import { PagedResponse } from './api-response.model';
+
 /**
  * The typed contract for the Donations and Payments service.
  *
@@ -546,6 +548,18 @@ export interface PaymentEventListItem {
   donationIntentId: string | null;
   intentReference: string | null;
   version: number;
+
+  /** The donor as the intent recorded them. Null when the event matched no intent. */
+  donorName: string | null;
+  /** Masked by the SERVER unless the caller holds pay.donations.view-sensitive-donor. */
+  donorEmail: string | null;
+  campaignName: string | null;
+  /**
+   * Fail | Pending | Success - the DONATION's outcome, which is a different question from
+   * `status`. `status` says whether the webhook finished processing; this says whether the
+   * donor's money moved, and it is the one the queue triages on.
+   */
+  paymentOutcome: 'Fail' | 'Pending' | 'Success';
 }
 
 export interface PaymentEventDetail extends PaymentEventListItem {
@@ -576,6 +590,13 @@ export interface PaymentEventSearchFilter extends PaginationRequest {
   /** A failed signature is either a misconfiguration or an attempted forgery. */
   signatureFailedOnly?: boolean | null;
   outstandingOnly?: boolean | null;
+  /**
+   * Fail | Pending | Success - the donation outcome.
+   *
+   * LEAVING IT UNSET STILL EXCLUDES SUCCESS. The document says a successful payment never
+   * reaches this queue, so "no filter" means Fail and Pending together rather than everything.
+   */
+  paymentOutcome?: 'Fail' | 'Pending' | 'Success' | null;
 }
 
 export interface SafeRetryRequest {
@@ -1079,4 +1100,54 @@ export interface PublicDonationFormConfig {
   permissions: { view: boolean; submit: boolean; continueToPayment: boolean };
   /** A typo guard on the form. The API has its own limit and enforces it. */
   maxDonationAmount: number;
+}
+
+// =========================================================================================
+// Receipt Register - SCR-PAY-005 as the workflow document describes it
+// =========================================================================================
+
+/**
+ * One line of the register.
+ *
+ * IT IS NOT ALWAYS A RECEIPT. The document says "whether a payment ends in Success or Fail, the
+ * result is recorded and shown", so the register unions issued receipts with failed donation
+ * intents. A failed payment has no `receiptNumber` and no `documentUrl`, because no tax receipt
+ * exists for money that never moved - it quotes its donation reference instead.
+ */
+export interface ReceiptRegisterRow {
+  id: string;
+  receiptNumber: string | null;
+  /** The receipt number, or the donation reference when the payment failed. */
+  reference: string;
+  receiptDateUtc: string | null;
+  /** The donor AS PRINTED on the receipt, not as they are today. */
+  donorSnapshot: string;
+  amount: MoneyResponse;
+  status: 'Success' | 'Failed';
+  campaignOrFundName: string | null;
+  documentUrl: string | null;
+  deliveryState: string;
+}
+
+/** The four cards across the top, counted over the whole scope rather than the page. */
+export interface ReceiptRegisterSummary {
+  totalReceipts: number;
+  /** SUCCESSFUL MONEY ONLY. A failed payment moved nothing. */
+  totalAmount: MoneyResponse;
+  successful: number;
+  failed: number;
+}
+
+export interface ReceiptRegisterResponse {
+  rows: PagedResponse<ReceiptRegisterRow>;
+  summary: ReceiptRegisterSummary;
+  permittedActions: string[];
+}
+
+export interface ReceiptRegisterFilter extends PaginationRequest {
+  /** Success | Failed. Unset returns both, which is the register as documented. */
+  status?: 'Success' | 'Failed' | null;
+  campaignId?: string | null;
+  fromUtc?: string | null;
+  toUtc?: string | null;
 }

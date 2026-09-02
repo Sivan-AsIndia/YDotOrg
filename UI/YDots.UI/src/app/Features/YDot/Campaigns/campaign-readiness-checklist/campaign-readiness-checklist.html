@@ -76,21 +76,46 @@
           @if (actionsMenuOpen()) {
             <div class="crc-menu" role="menu"
                  appClickOutside [clickOutsideExcept]="crcActionsBtn" (appClickOutside)="closeActionsMenu()">
-              <button type="button" role="menuitem" class="crc-menu-item"
-                      (click)="openAddCheckDrawer()">Add readiness check</button>
-              <div class="crc-menu-divider" role="separator"></div>
-              <button type="button" role="menuitem" class="crc-menu-item"
-                      [disabled]="!permissions().requestApproval || !requestApprovalEligible()"
-                      [attr.title]="!permissions().requestApproval ? 'Request approval requires the request-approval permission.' : (!requestApprovalEligible() ? 'Budget approval and Tracking readiness must pass (or an exception recorded) first.' : null)"
-                      (click)="openRequestDialog()">Request approval</button>
-              <button type="button" role="menuitem" class="crc-menu-item"
-                      [disabled]="!approveLaunchAllowed()"
-                      [attr.title]="approveDisabledReason() || null"
-                      (click)="openApproveDialog()">Approve launch</button>
-              <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
-                      [disabled]="!returnToDraftAllowed()"
-                      [attr.title]="returnDisabledReason() || null"
-                      (click)="openReturnDialog()">Return to draft</button>
+              <!-- PERMISSION HIDES; STATE DISABLES AND EXPLAINS.
+                   An action this role will never hold is not rendered - a permanently greyed-out
+                   row is noise, and a menu of them teaches people to stop reading the menu. An
+                   action the role DOES hold but the campaign is not ready for stays, disabled,
+                   with the reason underneath: that one changes, so it is worth saying.
+                   `capabilities()` answers the first question, `permissions()` (the server's
+                   permittedActions, which also encode status and the four-eyes rule) the second. -->
+              @if (capabilities().addCheck) {
+                <button type="button" role="menuitem" class="crc-menu-item"
+                        [disabled]="!permissions().addCheck"
+                        (click)="openAddCheckDrawer()">Add readiness check</button>
+                @if (!permissions().addCheck) {
+                  <p class="crc-menu-why">Checks can be added until the campaign is Scheduled.</p>
+                }
+                <div class="crc-menu-divider" role="separator"></div>
+              }
+              @if (capabilities().requestApproval) {
+                <button type="button" role="menuitem" class="crc-menu-item"
+                        [disabled]="!permissions().requestApproval || !requestApprovalEligible()"
+                        (click)="openRequestDialog()">Request approval</button>
+                @if (requestDisabledReason(); as why) {
+                  <p class="crc-menu-why">{{ why }}</p>
+                }
+              }
+              @if (capabilities().approveLaunch) {
+                <button type="button" role="menuitem" class="crc-menu-item"
+                        [disabled]="!approveLaunchAllowed()"
+                        (click)="openApproveDialog()">Approve launch</button>
+                @if (approveDisabledReason(); as why) {
+                  <p class="crc-menu-why">{{ why }}</p>
+                }
+              }
+              @if (capabilities().returnToDraft) {
+                <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
+                        [disabled]="!returnToDraftAllowed()"
+                        (click)="openReturnDialog()">Return to draft</button>
+                @if (returnDisabledReason(); as why) {
+                  <p class="crc-menu-why">{{ why }}</p>
+                }
+              }
             </div>
           }
         </div>
@@ -265,16 +290,20 @@
                 @if (dependencyRowMenuOpen() === item.key) {
                   <div class="crc-menu" role="menu"
                        appClickOutside [clickOutsideExcept]="crcDepBtn" (appClickOutside)="closeDependencyMenu()">
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="item.status === 'pass'"
-                            (click)="markDependencyPassed(item)">Pass / Completed</button>
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="item.status === 'fail'"
-                            (click)="markDependencyFailed(item)">Fail</button>
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="!permissions().assignBlocker"
-                            [attr.title]="permissions().assignBlocker ? null : 'Assign blocker requires the assign-blocker permission.'"
-                            (click)="openBlockerFor(item.key, item.label)">Assign blocker</button>
+                    @if (capabilities().pass) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              [disabled]="item.status === 'pass'"
+                              (click)="markDependencyPassed(item)">Pass / Completed</button>
+                    }
+                    @if (capabilities().fail) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              [disabled]="item.status === 'fail'"
+                              (click)="markDependencyFailed(item)">Fail</button>
+                    }
+                    @if (capabilities().assignBlocker) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              (click)="openBlockerFor(item.key, item.label)">Assign blocker</button>
+                    }
                     @if (isDependencyOverridden(item.key)) {
                       <div class="crc-menu-divider" role="separator"></div>
                       <button type="button" role="menuitem" class="crc-menu-item"
@@ -328,21 +357,37 @@
                 @if (checklistRowMenuOpen() === item.id) {
                   <div class="crc-menu" role="menu"
                        appClickOutside [clickOutsideExcept]="crcChecklistBtn" (appClickOutside)="closeChecklistRowMenu()">
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="item.status === 'Passed'"
-                            (click)="markChecklistPassed(item)">Pass / Completed</button>
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="item.status === 'Failed'"
-                            (click)="markChecklistFailed(item)">Fail</button>
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            (click)="openEditCheckDrawer(item)">Edit</button>
-                    <button type="button" role="menuitem" class="crc-menu-item"
-                            [disabled]="!permissions().assignBlocker"
-                            [attr.title]="permissions().assignBlocker ? null : 'Assign blocker requires the assign-blocker permission.'"
-                            (click)="openBlockerFor(item.id, item.name)">Assign blocker</button>
-                    <div class="crc-menu-divider" role="separator"></div>
-                    <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
-                            (click)="deleteChecklistItem(item)">Delete</button>
+                    <!-- EACH VERB IS WRAPPED IN THE PERMISSION THAT GOVERNS IT, so a role that
+                         does not hold it never sees it. Edit and Delete used to be rendered for
+                         everybody with no gate at all, which is the same bug from the other
+                         direction: an action offered to somebody the server would refuse. -->
+                    @if (capabilities().pass) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              [disabled]="item.status === 'Passed'"
+                              (click)="markChecklistPassed(item)">Pass / Completed</button>
+                    }
+                    @if (capabilities().fail) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              [disabled]="item.status === 'Failed'"
+                              (click)="markChecklistFailed(item)">Fail</button>
+                    }
+                    @if (capabilities().editCheck) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              (click)="openEditCheckDrawer(item)">Edit</button>
+                    }
+                    @if (capabilities().assignBlocker) {
+                      <button type="button" role="menuitem" class="crc-menu-item"
+                              (click)="openBlockerFor(item.id, item.name)">Assign blocker</button>
+                    }
+                    @if (capabilities().deleteCheck) {
+                      <div class="crc-menu-divider" role="separator"></div>
+                      <button type="button" role="menuitem" class="crc-menu-item crc-menu-item-danger"
+                              [disabled]="!deleteCheckAllowed(item)"
+                              (click)="deleteChecklistItem(item)">Delete</button>
+                      @if (deleteCheckDisabledReason(item); as why) {
+                        <p class="crc-menu-why">{{ why }}</p>
+                      }
+                    }
                   </div>
                 }
               </div>
@@ -374,7 +419,11 @@
                      raw put a Guid and a timestamp with microseconds on the screen. -->
                 <span class="crc-blocker-meta">Owner {{ ownerName(b.ownerRef) }} · raised {{ raisedWhen(b.createdAt) }}</span>
               </div>
-              @if (permissions().assignBlocker) {
+              <!-- RESOLVE IS THE CHECKER'S HALF. It was gated on the ASSIGN permission, so
+                   whoever could raise a blocker could clear their own - and an open blocker is
+                   exactly what stops a check being passed. Raising and clearing are two
+                   permissions now, and this is the second. -->
+              @if (capabilities().resolveBlocker) {
                 <button type="button" class="crc-blocker-remove" (click)="removeBlocker(b.id)" aria-label="Resolve blocker">Resolve</button>
               }
             </li>
@@ -383,10 +432,11 @@
       }
     </div>
 
-    <!-- Small dev affordance to exercise the dependency-failure state (stub outage). -->
-    <div class="crc-dev-row">
-      <button type="button" class="crc-textlink" (click)="simulateDependencyOutage()">Simulate content/payment service outage</button>
-    </div>
+    <!-- THE "SIMULATE SERVICE OUTAGE" LINK IS GONE. It called
+         ContentReadinessStoreService.setReachable(), which is an empty method and documents
+         itself as one: reachability is the outcome of a request, not something a screen decides.
+         So the link did nothing at all, every time, with no feedback - and the dependency-failure
+         banner it was meant to demonstrate is now raised by an actual failed load. -->
   </section>
   }
 </div>
@@ -410,7 +460,9 @@
       <select id="crc-blocker-owner" class="crc-input" [ngModel]="blockerOwnerRef()" (ngModelChange)="blockerOwnerRef.set($event)">
         <option value="" disabled>Select an owner…</option>
         @for (o of ownerOptions(); track o.reference) {
-          <option [value]="o.reference">{{ o.name }} — {{ o.context }}</option>
+          <!-- The dash only when there is something after it: `context` is the role and unit,
+               and is empty for anybody the directory holds neither for. -->
+          <option [value]="o.reference">{{ o.name }}@if (o.context) { — {{ o.context }} }</option>
         }
       </select>
       @if (blockerTouched() && !blockerOwnerValid()) { <span class="crc-field-error">Enter Owner.</span> }
@@ -542,9 +594,10 @@
     </div>
     <div class="crc-modal-actions">
       <button type="button" class="crc-btn crc-btn-ghost" (click)="closeViewDependency()">Close</button>
-      <button type="button" class="crc-btn crc-btn-primary"
-              [disabled]="!permissions().assignBlocker"
-              (click)="closeViewDependency(); openBlockerFor(vd.key, vd.label)">Assign blocker</button>
+      @if (capabilities().assignBlocker) {
+        <button type="button" class="crc-btn crc-btn-primary"
+                (click)="closeViewDependency(); openBlockerFor(vd.key, vd.label)">Assign blocker</button>
+      }
     </div>
   </div>
 }

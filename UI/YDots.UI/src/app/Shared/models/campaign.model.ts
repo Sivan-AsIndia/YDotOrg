@@ -75,8 +75,12 @@ export interface ActivityItem {
 
 /** A scope-aware selector option with a stable reference and disambiguating context. */
 export interface OwnerOption {
+  /** The API id. Never printed - it is what a request carries, not what a person reads. */
   readonly reference: string;
+  /** The human reference, USR-00001, which is the one worth showing. */
+  readonly code?: string;
   readonly name: string;
+  /** Role and unit. Empty when the directory knows neither; never the code. */
   readonly context: string;
   readonly initials: string;
   readonly tone: string;
@@ -156,6 +160,32 @@ export interface CampaignRecord {
   readonly reminderTime?: string;
 
   // ---- Approval / audit metadata ----
+
+  /**
+   * What THIS caller may do to THIS campaign next, exactly as the server decided it.
+   *
+   * THE ONLY THING A SCREEN MAY GATE A LIFECYCLE BUTTON ON. It folds together three questions
+   * that no browser can answer on its own: the campaign's current status, the permissions on the
+   * caller's token, and whether the caller is independent of whoever created or submitted the
+   * record. Gating on a bare permission check instead is what put an <strong>Approve</strong>
+   * button in front of an INITIATOR - a role defined by approving nothing - because that check
+   * asked "do you hold any lifecycle permission" and an Initiator holds five of them.
+   *
+   * Values: View, ViewHistory, Export, Edit, Submit, Delete, Approve, Activate, Pause, Resume,
+   * RequestClose, ApproveClose. Undefined until the detail has been loaded, which is the
+   * difference between "not allowed" and "not asked yet" - treat it as "show nothing".
+   */
+  readonly permittedActions?: readonly string[];
+
+  /** True once the full detail record has been fetched, rather than just the register row. */
+  readonly detailLoaded?: boolean;
+
+  /** Tracking assets on this campaign — drives the Tracking tab's badge and the delete rule. */
+  readonly trackingAssetCount?: number;
+
+  /** Required readiness checks not yet passed — drives the Readiness tab's badge. */
+  readonly outstandingCheckCount?: number;
+
   /** The campaign manager accountable for this campaign (notification recipient). */
   readonly managerReference?: string;
   /** The role that created the campaign — drives the tiered approval rule. */

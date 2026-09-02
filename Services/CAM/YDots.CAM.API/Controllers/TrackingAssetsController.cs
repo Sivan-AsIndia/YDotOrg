@@ -103,6 +103,21 @@ public sealed class TrackingAssetsController(
         FromResult(await commands.HandleAsync(
             new ActivateTrackingAssetCommand(id, request), cancellationToken));
 
+    /// <summary>
+    /// Asks for a live asset to be taken down. Active to DisableRequested.
+    ///
+    /// THE MAKER'S HALF of the disable pair: taking an asset down stops a printed QR code
+    /// resolving, so the person who made it asks and somebody else decides.
+    /// </summary>
+    [HttpPost("{id:guid}/request-disable")]
+    [HasPermission(PermissionCodes.TrackingAssetsRequestDisable)]
+    [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RequestDisableAsync(
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
+        FromResult(await commands.HandleAsync(
+            new RequestDisableTrackingAssetCommand(id, request), cancellationToken));
+
+    /// <summary>Decides a disable request, or takes a live asset down directly.</summary>
     [HttpPost("{id:guid}/deactivate")]
     [HasPermission(PermissionCodes.TrackingAssetsDeactivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
@@ -110,4 +125,20 @@ public sealed class TrackingAssetsController(
         Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
         FromResult(await commands.HandleAsync(
             new DeactivateTrackingAssetCommand(id, request), cancellationToken));
+
+    /// <summary>
+    /// Destroys an unused Draft asset.
+    ///
+    /// THE ONLY DELETE IN THE MODULE. It is safe only because a Draft has never been activated:
+    /// it holds no tracking reference, so no donation can have been attributed through it.
+    /// Anything past Draft is retired by deactivating it instead.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [HasPermission(PermissionCodes.TrackingAssetsDeleteDraft)]
+    [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteDraftAsync(
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
+        FromResult(await commands.HandleAsync(
+            new DeleteDraftTrackingAssetCommand(id, request), cancellationToken));
 }

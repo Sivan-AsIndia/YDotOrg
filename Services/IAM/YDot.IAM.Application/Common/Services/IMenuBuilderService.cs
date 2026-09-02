@@ -58,4 +58,15 @@ public interface IMenuBuilderService
 
     /// <summary>Where a caller should land after signing in, honouring any role landing page.</summary>
     Task<string?> ResolveLandingRouteAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The landing route for a tree that has ALREADY been built.
+    ///
+    /// <see cref="ResolveLandingRouteAsync"/> builds the navigation itself, which is right when
+    /// the landing route is all the caller wants. It is wrong for <c>GET /navigation</c>, which
+    /// needs both: that endpoint used to build the tree, then call the async overload and build
+    /// the identical tree a second time - four extra database round trips per sidebar load, on
+    /// the one request every screen makes first. Same rule, applied to the tree in hand.
+    /// </summary>
+    string? ResolveLandingRoute(IReadOnlyList<MenuNode> menu);
 }

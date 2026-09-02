@@ -1684,3 +1684,59 @@
   color: var(--danger, #c1443a);
   font-weight: 600;
 }
+
+/* ============================================================================
+ * The approved-organisation profile lock.
+ *
+ * A <fieldset> rather than [disabled] on each box: the verified identity fields
+ * are one set — the approval was granted against all of them together — and
+ * disabling the group natively also disables anything added to it later, which
+ * a hand-maintained list of bindings does not.
+ * ========================================================================== */
+.org-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0; /* fieldsets default to min-content, which breaks the grid inside */
+}
+
+/*
+ * A locked box still SHOWS its value — that is the point of it. Greyed and
+ * not-allowed, so it reads as "this is fixed" rather than "this is empty".
+ */
+.org-input:disabled,
+.org-select:disabled,
+.org-textarea:disabled {
+  background: var(--org-surface-muted, #f4f5f4);
+  color: var(--org-ink-soft, #6b7280);
+  cursor: not-allowed;
+}
+
+/* The explanation above a partially locked form. */
+.org-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--org-border);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--org-ink);
+}
+
+.org-note i {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  font-size: 16px;
+}
+
+.org-note--info {
+  border-color: var(--org-blue);
+  background: var(--org-blue-soft);
+}
+
+.org-note--info i {
+  color: var(--org-blue);
+}

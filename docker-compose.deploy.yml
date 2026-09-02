@@ -35,7 +35,7 @@ services:
   # ===============================================================================================
 
   ydot-postgres:
-    image: sivan67906/ydot-postgres:8.9.2
+    image: sivan67906/ydot-postgres:9.1.1
     pull_policy: always
     container_name: ydot-postgres
     environment:
@@ -66,7 +66,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: sivan67906/ydot-iam:8.9.2
+    image: sivan67906/ydot-iam:9.1.1
     pull_policy: always
     container_name: ydot-iam
     depends_on:
@@ -216,7 +216,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: sivan67906/ydot-cam:8.9.2
+    image: sivan67906/ydot-cam:9.1.1
     pull_policy: always
     container_name: ydot-cam
     depends_on:
@@ -264,7 +264,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: sivan67906/ydot-don:8.9.2
+    image: sivan67906/ydot-don:9.1.1
     pull_policy: always
     container_name: ydot-don
     depends_on:
@@ -313,7 +313,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: sivan67906/ydot-pay:8.9.2
+    image: sivan67906/ydot-pay:9.1.1
     pull_policy: always
     container_name: ydot-pay
     depends_on:
@@ -333,16 +333,36 @@ services:
 
       PaymentSettings__FinancialYearStartMonth: "4"
       PaymentSettings__DefaultPaymentLinkValidityMinutes: "60"
-      PaymentSettings__MaximumAttemptsBeforeSupport: "3"
+      # TWO: the original attempt plus one retry. The donation flow document says a
+      # record whose RETRY also fails moves to Payment Support and Safe Retry, and at
+      # three it never got there - the queue just offered a third identical button.
+      PaymentSettings__MaximumAttemptsBeforeSupport: "2"
       PaymentSettings__AutoIssueReceiptOnDonation: "true"
       PaymentSettings__AutoDeliverReceipt: "true"
       PaymentSettings__ReceiptDocumentRoot: "/var/ydot/receipts"
 
+      # ---- Donor portal accounts ---------------------------------------------------------------
+      #
       # Creating a donor account when a stranger gives is IAM's decision, so PAY asks over HTTP
-      # rather than writing iam_users itself. Off by default: a failure here must never fail a
-      # donation.
-      IdentityIntegration__Enabled: "false"
+      # rather than writing iam_users itself.
+      #
+      # ON, BECAUSE THE FLOW ENDS HERE: the Lead is converted to a Donor, a donor login is
+      # created and an activation link is e-mailed for them to click. With this off, PAY recorded
+      # the donation, converted the Lead, and returned "donor portal accounts are not enabled for
+      # this installation" - so the final step of the flow had no way to occur.
+      #
+      # A FAILURE HERE STILL NEVER FAILS A DONATION: the money is already taken by the time this
+      # runs, so every failure comes back as a result and is logged rather than thrown.
+      IdentityIntegration__Enabled: "${PAY_IDENTITY_ENABLED:-true}"
       IdentityIntegration__BaseUrl: "http://ydot-iam:8080"
+
+      # THE CREDENTIAL PAY SIGNS IN WITH. It needs iam.users.create in the Organisation the
+      # donation belongs to. SET THESE EXPLICITLY IN ANY REAL DEPLOYMENT - there is no default
+      # here on purpose, because a deployment file is not the place to fall back to a seeded
+      # demonstration account. With them unset the integration logs that no service credential is
+      # configured and donors are created without portal accounts.
+      IdentityIntegration__ServiceAccountUsername: "${PAY_IDENTITY_SERVICE_USERNAME:-}"
+      IdentityIntegration__ServiceAccountPassword: "${PAY_IDENTITY_SERVICE_PASSWORD:-}"
 
       # ---- Mail ------------------------------------------------------------------------------
       #
@@ -388,7 +408,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: sivan67906/ydot-ui:8.9.2
+    image: sivan67906/ydot-ui:9.1.1
     pull_policy: always
     container_name: ydot-ui
     # service_started, not service_healthy: nginx retries its upstream anyway, so an API still

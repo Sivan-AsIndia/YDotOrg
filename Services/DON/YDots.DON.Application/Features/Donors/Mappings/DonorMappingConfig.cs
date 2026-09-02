@@ -57,7 +57,26 @@ public static class DonorMappingConfig
             request.OrganisationName);
     }
 
-    public static DonorListItemResponse ToListItemResponse(this Donor donor) =>
+    /// <summary>
+    /// One grid row.
+    ///
+    /// THE GIVING AND FOLLOW-UP FACTS ARE PASSED IN rather than read off the donor, because they
+    /// live in other tables - donation summaries, follow-ups, consents and verifications. Passing
+    /// them keeps this a pure mapping and keeps the joins in the read service, where they can be
+    /// done once for a whole page instead of once per row.
+    /// </summary>
+    public static DonorListItemResponse ToListItemResponse(
+        this Donor donor,
+        bool canSeeContact,
+        string? campaignName = null,
+        decimal? lastDonationAmount = null,
+        DateTimeOffset? lastDonationAtUtc = null,
+        decimal lifetimeGiving = 0m,
+        string currency = "INR",
+        string followUpStatus = "None",
+        string verificationStatus = "Pending",
+        string consentStatus = "Granted",
+        bool consentReviewRequired = false) =>
         new(
             donor.Id,
             donor.DonorNumber,
@@ -66,7 +85,19 @@ public static class DonorMappingConfig
             donor.RelationshipOwnerUserId,
             donor.RelationshipOwnerName,
             donor.UpdatedAtUtc ?? donor.CreatedAtUtc,
-            donor.Version);
+            donor.Version,
+            ContactMasking.Phone(donor.PrimaryPhone, canSeeContact),
+            ContactMasking.Email(donor.PrimaryEmail, canSeeContact),
+            campaignName,
+            lastDonationAmount,
+            lastDonationAtUtc,
+            lifetimeGiving,
+            currency,
+            followUpStatus,
+            verificationStatus,
+            consentStatus,
+            consentReviewRequired,
+            !canSeeContact);
 
     public static DonorLookupResponse ToLookupResponse(this Donor donor) =>
         new(donor.Id, donor.DisplayName, donor.Status.ToString());

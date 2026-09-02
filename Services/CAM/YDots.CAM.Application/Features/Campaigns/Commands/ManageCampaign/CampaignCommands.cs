@@ -45,6 +45,7 @@ public sealed record DeleteDraftCampaignCommand(Guid CampaignId, CampaignLifecyc
 /// </summary>
 public sealed class CampaignCommandHandler(
     ICampaignRepository campaigns,
+    ICampaignReadinessRepository readiness,
     IAuditWriter audit,
     ICurrentUser currentUser,
     ITenantContext tenantContext,
@@ -86,6 +87,20 @@ public sealed class CampaignCommandHandler(
 
         await campaigns.AddAsync(campaign, cancellationToken);
 
+        // ---- THE CHECKLIST IS CREATED WITH THE CAMPAIGN ----------------------------------------
+        //
+        // Every campaign starts with one readiness check per category. Without them the readiness
+        // screen had nothing real to draw, so it drew six cards of its own that no blocker could
+        // attach to and no verdict could be saved against - see DefaultReadinessChecks for the
+        // three symptoms that produced.
+        //
+        // ADDED IN THE SAME UNIT OF WORK as the campaign, so a campaign can never exist without
+        // its checklist. If the save fails, neither is written.
+        foreach (var check in DefaultReadinessChecks.ForCampaign(campaign.Id))
+        {
+            await readiness.AddAsync(check, cancellationToken);
+        }
+
         await audit.WriteAsync(
             AuditActionCodes.CampaignCreated, nameof(Campaign), campaign.Id,
             cancellationToken: cancellationToken);
@@ -96,9 +111,13 @@ public sealed class CampaignCommandHandler(
             "Campaign {CampaignId} created with code {CampaignCode} in organisation {TenantId}.",
             campaign.Id, campaign.Code, campaign.TenantId);
 
+        // hasOutstandingChecks IS TRUE, not false. The six seeded checks are all Pending, so a
+        // brand-new campaign genuinely has outstanding required checks - reporting otherwise would
+        // offer an Activate button on the create response that the activate endpoint then refuses.
         return campaign.ToDetailResponse(
             pendingCloseRequest: null,
-            permittedActions: PermittedActions(campaign, hasOutstandingChecks: false, hasPendingClose: false));
+            permittedActions: PermittedActions(campaign, hasOutstandingChecks: true, hasPendingClose: false),
+            outstandingCheckCount: DefaultReadinessChecks.All.Count);
     }
 
     public async Task<Result<OutcomeResponse>> HandleAsync(

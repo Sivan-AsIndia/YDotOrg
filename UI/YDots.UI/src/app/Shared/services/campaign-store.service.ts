@@ -10,7 +10,49 @@ import {
 } from '../models/campaign-contract.model';
 import { CampaignRecord, CampaignStatus } from '../models/campaign.model';
 import { NotificationService } from '../../Service/notification.service';
-import { apiErrorMessage } from '../models/api-response.model';
+import { apiErrorMessage, apiFieldErrors } from '../models/api-response.model';
+
+/**
+ * What a lifecycle transition actually did, reported back to the screen that asked for it.
+ *
+ * WHY A CALLBACK AND NOT A RETURN. Every screen in this module drives lifecycle through the
+ * store's synchronous signal surface, and the transitions themselves are HTTP - so a screen had
+ * no way at all to learn whether the change it just announced had been accepted. The Pause /
+ * Resume / Close panel showed a green "Saved successfully. state Active" on a fixed 700 ms
+ * timer, whatever the server said, and it said it whether or not a request had even been sent.
+ *
+ * `applied: false` carries the server's own message wherever there was one.
+ */
+export type LifecycleOutcome = (result: { readonly applied: boolean; readonly error?: string }) => void;
+
+/**
+ * A save failure, said in a way the person can act on.
+ *
+ * THE ENVELOPE'S TOP LINE IS NOT ENOUGH BY ITSELF. A rejected write answers "Some of the
+ * details are not valid." - accurate, and of no use at all: it names no field, and on a
+ * four-step wizard the field it means is usually on a step that is no longer on screen. The
+ * server has always sent the per-field messages beside that sentence; this is where they were
+ * being thrown away.
+ *
+ * THE FIELD NAMES ARRIVE CAMEL-CASED, matching the JSON that was sent, so "publicDescription"
+ * is turned back into "Public description" rather than shown as the wire name.
+ */
+function fieldLabel(field: string): string {
+  const spaced = field.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function saveFailureMessage(error: unknown, fallback: string): string {
+  const message = apiErrorMessage(error, fallback);
+  const fields = Object.entries(apiFieldErrors(error));
+
+  if (fields.length === 0) {
+    return message;
+  }
+
+  return `${message} ${fields.map(([field, text]) => `${fieldLabel(field)} — ${text}`).join(' ')}`;
+}
 
 /**
  * The single shared source of truth for campaign data.
@@ -239,15 +281,21 @@ export class CampaignStoreService {
         currencyId: draft.currency ?? '',
         countryId: draft.country ?? '',
         ownerIds: [...(draft.ownerReferences ?? [draft.ownerReference ?? draft.createdByRef])],
-        stateId: draft.region || null,
-        cityId: draft.city || null,
-        zipCode: draft.pincode || null,
+        // STEP TWO AND STEP THREE ARE MANDATORY ON THE SERVER NOW, so these are sent as values
+        // rather than as nulls. An empty string or an empty array still fails validation - which
+        // is the intended outcome: a draft that reaches here without a state, a city, a zip code,
+        // a channel or its published wording is one the wizard should not have submitted, and the
+        // 400 names each missing field rather than saving a campaign whose detail screen would
+        // then have nothing to show.
+        stateId: draft.region ?? '',
+        cityId: draft.city ?? '',
+        zipCode: draft.pincode ?? '',
+        channelIds: [...(draft.channels ?? [])],
         lifecycleActivation: draft.activationMode === 'auto' ? 'auto' : 'manual',
-        daysBeforeStart: draft.reminderDaysBefore ?? 0,
-        reminderTime: draft.reminderTime || '09:00',
-        publicDescription: draft.publicDescriptionHtml ?? draft.publicDescription ?? null,
-        termsAndNotice: draft.termsNoticeHtml ?? draft.termsNotice ?? null,
-        channelIds: draft.channels ? [...draft.channels] : null,
+        daysBeforeStart: draft.reminderDaysBefore ?? null,
+        reminderTime: draft.reminderTime || null,
+        publicDescription: draft.publicDescriptionHtml ?? draft.publicDescription ?? '',
+        termsAndNotice: draft.termsNoticeHtml ?? draft.termsNotice ?? '',
       })
       .subscribe({
         // THE CALLBACK RUNS AFTER THE REFRESH, not before it. A caller that wants to act on
@@ -264,7 +312,7 @@ export class CampaignStoreService {
           // the caller can usually act on - a duplicate code, a field the validator rejected -
           // and "The campaign could not be created." threw all of that away, which is what
           // made a 400 on this call so hard to see from the screen.
-          const message = apiErrorMessage(error, 'The campaign could not be created.');
+          const message = saveFailureMessage(error, 'The campaign could not be created.');
 
           this.loadError.set(message);
           onSaved?.({ saved: false, error: message });
@@ -312,20 +360,21 @@ export class CampaignStoreService {
         currencyId: merged.currency ?? '',
         countryId: merged.country ?? '',
         ownerIds: [...(merged.ownerReferences ?? [merged.ownerReference])],
-        stateId: merged.region || null,
-        cityId: merged.city || null,
-        zipCode: merged.pincode || null,
+        // The same mandatory set as create: an edit must not be a way to empty a campaign out.
+        stateId: merged.region ?? '',
+        cityId: merged.city ?? '',
+        zipCode: merged.pincode ?? '',
+        channelIds: [...(merged.channels ?? [])],
         lifecycleActivation: merged.activationMode === 'auto' ? 'auto' : 'manual',
-        daysBeforeStart: merged.reminderDaysBefore ?? 0,
-        reminderTime: merged.reminderTime || '09:00',
-        publicDescription: merged.publicDescriptionHtml ?? merged.publicDescription ?? null,
-        termsAndNotice: merged.termsNoticeHtml ?? merged.termsNotice ?? null,
-        channelIds: merged.channels ? [...merged.channels] : null,
+        daysBeforeStart: merged.reminderDaysBefore ?? null,
+        reminderTime: merged.reminderTime || null,
+        publicDescription: merged.publicDescriptionHtml ?? merged.publicDescription ?? '',
+        termsAndNotice: merged.termsNoticeHtml ?? merged.termsNotice ?? '',
       })
       .subscribe({
         next: () => this.refresh(),
         error: (error: unknown) => {
-          this.loadError.set(apiErrorMessage(error, 'The campaign could not be saved.'));
+          this.loadError.set(saveFailureMessage(error, 'The campaign could not be saved.'));
           this.refresh();
         },
       });
@@ -345,11 +394,16 @@ export class CampaignStoreService {
    * own session state could approve their own campaign. The role parameter is kept so the eleven
    * call sites do not change, and is no longer trusted for anything.
    */
-  submitForApproval(ref: string, actorRole: CampaignRole, actorRef: string): void {
+  submitForApproval(
+    ref: string,
+    actorRole: CampaignRole,
+    actorRef: string,
+    onDone?: LifecycleOutcome,
+  ): void {
     void actorRole;
     void actorRef;
 
-    this.lifecycle(ref, (id, request) => this.api.submitCampaign(id, request), 'submitted');
+    this.lifecycle(ref, (id, request) => this.api.submitCampaign(id, request), 'submitted', onDone);
   }
 
   /**
@@ -359,22 +413,22 @@ export class CampaignStoreService {
    * draw the Approve button from `permittedActions` on the campaign detail rather than from a
    * permission check - otherwise they offer an action that answers 409.
    */
-  approveCampaign(ref: string, approverRef: string): void {
+  approveCampaign(ref: string, approverRef: string, onDone?: LifecycleOutcome): void {
     void approverRef;
 
-    this.lifecycle(ref, (id, request) => this.api.approveCampaign(id, request), 'approved');
+    this.lifecycle(ref, (id, request) => this.api.approveCampaign(id, request), 'approved', onDone);
   }
 
-  activate(ref: string): void {
-    this.lifecycle(ref, (id, request) => this.api.activateCampaign(id, request), 'activated');
+  activate(ref: string, onDone?: LifecycleOutcome): void {
+    this.lifecycle(ref, (id, request) => this.api.activateCampaign(id, request), 'activated', onDone);
   }
 
-  pause(ref: string): void {
-    this.lifecycle(ref, (id, request) => this.api.pauseCampaign(id, request), 'paused');
+  pause(ref: string, onDone?: LifecycleOutcome): void {
+    this.lifecycle(ref, (id, request) => this.api.pauseCampaign(id, request), 'paused', onDone);
   }
 
-  resume(ref: string): void {
-    this.lifecycle(ref, (id, request) => this.api.resumeCampaign(id, request), 'resumed');
+  resume(ref: string, onDone?: LifecycleOutcome): void {
+    this.lifecycle(ref, (id, request) => this.api.resumeCampaign(id, request), 'resumed', onDone);
   }
 
   /**
@@ -384,8 +438,8 @@ export class CampaignStoreService {
    * campaign needs a second person on this platform, and this method previously set the status
    * to Closed on its own. The campaign moves to Closing and waits.
    */
-  close(ref: string): void {
-    this.lifecycle(ref, (id, request) => this.api.requestCampaignClose(id, request), 'closed');
+  close(ref: string, onDone?: LifecycleOutcome): void {
+    this.lifecycle(ref, (id, request) => this.api.requestCampaignClose(id, request), 'closed', onDone);
   }
 
   /**
@@ -395,7 +449,7 @@ export class CampaignStoreService {
    * to it, and "cancelled" would misdescribe them. A campaign is closed with a reason instead,
    * which is what this now does - and the reason says it was cancelled.
    */
-  cancel(ref: string): void {
+  cancel(ref: string, onDone?: LifecycleOutcome): void {
     this.lifecycle(
       ref,
       (id, request) =>
@@ -405,6 +459,7 @@ export class CampaignStoreService {
           detailedReason: request.detailedReason ?? 'The campaign was cancelled before completion.',
         }),
       'cancelled',
+      onDone,
     );
   }
 
@@ -415,13 +470,16 @@ export class CampaignStoreService {
    * transition for - Draft, say - is refused here rather than silently applied locally, because
    * applying it locally is exactly how the screen and the server came to disagree.
    */
-  setStatus(ref: string, status: CampaignStatus): void {
+  setStatus(ref: string, status: CampaignStatus, onDone?: LifecycleOutcome): void {
     switch (status) {
       case 'Submitted':
-        this.submitForApproval(ref, 'Campaign Manager', '');
+        // 'Initiator' rather than the 'Campaign Manager' this named: the role catalogue no longer
+        // carries that name. The argument is inert either way - submitForApproval voids it and
+        // the server decides from the token - but it has to be a role that exists.
+        this.submitForApproval(ref, 'Initiator', '', onDone);
         return;
       case 'Approved':
-        this.approveCampaign(ref, '');
+        this.approveCampaign(ref, '', onDone);
         return;
 
       // SCHEDULED IS NOT A TRANSITION ANYBODY RUNS. It is where approval leaves a campaign whose
@@ -432,39 +490,48 @@ export class CampaignStoreService {
         const current = this.get(ref);
 
         if (current?.status === 'Submitted') {
-          this.approveCampaign(ref, '');
+          this.approveCampaign(ref, '', onDone);
           return;
         }
 
-        this.loadError.set(
+        this.refuse(
           'A campaign is scheduled by approving it while its activation is set to automatic. '
-          + 'It cannot be moved to Scheduled from here.');
+          + 'It cannot be moved to Scheduled from here.',
+          onDone,
+        );
         return;
       }
       case 'Active': {
         const current = this.get(ref);
         if (current?.status === 'Paused') {
-          this.resume(ref);
+          this.resume(ref, onDone);
         } else {
-          this.activate(ref);
+          this.activate(ref, onDone);
         }
         return;
       }
       case 'Paused':
-        this.pause(ref);
+        this.pause(ref, onDone);
         return;
       case 'Closing':
       case 'Closed':
-        this.close(ref);
+        this.close(ref, onDone);
         return;
       case 'Cancelled':
-        this.cancel(ref);
+        this.cancel(ref, onDone);
         return;
       default:
         // Draft is not reachable by a transition: a campaign returns to Draft through the
         // readiness screen's own endpoint, which requires a reason.
-        this.loadError.set(`A campaign cannot be moved to ${status} from here.`);
+        this.refuse(`A campaign cannot be moved to ${status} from here.`, onDone);
     }
+  }
+
+  /** A transition refused before it was sent — surfaced on the store AND reported to the caller,
+   *  so a screen waiting on the outcome is not left waiting for a call that never went out. */
+  private refuse(message: string, onDone?: LifecycleOutcome): void {
+    this.loadError.set(message);
+    onDone?.({ applied: false, error: message });
   }
 
   /**
@@ -507,6 +574,7 @@ export class CampaignStoreService {
       request: CampaignLifecycleRequest,
     ) => ReturnType<CampaignApiService['submitCampaign']>,
     event: Parameters<NotificationService['emitCampaignEvent']>[1],
+    onDone?: LifecycleOutcome,
   ): void {
     const record = this.get(ref);
     const id = this.idsByCode.get(ref);
@@ -519,22 +587,214 @@ export class CampaignStoreService {
     // reached a Campaign Manager for approval. Callers now chain on the create's completion -
     // and if one still arrives early, it says so instead of doing nothing.
     if (!record || !id) {
-      this.loadError.set(
-        'That campaign is not loaded yet, so the change was not sent. Refresh and try again.',
-      );
+      const message =
+        'That campaign is not loaded yet, so the change was not sent. Refresh and try again.';
+
+      this.loadError.set(message);
+      onDone?.({ applied: false, error: message });
       return;
     }
+
+    // THE DETAIL IS RE-READ TOO, not just the list. `permittedActions` - the only thing every
+    // lifecycle button on the campaign detail screen is drawn from - lives on the DETAIL response,
+    // and `refresh()` reloads the list projection, which does not carry it. Without this a
+    // campaign kept the actions of the state it had BEFORE the transition: Approve stayed on
+    // screen after the approval that had just consumed it, and answered 409 on the second press.
+    // Chained on the list load rather than fired beside it, so the detail merge lands on the row
+    // the refresh has already replaced instead of racing it.
+    const reloadDetail = () =>
+      this.refresh(() => {
+        if (this.get(ref)?.detailLoaded) {
+          this.loadDetail(ref);
+        }
+      });
 
     call(id, { expectedVersion: this.versionsByCode.get(ref) ?? 0 }).subscribe({
       next: () => {
         this.notifications.emitCampaignEvent(record, event);
-        this.refresh();
+        reloadDetail();
+        onDone?.({ applied: true });
       },
       error: (error: unknown) => {
-        this.loadError.set(apiErrorMessage(error, 'That change was refused.'));
-        this.refresh();
+        const message = apiErrorMessage(error, 'That change was refused.');
+
+        this.loadError.set(message);
+        reloadDetail();
+        onDone?.({ applied: false, error: message });
       },
     });
+  }
+
+  /**
+   * Loads the FULL record for one campaign and merges it into the store.
+   *
+   * WITHOUT THIS, THE DETAIL SCREEN WAS SHOWING A REGISTER ROW. Everything on that screen came
+   * from `CampaignListItem` - the list projection - which carries a code, a name, dates, a
+   * status and some counts, and nothing else. Purpose, currency, channels, location, the
+   * publication wording, the activation mode and `permittedActions` are all on the DETAIL
+   * response, and `getCampaign` was never called by anything in the application.
+   *
+   * The visible symptom was a detail screen reading "-" against Currency, Channel and Location on
+   * a campaign that had all three filled in. It looked intermittent because it was not: the
+   * fields appeared for a campaign this browser had just created - the optimistic record was
+   * still in memory - and vanished on the next page load. The invisible symptom was worse: with
+   * no `permittedActions`, every screen fell back to guessing lifecycle buttons from permission
+   * codes.
+   *
+   * IT IS SAFE TO CALL REPEATEDLY. A campaign that is not in the store yet, or has no server id
+   * yet, is skipped rather than fetched blindly.
+   */
+  loadDetail(ref: string): void {
+    const id = this.idsByCode.get(ref);
+
+    if (!id) {
+      return;
+    }
+
+    this.api.getCampaign(id).subscribe({
+      next: (detail) => {
+        this.versionsByCode.set(ref, detail.version);
+
+        this.records.update((records) =>
+          records.map((record) => (record.code === ref ? this.mergeDetail(record, detail) : record)),
+        );
+      },
+      error: (error: unknown) => {
+        this.loadError.set(apiErrorMessage(error, 'That campaign could not be loaded.'));
+      },
+    });
+  }
+
+  /**
+   * The detail response merged onto the register row the store already holds.
+   *
+   * NAMES AND IDS ARE BOTH KEPT. The ids are what the wizard needs to re-select a dropdown when
+   * somebody edits the campaign; the names are what the detail screen prints. Storing only one of
+   * the two is how this screen ended up with a choice between showing a Guid and showing a dash.
+   */
+  private mergeDetail(record: CampaignRecord, detail: CampaignDetail): CampaignRecord {
+    const description = this.splitRichText(detail.publicDescription);
+    const terms = this.splitRichText(detail.termsAndNotice);
+
+    return {
+      ...record,
+      name: detail.name,
+      purpose: detail.purpose,
+      status: this.toDisplayStatus(detail.status),
+      startDate: detail.startDate,
+      endDate: detail.endDate,
+      fundProgramme: detail.fundOrProgramme,
+
+      ownerReference: detail.ownerIds?.[0] ?? record.ownerReference,
+      ownerReferences: detail.ownerIds?.length ? [...detail.ownerIds] : record.ownerReferences,
+
+      currency: detail.currencyId,
+      currencyName: detail.currencyCode ?? undefined,
+
+      channels: detail.channelIds?.length ? [...detail.channelIds] : record.channels,
+      channelNames: detail.channels?.length
+        ? detail.channels.map((channel) => channel.name).filter((name) => !!name)
+        : undefined,
+
+      country: detail.countryId,
+      countryName: detail.countryName ?? undefined,
+      region: detail.stateId ?? undefined,
+      regionName: detail.stateName ?? undefined,
+      city: detail.cityId ?? undefined,
+      cityName: detail.cityName ?? undefined,
+      pincode: detail.zipCode ?? undefined,
+
+      activationMode: detail.lifecycleActivation === 'auto' ? 'auto' : 'manual',
+      reminderDaysBefore: detail.daysBeforeStart,
+      reminderTime: detail.reminderTime,
+
+      // THE MARKUP AND THE TEXT ARE SEPARATED AGAIN HERE. See `splitRichText` - the API keeps one
+      // field per value and it holds markup, so reading it straight into the plain-text field is
+      // what put "<div><br></div>" on the summary card.
+      publicDescription: description.text,
+      publicDescriptionHtml: description.html,
+      termsNotice: terms.text,
+      termsNoticeHtml: terms.html,
+
+      trackingAssetCount: detail.trackingAssetCount,
+      outstandingCheckCount: detail.outstandingCheckCount,
+      hasDownstreamReference: detail.trackingAssetCount > 0,
+
+      // THE WHOLE POINT OF THE ROUND TRIP. Every lifecycle button on the detail screen is drawn
+      // from this list and from nothing else.
+      permittedActions: [...detail.permittedActions],
+      detailLoaded: true,
+
+      createdAt: detail.createdAtUtc,
+      updatedAt: detail.updatedAtUtc ?? undefined,
+      wasEdited: !!detail.updatedAtUtc,
+    } as CampaignRecord;
+  }
+
+  /**
+   * Splits one stored rich-text value back into the markup and the plain text.
+   *
+   * WHY THIS EXISTS. Public description and Terms and notice are authored in a contenteditable
+   * editor, so the wizard holds each of them TWICE - `publicDescriptionHtml` for the markup and
+   * `publicDescription` for the text - and the API has ONE column for the pair. The client
+   * therefore sends the markup (see the create and update bodies above, which is right: the
+   * formatting is the point of the editor, and the CAM validators exempt these three fields from
+   * the no-markup rule precisely so it survives).
+   *
+   * WHAT WENT WRONG WAS THE WAY BACK. The detail response was read straight into the PLAIN field
+   * and the html field was left undefined - so after any reload the "plain text" was markup, and
+   * every screen that prints it as text printed the tags. On the campaign summary card that read:
+   *
+   *     The key decision<div><br></div><div>If you're asking me:</div>...
+   *
+   * with a Read more link beside it, on a field a donor-facing page is meant to publish.
+   *
+   * A value with no tags in it is text and stays text, so a description typed as one plain
+   * paragraph does not acquire an html twin it never had.
+   */
+  private splitRichText(value: string | null | undefined): {
+    readonly text: string | undefined;
+    readonly html: string | undefined;
+  } {
+    const stored = (value ?? '').trim();
+
+    if (!stored) {
+      return { text: undefined, html: undefined };
+    }
+
+    if (!/<[a-z!/][^>]*>/i.test(stored)) {
+      return { text: stored, html: undefined };
+    }
+
+    return { text: CampaignStoreService.toPlainText(stored), html: stored };
+  }
+
+  /**
+   * Markup as the text inside it.
+   *
+   * DELIBERATELY NOT `innerHTML` ON A DETACHED ELEMENT. Parsing a string the server returned by
+   * assigning it to a DOM node runs the loader on any `<img onerror>` or `<iframe src>` it
+   * contains, and this method is called on every detail load, for every campaign, whoever wrote
+   * the description. Block boundaries become line breaks so the paragraphs of a long description
+   * do not run into each other in the preview.
+   */
+  private static toPlainText(html: string): string {
+    return html
+      .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6]|tr|blockquote)\s*>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#0*39;|&apos;/gi, "'")
+
+      // LAST, so an escaped "&amp;lt;" does not become a "<" that the tag strip already ran past.
+      .replace(/&amp;/gi, '&')
+      .replace(/[ \t]+$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   /** One API row as the screens read it. */
@@ -575,7 +835,18 @@ export class CampaignStoreService {
 
       fundProgramme: item.fundOrProgramme,
       currency: item.currencyId,
+      currencyName: item.currencyCode ?? existing?.currencyName,
+
+      trackingAssetCount: item.trackingAssetCount,
+      outstandingCheckCount: item.outstandingCheckCount,
       updatedAt: item.updatedAtUtc ?? undefined,
+
+      // A REFRESH MUST NOT UNDO A DETAIL LOAD. `refresh()` rebuilds every row from the list
+      // projection, which carries none of the detail fields - so without carrying these forward
+      // a background refresh would blank the Currency, Channel and Location the user is looking
+      // at, and drop the permittedActions the lifecycle buttons are drawn from.
+      permittedActions: existing?.permittedActions,
+      detailLoaded: existing?.detailLoaded,
     } as CampaignRecord;
   }
 

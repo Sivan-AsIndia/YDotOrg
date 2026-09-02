@@ -24,9 +24,16 @@ namespace YDots.CAM.Infrastructure.Persistence.ReadServices;
 /// </summary>
 public sealed class CampaignReadService(
     CampaignDbContext context,
+    IPeopleDirectory people,
+    IGeographyDirectory geography,
+    IFinancialDirectory financial,
     ICurrentUser currentUser,
+    ITenantContext tenantContext,
     IDateTimeProvider clock) : ICampaignReadService
 {
+    private static readonly IReadOnlyDictionary<Guid, PersonSummary> NoPeople =
+        new Dictionary<Guid, PersonSummary>();
+
     public async Task<PagedResponse<CampaignListItemResponse>> SearchAsync(
         CampaignSearchFilter filter, AccessScope scope, CancellationToken cancellationToken)
     {
@@ -66,9 +73,23 @@ public sealed class CampaignReadService(
 
         var today = clock.TodayUtc;
 
+        // ONE DIRECTORY CALL AND ONE CURRENCY CALL FOR THE WHOLE PAGE, not one per row. Twenty
+        // campaigns reference a handful of owners and one or two currencies between them; asking
+        // per row is forty queries to draw one grid, and it only shows up under load.
+        var resolvedPeople = await ResolvePeopleAsync(
+            [.. rows.SelectMany(row => row.OwnerIds)], cancellationToken);
+
+        var currencyCodes = await financial.GetCurrencyCodesAsync(
+            [.. rows.Select(row => row.Campaign.CurrencyId).Distinct()], cancellationToken);
+
         var items = rows
             .Select(row => row.Campaign.ToListItemResponse(
-                today, row.OwnerIds, row.TrackingAssetCount, row.OutstandingCheckCount))
+                today,
+                row.OwnerIds,
+                resolvedPeople,
+                currencyCodes.GetValueOrDefault(row.Campaign.CurrencyId),
+                row.TrackingAssetCount,
+                row.OutstandingCheckCount))
             .ToList();
 
         return new PagedResponse<CampaignListItemResponse>(items, total, filter.Page, filter.PageSize);
@@ -79,9 +100,13 @@ public sealed class CampaignReadService(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
+        // THE CHANNEL ROW IS INCLUDED THROUGH THE JOIN, not just the join itself. Without
+        // ThenInclude, campaign.Channels holds ids and no names - which is what left the detail
+        // screen's Channel row reading "-" on a campaign that ran on three of them.
         var campaign = await ApplyScope(context.Campaigns.AsNoTracking(), scope)
             .Include(entity => entity.Owners)
             .Include(entity => entity.Channels)
+                .ThenInclude(link => link.Channel)
             .FirstOrDefaultAsync(entity => entity.Id == id, cancellationToken);
 
         if (campaign is null)
@@ -97,14 +122,33 @@ public sealed class CampaignReadService(
             .OrderByDescending(action => action.CreatedAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var hasOutstandingChecks = await context.CampaignReadinessChecks
+        var outstandingCheckCount = await context.CampaignReadinessChecks
             .AsNoTracking()
             .Where(check => check.CampaignId == id)
             .Where(check => check.RequiredForLaunch)
-            .AnyAsync(
+            .CountAsync(
                 check => check.Status != ReadinessCheckStatus.Passed
                          || check.Blockers.Any(blocker => !blocker.IsResolved),
                 cancellationToken);
+
+        var trackingAssetCount = await context.TrackingAssets
+            .AsNoTracking()
+            .CountAsync(asset => asset.CampaignId == id, cancellationToken);
+
+        // ---- The names the screen actually prints ----------------------------------------------
+        //
+        // The detail response used to carry only ids: a currency id, three geography ids and a
+        // list of channel ids. Everything downstream of them - Currency, Location, Channel - drew
+        // a dash, because nothing the client held could turn a Guid into a word. Resolving them
+        // here is one extra round trip per detail load and removes four from the client.
+        var resolvedPeople = await ResolvePeopleAsync(
+            [.. campaign.Owners.Select(owner => owner.OwnerId)], cancellationToken);
+
+        var place = await geography.GetPlaceNamesAsync(
+            campaign.CountryId, campaign.StateId, campaign.CityId, cancellationToken);
+
+        var currencyCodes = await financial.GetCurrencyCodesAsync(
+            [campaign.CurrencyId], cancellationToken);
 
         return campaign.ToDetailResponse(
             pendingClose,
@@ -112,8 +156,29 @@ public sealed class CampaignReadService(
                 campaign,
                 currentUser.UserId,
                 currentUser.HasPermission,
-                hasOutstandingChecks,
-                pendingClose is not null));
+                outstandingCheckCount > 0,
+                pendingClose is not null),
+            resolvedPeople,
+            place,
+            currencyCodes.GetValueOrDefault(campaign.CurrencyId),
+            trackingAssetCount,
+            outstandingCheckCount);
+    }
+
+    /// <summary>
+    /// Display names for a set of owner ids.
+    ///
+    /// A NAME IS DECORATION, so this never fails a page: an unresolvable id, or no Organisation
+    /// on the request at all, produces an empty dictionary and the screen prints the id.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, PersonSummary>> ResolvePeopleAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var wanted = userIds.Where(id => id != Guid.Empty).Distinct().ToArray();
+
+        return wanted.Length == 0 || !tenantContext.HasTenant
+            ? NoPeople
+            : await people.GetPeopleAsync(tenantContext.RequireTenantId(), wanted, cancellationToken);
     }
 
     public async Task<PagedResponse<CampaignHistoryResponse>> GetHistoryAsync(
@@ -234,7 +299,10 @@ public sealed class CampaignReadService(
     ///
     /// THIS IS NOT THE ORGANISATION BOUNDARY. That is enforced underneath by the query filter
     /// and cannot be widened from here. This decides how much of the caller's OWN Organisation
-    /// they see - which for a Campaign Owner scoped to "own" is the campaigns they own.
+    /// they see - which, for somebody whose data scope is "own records", is the campaigns they
+    /// created or are named an owner of. OWNERSHIP IS NOT A ROLE: it is a row in
+    /// cam_campaign_owners, and it decides what a caller SEES while their role decides what they
+    /// may DO.
     /// </summary>
     private static IQueryable<Campaign> ApplyScope(IQueryable<Campaign> query, AccessScope scope) =>
         scope.IsOwnRecordsOnly

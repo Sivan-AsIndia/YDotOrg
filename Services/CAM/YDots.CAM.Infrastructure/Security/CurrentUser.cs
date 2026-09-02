@@ -68,7 +68,38 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICur
         ?? httpContextAccessor.HttpContext?.TraceIdentifier
         ?? Guid.NewGuid().ToString();
 
-    public string? IpAddress => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    /// <summary>
+    /// The caller address, as the audit trail records it.
+    ///
+    /// AN IPv4 ADDRESS IS WRITTEN IN IPv4 FORM. Kestrel listens on a dual-stack socket, so an
+    /// ordinary IPv4 caller arrives as the mapped form <c>::ffff:172.20.0.1</c> and every audit
+    /// row carried that. It is the same address written in a way almost nobody reads, and it
+    /// also means one caller can be stored two ways depending on which socket the request landed
+    /// on - so grouping events by address quietly gets the wrong answer. Unmapping here fixes
+    /// every reader at once, because they all come through this property.
+    ///
+    /// The value itself comes from the connection, which <c>UseForwardedHeaders</c> has already
+    /// rewritten from X-Forwarded-For when the request arrived from a trusted proxy. Reading the
+    /// header directly would let any caller name their own address.
+    /// </summary>
+    public string? IpAddress
+    {
+        get
+        {
+            var address = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress;
+
+            if (address is null)
+            {
+                return null;
+            }
+
+            // A genuine IPv6 caller is left exactly as it is; only the mapped IPv4 form is
+            // unwrapped.
+            return address.IsIPv4MappedToIPv6
+                ? address.MapToIPv4().ToString()
+                : address.ToString();
+        }
+    }
 
     public string? UserAgent
     {

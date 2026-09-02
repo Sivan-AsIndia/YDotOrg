@@ -73,6 +73,34 @@ public static class OrganisationMappingConfig
         tenant.LogoUrl = Coalesce(request.LogoUrl, tenant.LogoUrl);
 
         tenant.ContactPersonName = Coalesce(request.ContactPersonName, tenant.ContactPersonName);
+
+        tenant.TimeZone = Coalesce(request.TimeZone, tenant.TimeZone)!;
+        tenant.DefaultCurrency = Coalesce(request.DefaultCurrency, tenant.DefaultCurrency)!.ToUpperInvariant();
+        tenant.DefaultCulture = Coalesce(request.DefaultCulture, tenant.DefaultCulture)!;
+
+        request.ApplyContactAndAddress(tenant);
+    }
+
+    /// <summary>
+    /// Applies ONLY the reachability fields — contact e-mail, telephone and postal address.
+    ///
+    /// THIS IS THE WHOLE EDIT ONCE THE ORGANISATION HAS BEEN APPROVED. Everything else on the
+    /// profile — the name, the legal name, the registration number, PAN, GSTIN, the type — is
+    /// what SuperAdmin checked the registration certificate against before approving. Leaving
+    /// those writable afterwards means an Organisation can be approved as one legal entity and
+    /// then quietly become another, with the accepted documents still attached and the timeline
+    /// showing nothing but "profile saved".
+    ///
+    /// An address and a telephone number genuinely do change while an Organisation is running,
+    /// and nothing downstream is verified against them, so they stay open. Correcting a name or
+    /// a registration number is a re-verification, not an edit, and has to go back through
+    /// review.
+    /// </summary>
+    public static void ApplyContactAndAddress(this UpdateOrganisationProfileRequest request, Tenant tenant)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(tenant);
+
         tenant.ContactEmail = Coalesce(request.ContactEmail, tenant.ContactEmail)?.ToLowerInvariant();
         tenant.ContactPhoneCountryCode = Coalesce(request.ContactPhoneCountryCode, tenant.ContactPhoneCountryCode);
         tenant.ContactPhone = Coalesce(request.ContactPhone, tenant.ContactPhone);
@@ -83,10 +111,6 @@ public static class OrganisationMappingConfig
         tenant.State = Coalesce(request.State, tenant.State);
         tenant.Country = Coalesce(request.Country, tenant.Country);
         tenant.PostalCode = Coalesce(request.PostalCode, tenant.PostalCode);
-
-        tenant.TimeZone = Coalesce(request.TimeZone, tenant.TimeZone)!;
-        tenant.DefaultCurrency = Coalesce(request.DefaultCurrency, tenant.DefaultCurrency)!.ToUpperInvariant();
-        tenant.DefaultCulture = Coalesce(request.DefaultCulture, tenant.DefaultCulture)!;
     }
 
     public static OrganisationListItemResponse ToListItemResponse(
@@ -193,7 +217,8 @@ public static class OrganisationMappingConfig
 
             PermittedActionsFor(tenant),
             outstanding,
-            outstanding.Count == 0);
+            outstanding.Count == 0,
+            EditableProfileFieldsFor(tenant));
     }
 
     public static OrganisationDomainResponse ToDomainResponse(this TenantDomain domain) =>
@@ -302,6 +327,77 @@ public static class OrganisationMappingConfig
         TenantStatus.Archived => ["View"],
         _ => ["View"]
     };
+
+    /// <summary>
+    /// Contact e-mail, telephone and postal address — the fields that stay editable for the
+    /// life of the Organisation. See <see cref="ApplyContactAndAddress"/> for why these three
+    /// and nothing else.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ContactAndAddressFields =
+    [
+        nameof(UpdateOrganisationProfileRequest.ContactEmail),
+        nameof(UpdateOrganisationProfileRequest.ContactPhoneCountryCode),
+        nameof(UpdateOrganisationProfileRequest.ContactPhone),
+        nameof(UpdateOrganisationProfileRequest.AddressLine1),
+        nameof(UpdateOrganisationProfileRequest.AddressLine2),
+        nameof(UpdateOrganisationProfileRequest.City),
+        nameof(UpdateOrganisationProfileRequest.State),
+        nameof(UpdateOrganisationProfileRequest.Country),
+        nameof(UpdateOrganisationProfileRequest.PostalCode)
+    ];
+
+    /// <summary>Every profile field, for the states where the whole form is still open.</summary>
+    public static readonly IReadOnlyList<string> AllProfileFields =
+    [
+        nameof(UpdateOrganisationProfileRequest.Name),
+        nameof(UpdateOrganisationProfileRequest.LegalName),
+        nameof(UpdateOrganisationProfileRequest.RegistrationNumber),
+        nameof(UpdateOrganisationProfileRequest.TaxIdentificationNumber),
+        nameof(UpdateOrganisationProfileRequest.PanNumber),
+        nameof(UpdateOrganisationProfileRequest.GstNumber),
+        nameof(UpdateOrganisationProfileRequest.OrganisationType),
+        nameof(UpdateOrganisationProfileRequest.EstablishedOn),
+        nameof(UpdateOrganisationProfileRequest.Description),
+        nameof(UpdateOrganisationProfileRequest.WebsiteUrl),
+        nameof(UpdateOrganisationProfileRequest.LogoUrl),
+        nameof(UpdateOrganisationProfileRequest.ContactPersonName),
+        .. ContactAndAddressFields,
+        nameof(UpdateOrganisationProfileRequest.TimeZone),
+        nameof(UpdateOrganisationProfileRequest.DefaultCurrency),
+        nameof(UpdateOrganisationProfileRequest.DefaultCulture)
+    ];
+
+    /// <summary>
+    /// True once a platform reviewer has accepted the identity fields, which is the point at
+    /// which they stop being the Organisation's to change.
+    ///
+    /// SUSPENDED IS IN THE LIST even though no Edit action is offered there — a suspension is
+    /// not a licence to rewrite the record, and the state check has to hold on its own rather
+    /// than relying on the button being absent.
+    /// </summary>
+    public static bool IsProfileVerified(TenantStatus status) =>
+        status is TenantStatus.Approved or TenantStatus.Active or TenantStatus.Suspended;
+
+    /// <summary>
+    /// Which profile fields this Organisation may still change, in its current state.
+    ///
+    /// SENT TO THE CLIENT for the same reason <see cref="PermittedActionsFor"/> is: the fields
+    /// drawn as editable and the fields the API will actually accept cannot drift apart if only
+    /// one side decides. Enforcement is still server-side — this list only spares somebody
+    /// typing into a box whose value is going to be discarded.
+    /// </summary>
+    public static IReadOnlyList<string> EditableProfileFieldsFor(Tenant tenant)
+    {
+        ArgumentNullException.ThrowIfNull(tenant);
+
+        if (tenant.Status is TenantStatus.Submitted or TenantStatus.UnderReview
+            or TenantStatus.Resubmitted or TenantStatus.Archived)
+        {
+            return [];
+        }
+
+        return IsProfileVerified(tenant.Status) ? ContactAndAddressFields : AllProfileFields;
+    }
 
     /// <summary>
     /// The fields a profile still needs before it can be submitted.

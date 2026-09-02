@@ -82,6 +82,28 @@ public sealed class LeadCaptureController : ApiControllerBase
     /// POST deduplicate. Read-only: it reports safe candidate categories and comparison routes,
     /// and never exposes another person's protected details.
     /// </summary>
+    /// <summary>
+    /// POST bulk-import. Creates many leads from the rows of an uploaded file.
+    ///
+    /// SUBMIT IS THE PERMISSION, NOT SAVE, AND THE DIFFERENCE MATTERS. Save is classified as an
+    /// Edit, which an APPROVER holds - the capture screen relies on that being harmless because a
+    /// saved lead is a DRAFT, and Submit is the gate that puts it in the work queue. A bulk upload
+    /// has no draft stage: its rows go straight into the queue. Gating it on Save would therefore
+    /// let an APPROVER create two hundred live leads while still being unable to submit a single
+    /// one by hand, which is precisely the maker-checker split the role model exists to keep.
+    /// </summary>
+    [HttpPost("bulk-import")]
+    [HasPermission(PermissionCodes.LeadCaptureSubmit)]
+    [ProducesResponseType(typeof(ApiResponse<BulkLeadImportResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> BulkImport(
+        [FromBody] BulkLeadImportRequest request,
+        [FromServices] LeadCaptureCommandHandler handler,
+        CancellationToken cancellationToken) =>
+        FromResult(await handler.HandleAsync(new BulkImportLeadsCommand(request), cancellationToken),
+            "The upload was processed.");
+
     [HttpPost("{id:guid}/deduplicate")]
     [HasPermission(PermissionCodes.LeadCaptureDeduplicate)]
     [ProducesResponseType(typeof(ApiResponse<DeduplicateResultResponse>), StatusCodes.Status200OK)]

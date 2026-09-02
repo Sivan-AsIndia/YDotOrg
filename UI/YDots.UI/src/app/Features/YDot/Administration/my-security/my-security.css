@@ -439,15 +439,27 @@
 .mfa-card__status{ font-size:.72rem; font-weight:600; color:var(--success); }
 
 /* Sidebar quick list */
+/* A <button> now rather than an <a>: the rows scroll within this page, and a bare
+   fragment href resolved against <base href="/"> was navigating away from it. The reset
+   below is what keeps a button looking like the row it replaced. */
 .quick-list__row{
   display:flex;
   align-items:center;
   gap:12px;
+  width:100%;
   padding:13px 20px;
+  border:none;
   border-bottom:1px solid var(--border);
+  background:none;
+  text-align:left;
+  cursor:pointer;
   color:inherit;
   text-decoration:none;
   transition:background .15s ease;
+}
+.quick-list__row:focus-visible{
+  outline:2px solid var(--pe-primary);
+  outline-offset:-2px;
 }
 .quick-list__row:last-child{ border-bottom:none; }
 .quick-list__row:hover{ background:var(--bg); }
@@ -600,4 +612,11 @@
     animation:none !important;
     transition:none !important;
   }
+}
+
+/* The card the sidebar just jumped to. A scroll on a long page is easy to miss, so the
+   destination says for a moment that it is the one that was asked for. */
+.sec-card.is-jump-target{
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--pe-primary) 45%, transparent);
+  transition:box-shadow .3s ease;
 }

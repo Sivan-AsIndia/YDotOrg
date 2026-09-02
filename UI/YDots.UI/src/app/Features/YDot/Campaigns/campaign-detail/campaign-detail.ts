@@ -27,6 +27,12 @@ interface LifecycleTransition {
   readonly key: string;
   readonly label: string;
   readonly target: CampaignStatus;
+
+  /**
+   * The server-side action name this transition corresponds to, as it appears in the campaign's
+   * `permittedActions`. A transition whose action is not in that list is not offered.
+   */
+  readonly requires?: string;
 }
 
 /**
@@ -37,31 +43,42 @@ interface LifecycleTransition {
  */
 const PRIMARY_TRANSITION: Partial<Record<CampaignStatus, LifecycleTransition>> = {
   Draft: { key: 'primary', label: 'Submit', target: 'Submitted' },
-  Submitted: { key: 'primary', label: 'Approve', target: 'Approved' },
+
+  // APPROVAL LANDS ON SCHEDULED. The server moves a Submitted campaign to Scheduled while its
+  // start date is still ahead, and to Approved only when that date has already passed. Naming
+  // the target `Approved` here made the confirm dialog promise a status the campaign was not
+  // going to end up in.
+  Submitted: { key: 'primary', label: 'Approve', target: 'Scheduled', requires: 'Approve' },
 
   // APPROVED GOES TO ACTIVE, NOT TO SCHEDULED, and that is the shape of the server's state
-  // machine rather than a preference. `Scheduled` is where a campaign set to AUTO activation
-  // waits for its own start date, and approval is what puts it there — there is no separate
-  // "schedule" step for anybody to run. This offered one: it was labelled Schedule, it routed
-  // to the approve endpoint, and approve refuses anything that is not Submitted, so pressing it
-  // on an Approved campaign answered 409 every time. An approved campaign's permitted action on
-  // the server is Activate, which is what this now offers.
-  Approved: { key: 'primary', label: 'Activate', target: 'Active' },
-  Scheduled: { key: 'primary', label: 'Activate', target: 'Active' },
-  Active: { key: 'primary', label: 'Pause', target: 'Paused' },
-  Paused: { key: 'primary', label: 'Resume', target: 'Active' },
-  Closing: { key: 'primary', label: 'Complete closure', target: 'Closed' },
+  // machine rather than a preference. `Scheduled` is where an approved campaign waits for its own
+  // start date — there is no separate "schedule" step for anybody to run. This offered one: it
+  // was labelled Schedule, it routed to the approve endpoint, and approve refuses anything that
+  // is not Submitted, so pressing it on an Approved campaign answered 409 every time.
+  Approved: { key: 'primary', label: 'Activate', target: 'Active', requires: 'Activate' },
+  Scheduled: { key: 'primary', label: 'Activate', target: 'Active', requires: 'Activate' },
+  Active: { key: 'primary', label: 'Pause', target: 'Paused', requires: 'Pause' },
+  Paused: { key: 'primary', label: 'Resume', target: 'Active', requires: 'Resume' },
+  Closing: { key: 'primary', label: 'Complete closure', target: 'Closed', requires: 'ApproveClose' },
 };
 const SECONDARY_TRANSITIONS: Partial<Record<CampaignStatus, readonly LifecycleTransition[]>> = {
-  Scheduled: [{ key: 'pause', label: 'Pause', target: 'Paused' }],
-  Active: [{ key: 'close', label: 'Close', target: 'Closing' }],
-  Paused: [{ key: 'close', label: 'Close', target: 'Closing' }],
+  Scheduled: [{ key: 'pause', label: 'Pause', target: 'Paused', requires: 'Pause' }],
+  Active: [{ key: 'close', label: 'Close', target: 'Closing', requires: 'RequestClose' }],
+  Paused: [{ key: 'close', label: 'Close', target: 'Closing', requires: 'RequestClose' }],
 };
-/** States from which Cancel is offered "if permitted" (non-terminal, pre-closing). */
-const CANCELLABLE_STATES: readonly CampaignStatus[] = [
-  'Draft', 'Submitted', 'Approved', 'Scheduled', 'Active', 'Paused',
-];
-const CANCEL_TRANSITION: LifecycleTransition = { key: 'cancel', label: 'Cancel campaign', target: 'Cancelled' };
+/**
+ * States from which Cancel used to be offered.
+ *
+ * EMPTY, AND THE CONSTANT IS KEPT TO SAY SO. The CAM service has a `Cancelled` status on its enum
+ * and NO endpoint that ever assigns it - nothing in the module can put a campaign there. Offering
+ * "Cancel campaign" was therefore offering an action with nowhere to go: it routed into the same
+ * confirm dialog as the real transitions and then had no call to make. Deleting a draft, or
+ * requesting a close on a live campaign, are the two real ways to end a campaign early.
+ */
+const CANCELLABLE_STATES: readonly CampaignStatus[] = [];
+const CANCEL_TRANSITION: LifecycleTransition = {
+  key: 'cancel', label: 'Cancel campaign', target: 'Cancelled',
+};
 
 /**
  * States whose lifecycle primary action is a Pause / Resume / Close operation.
@@ -117,6 +134,13 @@ export class CampaignDetailComponent {
   private readonly initialRecord = this.store.get(this.route.snapshot.queryParamMap.get('ref') ?? '');
 
   constructor() {
+    // THE DETAIL RECORD, NOT JUST THE REGISTER ROW. Everything on this screen below the header -
+    // purpose, currency, channels, location, the publication wording, the activation mode - lives
+    // on the detail response, and so does `permittedActions`, which every lifecycle button is
+    // drawn from. Without this call the screen renders a register row and fills the gaps with
+    // dashes.
+    this.store.loadDetail(this.reference);
+
     this.loadActivity();
     // Donations-in-scope is modelled as a backend fetch: stamp a freshly-fetched time on load,
     // the same as the manual refresh action does.
@@ -134,8 +158,19 @@ export class CampaignDetailComponent {
   private readonly liveRecord = computed(() => this.store.get(this.reference));
   /** Campaign name — read-only. */
   protected readonly campaignName = computed(() => this.liveRecord()?.name ?? 'Educate a Child 2025');
-  /** Status — server-derived current state. */
-  protected readonly status = signal<CampaignStatus>(this.initialRecord?.status ?? 'Active');
+  /**
+   * Status — server-derived current state, READ LIVE FROM THE RECORD.
+   *
+   * IT WAS A LOCAL SIGNAL SEEDED ONCE AT CONSTRUCTION, and nothing that changed the campaign's
+   * state afterwards reached it except this page's own confirm dialog, which set it by hand. So a
+   * campaign activated on the Manage lifecycle panel kept its old badge - the panel reported
+   * "state Active" and the pill an inch above it went on saying SCHEDULED - and every lifecycle
+   * button on the header, all of which are chosen by status, went on offering the moves for the
+   * state the campaign had been in when the page opened.
+   */
+  protected readonly status = computed<CampaignStatus>(
+    () => this.liveRecord()?.status ?? this.initialRecord?.status ?? 'Active',
+  );
   /** Owner — read-only. */
   protected readonly owner = computed(() => {
     const rec = this.liveRecord();
@@ -144,8 +179,17 @@ export class CampaignDetailComponent {
     // owner at all, must not read as one belonging to a particular person.
     return rec ? this.people.name(rec.ownerReference) : 'Unassigned';
   });
-  /** Owner reference/id — shown directly below the campaign name, alongside the owner's role. */
+  /**
+   * Owner reference/id.
+   *
+   * NOT FOR DISPLAY. This is the API's Guid — it exists so the directory can be asked about the
+   * person. The summary card used to print it verbatim between the owner's name and their role,
+   * which put a 36-character identifier in the middle of a sentence a fundraiser reads.
+   * `ownerCode()` is the one to show.
+   */
   protected readonly ownerRef = computed(() => this.liveRecord()?.ownerReference ?? '');
+  /** The owner's human reference — USR-00001 — or an empty string when it is not known. */
+  protected readonly ownerCode = computed(() => this.people.get(this.ownerRef())?.code ?? '');
   /** Owner role — from the mock session profile when the owner is one of the seeded users; a plain
    *  campaign owner otherwise (this app models every non-staff campaign owner as that role). */
   /**
@@ -157,6 +201,18 @@ export class CampaignDetailComponent {
    */
   protected readonly ownerRole = computed(
     () => this.people.get(this.ownerRef())?.context || 'Campaign Owner',
+  );
+  /**
+   * The owner line as one string: name, then reference and role when either is known.
+   *
+   * Assembled here rather than in the template so the separators disappear along with the parts
+   * they separate — a template that interpolates three values with two dots between them prints
+   * "Rajat Sivan · · " when two of the three are empty.
+   */
+  protected readonly ownerLine = computed(() =>
+    [this.ownersLabel(), this.ownerCode(), this.ownerRole()]
+      .filter((part) => !!part && part !== '—')
+      .join(' · '),
   );
   /** Every accountable owner's name — a campaign may have more than one (Wizard "+ Add owner"). */
   protected readonly ownersLabel = computed(() => {
@@ -187,33 +243,42 @@ export class CampaignDetailComponent {
    * (CurrentUserService), the same authority Campaign Register reads, so the two
    * screens share one session context rather than holding a local permission object.
    */
+  /**
+   * What the server says THIS caller may do to THIS campaign.
+   *
+   * THE ONLY AUTHORITY FOR A LIFECYCLE BUTTON ON THIS SCREEN. Empty until the detail has loaded,
+   * which is deliberate: showing nothing for a moment is honest, and showing a button that turns
+   * out to be forbidden is not.
+   */
+  protected readonly permittedActions = computed(
+    () => new Set(this.liveRecord()?.permittedActions ?? []),
+  );
+
+  protected readonly allows = (action: string): boolean => this.permittedActions().has(action);
+
+  /**
+   * Page-level permissions.
+   *
+   * NOTE WHAT IS NOT HERE ANY MORE: an `operate` flag computed as "holds ANY lifecycle
+   * permission". That check is what put an <strong>Approve</strong> button in front of an
+   * INITIATOR. An Initiator holds submit, activate, pause, resume and request-close - five of the
+   * seven codes it tested - so `operate` was true, and the button's LABEL came from a status
+   * lookup that says Submitted means Approve. The screen therefore offered the one action the
+   * role is defined by never having. Pressing it answered 403, but by then the wrong thing had
+   * already been promised.
+   *
+   * Per-record lifecycle rights now come from `permittedActions` above. What stays here is only
+   * what is genuinely a page-level capability, decided by permission alone.
+   */
   protected readonly permissions = computed(() => ({
     view: this.currentUser.hasPermission('cam.campaigns.view'),
-
-    // "OPERATE ACCORDING TO LIFECYCLE" IS NOT ONE PERMISSION. The CAM service enforces a separate
-    // code per transition, so the control is offered when the caller holds ANY of them and the
-    // server decides which transition the click actually is. The single page-named code this used
-    // to check existed in no catalogue at all, so it was false for everybody - including the
-    // organisation's own administrator - and every lifecycle action on this screen was inert.
-    operate: this.currentUser.hasAnyPermission(
-      'cam.campaigns.submit',
-      'cam.campaigns.approve',
-      'cam.campaigns.activate',
-      'cam.campaigns.pause',
-      'cam.campaigns.resume',
-      'cam.campaigns.request-close',
-      'cam.campaigns.close',
-    ),
-    // Reuses the Campaign Register's export permission key — same export capability,
-    // now also offered from this campaign's own detail page.
     export: this.currentUser.hasPermission('cam.campaigns.export'),
-    // Reuses the Campaign Register's delete-draft permission — the same capability, now also
-    // offered from a draft campaign's own detail page next to Submit.
-    deleteDraft: this.currentUser.hasPermission('cam.campaigns.delete-draft'),
   }));
-  protected readonly exportAllowed = computed(() => this.permissions().export && this.uiState() !== 'no-access');
+  protected readonly exportAllowed = computed(
+    () => (this.allows('Export') || this.permissions().export) && this.uiState() !== 'no-access',
+  );
   /** Edit is offered only for a Draft campaign — opens the Campaign Wizard pre-filled with this record. */
-  protected readonly canEdit = computed(() => this.status() === 'Draft' && this.uiState() !== 'no-access');
+  protected readonly canEdit = computed(() => this.allows('Edit') && this.uiState() !== 'no-access');
   protected openEdit(): void {
     if (!this.canEdit()) {
       return;
@@ -224,8 +289,7 @@ export class CampaignDetailComponent {
    *  user — a permanent delete of an unused draft, distinct from the lifecycle Cancel. */
   protected readonly canDeleteDraft = computed(
     () =>
-      this.permissions().deleteDraft &&
-      this.status() === 'Draft' &&
+      this.allows('Delete') &&
       !this.liveRecord()?.hasDownstreamReference &&
       this.uiState() !== 'no-access',
   );
@@ -399,14 +463,23 @@ export class CampaignDetailComponent {
     { primary: 'May 2025 donation statement', secondary: 'CSV · 88 KB', meta: 'Confidential · record scope' },
   ];
   /**
-   * Documents carries its own, independent permission/scope check rather than only relying on the page-level view gate.
-   * No doc-listed sub-permission exists for this field, so eligibility is
-   * modelled the same way the rest of this session's mock session objects
-   * model role scope: the narrower Campaign Manager role is in the record's
-   * accountable scope, Executive users are not.
+   * Documents carries its own, independent check rather than only relying on the page-level
+   * view gate: the attachments are marked confidential and record-scoped.
+   *
+   * IT NOW ASKS A PERMISSION AND NOT A ROLE NAME. It used to require
+   * `currentUser.role() === 'Campaign Manager'`, which was wrong twice over. It contradicted the
+   * contract on that computed - which says in as many words that it is a LABEL and that nothing
+   * gates on it, because a person can hold campaign permissions under any role name an
+   * organisation invents - and when the catalogue was cut to four authority-shaped roles the
+   * string stopped matching anything at all, so the section would have vanished for every user
+   * on the platform without a single error to say why.
+   *
+   * `cam.campaigns.export` is the closest honest gate the catalogue offers: taking campaign
+   * material out of the system is exactly what reading a confidential attachment amounts to, and
+   * it is the permission an organisation already grants to decide that question.
    */
   protected readonly documentsAllowed = computed(
-    () => this.permissions().view && this.currentUser.role() === 'Campaign Manager',
+    () => this.permissions().view && this.permissions().export,
   );
 
   /**
@@ -421,14 +494,25 @@ export class CampaignDetailComponent {
    */
   protected readonly recentActivity = signal<readonly ActivityItem[]>([]);
 
+  /** Whether the history call is in flight, so the panel can say so instead of showing blank. */
+  protected readonly activityLoading = signal(false);
+
+  /** The reason the trail is missing, when it is missing for a reason. Null when all is well. */
+  protected readonly activityError = signal<string | null>(null);
+
   /** Loads the history for the campaign on screen. */
   private loadActivity(): void {
     const campaignId = this.store.apiId(this.reference);
 
     if (!campaignId) {
       this.recentActivity.set([]);
+      this.activityLoading.set(false);
+      this.activityError.set(null);
       return;
     }
+
+    this.activityLoading.set(true);
+    this.activityError.set(null);
 
     this.campaignApi.getCampaignHistory(campaignId).subscribe({
       next: (entries) =>
@@ -454,7 +538,12 @@ export class CampaignDetailComponent {
             } as ActivityItem;
           }),
         ),
-      error: () => this.recentActivity.set([]),
+      error: () => {
+        this.recentActivity.set([]);
+        this.activityLoading.set(false);
+        this.activityError.set("This campaign's history could not be loaded.");
+      },
+      complete: () => this.activityLoading.set(false),
     });
   }
 
@@ -470,15 +559,13 @@ export class CampaignDetailComponent {
     const list = this.liveRecord()?.channelNames;
     return list && list.length ? list.join(', ') : '—';
   });
-  protected readonly targetBudgetLabel = computed(() => {
-    const rec = this.liveRecord();
-    const target = this.formatAmount(this.targetAmount());
-    return rec?.budgetAmount ? `${target} target · ${this.formatAmount(rec.budgetAmount)} budget` : `${target} target`;
-  });
   /** Fund or programme — captured on Wizard step 1. */
   protected readonly fundProgramme = computed(() => this.liveRecord()?.fundProgramme || '—');
-  /** Currency — captured on Wizard step 2. */
-  protected readonly currencyLabel = computed(() => this.liveRecord()?.currencyName || '—');
+  // CURRENCY IS NO LONGER SHOWN. The summary card carried a Currency row, but no wizard step
+  // asks for one - the API requires a CurrencyId, so the client sends the Organisation's default
+  // - and nothing on this screen displays an amount for it to qualify. The row therefore reported
+  // a value nobody chose, about figures that are not on the page. `currencyName` is still on the
+  // record for the screens that do show money.
   /** Country / State / City / Zip code — captured on Wizard step 3. */
   protected readonly locationLabel = computed(() => {
     const rec = this.liveRecord();
@@ -543,10 +630,15 @@ export class CampaignDetailComponent {
   protected readonly readMoreHtml = computed(() => (this.readMoreField() === 'terms' ? this.termsNoticeHtml() : this.publicDescriptionHtml()));
 
   // ================= Main work: tabs =================
-  /** History & Sources removed per user request; Targets/Budget/Tracking/Payments remain. */
+  /**
+   * The work tabs.
+   *
+   * TARGETS AND BUDGET ARE GONE. Both read from the Budget & Target Plans module, which is on
+   * hold - so Targets rendered a zero target against a progress meter stuck at 0%, and Budget
+   * rendered "No approved budget plan for this campaign" for every campaign that has ever
+   * existed, because no plan can be created. They come back with the module.
+   */
   protected readonly tabs: readonly DetailTab[] = [
-    { key: 'targets', label: 'Targets' },
-    { key: 'budget', label: 'Budget' },
     { key: 'tracking', label: 'Tracking' },
     { key: 'payments', label: 'Payments' },
   ];
@@ -613,29 +705,101 @@ export class CampaignDetailComponent {
 
   // ================= Actions, eligibility and result =================
   /** The named transition this state's header button performs. */
-  protected readonly primaryTransition = computed(() => PRIMARY_TRANSITION[this.status()]);
+  /**
+   * The primary transition for this status, IF the server has listed it for this caller.
+   *
+   * The status decides which transition is the interesting one; `permittedActions` decides
+   * whether this particular person may run it. Both have to agree, and the second half is the
+   * one that was missing - which is how an Initiator was offered Approve on a Submitted campaign.
+   */
+  protected readonly primaryTransition = computed(() => {
+    const transition = PRIMARY_TRANSITION[this.status()];
+
+    if (!transition) {
+      return undefined;
+    }
+
+    // No `requires` means the transition predates this rule; treat it as not offered rather than
+    // as universally allowed, so a future status added without a mapping fails closed.
+    return transition.requires && this.allows(transition.requires) ? transition : undefined;
+  });
+
   /** Other eligible transitions for this state, offered inside the same confirm dialog
-   *  rather than as extra header buttons. */
+   *  rather than as extra header buttons. Filtered against `permittedActions` too. */
   protected readonly alternateTransitions = computed<readonly LifecycleTransition[]>(() => {
     const alts = [...(SECONDARY_TRANSITIONS[this.status()] ?? [])];
+
     if (CANCELLABLE_STATES.includes(this.status())) {
       alts.push(CANCEL_TRANSITION);
     }
-    return alts;
+
+    return alts.filter((transition) => !!transition.requires && this.allows(transition.requires));
   });
-  /** The single primary action: appears only when role, permission, scope, state and dependencies allow. */
-  protected readonly operateAllowed = computed(
-    () => this.permissions().operate && !!this.primaryTransition() && this.uiState() !== 'no-access',
-  );
-  /** True when this state's lifecycle primary action is run on the dedicated Pause / Resume /
-   *  Close screen rather than the in-place confirm dialog. */
+  /**
+   * The single primary action: appears only when the SERVER has listed it for this caller.
+   *
+   * `primaryTransition()` is already filtered against `permittedActions`, so an Initiator looking
+   * at a Submitted campaign gets no primary button at all rather than an Approve they cannot use.
+   */
+  /** True when this state's lifecycle actions are run on the Pause / Resume / Close panel rather
+   *  than in the in-place confirm dialog. Those states have no in-place primary button: the
+   *  "Manage lifecycle" button beside it is their doorway. */
   protected readonly lifecycleUsesDedicatedPage = computed(() => LIFECYCLE_PAGE_STATES.includes(this.status()));
-  /** Header lifecycle-button label: a single "Manage lifecycle" doorway for the states operated on
-   *  the dedicated screen (Scheduled activation, Active pause, Paused resume/close); the specific
-   *  maker verb (Submit / Approve / Schedule …) for the in-place confirm states. */
-  protected readonly primaryActionLabel = computed(() =>
-    this.lifecycleUsesDedicatedPage() ? 'Manage lifecycle' : (this.primaryTransition()?.label ?? ''),
+
+  /**
+   * The in-place maker action — Submit on a Draft, Approve on a Submitted, Complete closure on a
+   * Closing campaign.
+   *
+   * IT NO LONGER DOUBLES AS THE LIFECYCLE DOORWAY. This button used to change identity with the
+   * status: for Scheduled / Active / Paused it relabelled itself "Manage lifecycle" and opened
+   * the panel, and for every other status the panel had no button at all. So a Submitted campaign
+   * - which is what a campaign looks like for the whole of its approval - showed Approve and no
+   * way to reach lifecycle management, and that is the button reported missing. Manage lifecycle
+   * is now its own button and is always present.
+   */
+  protected readonly operateAllowed = computed(
+    () => !!this.primaryTransition() && !this.lifecycleUsesDedicatedPage() && this.uiState() !== 'no-access',
   );
+  protected readonly primaryActionLabel = computed(() => this.primaryTransition()?.label ?? '');
+
+  /**
+   * Manage lifecycle — offered for every state a reader can see.
+   *
+   * NOT GATED ON HOLDING A TRANSITION. The panel is a record as much as a control: current state,
+   * open donation intents, active tracking assets, financial exceptions and the accountable
+   * history of who moved this campaign and when. It renders its own view-only mode for a caller
+   * who holds none of the actions, and offers whichever ones apply to the state it finds. Gating
+   * the doorway on the actions behind it is what hid the whole thing from a Submitted campaign.
+   */
+  protected readonly lifecycleAllowed = computed(
+    () => this.permissions().view && this.uiState() !== 'no-access',
+  );
+
+  /** Opens the Pause / Resume / Close panel — the header's "Manage lifecycle" button. */
+  protected openLifecycle(): void {
+    if (!this.lifecycleAllowed()) {
+      return;
+    }
+    this.lifecyclePopupOpen.set(true);
+  }
+
+  /**
+   * Tracking assets — opens the Tracking Asset Manager scoped to THIS campaign.
+   *
+   * The manager is no longer in the sidebar: it is a per-campaign screen and this is the way in,
+   * which is why the campaign code travels with it.
+   */
+  protected readonly trackingAssetsAllowed = computed(
+    () => this.currentUser.hasPermission('cam.tracking-assets.view') && this.uiState() !== 'no-access',
+  );
+  protected openTrackingAssets(): void {
+    if (!this.trackingAssetsAllowed()) {
+      return;
+    }
+    this.router.navigate(['/app/fundraising/campaigns/tracking-asset-manager'], {
+      queryParams: { campaign: this.reference },
+    });
+  }
 
   /** Lifecycle popup — Pause / Resume / Close is a modal launched from this page, not a
    *  separate route. */
@@ -653,17 +817,12 @@ export class CampaignDetailComponent {
   protected readonly lifecyclePopupRef = computed(() => (this.liveRecord() ? this.reference : 'CAMP-2025-0011'));
 
   /**
-   * The single header lifecycle action. For a live campaign (Active / Paused) it opens
-   * the Pause / Resume / Close actions as a popup, carrying this campaign's reference — the
-   * "lifecycle primary action → Pause / Resume / Close" flow. For the maker states it opens the
-   * in-place high-risk confirm dialog.
+   * The header's maker action — Submit / Approve / Complete closure — in its in-place high-risk
+   * confirm dialog. Activate / Pause / Resume / Close live on the Manage lifecycle panel and no
+   * longer route through here.
    */
   protected runPrimaryLifecycle(): void {
     if (!this.operateAllowed()) {
-      return;
-    }
-    if (this.lifecycleUsesDedicatedPage()) {
-      this.lifecyclePopupOpen.set(true);
       return;
     }
     this.openOperate();
@@ -716,18 +875,25 @@ export class CampaignDetailComponent {
   protected cancelOperate(): void {
     this.operateDialogOpen.set(false);
   }
-  /** Require explicit confirmation; change only the authorised record and show a persistent result. */
+  /**
+   * Require explicit confirmation; change only the authorised record and show a persistent result.
+   *
+   * `setStatus` ROUTES TO THE TRANSITION'S OWN ENDPOINT. This called `store.update(ref, { status })`,
+   * which is the generic content PUT: the status went into the local record, the body sent to the
+   * server carries no status at all, and the refresh that followed put the server's unchanged
+   * state straight back. Submit and Approve both reported success on this screen without ever
+   * being sent. The same defect is fixed on the Manage lifecycle panel.
+   */
   protected confirmOperate(): void {
     this.operateReasonTouched.set(true);
     if (!this.operateReasonValid()) {
       return;
     }
     const target = this.proposedState();
-    this.status.set(target);
-    // Write back to the shared store so every other screen reflects the change immediately.
-    if (this.store.get(this.reference)) {
-      this.store.update(this.reference, { status: target });
-    }
+
+    // The store owns the write, and `status` above reads the record back - so there is no local
+    // status to set here, and nothing to diverge from the server if the transition is refused.
+    this.store.setStatus(this.reference, target);
     this.operateDialogOpen.set(false);
     this.toast.show('Lifecycle updated', `${this.reference} is now ${target}.`, 'success');
     this.uiState.set('ready');

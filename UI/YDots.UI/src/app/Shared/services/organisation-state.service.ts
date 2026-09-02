@@ -4,6 +4,7 @@ import { ToastService } from './toast.service';
 import { OrganisationRecord, OrganisationCompliance, OrganisationStatus, buildDocumentChecklist, ORG_STATUS_BADGE_CLASS, OrganisationDocument, OrganisationAuditEntry, ORG_STATUS_TRANSITIONS } from '../models/organisation.model';
 import { OrganisationApiService } from '../../Service/organisation-api.service';
 import { OrganisationListItemResponse } from '../models/iam-contract.model';
+import { OrganisationScopeService } from './organisation-scope.service';
 
 
 export interface CreateOrganisationInput {
@@ -182,6 +183,7 @@ export class OrganisationStateService {
   }
 
   private readonly api = inject(OrganisationApiService);
+  private readonly organisationScope = inject(OrganisationScopeService);
 
   /**
    * The organisations.
@@ -285,6 +287,53 @@ export class OrganisationStateService {
         // Storage unavailable (private browsing, quota) — falls back to in-memory-only for this session.
       }
     });
+
+    /**
+     * THIS LIST BELONGS TO NOBODY IN PARTICULAR AND THAT IS THE PROBLEM.
+     *
+     * It is the PLATFORM directory — every Organisation on the platform, each with its
+     * administrator's e-mail address — and it was the one Organisation-sensitive cache in the app
+     * that neither cleared on sign-out nor reloaded on a switch. Two consequences followed, and
+     * the second is the one that matters:
+     *
+     *   - IT WENT STALE ACROSS A SWITCH. Approve an Organisation from inside another one and the
+     *     directory still showed the status it had when the tab was opened.
+     *   - IT SURVIVED SIGN-OUT. `AuthTokenService.clear()` removes the `ydot.*` keys and knew
+     *     nothing about this one, so a snapshot of every Organisation stayed in `sessionStorage`
+     *     for whoever signed in next in the same tab.
+     *
+     * Registering here means the cache is now keyed to the session like everything else: dropped
+     * when nobody is signed in, refetched whenever the operating Organisation changes. The API is
+     * still the authority — a caller without `platform.organisations.view` gets a 403 and an empty
+     * list, exactly as they did before.
+     */
+    this.organisationScope.onOrganisationChange((scope) => {
+      if (scope === null) {
+        this.discard();
+        return;
+      }
+
+      this.refresh();
+    });
+  }
+
+  /**
+   * Forgets the directory, including the stored copy.
+   *
+   * Called on sign-out rather than reloading: there is no longer anybody to load it for, and
+   * leaving the snapshot behind is what let the next person in the tab start with it.
+   */
+  private discard(): void {
+    this.records.set([]);
+    this.auditLog.set([]);
+    this.idsByCode.clear();
+    this.loadError.set(null);
+
+    try {
+      sessionStorage.removeItem(OrganisationStateService.storageKey);
+    } catch {
+      // Storage unavailable — the signals above are cleared either way.
+    }
   }
 
   private hydrateFromStorage(): void {

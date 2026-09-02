@@ -196,6 +196,13 @@ public class CampaignDbContext(
     /// EVERY HANDLER USED TO DO THIS BY HAND - <c>campaign.UpdatedAtUtc = now;</c>,
     /// <c>campaign.Version++;</c> - and any handler that forgot broke concurrency detection
     /// silently, because a version that never moves makes every ExpectedVersion check pass.
+    ///
+    /// WHERE THERE IS NO SIGNED-IN ACTOR, <c>UpdatedByUserId</c> IS LEFT NULL rather than set to
+    /// <c>Guid.Empty</c>. The background activation sweep saves outside any request, so there is
+    /// genuinely nobody to name - and an all-zero Guid in a "who changed this" column reads as a
+    /// user, which is worse than an honest blank. <c>CreatedByUserId</c> cannot be nullable, so a
+    /// row created without an actor keeps <c>Guid.Empty</c>; the sweep sets it to the system user
+    /// itself for the rows it writes.
     /// </summary>
     private void StampAuditColumns()
     {
@@ -216,7 +223,7 @@ public class CampaignDbContext(
 
                 case EntityState.Modified:
                     entry.Entity.UpdatedAtUtc = now;
-                    entry.Entity.UpdatedByUserId = actorId;
+                    entry.Entity.UpdatedByUserId = actorId == Guid.Empty ? null : actorId;
                     entry.Entity.Version += 1;
                     break;
             }

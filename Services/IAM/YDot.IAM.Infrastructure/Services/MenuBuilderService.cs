@@ -161,17 +161,24 @@ public sealed class MenuBuilderService(
     /// to the tree rather than to a hard-coded route means somebody whose roles exclude the
     /// dashboard still lands somewhere they can actually use.
     /// </summary>
-    public async Task<string?> ResolveLandingRouteAsync(CancellationToken cancellationToken)
-    {
-        var tree = await BuildForCurrentUserAsync(cancellationToken);
+    public async Task<string?> ResolveLandingRouteAsync(CancellationToken cancellationToken) =>
+        ResolveLandingRoute(await BuildForCurrentUserAsync(cancellationToken));
 
-        var landing = FindFirst(tree, node => node.IsLandingPage && !node.IsGroupOnly);
+    /// <summary>
+    /// The same rule, applied to a tree the caller has already built.
+    ///
+    /// <c>GET /navigation</c> needs the tree AND the landing route, and it used to get them by
+    /// building the tree twice. The rule lives here so the two answers cannot drift.
+    /// </summary>
+    public string? ResolveLandingRoute(IReadOnlyList<MenuNode> menu)
+    {
+        var landing = FindFirst(menu, node => node.IsLandingPage && !node.IsGroupOnly);
         if (landing is not null)
         {
             return landing.Route;
         }
 
-        return FindFirst(tree, node => !node.IsGroupOnly)?.Route;
+        return FindFirst(menu, node => !node.IsGroupOnly)?.Route;
     }
 
     /// <summary>

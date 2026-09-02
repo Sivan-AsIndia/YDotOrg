@@ -67,7 +67,9 @@ export class DashboardComponent implements AfterViewInit, OnInit {
     { title: 'Campaigns', route: '/app/fundraising/campaigns/campaign-register', icon: 'ri-megaphone-line', desc: 'Manage fundraising campaigns', color: 'info' },
     { title: 'Donors', route: '/app/fundraising/relationships/donor-360', icon: 'ri-heart-line', desc: 'View donor 360 profiles', color: 'warning' },
     { title: 'Finance', route: '/app/money/finance/finance-workbench', icon: 'ri-bank-line', desc: 'Financial workbench & reconciliations', color: 'danger' },
-    { title: 'Donations', route: '/app/donations/donation-intent-detail', icon: 'ri-hand-coin-line', desc: 'Donation intents & payments', color: 'primary' },
+    // THE DONATION-INTENT DETAIL SCREEN IS GONE, so this tile pointed at a dead route. The
+    // Payment Queue is where an operator starts in this module - it is the work list.
+    { title: 'Donations', route: '/app/donations/payment-event-queue', icon: 'ri-hand-coin-line', desc: 'Payment queue & receipts', color: 'primary' },
     { title: 'Communications', route: '/app/communications/unified-inbox', icon: 'ri-chat-3-line', desc: 'Unified inbox & templates', color: 'info' },
     { title: 'Inventory', route: '/app/supply/inventory/inventory-overview', icon: 'ri-archive-line', desc: 'Blind-stick stock & warehouses', color: 'success' },
   ]);

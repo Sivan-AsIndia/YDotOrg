@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Domain.Entities;
 using YDot.IAM.Domain.Enums;
@@ -357,6 +357,29 @@ public sealed class SecurityRepository(IamDbContext context) : ISecurityReposito
                           && device.DeviceTokenHash == deviceTokenHash
                           && device.RevokedAtUtc == null,
                 cancellationToken);
+
+    /// <summary>
+    /// The live row for a browser that presented no cookie. Filters bypassed for the same reason
+    /// as the lookup above: this runs during sign-in, before a token exists.
+    /// </summary>
+    public Task<TrustedDevice?> FindTrustedDeviceByIdentifierAsync(
+        Guid userId, string? deviceIdentifier, DateTimeOffset asOf, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(deviceIdentifier))
+        {
+            return Task.FromResult<TrustedDevice?>(null);
+        }
+
+        return context.TrustedDevices
+            .IgnoreQueryFilters()
+            .OrderByDescending(device => device.TrustedAtUtc)
+            .FirstOrDefaultAsync(
+                device => device.UserId == userId
+                          && device.DeviceIdentifier == deviceIdentifier
+                          && device.RevokedAtUtc == null
+                          && device.ExpiresAtUtc > asOf,
+                cancellationToken);
+    }
 
     public async Task AddTrustedDeviceAsync(TrustedDevice device, CancellationToken cancellationToken) =>
         await context.TrustedDevices.AddAsync(device, cancellationToken);

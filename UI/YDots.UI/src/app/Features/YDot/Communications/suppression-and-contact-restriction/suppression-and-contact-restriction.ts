@@ -27,8 +27,14 @@ export interface RestrictionRecord {
   styleUrl: './suppression-and-contact-restriction.css',
 })
 export class SuppressionAndContactRestrictionComponent {
-  // Access simulator
-  effectiveRole = 'Donor Care';
+  // Access simulator.
+  //
+  // THREE ROLES, AND ONLY THREE. The selector offered six job titles - Fundraiser, Donor Care,
+  // Assigned agent, Supervisor, Integration Operator and Authorised Administrator - and IAM has
+  // issued none of them since its catalogue was reduced to TENANT_ADMIN, INITIATOR and APPROVER.
+  // Suppressing a contact and lifting a restriction are Operate codes that follow no decision, so
+  // they belong to the maker; the checker's part here is to view.
+  effectiveRole = 'INITIATOR';
   scopeUnits: string[] = ['Donation Operations', 'Community Outreach'];
 
   // List state

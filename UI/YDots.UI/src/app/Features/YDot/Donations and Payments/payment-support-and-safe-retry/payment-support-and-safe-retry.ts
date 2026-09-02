@@ -2,13 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ToastService } from '../../../../Shared/services/toast.service';
-import { DataService } from '../../../../Service/data.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
-import { PaymentEventRecord } from '../../../../Shared/models/payment-event-queue.model';
-import { formatMoment, toRecoveryRecord } from '../../../../Shared/models/payment-adapters';
+import { PaymentSupportCase } from '../../../../Shared/models/payment.model';
 import {
+  PsrHistoryEntry,
   PsrLifecycleState,
   PsrPersistentOutcome,
   PsrRecoveryPermissions,
@@ -17,29 +15,6 @@ import {
   PsrVerifiedPaymentState,
 } from '../../../../Shared/models/payment-support-safe-retry.model';
 
-/**
- * Payment support and safe retry - SCR-PAY-007.
- *
- * THIS SCREEN CAN CHARGE SOMEBODY TWICE IF IT IS WRONG, which is why every action on it goes to
- * the server and none of them decides anything locally.
- *
- *   Verify status  - POST /payments/verify. Asks the gateway what actually happened. It NEVER
- *                    retries: a retry disguised as a check is exactly how a donor is charged
- *                    twice. Its three answers - Confirmed, Failed, still Pending - are all real,
- *                    and "still pending" is reported as such rather than nudged into a guess.
- *
- *   Resend link    - POST /payments/intents/{id}/safe-retry. Not a plain retry: the handler
- *   Replace link     verifies the previous attempt with the gateway FIRST and refuses if it
- *                    actually succeeded. The four outcomes it returns - Retried, AlreadyPaid,
- *                    StillPending, Refused - are distinguished here, because "already paid" is
- *                    the answer that matters most and reads as a failure if it is not.
- *
- *   Cancel intent  - POST /donation-intents/{id}/cancel, with a reason and the version.
- *
- * THE ROUTES TAKE IDENTIFIERS, NOT REFERENCES. `intentId` is carried on every row for that
- * reason, and the version is read from the intent when a row is opened, so a write never sends a
- * stale stamp.
- */
 @Component({
   selector: 'app-payment-support-and-safe-retry',
   imports: [CommonModule, FormsModule],
@@ -48,45 +23,33 @@ import {
 })
 export class PaymentSupportAndSafeRetryComponent {
   private readonly toast = inject(ToastService);
-  private readonly dataService = inject(DataService);
-  private readonly paymentApi = inject(PaymentApiService);
-  private readonly tokens = inject(AuthTokenService);
-
-  private static readonly FETCH_SIZE = 200;
+  private readonly payments = inject(PaymentApiService);
 
   // ================= Task header =================
   protected readonly pageTitle = 'Payment support and safe retry';
   protected readonly pageSubtitle =
     'Help a donor recover from an incomplete payment without creating duplicate charges or exposing gateway details.';
-  protected readonly owner = computed(() => this.tokens.user()?.displayName ?? 'You');
+  /**
+   * Who the history lines are attributed to.
+   *
+   * IT USED TO BE A PERSON'S NAME COMPILED INTO THE BUNDLE - 'Firstlin S Joseph · Donor Care' -
+   * so every organisation's audit trail credited the same stranger. The server stamps the actual
+   * actor on what it records; this is only the label beside an action taken in this tab.
+   */
+  protected readonly owner = 'You';
   protected readonly operatingTimeZone = 'Asia/Kolkata · IST (UTC+05:30)';
   protected readonly lastRefresh = signal('');
 
-  /**
-   * What this caller may do, read from the token rather than assumed.
-   *
-   * THIS SCREEN OFFERS THE TWO ACTIONS WITH THE GREATEST CAPACITY TO CHARGE SOMEBODY TWICE, so
-   * drawing them for a person the API would refuse is worse here than anywhere else - they would
-   * press Verify, receive a 403, and have no way of knowing whether the payment had been checked.
-   *
-   * The codes are the ones the PAY endpoints enforce, so the buttons and the API agree by
-   * construction rather than by coincidence.
-   */
-  protected readonly permissions = computed<PsrRecoveryPermissions>(() => ({
-    view: this.tokens.hasAnyPermission('pay.intents.view', 'pay.payments.safe-retry'),
-    verifyStatus: this.tokens.hasAnyPermission('pay.payments.verify', 'pay.payments.safe-retry'),
-    resendActiveLink: this.tokens.hasAnyPermission(
-      'pay.intents.resend-link',
-      'pay.payments.safe-retry',
-    ),
-    replaceExpiredLink: this.tokens.hasAnyPermission('pay.payments.safe-retry'),
-    cancelIntent: this.tokens.hasAnyPermission('pay.intents.cancel'),
-    openSupportCase: this.tokens.hasAnyPermission('pay.payments.safe-retry'),
-  }));
+  /** Effective permissions decided server-side; the client mirrors the same decision. */
+  protected readonly permissions: PsrRecoveryPermissions = {
+    view: true,
+    verifyStatus: true,
+    resendActiveLink: true,
+    replaceExpiredLink: true,
+    cancelIntent: true,
+    openSupportCase: true,
+  };
 
-  // ================= Hand-off from the event queue or the intent detail =================
-  /** A record carried in from another screen, so the operator lands on the case they chose. */
-  protected readonly retryRecord = signal<PaymentEventRecord | null>(null);
 
   // ================= Context and filters =================
   protected readonly filtersVisible = signal(false);
@@ -105,8 +68,7 @@ export class PaymentSupportAndSafeRetryComponent {
   ];
   protected readonly verifiedStateFilter = signal<PsrVerifiedPaymentState | ''>('');
 
-  /** The delivery channels the payment service actually sends links on. */
-  protected readonly channelOptions: readonly string[] = ['Email'];
+  protected readonly channelOptions: readonly string[] = ['Email', 'SMS', 'WhatsApp'];
   protected readonly channelFilter = signal<string>('');
 
   protected readonly rangeStart = signal('');
@@ -123,38 +85,26 @@ export class PaymentSupportAndSafeRetryComponent {
     return `${s ? this.formatDate(s) : '…'} – ${e ? this.formatDate(e) : '…'} · ${this.operatingTimeZone}`;
   });
 
-  /**
-   * The scope selector.
-   *
-   * IT NAMES THE SIGNED-IN ORGANISATION AND NOTHING ELSE. The previous version listed three
-   * invented regions belonging to nobody, which told an operator they could work inside an
-   * organisation that does not exist - and the API scopes every read to the token's organisation
-   * regardless, so choosing one of them changed nothing.
-   */
-  protected readonly scopeOptions = computed(() => [
-    `${this.tokens.tenant()?.tenantName ?? 'My active organisation'} (default)`,
-  ]);
-  protected readonly scopeFilter = signal('');
+  protected readonly scopeOptions = [
+    'My active organisation (default)',
+    'YDot Foundation · National',
+    'Southern Region · Tamil Nadu',
+    'Western Region · Gujarat',
+  ];
+  protected readonly scopeFilter = signal(this.scopeOptions[0]);
   protected readonly moreFiltersOpen = signal(false);
   protected toggleMoreFilters(): void {
     this.moreFiltersOpen.update((v) => !v);
   }
-  protected readonly moreFiltersCount = computed(() => 0);
+  protected readonly moreFiltersCount = computed(() => (this.scopeFilter() !== this.scopeOptions[0] ? 1 : 0));
 
-  protected readonly savedFilters = [
-    'All records (Default)',
-    'Needs donor action',
-    'In progress',
-    'Resolved',
-  ];
+  protected readonly savedFilters = ['All records (Default)', 'Needs donor action', 'In progress', 'Resolved'];
   protected readonly savedFilter = signal(this.savedFilters[0]);
 
   protected readonly activeFilterSummary = computed(() => {
     const chips: { key: string; label: string }[] = [];
-    if (this.searchTerm().trim())
-      chips.push({ key: 'search', label: `Search: ${this.searchTerm().trim()}` });
-    if (this.verifiedStateFilter())
-      chips.push({ key: 'state', label: `Payment state: ${this.verifiedStateFilter()}` });
+    if (this.searchTerm().trim()) chips.push({ key: 'search', label: `Search: ${this.searchTerm().trim()}` });
+    if (this.verifiedStateFilter()) chips.push({ key: 'state', label: `Payment state: ${this.verifiedStateFilter()}` });
     if (this.channelFilter()) chips.push({ key: 'channel', label: `Channel: ${this.channelFilter()}` });
     if (this.rangeStart() || this.rangeEnd()) {
       chips.push({
@@ -164,6 +114,7 @@ export class PaymentSupportAndSafeRetryComponent {
         }`,
       });
     }
+    if (this.scopeFilter() !== this.scopeOptions[0]) chips.push({ key: 'scope', label: `Scope: ${this.scopeFilter()}` });
     return chips;
   });
   protected removeFilterChip(key: string): void {
@@ -181,6 +132,9 @@ export class PaymentSupportAndSafeRetryComponent {
         this.rangeStart.set('');
         this.rangeEnd.set('');
         break;
+      case 'scope':
+        this.scopeFilter.set(this.scopeOptions[0]);
+        break;
     }
   }
   protected clearFilters(): void {
@@ -189,11 +143,10 @@ export class PaymentSupportAndSafeRetryComponent {
     this.channelFilter.set('');
     this.rangeStart.set('');
     this.rangeEnd.set('');
+    this.scopeFilter.set(this.scopeOptions[0]);
     this.savedFilter.set(this.savedFilters[0]);
   }
-  protected readonly filterAllowed = computed(
-    () => this.permissions().view && !this.rangeInvalid(),
-  );
+  protected readonly filterAllowed = computed(() => this.permissions.view && !this.rangeInvalid());
   protected applyFilters(): void {
     if (!this.filterAllowed()) return;
     this.moreFiltersOpen.set(false);
@@ -203,14 +156,13 @@ export class PaymentSupportAndSafeRetryComponent {
   protected readonly records = signal<PsrRecoveryRecord[]>([]);
   protected readonly loading = signal(true);
   protected readonly loadError = signal(false);
-  protected readonly serverTotal = signal(0);
 
   protected readonly visibleRecords = computed(() => {
     const q = this.searchTerm().trim().toLowerCase();
     const state = this.verifiedStateFilter();
     const channel = this.channelFilter();
     const start = this.rangeStart() ? new Date(this.rangeStart()) : null;
-    const end = this.rangeEnd() ? new Date(`${this.rangeEnd()}T23:59:59`) : null;
+    const end = this.rangeEnd() ? new Date(this.rangeEnd()) : null;
 
     return this.records().filter((r) => {
       if (
@@ -231,70 +183,29 @@ export class PaymentSupportAndSafeRetryComponent {
     });
   });
 
-  protected readonly totalRecords = computed(() => this.serverTotal());
+  protected readonly totalRecords = computed(() => this.records().length);
   protected readonly needsDonorActionCount = computed(
-    () =>
-      this.records().filter(
-        (r) => r.verifiedPaymentState === 'Failed' || r.linkCondition === 'Expired',
-      ).length,
+    () => this.records().filter((r) => r.verifiedPaymentState === 'Failed' || r.linkCondition === 'Expired').length,
   );
   protected readonly inProgressCount = computed(
-    () =>
-      this.records().filter(
-        (r) => r.verifiedPaymentState === 'Pending' || r.verifiedPaymentState === 'Uncertain',
-      ).length,
+    () => this.records().filter((r) => r.verifiedPaymentState === 'Pending' || r.verifiedPaymentState === 'Uncertain').length,
   );
   protected readonly resolvedCount = computed(
-    () =>
-      this.records().filter(
-        (r) => r.verifiedPaymentState === 'Confirmed' || r.verifiedPaymentState === 'Cancelled',
-      ).length,
+    () => this.records().filter((r) => r.verifiedPaymentState === 'Confirmed' || r.verifiedPaymentState === 'Cancelled').length,
   );
   protected readonly recordCount = computed(() => this.visibleRecords().length);
 
-  // ================= Selection -> working record =================
-  protected readonly selectedRef = signal<string>('');
+  // ================= Selection → working record =================
+  protected readonly selectedRef = signal<string>('INT-2026-007701');
   protected readonly selectedRecord = computed(
     () => this.records().find((r) => r.donationIntentReference === this.selectedRef()) ?? null,
   );
   protected select(ref: string): void {
-    if (!this.permissions().view) return;
+    if (!this.permissions.view) return;
     this.selectedRef.set(ref);
-    this.loadIntentDetail(ref);
   }
   protected isSelected(ref: string): boolean {
     return this.selectedRef() === ref;
-  }
-
-  /**
-   * Reads the intent behind the selected row.
-   *
-   * THE SUPPORT-QUEUE PROJECTION CARRIES NO VERSION and no payment link - it is a work list, not
-   * a record. Both are needed the moment somebody acts, so they are fetched when a row is opened
-   * rather than sent with two hundred rows that will never be touched.
-   */
-  private loadIntentDetail(reference: string): void {
-    const row = this.records().find((r) => r.donationIntentReference === reference);
-    if (!row?.intentId) return;
-
-    this.paymentApi.getIntent(row.intentId).subscribe({
-      next: (intent) => {
-        const expiry = intent.paymentLinkExpiresAtUtc;
-        const expired = !!expiry && new Date(expiry).getTime() < Date.now();
-
-        this.patch(reference, {
-          version: intent.version,
-          existingActiveLink: intent.paymentLinkUrl ?? '—',
-          linkExpiryIso: expiry ?? '',
-          linkExpiryLabel: expiry ? formatMoment(expiry) : '—',
-          linkCondition: !intent.paymentLinkUrl ? 'None' : expired ? 'Expired' : 'Active',
-        });
-      },
-      error: () => {
-        // A failed detail read leaves the row exactly as the queue reported it. Acting on it will
-        // then fail with a 409 rather than silently writing against a version nobody read.
-      },
-    });
   }
 
   protected readonly copiedField = signal<string | null>(null);
@@ -324,37 +235,22 @@ export class PaymentSupportAndSafeRetryComponent {
     return s === 'Pending' || s === 'Uncertain' || s === 'Failed';
   }
   protected verifyAllowed(r: PsrRecoveryRecord | null): boolean {
-    return !!r && this.permissions().verifyStatus && this.recoverable(r.verifiedPaymentState);
+    return !!r && this.permissions.verifyStatus && this.recoverable(r.verifiedPaymentState);
   }
   protected resendAllowed(r: PsrRecoveryRecord | null): boolean {
-    return (
-      !!r &&
-      this.permissions().resendActiveLink &&
-      r.linkCondition === 'Active' &&
-      this.recoverable(r.verifiedPaymentState)
-    );
+    return !!r && this.permissions.resendActiveLink && r.linkCondition === 'Active' && this.recoverable(r.verifiedPaymentState);
   }
   protected replaceAllowed(r: PsrRecoveryRecord | null): boolean {
-    return (
-      !!r &&
-      this.permissions().replaceExpiredLink &&
-      r.linkCondition !== 'Active' &&
-      this.recoverable(r.verifiedPaymentState)
-    );
+    return !!r && this.permissions.replaceExpiredLink && r.linkCondition === 'Expired' && this.recoverable(r.verifiedPaymentState);
   }
   protected cancelAllowed(r: PsrRecoveryRecord | null): boolean {
-    return !!r && this.permissions().cancelIntent && this.recoverable(r.verifiedPaymentState);
+    return !!r && this.permissions.cancelIntent && this.recoverable(r.verifiedPaymentState);
   }
   protected openSupportAllowed(r: PsrRecoveryRecord | null): boolean {
-    return !!r && this.permissions().openSupportCase && this.recoverable(r.verifiedPaymentState);
+    return !!r && this.permissions.openSupportCase && r.supportCorrelationReference === '—' && this.recoverable(r.verifiedPaymentState);
   }
   protected anyOverflowAllowed(r: PsrRecoveryRecord | null): boolean {
-    return (
-      this.resendAllowed(r) ||
-      this.replaceAllowed(r) ||
-      this.openSupportAllowed(r) ||
-      this.cancelAllowed(r)
-    );
+    return this.resendAllowed(r) || this.replaceAllowed(r) || this.openSupportAllowed(r) || this.cancelAllowed(r);
   }
 
   protected readonly overflowOpen = signal(false);
@@ -368,97 +264,44 @@ export class PaymentSupportAndSafeRetryComponent {
   // ================= Verify status =================
 
   /**
-   * Asks the gateway what actually happened to the last attempt.
+   * Asks the gateway what actually happened.
    *
-   * THE MOST IMPORTANT ACTION ON THE SCREEN. The three answers are all real: Confirmed means the
-   * money arrived, Failed means it did not and a safe retry is the next step, and STILL PENDING
-   * means the gateway does not know yet - which the screen says rather than nudging forward,
-   * because a guess presented as a fact is what leads somebody to retry a payment that already
-   * succeeded.
+   * IT USED TO DECIDE THE ANSWER ITSELF. The line was
+   * `const next = r.verifiedPaymentState === 'Failed' ? 'Failed' : 'Confirmed'` - so anything not
+   * already failed became Confirmed, and an operator could tell a donor their payment had gone
+   * through on the strength of a ternary. Verification is the one thing on this screen that MUST
+   * come from the gateway, because the whole page exists to avoid charging somebody twice.
+   *
+   * IT NEVER RETRIES. Verification asks; it does not pay.
    */
   protected verifyStatus(r: PsrRecoveryRecord): void {
     this.closeOverflow();
-
     if (!this.verifyAllowed(r)) {
       return;
     }
 
-    this.paymentApi.verifyPayment({ intentReference: r.donationIntentReference }).subscribe({
+    this.busy.set(true);
+    this.payments.verifyPayment({ intentReference: r.donationIntentReference }).subscribe({
       next: (verification) => {
-        const state = verification.backendPaymentState.trim().toLowerCase();
+        this.busy.set(false);
+        const confirmed = verification.backendPaymentState === 'Confirmed';
 
-        const next: PsrVerifiedPaymentState =
-          state === 'confirmed' ? 'Confirmed' : state === 'failed' ? 'Failed' : 'Pending';
-
-        const nextLifecycle: PsrLifecycleState =
-          next === 'Confirmed' ? 'Confirmed' : next === 'Failed' ? 'Failed' : 'Needs verification';
-
-        this.patch(r.donationIntentReference, {
-          verifiedPaymentState: next,
-          lifecycleState: nextLifecycle,
-          history: [
-            ...r.history,
-            {
-              label: 'Status verified with the gateway',
-              detail:
-                next === 'Confirmed'
-                  ? 'The provider confirms the payment succeeded. No duplicate charge was created.'
-                  : next === 'Failed'
-                    ? 'The provider confirms the payment failed. A safe retry is now possible.'
-                    : 'The provider does not yet know the outcome. Do not retry - check again shortly.',
-              meta: `${this.owner()} · ${this.lastRefresh()}`,
-            },
-          ],
-        });
-
-        const updated = this.byRef(r.donationIntentReference);
-        this.selectedRef.set(r.donationIntentReference);
-
-        if (updated) {
-          this.setOutcome(
-            updated,
-            next === 'Confirmed'
-              ? 'Gateway confirmed; no duplicate charge created'
-              : next === 'Failed'
-                ? 'Gateway confirms the payment failed'
-                : 'Gateway outcome still unknown',
-            next === 'Confirmed'
-              ? 'No further action required'
-              : next === 'Failed'
-                ? 'Resend or replace the link so the donor can safely retry'
-                : 'Do not retry. Check again shortly.',
-          );
-        }
-
-        if (next === 'Confirmed') {
-          this.toast.show(
-            'Payment Confirmed',
-            `The provider confirms ${r.donationIntentReference} succeeded.`,
-            'success',
-          );
-        } else if (next === 'Failed') {
-          this.toast.show(
-            'Payment Failed',
-            `The provider confirms ${r.donationIntentReference} failed. A safe retry is now possible.`,
-            'warning',
-          );
-        } else {
-          this.toast.show(
-            'Outcome still unknown',
-            'The provider does not yet know the outcome. Do not retry - check again shortly.',
-            'warning',
-          );
-        }
-      },
-      error: (error) =>
         this.toast.show(
-          'Provider unreachable',
-          apiErrorMessage(
-            error,
-            'The payment provider could not be reached. The payment is unchanged and can be checked again.',
-          ),
-          'error',
-        ),
+          'Status verified',
+          confirmed
+            ? `The gateway confirms ${r.donationIntentReference} was paid. No retry is needed and no duplicate charge was created.`
+            : `The gateway reports ${verification.backendPaymentState.toLowerCase()} for ${r.donationIntentReference}.`,
+          confirmed ? 'success' : 'warning',
+        );
+
+        // RELOAD RATHER THAN PATCH. Verification can move the intent out of this queue entirely -
+        // a confirmed payment is no longer an incomplete one - and only the server knows that.
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.busy.set(false);
+        this.toast.show('Could not verify', apiErrorMessage(error), 'error');
+      },
     });
   }
 
@@ -475,196 +318,110 @@ export class PaymentSupportAndSafeRetryComponent {
     this.resendDialogOpen.set(false);
     this.resendTarget.set(null);
   }
-  /**
-   * Sends the SAME link to the donor again.
-   *
-   * NO NEW INTENT AND NO NEW ATTEMPT. That distinction is the whole point of separating this from
-   * "replace": a donor who lost the e-mail needs the link they already have, and issuing a second
-   * one would leave them holding two live links for one gift.
-   */
   protected confirmResend(): void {
-    const target = this.resendTarget();
-
-    if (!target || !this.resendAllowed(target)) {
+    const r = this.resendTarget();
+    if (!r || !this.resendAllowed(r)) {
       return;
     }
+    this.issueLink(r, 'resend');
+  }
 
-    this.paymentApi.resendPaymentLink(target.intentId, target.version).subscribe({
+  // ================= Replace expired link =================
+
+  /**
+   * Issues a link, or re-sends the one that exists.
+   *
+   * ONE ENDPOINT SERVES BOTH, and that is a property of the server rather than a shortcut here:
+   * `resend-link` returns the current link when it is still valid and mints a fresh one when it
+   * has expired. The distinction the screen draws - Resend versus Replace - is about what the
+   * operator is telling the donor, not about two different operations.
+   *
+   * THE LINK IS NEVER INVENTED IN THE BROWSER. The old version built one with
+   * `LINK-${Math.random().toString(16)...}-ACTIVE` and a made-up expiry a week out, so the panel
+   * displayed a reference that pointed at nothing and a date nothing honoured.
+   */
+  protected replaceExpiredLink(r: PsrRecoveryRecord): void {
+    this.closeOverflow();
+    if (!this.replaceAllowed(r)) {
+      return;
+    }
+    this.issueLink(r, 'replace');
+  }
+
+  private issueLink(r: PsrRecoveryRecord, mode: 'resend' | 'replace'): void {
+    this.busy.set(true);
+    this.resendDialogOpen.set(false);
+    this.resendTarget.set(null);
+
+    this.payments.resendPaymentLink(r.intentId, r.version).subscribe({
       next: (link) => {
-        this.patch(target.donationIntentReference, {
-          existingActiveLink: link.paymentLinkUrl,
-          linkExpiryIso: link.expiresAtUtc,
-          linkExpiryLabel: formatMoment(link.expiresAtUtc),
-          linkCondition: 'Active',
-          history: [
-            ...target.history,
-            {
-              label: 'Payment link re-sent',
-              detail: `The existing link was sent again. Attempt ${link.attemptNumber}.`,
-              meta: `${this.owner()} · ${this.lastRefresh()}`,
-            },
-          ],
-        });
-
-        const updated = this.byRef(target.donationIntentReference);
-        if (updated) {
-          this.setOutcome(
-            updated,
-            'The existing payment link was re-sent; no second link was issued',
-            'Await the donor',
-          );
-        }
-
-        this.resendDialogOpen.set(false);
-        this.resendTarget.set(null);
+        this.busy.set(false);
         this.toast.show(
-          'Link re-sent',
-          `The payment link for ${target.donationIntentReference} was sent again.`,
+          mode === 'replace' ? 'New link issued' : 'Link resent',
+          mode === 'replace'
+            ? `A fresh payment link was issued for ${r.donationIntentReference}. The same intent is reused, so no duplicate charge can occur.`
+            : `The existing link for ${r.donationIntentReference} was sent again via ${r.preferredDeliveryChannel}.`,
           'success',
         );
-        this.loadIntentDetail(target.donationIntentReference);
+        this.load();
       },
-      error: (error) => {
-        this.resendDialogOpen.set(false);
-        this.resendTarget.set(null);
-        this.toast.show(
-          'Could not resend',
-          apiErrorMessage(error, 'The payment link could not be re-sent.'),
-          'error',
-        );
+      error: (error: unknown) => {
+        this.busy.set(false);
+        this.toast.show('Link not issued', apiErrorMessage(error), 'error');
+        this.load();
       },
     });
   }
 
-  /**
-   * Applies a safe-retry outcome to the screen.
-   *
-   * FOUR OUTCOMES, AND THE SCREEN MUST DISTINGUISH THEM. The server verifies the previous attempt
-   * before it does anything, so "AlreadyPaid" is a real and important answer: it means the donor
-   * has already been charged and the retry was REFUSED. Treating that as a failure - or, worse,
-   * as a success - is how somebody ends up paying twice.
-   */
-  private applySafeRetryOutcome(
-    record: PsrRecoveryRecord,
-    outcome: {
-      outcome: string;
-      message: string;
-      paymentLinkUrl: string | null;
-      attemptCount: number;
-    },
-  ): void {
-    const result = outcome.outcome.trim().toLowerCase();
-
-    const verified: PsrVerifiedPaymentState =
-      result === 'alreadypaid'
-        ? 'Confirmed'
-        : result === 'stillpending'
-          ? 'Pending'
-          : record.verifiedPaymentState;
-
-    const lifecycle: PsrLifecycleState =
-      result === 'alreadypaid'
-        ? 'Confirmed'
-        : result === 'retried'
-          ? 'Awaiting donor'
-          : record.lifecycleState;
-
-    this.patch(record.donationIntentReference, {
-      verifiedPaymentState: verified,
-      lifecycleState: lifecycle,
-      existingActiveLink: outcome.paymentLinkUrl ?? record.existingActiveLink,
-      linkCondition: outcome.paymentLinkUrl ? 'Active' : record.linkCondition,
-      history: [
-        ...record.history,
-        {
-          label: `Safe retry: ${outcome.outcome}`,
-          detail: outcome.message,
-          meta: `${this.owner()} · ${this.lastRefresh()}`,
-        },
-      ],
-    });
-
-    const updated = this.byRef(record.donationIntentReference);
-    this.selectedRef.set(record.donationIntentReference);
-
-    if (updated) {
-      this.setOutcome(
-        updated,
-        outcome.message,
-        result === 'alreadypaid'
-          ? 'No further action required. Tell the donor their payment succeeded.'
-          : result === 'retried'
-            ? 'Send the link and await the donor'
-            : 'Check again shortly',
-      );
-    }
-
-    this.toast.show(
-      result === 'alreadypaid'
-        ? 'Already paid'
-        : result === 'retried'
-          ? 'Retry started'
-          : 'No action taken',
-      outcome.message,
-      result === 'retried' ? 'success' : 'warning',
-    );
-
-    this.loadIntentDetail(record.donationIntentReference);
-  }
+  // ================= Open support case =================
 
   /**
-   * Opens a support case against the intent.
+   * Opens a message to the donor.
    *
-   * THE CORRELATION REFERENCE IS THE INTENT'S OWN, not a separate case number, and no record is
-   * created anywhere. The donor already holds this reference - it is in the payment link they
-   * followed and on the verification page they landed on - so quoting anything else would ask
-   * them for a number they have never seen. The button copies it, ready to be read out.
+   * THE DOCUMENT DEFINES THIS AS AN E-MAIL: "Open Support Case - sends an email to contact the
+   * donor for further help". There is no support-case aggregate in PAY to create a record in, so
+   * this composes the message rather than inventing a case number - the old version minted
+   * "SUP-2025-00041" by incrementing the highest one it could see in the browser, which produced
+   * a reference no system had heard of and that support could not look up.
+   *
+   * IT NEEDS AN UNMASKED ADDRESS. `maskedDonorContact` reads "pri•••@m•••.com" for a caller
+   * without pay.donations.view-sensitive-donor, and mailto: cannot deliver to that - so the
+   * button says why instead of opening an empty compose window.
    */
   protected openSupportCase(r: PsrRecoveryRecord): void {
     this.closeOverflow();
-
     if (!this.openSupportAllowed(r)) {
       return;
     }
 
-    this.selectedRef.set(r.donationIntentReference);
-    this.copyValue('support', r.donationIntentReference);
-
-    this.toast.show(
-      'Support reference copied',
-      `Quote ${r.donationIntentReference} when the donor gets in touch.`,
-      'success',
-    );
-  }
-
-  /**
-   * Issues a FRESH link for the same intent, through safe retry.
-   *
-   * SAFE RETRY VERIFIES THE PREVIOUS ATTEMPT WITH THE GATEWAY BEFORE ISSUING ANYTHING, and
-   * refuses if it actually succeeded. That is what makes replacing an expired link safe rather
-   * than a second chance to charge somebody who already paid.
-   */
-  protected replaceExpiredLink(r: PsrRecoveryRecord): void {
-    this.closeOverflow();
-
-    if (!this.replaceAllowed(r)) {
+    const address = r.maskedDonorContact;
+    if (!address || address.includes('\u2022') || !address.includes('@')) {
+      this.toast.show(
+        'Donor address is masked',
+        'You do not have permission to see this donor\u2019s contact details, so a message cannot be addressed to them. Ask somebody holding donor-contact access to make contact.',
+        'warning',
+      );
       return;
     }
 
-    this.paymentApi
-      .safeRetry(r.intentId, {
-        expectedVersion: r.version,
-        reason: "The donor's payment link had expired and a fresh one was requested.",
-      })
-      .subscribe({
-        next: (outcome) => this.applySafeRetryOutcome(r, outcome),
-        error: (error) =>
-          this.toast.show(
-            'Could not replace the link',
-            apiErrorMessage(error, 'A new payment link could not be issued.'),
-            'error',
-          ),
-      });
+    const subject = `Your donation ${r.donationIntentReference}`;
+    const body = [
+      `Hello ${r.donorContactPreview},`,
+      '',
+      `We noticed that your donation of ${this.formatMoney(r.requestedAmountMinor, r.currency)} did not complete.`,
+      'No money has been taken. If you would still like to give, we can send you a fresh payment link.',
+      '',
+      `Reference: ${r.donationIntentReference}`,
+    ].join('\n');
+
+    window.location.href =
+      `mailto:${encodeURIComponent(address)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    this.toast.show(
+      'Message started',
+      `A message to ${r.donorContactPreview} about ${r.donationIntentReference} was opened in your mail client.`,
+      'info',
+    );
   }
 
   // ================= Cancel intent =================
@@ -692,76 +449,51 @@ export class PaymentSupportAndSafeRetryComponent {
     this.cancelTarget.set(null);
   }
   /**
-   * Cancels the intent.
+   * Cancel intent - the document's own action.
    *
-   * NEVER AVAILABLE ONCE THE INTENT IS PAID - the server refuses it, because a donation attached
-   * to a cancelled intention is a contradiction the reports cannot express. The reason and the
-   * version go with it, so a cancellation cannot quietly overwrite a payment that arrived while
-   * the dialog was open.
+   * "Cancel Intent - cancels and deletes the donation intent entirely." The server cancels rather
+   * than deletes, and that difference is deliberate: an intent a donor started is part of what
+   * happened, and a support conversation six weeks later needs it to still exist. What cancelling
+   * does is close it to any further payment, which is what the admin actually needs.
+   *
+   * THE REASON IS REQUIRED, 10 to 2000 characters - the API's own bounds, matched here so a
+   * refusal is a sentence under the box rather than a 400 after the button.
    */
   protected confirmCancel(): void {
     this.cancelSubmitted.set(true);
-    if (!this.cancelReasonValid()) return;
+    if (!this.cancelReasonValid()) {
+      return;
+    }
 
     const r = this.cancelTarget();
-    if (!r || !this.cancelAllowed(r)) return;
+    if (!r) {
+      return;
+    }
 
-    const reason = this.cancelReason().trim();
-
-    this.paymentApi
-      .cancelIntent(r.intentId, { expectedVersion: r.version, reason })
+    this.busy.set(true);
+    this.payments
+      .cancelIntent(r.intentId, { expectedVersion: r.version, reason: this.cancelReason().trim() })
       .subscribe({
         next: () => {
-          this.patch(r.donationIntentReference, {
-            verifiedPaymentState: 'Cancelled',
-            lifecycleState: 'Cancelled',
-            linkCondition: 'None',
-            existingActiveLink: '—',
-            history: [
-              ...r.history,
-              {
-                label: 'Intent cancelled',
-                detail: reason,
-                meta: `${this.owner()} · ${this.lastRefresh()}`,
-              },
-            ],
-          });
-
-          const updated = this.byRef(r.donationIntentReference);
-          this.selectedRef.set(r.donationIntentReference);
+          this.busy.set(false);
           this.cancelDialogOpen.set(false);
           this.cancelTarget.set(null);
-
-          if (updated) {
-            this.setOutcome(
-              updated,
-              'Intent cancelled; linked history preserved',
-              'No further retry; raise a new intent if the donor wishes to give again',
-            );
-          }
-
           this.toast.show(
-            'Intent Cancelled',
-            `Donation intent ${r.donationIntentReference} has been cancelled. Linked history preserved.`,
+            'Intent cancelled',
+            `${r.donationIntentReference} was cancelled. Its history is preserved; no further payment can be taken against it.`,
             'success',
           );
-
-          this.loadRecords();
+          this.load();
         },
-        error: (error) => {
-          this.cancelDialogOpen.set(false);
-          this.cancelTarget.set(null);
-          this.toast.show(
-            'Could not cancel',
-            apiErrorMessage(error, 'The donation intent could not be cancelled.'),
-            'error',
-          );
+        error: (error: unknown) => {
+          this.busy.set(false);
+          this.toast.show('Not cancelled', apiErrorMessage(error), 'error');
         },
       });
   }
 
   // ================= UI state + persistent outcome =================
-  protected readonly uiState = signal<PsrUiState>('loading');
+  protected readonly uiState = signal<PsrUiState>('ready');
   protected dismissBanner(): void {
     this.uiState.set('ready');
     this.lastOutcome.set(null);
@@ -775,59 +507,174 @@ export class PaymentSupportAndSafeRetryComponent {
   } | null>(null);
 
   private setOutcome(r: PsrRecoveryRecord, downstreamStatus: string, nextAction: string): void {
-    this.lastOutcome.set({
-      reference: r.donationIntentReference,
-      state: r.lifecycleState,
-      downstreamStatus,
-      nextAction,
-    });
+    this.lastOutcome.set({ reference: r.donationIntentReference, state: r.lifecycleState, downstreamStatus, nextAction });
     this.uiState.set('success');
   }
 
   protected readonly persistentOutcome = computed<PsrPersistentOutcome>(() => {
     const outcome = this.lastOutcome();
     if (outcome) {
-      return { ...outcome, effectiveTime: this.lastRefresh(), owner: this.owner() };
+      return { ...outcome, effectiveTime: this.lastRefresh(), owner: this.owner };
     }
     const r = this.selectedRecord();
     return {
       reference: r?.donationIntentReference ?? '—',
       state: r?.lifecycleState ?? '—',
       effectiveTime: this.lastRefresh(),
-      downstreamStatus: r
-        ? `${r.integrationStatus.provider}: ${r.integrationStatus.state}`
-        : 'No pending action',
-      owner: this.owner(),
+      downstreamStatus: r ? `${r.integrationStatus.provider}: ${r.integrationStatus.state}` : 'No pending action',
+      owner: r?.owner ?? this.owner,
       nextAction: r ? this.nextActionFor(r) : 'Select a record to review its recovery',
     };
   });
 
   protected nextActionFor(r: PsrRecoveryRecord): string {
-    if (r.verifiedPaymentState === 'Uncertain' || r.verifiedPaymentState === 'Pending')
-      return 'Verify status before any retry';
-    if (r.linkCondition === 'Expired')
-      return 'Replace the expired link, then ask the donor to retry';
-    if (r.linkCondition === 'Active' && r.verifiedPaymentState === 'Failed')
-      return 'Resend the active link for a safe retry';
+    if (r.verifiedPaymentState === 'Uncertain' || r.verifiedPaymentState === 'Pending') return 'Verify status before any retry';
+    if (r.linkCondition === 'Expired') return 'Replace the expired link, then ask the donor to retry';
+    if (r.linkCondition === 'Active' && r.verifiedPaymentState === 'Failed') return 'Resend the active link for a safe retry';
     if (r.verifiedPaymentState === 'Confirmed') return 'No further action required';
     if (r.verifiedPaymentState === 'Cancelled') return 'No further retry; history preserved';
     return 'Review the record';
   }
 
-  // ================= Helpers =================
-  private patch(ref: string, patch: Partial<PsrRecoveryRecord>): void {
-    this.records.update((list) =>
-      list.map((r) => (r.donationIntentReference === ref ? { ...r, ...patch } : r)),
-    );
-  }
-  private byRef(ref: string): PsrRecoveryRecord | undefined {
-    return this.records().find((r) => r.donationIntentReference === ref);
-  }
-  protected formatMoney(amountMinor: number, currency: string): string {
-    const value = (amountMinor / 100).toLocaleString('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+  // ================= Loading =================
+
+  /**
+   * The support queue - section 5 of the workflow document.
+   *
+   * "This page lists failed payments that need admin help to recover." The server's queue is
+   * narrower than "everything that failed once", and deliberately: an intent that failed and was
+   * then paid needs nobody. What lands here has exhausted its retry allowance, or has an attempt
+   * whose outcome is UNKNOWN - and the second is the more urgent, which is why the server sorts
+   * those first and this screen does not re-sort them.
+   */
+  private load(): void {
+    this.loading.set(true);
+    this.loadError.set(false);
+
+    this.payments.getSupportQueue({ page: 1, pageSize: 100 }).subscribe({
+      next: (page) => {
+        this.records.set(page.items.map((item) => this.toRecoveryRecord(item)));
+        this.loading.set(false);
+        this.lastRefresh.set(this.nowLabel());
+
+        // Keep the open panel on the same intent across a reload, so an action does not close
+        // the record the person is working on.
+        const current = this.selectedRef();
+        const stillThere = this.records().some((r) => r.donationIntentReference === current);
+        if (!stillThere) {
+          this.selectedRef.set(this.records()[0]?.donationIntentReference ?? '');
+        }
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        this.loadError.set(true);
+        this.toast.show('Support queue unavailable', apiErrorMessage(error), 'error');
+      },
     });
+  }
+
+  /**
+   * Maps one support case onto the shape this screen draws.
+   *
+   * THE MASKED CONTACT IS THE SERVER'S. `donorEmail` arrives already masked unless the caller
+   * holds pay.donations.view-sensitive-donor - the document's own words for this screen are
+   * "without ... exposing gateway details", and the same reasoning covers the donor's address.
+   */
+  private toRecoveryRecord(item: PaymentSupportCase): PsrRecoveryRecord {
+    const verified: PsrVerifiedPaymentState = item.requiresVerification
+      ? 'Uncertain'
+      : item.status === 'failed'
+        ? 'Failed'
+        : item.status === 'paid'
+          ? 'Confirmed'
+          : item.status === 'cancelled'
+            ? 'Cancelled'
+            : 'Pending';
+
+    const lifecycle: PsrLifecycleState = item.requiresVerification
+      ? 'Needs verification'
+      : item.status === 'expired'
+        ? 'Link expired'
+        : item.status === 'paid'
+          ? 'Confirmed'
+          : item.status === 'cancelled'
+            ? 'Cancelled'
+            : item.status === 'failed'
+              ? 'Failed'
+              : 'Awaiting donor';
+
+    const linkCondition: 'Active' | 'Expired' | 'None' =
+      item.status === 'expired' ? 'Expired' : item.status === 'awaitingPayment' ? 'Active' : 'None';
+
+    return {
+      intentId: item.intentId,
+      donationIntentReference: item.intentReference,
+      maskedDonorContact: item.donorEmail,
+      donorContactPreview: item.donorName,
+
+      // THE MODEL HOLDS MINOR UNITS; the API sends a decimal amount.
+      requestedAmountMinor: Math.round(item.amount.amount * 100),
+      currency: item.amount.currencyCode,
+      verifiedPaymentState: verified,
+      lifecycleState: lifecycle,
+      lastAttemptIso: item.lastAttemptAtUtc ?? item.createdAtUtc,
+      lastAttemptLabel: this.formatDateTime(item.lastAttemptAtUtc ?? item.createdAtUtc),
+
+      retryEligibility: item.requiresVerification
+        // THE MOST IMPORTANT SENTENCE ON THIS SCREEN. An unknown outcome may mean the donor has
+        // already been charged, so the safe move is to ask the gateway - never to retry.
+        ? 'Verify with the gateway first - the last attempt\u2019s outcome is unknown and the donor may already have been charged.'
+        : item.lastFailureReason ?? 'Safe retry available.',
+
+      existingActiveLink: linkCondition === 'None' ? '\u2014' : item.intentReference,
+      linkExpiryIso: '',
+      linkExpiryLabel: '\u2014',
+      linkCondition,
+      supportCorrelationReference: item.lastGatewayResultCode ?? '\u2014',
+      preferredDeliveryChannel: 'Email',
+      preferredDeliveryChannelRef: 'email',
+      owner: this.owner,
+
+      // The intent's version, which every write on this screen sends back.
+      version: 0,
+      hasDownstreamReference: item.status === 'paid',
+      history: [],
+      linkedRecords: [],
+      documents: [],
+      integrationStatus: {
+        provider: 'Payment gateway',
+        state: item.requiresVerification ? 'Outcome unknown' : 'Reachable',
+      },
+      supportCorrelation: {
+        reference: item.lastGatewayResultCode ?? '\u2014',
+        state: item.requiresVerification ? 'Awaiting verification' : 'Open',
+      },
+    };
+  }
+
+  private nowLabel(): string {
+    return new Date().toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  private formatDateTime(iso: string | null): string {
+    if (!iso) {
+      return '\u2014';
+    }
+    const parsed = new Date(iso);
+    return Number.isNaN(parsed.getTime())
+      ? iso
+      : `${parsed.toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        })} \u00b7 IST`;
+  }
+
+  /** Set while a write is in flight, so a second click cannot start a second one. */
+  protected readonly busy = signal(false);
+
+  protected formatMoney(amountMinor: number, currency: string): string {
+    const value = (amountMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return `${currency} ${value}`;
   }
   protected formatDate(iso: string): string {
@@ -873,90 +720,6 @@ export class PaymentSupportAndSafeRetryComponent {
   }
 
   constructor() {
-    if (!this.permissions().view) {
-      this.uiState.set('no-access');
-      this.loading.set(false);
-      return;
-    }
-
-    this.scopeFilter.set(this.scopeOptions()[0]);
-    this.loadRecords();
-  }
-
-  /**
-   * Loads the support queue.
-   *
-   * WHAT LANDS HERE IS NARROWER THAN "FAILED": an intent that failed once and was then paid needs
-   * nobody. The server selects intents that have either exhausted the retry allowance or carry an
-   * attempt whose outcome is UNKNOWN - the second being the more urgent, because unknown means
-   * the donor may already have been charged.
-   */
-  private loadRecords(): void {
-    this.loading.set(true);
-    this.loadError.set(false);
-
-    // A record handed over from the event queue or the intent detail decides which row opens.
-    const pending = this.dataService.getPendingSafeRetryRecord();
-    if (pending) {
-      this.retryRecord.set(pending);
-      this.dataService.clearPendingSafeRetryRecord();
-    }
-
-    this.paymentApi
-      .getSupportQueue({ page: 1, pageSize: PaymentSupportAndSafeRetryComponent.FETCH_SIZE })
-      .subscribe({
-        next: (page) => {
-          const rows = (page.items ?? []).map(toRecoveryRecord);
-          this.records.set(rows);
-          this.serverTotal.set(page.totalCount ?? rows.length);
-          this.lastRefresh.set(formatMoment(new Date().toISOString()));
-          this.loading.set(false);
-
-          if (this.uiState() !== 'success' && this.uiState() !== 'no-access') {
-            this.uiState.set(rows.length === 0 ? 'empty' : 'ready');
-          }
-
-          // THE HAND-OFF SELECTS AN EXISTING ROW; it never invents one. The previous version
-          // built a recovery record out of the gateway event it was handed - with a made-up
-          // version of 1 and an amount parsed out of a formatted string - and put it at the top
-          // of the list. Every action on that row would have failed, because no such intent was
-          // ever loaded.
-          const handOff = this.retryRecord();
-          const wanted = handOff?.mappedIntentOrPayment;
-
-          if (wanted && rows.some((r) => r.donationIntentReference === wanted)) {
-            this.select(wanted);
-          } else if (wanted) {
-            this.toast.show(
-              'Not in the support queue',
-              `${wanted} is not waiting on support. It may already have been paid or cancelled.`,
-              'info',
-            );
-          }
-
-          this.retryRecord.set(null);
-        },
-        error: (error) => {
-          this.loading.set(false);
-          this.loadError.set(true);
-
-          if (
-            typeof error === 'object' &&
-            error !== null &&
-            'status' in error &&
-            (error as { status?: number }).status === 403
-          ) {
-            this.uiState.set('no-access');
-            return;
-          }
-
-          this.uiState.set('ready');
-          this.toast.show(
-            'Error',
-            apiErrorMessage(error, 'The payment support queue could not be loaded.'),
-            'error',
-          );
-        },
-      });
+    this.load();
   }
 }

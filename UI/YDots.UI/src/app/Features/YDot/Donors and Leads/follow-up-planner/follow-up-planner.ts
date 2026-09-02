@@ -6,89 +6,73 @@ import { ConfirmModalComponent } from '../../../../Shared/components/confirm-mod
 import {
   ConfirmDialogConfig,
 } from '../../../../Shared/models/donors-leads.model';
-import { WorkflowDonor, WorkflowStateService } from '../../../../Service/workflow-state.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 import { DonorApiService } from '../../../../Service/donor-api.service';
-import { DonLookupItem } from '../../../../Shared/models/donor-contract.model';
+import { ToastService } from '../../../../Shared/services/toast.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import {
+  DonLookupItem,
+  FollowUp as ApiFollowUp,
+} from '../../../../Shared/models/donor-contract.model';
 
 type PlannerUiState = 'ready' | 'loading' | 'success' | 'error' | 'empty';
+
+interface OwnerOption {
+  readonly reference: string;
+  readonly label: string;
+  readonly context: string;
+  readonly initials: string;
+}
 
 interface ScreenAction {
   readonly id: string;
   readonly label: string;
   readonly placement: 'primary' | 'secondary' | 'danger';
   readonly permission: string;
+  readonly allowedState: string;
   readonly result: string;
   readonly requiresReason?: boolean;
   readonly typedConfirm?: boolean;
 }
 
-/**
- * The screen's own copy and its action contract.
- *
- * WHY THIS IS STILL IN THE BUNDLE WHEN THE REST OF THE PAGE IS NOT. A button's label, the
- * sentence its confirmation dialog shows, and which of the three placements it takes are
- * PRESENTATION - they are decided by whoever designs this screen, they are the same for every
- * organisation, and the API has no opinion on any of them. Moving them to the server would mean
- * a round trip to find out what to write on a button.
- *
- * WHAT IS NO LONGER HERE is everything that differs per organisation or per caller: the channel,
- * priority and language catalogues, the owner list, the active scope and the refresh time. Those
- * used to sit in this screen's JSON as fixed arrays - the same five channels and seven languages
- * for every charity on the platform - and they now come from the API, which knows which are
- * actually configured. The permission flags went the same way and are read from the token.
- */
-const SCREEN = {
-  title: 'Follow-up planner',
-  purpose: 'Plan a respectful, consent-aware next action with clear ownership and due time.',
-} as const;
-
-const SAVED_FILTERS: readonly string[] = [
-  'All follow-ups (Default)',
-  'Due today',
-  'Overdue',
-  'Completed',
-];
-
-const ACTIONS: readonly ScreenAction[] = [
-  {
-    id: 'scheduleFollowUp',
-    label: 'Schedule follow-up',
-    placement: 'primary',
-    permission: 'don.follow-up-planner.schedule-follow-up',
-    result:
-      'The follow-up is saved against this record and appears in the owner’s queue.',
-  },
-  {
-    id: 'assign',
-    label: 'Assign',
-    placement: 'secondary',
-    permission: 'don.follow-up-planner.assign',
-    result: 'Ownership moves to the person you choose on the assignment board.',
-  },
-  {
-    id: 'markComplete',
-    label: 'Mark complete',
-    placement: 'secondary',
-    permission: 'don.follow-up-planner.mark-complete',
-    result: 'The outcome is recorded against this follow-up and it leaves the queue.',
-  },
-  {
-    id: 'reschedule',
-    label: 'Reschedule',
-    placement: 'secondary',
-    permission: 'don.follow-up-planner.reschedule',
-    result: 'The follow-up keeps its history and moves to the new date and time.',
-  },
-  {
-    id: 'cancelTask',
-    label: 'Cancel task',
-    placement: 'danger',
-    permission: 'don.follow-up-planner.cancel-task',
-    requiresReason: true,
-    result: 'The follow-up is cancelled with your reason and stays on the record’s history.',
-  },
-];
+interface ScreenData {
+  readonly screen: {
+    readonly viewId: string;
+    readonly title: string;
+    readonly route: string;
+    readonly purpose: string;
+    readonly primaryAction: string;
+    readonly viewPermission: string;
+    readonly primaryUsers: readonly string[];
+    readonly scope: string;
+    readonly lastRefresh: string;
+  };
+  readonly permissions: Readonly<Record<string, boolean>>;
+  readonly followUpReference: string;
+  readonly donorOrLeadReference: string;
+  readonly relationshipOwner: string;
+  readonly purpose: string;
+  readonly permittedChannel: string;
+  readonly preferredLanguage: string;
+  readonly preferredContactTime: string;
+  readonly nextAction: string;
+  readonly dueDate: string;
+  readonly priority: string;
+  readonly notes: string;
+  readonly consentWarning: string;
+  readonly assignedScope: string;
+  readonly priorities: readonly string[];
+  readonly channels: readonly string[];
+  readonly languages: readonly string[];
+  readonly ownerOptions: readonly OwnerOption[];
+  readonly savedFilters: readonly string[];
+  readonly fieldContracts: readonly {
+    readonly label: string;
+    readonly control: string;
+    readonly required: boolean;
+    readonly visibility: string;
+  }[];
+  readonly actions: readonly ScreenAction[];
+}
 
 /**
  * DON-UI-08 — Follow-up planner.
@@ -104,125 +88,212 @@ const ACTIONS: readonly ScreenAction[] = [
 export class FollowUpPlannerComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly workflow = inject(WorkflowStateService);
-
-  private readonly donorApi = inject(DonorApiService);
-
-  /** Page copy and the action contract. Presentation - see the note on SCREEN. */
-  protected readonly screen = SCREEN;
-  protected readonly savedFilters = SAVED_FILTERS;
-  protected readonly actions = ACTIONS;
+  private readonly api = inject(DonorApiService);
+  private readonly toast = inject(ToastService);
 
   /**
-   * Everything the server decides, rather than the bundle.
+   * The Follow-Up Planner - the destination of every "Schedule Follow-Up" in the document.
    *
-   * EMPTY UNTIL THE FIRST READ ANSWERS, on purpose. A dropdown pre-filled with a guess is worse
-   * than an empty one: the guess is indistinguishable from a real option, and picking it sends a
-   * value the API will reject.
+   * WHAT THIS REPLACES. `follow-up-planner.json` supplied the screen's permissions, its default
+   * channel, its default priority, its purpose text and a `donorOrLeadReference` used whenever
+   * the in-memory store had nothing - which was on every fresh load. Scheduling then called
+   * `workflow.addFollowUp`, so a follow-up planned here existed only until the tab was closed
+   * and never appeared in anybody else's Follow-Up Queue.
    */
-  protected readonly channelOptions = signal<readonly DonLookupItem[]>([]);
-  protected readonly priorityOptions = signal<readonly DonLookupItem[]>([]);
-  protected readonly languageOptions = signal<readonly DonLookupItem[]>([]);
-  protected readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
 
-  /** The scope this caller is actually working in, as the server resolved it. */
-  protected readonly assignedScope = signal('');
-
-  /** When this screen last heard from the server. Real, not a fixed string in a JSON file. */
-  protected readonly lastRefresh = signal('');
-
-  protected readonly uiState = signal<PlannerUiState>('ready');
-  protected readonly savedFilter = signal(SAVED_FILTERS[0]);
+  protected readonly uiState = signal<PlannerUiState>('loading');
   protected readonly confirmConfig = signal<ConfirmDialogConfig | null>(null);
   protected readonly activeActionId = signal('');
+  protected readonly savedFilter = signal('All follow-ups (Default)');
+  protected readonly savedFilters = signal<readonly string[]>(['All follow-ups (Default)']);
 
-  private readonly tokens = inject(AuthTokenService);
-
-  /**
-   * What this caller may actually do.
-   *
-   * THE SIX HARD-CODED `true`s ARE GONE. They lived in this screen's JSON page data, so every
-   * button on the screen was drawn for everybody who could reach it - a read-only reviewer saw the
-   * same controls as the person who owns the work, and found out which ones they were not allowed
-   * to press by pressing them.
-   *
-   * The server enforces these codes whatever this object says; reading them here is what stops the
-   * screen offering an action the API will refuse.
-   */
-  /**
-   * What this caller may do, keyed by the action ids the screen's own configuration uses.
-   *
-   * AN UNLISTED ACTION IS REFUSED. The checks below read `=== true` rather than `!== false`,
-   * because the two differ exactly where it matters: against the old JSON object a missing key
-   * meant "not mentioned, therefore allowed", and against the token it means "this caller does not
-   * hold the permission".
-   */
-  protected readonly permissions = computed<Record<string, boolean>>(() => ({
-    view: this.tokens.hasAnyPermission('don.follow-up-planner.view'),
-    scheduleFollowUp: this.tokens.hasAnyPermission('don.follow-up-planner.schedule-follow-up'),
-    assign: this.tokens.hasAnyPermission('don.follow-up-planner.assign'),
-    markComplete: this.tokens.hasAnyPermission('don.follow-up-planner.mark-complete'),
-    reschedule: this.tokens.hasAnyPermission('don.follow-up-planner.reschedule'),
-    cancelTask: this.tokens.hasAnyPermission('don.follow-up-planner.cancel-task'),
-  }));
+  /** The caller's permitted actions, as the server listed them. */
+  protected readonly permissions = signal<Record<string, boolean>>({
+    scheduleFollowUp: false,
+    assign: false,
+    markComplete: false,
+    reschedule: false,
+    cancelTask: false,
+  });
 
   protected readonly leadId = signal(this.route.snapshot.queryParamMap.get('leadId'));
   protected readonly donorId = signal(this.route.snapshot.queryParamMap.get('donorId'));
   protected readonly followUpId = signal(this.route.snapshot.queryParamMap.get('followUpId'));
-  private readonly sourceFollowUpId = signal(this.route.snapshot.queryParamMap.get('sourceId'));
-  private readonly existingFollowUp = computed(() => {
-    const id = this.followUpId();
-    return id ? this.workflow.getFollowUp(id) : undefined;
-  });
-  private readonly sourceFollowUp = computed(() => {
-    const id = this.sourceFollowUpId();
-    return id ? this.workflow.getFollowUp(id) : undefined;
-  });
-  private readonly contextFollowUp = computed(() => this.existingFollowUp() ?? this.sourceFollowUp());
-  protected readonly resolvedDonorId = computed(() =>
-    this.donorId() ?? (this.contextFollowUp()?.recordType === 'Donor' ? this.contextFollowUp()!.recordId : null),
-  );
-  protected readonly resolvedLeadId = computed(() =>
-    this.leadId() ?? (this.contextFollowUp()?.recordType === 'Lead' ? this.contextFollowUp()!.recordId : null),
-  );
-  protected readonly lead = computed(() => this.workflow.getLead(this.resolvedLeadId()));
-  protected readonly donor = computed(() => this.workflow.getDonor(this.resolvedDonorId()));
-  protected readonly recordReference = computed(() => this.contextFollowUp()?.recordId ?? this.lead()?.id ?? this.donor()?.donorId ?? '');
-  protected readonly relationshipOwner = computed(() => this.lead()?.owner ?? this.donor()?.owner ?? '');
-  protected readonly campaign = computed(() => this.lead()?.campaign ?? this.donor()?.campaign ?? '');
-  protected readonly preferredLanguage = computed(() => this.lead()?.language ?? '');
 
-  /**
-   * The donor's own preference, and the consent position on this record.
-   *
-   * BOTH USED TO BE FIXED STRINGS in this screen's JSON - the same preferred contact time and
-   * the same consent wording for every record anyone opened. A consent notice that is not this
-   * record's consent notice is worse than none: it invites somebody to make contact they are not
-   * permitted to make, on the strength of a reassurance the page invented.
-   *
-   * BLANK WHEN UNKNOWN, and the template says so rather than filling the gap.
-   */
-  protected readonly preferredContactTime = computed(
-    () => this.contextFollowUp()?.scheduledTime ?? '',
+  /** The follow-up being edited, when the screen was opened on one. */
+  protected readonly existing = signal<ApiFollowUp | null>(null);
+
+  protected readonly channelOptions = signal<readonly DonLookupItem[]>([]);
+  protected readonly priorityOptions = signal<readonly DonLookupItem[]>([]);
+  protected readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
+
+  protected readonly resolvedDonorId = computed(() => this.donorId() ?? this.existing()?.donorId ?? null);
+  protected readonly resolvedLeadId = computed(() => this.leadId() ?? this.existing()?.leadId ?? null);
+
+  protected readonly recordReference = computed(
+    () => this.existing()?.leadReference ?? this.existing()?.donorReference ?? this.resolvedLeadId() ?? this.resolvedDonorId() ?? '',
   );
+  protected readonly relationshipOwner = computed(() => this.existing()?.relationshipOwnerName ?? '');
+  protected readonly campaign = computed(() => '');
+  protected readonly preferredLanguage = computed(() => this.existing()?.preferredLanguage ?? '');
 
-  protected readonly consentWarning = signal('');
-
-  protected readonly followUpType = signal('Call');
-  protected readonly scheduledDate = signal(this.contextFollowUp()?.scheduledDate ?? '');
-  protected readonly scheduledTime = signal(this.contextFollowUp()?.scheduledTime ?? '');
-  protected readonly priority = signal(this.contextFollowUp()?.priority ?? '');
-  protected readonly owner = signal(this.contextFollowUp()?.assignedTo ?? this.relationshipOwner());
-  protected readonly purpose = signal(this.contextFollowUp()?.purpose ?? '');
-  protected readonly expectedOutcome = signal(this.contextFollowUp()?.expectedOutcome ?? '');
+  protected readonly followUpType = signal('Email');
+  protected readonly scheduledDate = signal('');
+  protected readonly scheduledTime = signal('');
+  protected readonly priority = signal('Medium');
+  protected readonly owner = signal('');
+  protected readonly purpose = signal('');
+  protected readonly expectedOutcome = signal('');
   protected readonly validationMessage = signal<string | null>(null);
 
+  /**
+   * The consent warning for the chosen channel.
+   *
+   * IT IS THE SERVER'S, AND IT BLOCKS. A follow-up on a channel the person has withdrawn consent
+   * for is refused by the API; asking first means the refusal is a sentence beside the channel
+   * picker rather than a 400 after the confirm dialog.
+   */
+  protected readonly consentWarning = signal<string>('');
+
+  /** When the screen last read the server, for the header's freshness line. */
+  protected readonly lastRefresh = signal('');
+
+  /** Whose records this caller may see, as the server described it. */
+  protected readonly activeScope = signal('');
+
+  constructor() {
+    this.load();
+  }
+
+  private load(): void {
+    this.uiState.set('loading');
+
+    this.api
+      .getFollowUpPlanner({ page: 1, pageSize: 50, leadId: this.leadId(), donorId: this.donorId() })
+      .subscribe({
+        next: (response) => {
+          this.channelOptions.set(response.channelOptions);
+          this.priorityOptions.set(response.priorityOptions);
+          this.ownerOptions.set(response.ownerOptions);
+
+          // VERBS: ['Schedule follow-up','View','Assign','Mark complete','Reschedule','Cancel task'].
+          const permitted = response.permittedActions ?? [];
+          this.permissions.set({
+            scheduleFollowUp: permitted.includes('Schedule follow-up'),
+            assign: permitted.includes('Assign'),
+            markComplete: permitted.includes('Mark complete'),
+            reschedule: permitted.includes('Reschedule'),
+            cancelTask: permitted.includes('Cancel task'),
+          });
+
+          // Editing an existing follow-up: fill the form from it.
+          const editing = this.followUpId()
+            ? response.followUps.items.find((item) => item.id === this.followUpId())
+            : null;
+
+          if (editing) {
+            this.existing.set(editing);
+            this.followUpType.set(editing.permittedChannel);
+            this.priority.set(editing.priority);
+            this.owner.set(editing.relationshipOwnerUserId);
+            this.purpose.set(editing.purpose ?? '');
+            this.expectedOutcome.set(editing.nextAction ?? '');
+
+            if (editing.dueAtUtc) {
+              const due = new Date(editing.dueAtUtc);
+              this.scheduledDate.set(this.toDateInput(due));
+              this.scheduledTime.set(this.toTimeInput(due));
+            }
+            if (editing.consentWarning?.hasWarning) {
+              this.consentWarning.set(editing.consentWarning.message);
+            }
+          } else {
+            this.followUpType.set(response.channelOptions[0]?.value ?? 'Email');
+            this.priority.set(response.priorityOptions[0]?.value ?? 'Medium');
+          }
+
+          this.activeScope.set(response.activeScope);
+          this.lastRefresh.set(new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+          }));
+
+          this.uiState.set('ready');
+          this.checkConsent();
+        },
+        error: (error: unknown) => {
+          this.uiState.set('error');
+          this.toast.show('Planner unavailable', apiErrorMessage(error), 'error');
+        },
+      });
+  }
+
+  /** Re-asks the server whether the chosen channel is permitted for this person. */
+  protected checkConsent(): void {
+    const leadId = this.resolvedLeadId();
+    const donorId = this.resolvedDonorId();
+    if (!leadId && !donorId) {
+      return;
+    }
+
+    this.api
+      .getConsentWarning(donorId ?? undefined, leadId ?? undefined, this.followUpType())
+      .subscribe({
+        next: (warning) => this.consentWarning.set(warning.hasWarning ? warning.message : ''),
+        error: () => this.consentWarning.set(''),
+      });
+  }
+
+  private toDateInput(value: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  }
+
+  private toTimeInput(value: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  }
+
+  private toDueUtc(): string {
+    return new Date(`${this.scheduledDate()}T${this.scheduledTime() || '09:00'}`).toISOString();
+  }
+
+  /**
+   * The actions this screen offers.
+   *
+   * DECLARED HERE, GATED BY THE SERVER. The list used to come from the JSON file's `actions`
+   * array, which meant the buttons a person saw were whatever the bundle said rather than what
+   * their token allows. The labels are the screen's; the gate is `permissions()`.
+   */
+  private readonly actionCatalogue = [
+    {
+      id: 'scheduleFollowUp',
+      label: 'Schedule follow-up',
+      result: 'The follow-up is scheduled and appears in the owner\u2019s Follow-Up Queue.',
+      placement: 'primary',
+      requiresReason: false,
+    },
+    {
+      id: 'reschedule',
+      label: 'Reschedule',
+      result: 'The follow-up moves to a new date and the reason is recorded.',
+      placement: 'primary',
+      requiresReason: true,
+    },
+    {
+      id: 'cancelTask',
+      label: 'Cancel follow-up',
+      result: 'The follow-up is cancelled. The reason is recorded against it.',
+      placement: 'danger',
+      requiresReason: true,
+    },
+  ] as const;
+
   protected readonly visibleActions = computed(() =>
-    this.actions.filter((action) => action.id === 'scheduleFollowUp' && this.permissions()[action.id] === true),
+    this.actionCatalogue.filter((action) => this.permissions()[action.id] === true),
   );
 
   protected readonly activeFilterSummary = computed(() => {
-    const defaultFilter = SAVED_FILTERS[0];
+    const defaultFilter = this.savedFilters()[0];
     return this.savedFilter() !== defaultFilter
       ? [{ key: 'saved', label: `View: ${this.savedFilter()}` }]
       : [];
@@ -234,81 +305,8 @@ export class FollowUpPlannerComponent {
 
   protected removeFilterChip(key: string): void {
     if (key === 'saved') {
-      this.savedFilter.set(SAVED_FILTERS[0]);
+      this.savedFilter.set(this.savedFilters()[0] ?? 'All follow-ups (Default)');
     }
-  }
-
-  constructor() {
-    this.loadFromServer();
-  }
-
-  /**
-   * Reads the catalogues, the owner list and the scope from the donors API.
-   *
-   * ONE CALL, NOT FIVE. The planner endpoint answers with every catalogue the form needs
-   * alongside the tasks themselves, which is what lets the screen open with the dropdowns
-   * already correct rather than filling them in one round trip at a time.
-   *
-   * A FAILURE LEAVES THE DROPDOWNS EMPTY AND SAYS SO. The previous version could not fail -
-   * the arrays were compiled in - so a caller whose permissions had been withdrawn, or whose
-   * session had expired, saw a fully populated form and discovered the problem only on save.
-   */
-  private loadFromServer(): void {
-    this.uiState.set('loading');
-
-    this.donorApi.getFollowUpPlanner({ pageSize: 1 }).subscribe({
-      next: (response) => {
-        this.channelOptions.set(response.channelOptions ?? []);
-        this.priorityOptions.set(response.priorityOptions ?? []);
-        this.languageOptions.set(response.languageOptions ?? []);
-        this.ownerOptions.set(response.ownerOptions ?? []);
-        this.assignedScope.set(response.activeScope ?? '');
-        this.lastRefresh.set(this.nowLabel());
-        this.uiState.set('ready');
-        this.loadConsentWarning();
-      },
-      error: () => {
-        // Nothing is invented to fill the gap. See the note on the option signals.
-        this.uiState.set('error');
-      },
-    });
-  }
-
-  /**
-   * This record's consent position, asked for by record rather than assumed.
-   *
-   * THE CHANNEL IS PART OF THE QUESTION. Consent is not one flag - somebody may be reachable by
-   * e-mail and not by telephone - so the answer changes as the person changes the follow-up type,
-   * and asking without the channel would produce a reassurance that is true for some other way of
-   * making contact.
-   */
-  private loadConsentWarning(): void {
-    const donorId = this.resolvedDonorId();
-    const leadId = this.resolvedLeadId();
-
-    if (!donorId && !leadId) {
-      this.consentWarning.set('');
-      return;
-    }
-
-    this.donorApi
-      .getConsentWarning(donorId ?? undefined, leadId ?? undefined, this.followUpType())
-      .subscribe({
-        next: (warning) => this.consentWarning.set(warning?.message ?? ''),
-
-        // An unanswered question is left unanswered rather than reported as "no warning".
-        error: () => this.consentWarning.set(''),
-      });
-  }
-
-  private nowLabel(): string {
-    return new Date().toLocaleString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   }
 
   protected setUiState(state: PlannerUiState): void {
@@ -360,8 +358,15 @@ export class FollowUpPlannerComponent {
       this.validationMessage.set(null);
     }
 
-    const action = this.actions.find((candidate) => candidate.id === actionId);
+    const action = this.actionCatalogue.find((candidate) => candidate.id === actionId);
     if (!action || this.permissions()[actionId] !== true || this.uiState() === 'loading') {
+      return;
+    }
+
+    // A CHANNEL THE PERSON HAS WITHDRAWN IS REFUSED BY THE SERVER, so it is refused here first -
+    // the alternative is a confirm dialog, a typed reason and then a 400.
+    if (actionId === 'scheduleFollowUp' && this.consentWarning()) {
+      this.validationMessage.set(this.consentWarning());
       return;
     }
 
@@ -376,80 +381,100 @@ export class FollowUpPlannerComponent {
       reasonLabel: 'Reason',
       reasonMin: 10,
       reasonMax: 2000,
-      typedConfirm: Boolean(action.typedConfirm),
-      affectedRecord: `${this.followUpId() ?? ''} · ${this.recordReference()}`,
-      effectiveTime: this.lastRefresh(),
+      typedConfirm: false,
+      affectedRecord: `${this.existing()?.followUpReference ?? 'New follow-up'} · ${this.recordReference()}`,
+      effectiveTime: `${this.scheduledDate()} ${this.scheduledTime()}`.trim() || 'On confirmation',
       beforeAfter: [
-        { label: 'Priority', before: this.priority(), after: this.priority() },
+        { label: 'Priority', before: this.existing()?.priority ?? '—', after: this.priority() },
+        { label: 'Due', before: this.existing()?.dueAtUtc ?? '—', after: this.scheduledDate() },
       ],
     });
   }
 
   protected onConfirm(reason: string): void {
     const action = this.activeActionId();
-    const recordId = this.recordReference();
     const existingId = this.followUpId();
 
-    if (action === 'assign') {
-      this.confirmConfig.set(null);
-      this.activeActionId.set('');
-      this.router.navigate(['/app/fundraising/relationships/assignment-board'], { queryParams: { leadId: recordId } });
-      return;
-    }
-
-    if (action === 'markComplete') {
-      this.confirmConfig.set(null);
-      this.activeActionId.set('');
-      const followUp = existingId ? this.workflow.getFollowUp(existingId) : this.workflow.followUpsFor(recordId)[0];
-      this.router.navigate(['/app/fundraising/relationships/follow-up-execution'], {
-        queryParams: { followUpId: followUp?.id ?? null, leadId: this.resolvedLeadId(), donorId: this.resolvedDonorId() },
-      });
+    if (action === 'reschedule' && existingId) {
+      this.api
+        .rescheduleFollowUp(existingId, {
+          dueAtUtc: this.toDueUtc(),
+          rescheduleReason: reason,
+          priority: this.priority(),
+          expectedVersion: this.existing()?.version ?? null,
+        })
+        .subscribe({
+          next: () => this.afterWrite('Follow-up rescheduled.'),
+          error: (error: unknown) => this.afterError(error),
+        });
       return;
     }
 
     if (action === 'cancelTask' && existingId) {
-      this.workflow.patchFollowUp(existingId, { status: 'Cancelled', history: [...(this.workflow.getFollowUp(existingId)?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Cancelled${reason ? ': ' + reason : ''}` }] });
-    } else if (action === 'reschedule' && existingId) {
-      this.router.navigate(['/app/fundraising/relationships/follow-up-queue'], { queryParams: { followUpId: existingId, leadId: this.resolvedLeadId(), donorId: this.resolvedDonorId(), action: 'reschedule' } });
-      this.confirmConfig.set(null);
-      this.activeActionId.set('');
+      this.api
+        .cancelFollowUp(existingId, { reason, expectedVersion: this.existing()?.version ?? null })
+        .subscribe({
+          next: () => this.afterWrite('Follow-up cancelled.'),
+          error: (error: unknown) => this.afterError(error),
+        });
       return;
-    } else if (action === 'scheduleFollowUp') {
-      if (existingId) {
-        this.workflow.patchFollowUp(existingId, {
-          assignedTo: this.owner(),
-          scheduledDate: this.scheduledDate(),
-          scheduledTime: this.scheduledTime(),
+    }
+
+    if (action === 'scheduleFollowUp') {
+      const owner = this.ownerOptions().find((option) => option.value === this.owner());
+
+      this.api
+        .scheduleFollowUp({
+          leadId: this.resolvedLeadId(),
+          donorId: this.resolvedDonorId(),
+          relationshipOwnerUserId: owner?.value ?? null,
+          relationshipOwnerName: owner?.label ?? null,
           purpose: this.purpose().trim(),
-          expectedOutcome: this.expectedOutcome().trim(),
+          permittedChannel: this.followUpType(),
+          preferredLanguage: this.preferredLanguage() || null,
+          nextAction: this.expectedOutcome().trim(),
+          dueAtUtc: this.toDueUtc(),
           priority: this.priority(),
-          followUpType: this.followUpType(),
-          status: 'Pending',
+
+          // FALSE BECAUSE THERE IS NO WARNING. The confirm path above refuses to open when the
+          // channel carries one, so acknowledging is never something this screen does silently.
+          consentWarningAcknowledged: false,
+        })
+        .subscribe({
+          next: (created) => {
+            this.followUpId.set(created.id);
+            this.afterWrite('Follow-up scheduled.');
+          },
+          error: (error: unknown) => this.afterError(error),
         });
-      } else {
-        const created = this.workflow.addFollowUp({
-          recordId,
-          recordName: this.lead()?.name ?? this.donor()?.name,
-          assignedTo: this.owner(),
-          campaign: this.campaign(),
-          phone: this.lead()?.mobile ?? this.donor()?.mobile,
-          email: this.lead()?.email ?? this.donor()?.email,
-          recordType: this.donor() ? 'Donor' : undefined,
-          scheduledDate: this.scheduledDate(),
-          scheduledTime: this.scheduledTime(),
-          purpose: this.purpose().trim(),
-          expectedOutcome: this.expectedOutcome().trim(),
-          priority: this.priority(),
-          followUpType: this.followUpType(),
-        });
-        this.followUpId.set(created.id);
-      }
+      return;
     }
 
     this.confirmConfig.set(null);
     this.activeActionId.set('');
+  }
+
+  private afterWrite(message: string): void {
+    this.confirmConfig.set(null);
+    this.activeActionId.set('');
     this.uiState.set('success');
-    this.router.navigate(['/app/fundraising/relationships/follow-up-queue'], { queryParams: { followUpId: this.followUpId(), leadId: this.resolvedLeadId(), donorId: this.resolvedDonorId() } });
+    this.toast.show('Saved', message, 'success');
+
+    // THE DOCUMENT'S DESTINATION: scheduling from the planner lands in the Follow-Up Queue.
+    this.router.navigate(['/app/fundraising/relationships/follow-up-queue'], {
+      queryParams: {
+        followUpId: this.followUpId(),
+        leadId: this.resolvedLeadId(),
+        donorId: this.resolvedDonorId(),
+      },
+    });
+  }
+
+  private afterError(error: unknown): void {
+    this.confirmConfig.set(null);
+    this.activeActionId.set('');
+    this.uiState.set('ready');
+    this.toast.show('Not saved', apiErrorMessage(error), 'error');
   }
 
   protected onCancel(): void {

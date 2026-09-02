@@ -61,6 +61,7 @@ public sealed class PaymentProcessingCommandHandler(
     IPaymentEventRepository paymentEvents,
     IGatewayAccountRepository gatewayAccounts,
     IReceiptRepository receipts,
+    IReceiptDocumentService receiptDocuments,
     IDonorDirectory donorDirectory,
     IPaymentGateway paymentGateway,
     IReferenceGenerator references,
@@ -629,6 +630,8 @@ public sealed class PaymentProcessingCommandHandler(
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await RenderAndDeliverAsync(receipt, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -636,6 +639,107 @@ public sealed class PaymentProcessingCommandHandler(
                 exception,
                 "The receipt for donation {DonationReference} could not be issued. The donation "
                 + "stands and this needs following up.", donation.DonationReference);
+        }
+    }
+
+    /// <summary>
+    /// Renders the receipt document and e-mails it to the donor.
+    ///
+    /// THE DOCUMENT REQUIRES THIS AND IT WAS NOT HAPPENING. Section 6: "a copy of the receipt is
+    /// automatically emailed to the donor at the same time", and section 1: "A successful or
+    /// failed payment always generates a Payment Receipt, and a copy is emailed to the donor."
+    /// The auto-issue path created the row with <c>DeliveryStatus = NotSent</c>, wrote the audit
+    /// entry and stopped - so every donation taken through the public form produced a receipt
+    /// that existed only inside the application. The donor received nothing, and the Receipt
+    /// Register showed a delivery state of "Not sent" that no screen offered a way to change
+    /// except a manual Resend somebody had to think to press.
+    ///
+    /// IT MIRRORS <c>ReceiptCommandHandler.RenderAndDeliverAsync</c> rather than calling it: that
+    /// one is private to a handler with its own repository and unit of work, and reaching across
+    /// to it would make the payment pipeline depend on the receipt-administration handler's
+    /// lifetime. The shared part - rendering and sending - is <see cref="IReceiptDocumentService"/>,
+    /// which is what both of them actually use.
+    ///
+    /// EVERY FAILURE IS LOGGED AND SWALLOWED. The money is already taken and the receipt is
+    /// validly issued the moment it is numbered; a PDF that would not render or an inbox that
+    /// bounced is a follow-up task, not a reason to fail a donation that succeeded. A receipt
+    /// left undelivered surfaces on the Receipt Register with its delivery state showing, and
+    /// Receipt Correction can resend it.
+    /// </summary>
+    private async Task RenderAndDeliverAsync(Receipt receipt, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rendered = await receiptDocuments.RenderAsync(receipt, cancellationToken);
+
+            if (rendered.Succeeded)
+            {
+                receipt.DocumentUrl = rendered.DocumentUrl;
+            }
+            else
+            {
+                logger.LogWarning(
+                    "Receipt {ReceiptNumber} could not be rendered: {Reason}. The receipt is still "
+                    + "validly issued.", receipt.ReceiptNumber, rendered.FailureReason);
+            }
+
+            if (_settings.AutoDeliverReceipt && !string.IsNullOrWhiteSpace(receipt.DonorEmail))
+            {
+                var delivery = new ReceiptDelivery
+                {
+                    TenantId = receipt.TenantId,
+                    BusinessUnitId = receipt.BusinessUnitId,
+                    ReceiptId = receipt.Id,
+                    Channel = "Email",
+                    Destination = receipt.DonorEmail,
+                    Status = ReceiptDeliveryStatus.Pending,
+                    AttemptedAtUtc = clock.UtcNow
+                };
+
+                ReceiptDeliveryResult result;
+
+                try
+                {
+                    result = await receiptDocuments.DeliverAsync(
+                        receipt, "Email", receipt.DonorEmail, cancellationToken);
+                }
+                catch (Exception exception)
+                {
+                    result = new ReceiptDeliveryResult(false, null, exception.Message);
+                }
+
+                if (result.Succeeded)
+                {
+                    delivery.Status = ReceiptDeliveryStatus.Delivered;
+                    delivery.DeliveredAtUtc = clock.UtcNow;
+                    delivery.ProviderReference = result.ProviderReference;
+                    receipt.DeliveryStatus = ReceiptDeliveryStatus.Delivered;
+                }
+                else
+                {
+                    delivery.Status = ReceiptDeliveryStatus.Failed;
+                    delivery.FailureReason = result.FailureReason;
+
+                    // FAILED, NOT "NOT SENT". The difference is what a person reading the
+                    // register needs: nobody tried, versus somebody tried and it bounced.
+                    receipt.DeliveryStatus = ReceiptDeliveryStatus.Failed;
+
+                    logger.LogWarning(
+                        "Receipt {ReceiptNumber} could not be delivered to the donor: {Reason}.",
+                        receipt.ReceiptNumber, result.FailureReason);
+                }
+
+                receipt.Deliveries.Add(delivery);
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Rendering or delivering receipt {ReceiptNumber} failed. The receipt is still "
+                + "validly issued and this needs following up.", receipt.ReceiptNumber);
         }
     }
 

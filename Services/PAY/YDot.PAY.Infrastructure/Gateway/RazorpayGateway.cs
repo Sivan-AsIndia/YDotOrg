@@ -46,6 +46,7 @@ namespace YDot.PAY.Infrastructure.Gateway;
 public sealed class RazorpayGateway(
     IHttpClientFactory httpClientFactory,
     IOptions<PaymentSettings> paymentSettings,
+    IOptions<ClientAppSettings> clientSettings,
     IGatewayCredentialResolver credentials,
     ILogger<RazorpayGateway> logger) : IPaymentGateway
 {
@@ -64,6 +65,7 @@ public sealed class RazorpayGateway(
     private static readonly TimeSpan MinimumLinkValidity = TimeSpan.FromMinutes(15);
 
     private readonly PaymentSettings _settings = paymentSettings.Value;
+    private readonly ClientAppSettings _client = clientSettings.Value;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -136,8 +138,27 @@ public sealed class RazorpayGateway(
             Notify = new NotifyPayload { Email = !string.IsNullOrWhiteSpace(intent.Email), Sms = false },
 
             ReminderEnable = false,
-            CallbackUrl = string.IsNullOrWhiteSpace(account.ReturnUrl) ? null : account.ReturnUrl,
-            CallbackMethod = string.IsNullOrWhiteSpace(account.ReturnUrl) ? null : "get",
+
+            // WHERE THE DONOR COMES BACK TO. Razorpay redirects the donor's own BROWSER here
+            // after they pay, appending razorpay_payment_link_reference_id - which is the
+            // ReferenceId above, our intent reference - so the result page knows which donation
+            // it is looking at without the donor having an account.
+            //
+            // THIS IS A BROWSER REDIRECT, NOT A SERVER CALL, and the distinction is the whole
+            // reason it works where a webhook does not: Razorpay's servers never have to reach
+            // us, so http://localhost:6700 is a perfectly good callback on a development
+            // machine. The result page then asks US to verify, and verification is a PULL - our
+            // server calls GET payment_links/{id} - so the outcome is confirmed with no inbound
+            // connectivity anywhere in the loop.
+            //
+            // IT FALLS BACK TO THE CONFIGURED CLIENT rather than requiring a per-account URL.
+            // ReturnUrl on the gateway account is null on every seeded row, so the callback was
+            // simply never sent: a donor who paid was left on Razorpay's own page, nothing
+            // called verify, and the donation sat Pending until an administrator opened Support
+            // & Retry and pressed Verify status. An organisation that needs its own landing page
+            // still sets ReturnUrl and that wins.
+            CallbackUrl = ResolveCallbackUrl(account),
+            CallbackMethod = string.IsNullOrWhiteSpace(ResolveCallbackUrl(account)) ? null : "get",
 
             ExpireBy = expiresAtUtc - DateTimeOffset.UtcNow >= MinimumLinkValidity
                 ? expiresAtUtc.ToUnixTimeSeconds()
@@ -612,6 +633,33 @@ public sealed class RazorpayGateway(
         };
 
     /// <summary>Razorpay's event names to ours.</summary>
+    /// <summary>
+    /// Where Razorpay sends the donor after they pay.
+    ///
+    /// The account's own <c>ReturnUrl</c> wins when it is set. Otherwise the configured client
+    /// base URL and payment-result path are joined - which is what makes the return trip work
+    /// out of the box instead of depending on a column nobody fills in.
+    ///
+    /// NULL WHEN NEITHER IS CONFIGURED, because Razorpay refuses a malformed callback_url and
+    /// would reject the whole payment link. No callback is a worse donor experience; a rejected
+    /// link is no donation at all.
+    /// </summary>
+    private string? ResolveCallbackUrl(PaymentGatewayAccount account)
+    {
+        if (!string.IsNullOrWhiteSpace(account.ReturnUrl))
+        {
+            return account.ReturnUrl;
+        }
+
+        if (string.IsNullOrWhiteSpace(_client.BaseUrl)
+            || string.IsNullOrWhiteSpace(_client.PaymentResultPath))
+        {
+            return null;
+        }
+
+        return $"{_client.BaseUrl.TrimEnd('/')}/{_client.PaymentResultPath.TrimStart('/')}";
+    }
+
     private static PaymentEventType MapEventType(string? eventName) =>
         eventName?.Trim().ToLowerInvariant() switch
         {

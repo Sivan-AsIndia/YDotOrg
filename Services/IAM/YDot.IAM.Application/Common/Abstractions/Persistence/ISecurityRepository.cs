@@ -1,4 +1,4 @@
-using YDot.IAM.Domain.Entities;
+﻿using YDot.IAM.Domain.Entities;
 
 namespace YDot.IAM.Application.Common.Abstractions.Persistence;
 
@@ -104,6 +104,17 @@ public interface ISecurityRepository
     Task<TrustedDevice?> GetTrustedDeviceAsync(Guid deviceId, CancellationToken cancellationToken);
 
     Task<TrustedDevice?> FindTrustedDeviceAsync(Guid userId, string deviceTokenHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The live remembered-device row for a browser that presented no cookie, matched on the
+    /// stable identifier the client mints for itself.
+    ///
+    /// Exists so "remember this device" renews one row per browser rather than adding a new one
+    /// every time the cookie has been cleared — a list of eight entries all naming the same
+    /// laptop is exactly as useless as an empty one.
+    /// </summary>
+    Task<TrustedDevice?> FindTrustedDeviceByIdentifierAsync(
+        Guid userId, string? deviceIdentifier, DateTimeOffset asOf, CancellationToken cancellationToken);
 
     Task AddTrustedDeviceAsync(TrustedDevice device, CancellationToken cancellationToken);
 

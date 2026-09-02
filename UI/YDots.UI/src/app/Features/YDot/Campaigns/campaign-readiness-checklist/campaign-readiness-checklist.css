@@ -551,3 +551,11 @@ button:focus-visible,
   .crc-title { font-size: 22px; }
   .crc-menu { right: auto; left: 0; }
 }
+/* The reason a greyed-out Actions item is greyed out, shown under it rather than hidden in a
+   tooltip nobody hovers a disabled row to find. */
+.crc-menu-why {
+  margin: -2px 12px 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--crc-ink-3, #6b7280);
+}

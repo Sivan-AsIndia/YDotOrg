@@ -1,4 +1,5 @@
 using System.Globalization;
+using YDots.CAM.Application.Common.Abstractions.Services;
 using YDots.CAM.Application.Common.Constants;
 using YDots.CAM.Application.Features.TrackingAssets.DTOs;
 using YDots.CAM.Domain.Entities;
@@ -138,7 +139,16 @@ public static class TrackingAssetMappingConfig
         }
     }
 
-    /// <summary>One row of the manager grid.</summary>
+    /// <summary>
+    /// One row of the manager grid.
+    ///
+    /// <paramref name="income"/> IS WHAT THE ASSET HAS ACTUALLY RAISED, read from the donations
+    /// by the read service. The <c>TotalReceived</c> column on the row is never written by
+    /// anything, so every asset in the manager reported zero collected however many gifts had
+    /// come through it - and "what did this QR code bring in" is the whole reason the screen
+    /// exists. Null where the payment tables could not be reached, which shows as zero rather
+    /// than failing the page.
+    /// </summary>
     public static TrackingAssetListItemResponse ToListItemResponse(
         this TrackingAsset asset,
         string campaignCode,
@@ -146,7 +156,8 @@ public static class TrackingAssetMappingConfig
         string channelName,
         string sourceName,
         string mediumName,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        CampaignIncome? income = null)
     {
         ArgumentNullException.ThrowIfNull(asset);
 
@@ -173,7 +184,9 @@ public static class TrackingAssetMappingConfig
             asset.ActiveTo,
             asset.IsLiveAt(now),
             asset.UsageCount,
-            asset.TotalReceived,
+            income?.ConfirmedAmount ?? 0m,
+            income?.DonationCount ?? 0,
+            income?.DonorCount ?? 0,
             asset.Places.Count,
             asset.UpdatedAtUtc,
             asset.Version);
@@ -188,7 +201,10 @@ public static class TrackingAssetMappingConfig
         string sourceName,
         string mediumName,
         DateTimeOffset now,
-        IReadOnlyList<string> permittedActions)
+        IReadOnlyList<string> permittedActions,
+        CampaignIncome? income = null,
+        IReadOnlyDictionary<Guid, string>? cityNames = null,
+        IReadOnlyDictionary<Guid, string>? stateNames = null)
     {
         ArgumentNullException.ThrowIfNull(asset);
 
@@ -217,7 +233,10 @@ public static class TrackingAssetMappingConfig
             asset.ActiveTo,
             asset.IsLiveAt(now),
             asset.UsageCount,
-            asset.TotalReceived,
+            income?.ConfirmedAmount ?? 0m,
+            income?.DonationCount ?? 0,
+            income?.DonorCount ?? 0,
+            income?.RefundedAmount ?? 0m,
             asset.SubmittedByUserId,
             asset.SubmittedAtUtc,
             asset.ApprovedByUserId,
@@ -227,11 +246,14 @@ public static class TrackingAssetMappingConfig
             asset.UpdatedAtUtc,
             asset.UpdatedByUserId,
             asset.Version,
-            [.. asset.Places.Select(place => place.ToResponse())],
+            [.. asset.Places.Select(place => place.ToResponse(cityNames, stateNames))],
             permittedActions);
     }
 
-    public static TrackingAssetPlaceResponse ToResponse(this TrackingAssetPlace place)
+    public static TrackingAssetPlaceResponse ToResponse(
+        this TrackingAssetPlace place,
+        IReadOnlyDictionary<Guid, string>? cityNames = null,
+        IReadOnlyDictionary<Guid, string>? stateNames = null)
     {
         ArgumentNullException.ThrowIfNull(place);
 
@@ -239,18 +261,24 @@ public static class TrackingAssetMappingConfig
             place.Id,
             place.PlaceName,
             place.CityId,
+            Lookup(cityNames, place.CityId),
             place.StateId,
+            Lookup(stateNames, place.StateId),
             place.Destination,
             [.. place.CustomFields.Select(field =>
                 new TrackingAssetCustomFieldResponse(field.Id, field.FieldName, field.Value))]);
     }
+
+    private static string? Lookup(IReadOnlyDictionary<Guid, string>? names, Guid? id) =>
+        names is not null && id.HasValue && names.TryGetValue(id.Value, out var name) ? name : null;
 
     public static TrackingAssetExportRow ToExportRow(
         this TrackingAsset asset,
         string campaignCode,
         string channelName,
         string sourceName,
-        string mediumName)
+        string mediumName,
+        CampaignIncome? income = null)
     {
         ArgumentNullException.ThrowIfNull(asset);
 
@@ -268,7 +296,8 @@ public static class TrackingAssetMappingConfig
             asset.ActiveFrom.ToString("u", CultureInfo.InvariantCulture),
             asset.ActiveTo.ToString("u", CultureInfo.InvariantCulture),
             asset.UsageCount.ToString(CultureInfo.InvariantCulture),
-            asset.TotalReceived.ToString(CultureInfo.InvariantCulture));
+            (income?.ConfirmedAmount ?? 0m).ToString(CultureInfo.InvariantCulture),
+            (income?.DonationCount ?? 0).ToString(CultureInfo.InvariantCulture));
     }
 
     public static string DescribeStatus(TrackingAssetStatus status) => status switch
@@ -317,6 +346,14 @@ public static class TrackingAssetMappingConfig
             {
                 actions.Add("Submit");
             }
+
+            // A draft nothing points at can be discarded outright. `UsageCount` is checked as
+            // well as the status because the handler checks it, and an action offered here that
+            // the handler then refuses is worse than one never offered.
+            if (asset.UsageCount == 0 && hasPermission(PermissionCodes.TrackingAssetsDeleteDraft))
+            {
+                actions.Add("DeleteDraft");
+            }
         }
 
         if (asset.Status == TrackingAssetStatus.Submitted
@@ -332,7 +369,15 @@ public static class TrackingAssetMappingConfig
             actions.Add("Activate");
         }
 
+        // THE DISABLE PAIR. A live asset can be REQUESTED for disable by its maker and
+        // deactivated by a checker; an asset already carrying a request can only be decided.
         if (asset.Status == TrackingAssetStatus.Active
+            && hasPermission(PermissionCodes.TrackingAssetsRequestDisable))
+        {
+            actions.Add("RequestDisable");
+        }
+
+        if (asset.Status is TrackingAssetStatus.Active or TrackingAssetStatus.DisableRequested
             && hasPermission(PermissionCodes.TrackingAssetsDeactivate))
         {
             actions.Add("Deactivate");

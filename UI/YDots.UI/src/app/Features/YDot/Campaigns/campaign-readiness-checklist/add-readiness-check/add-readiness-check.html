@@ -68,7 +68,7 @@
                   <li>
                     <button type="button" class="crcx-pop-opt" [class.is-selected]="o.reference === cOwnerId()" (click)="selectCheckOwner(o.reference)">
                       <span class="crcx-opt-main">{{ o.name }}</span>
-                      <span class="crcx-opt-sub">{{ o.context }}</span>
+                      @if (o.context) { <span class="crcx-opt-sub">{{ o.context }}</span> }
                     </button>
                   </li>
                 } @empty {

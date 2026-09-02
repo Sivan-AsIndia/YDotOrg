@@ -673,6 +673,52 @@ export class CampaignWizardComponent {
     sel.addRange(range);
   }
 
+  /**
+   * Paste, without the page it was copied from.
+   *
+   * WHAT WENT WRONG WITHOUT THIS. A browser pastes the SOURCE's markup into a contenteditable,
+   * not its words: a paragraph copied from a web page arrives wrapped in a span carrying that
+   * page's font stack, colour and white-space rule, which is a couple of hundred characters of
+   * styling per block. These editors count the characters a person can SEE and then send the
+   * markup, so a description that read as 770 characters travelled as several thousand - past
+   * the column that stores it, and the save was refused with a message that named no field. It
+   * also meant a campaign description quietly inherited the typography of wherever the text had
+   * been written.
+   *
+   * THE TEXT AND ITS LINE BREAKS SURVIVE; only the styling is dropped. Formatting this field is
+   * what the toolbar above it is for, and formatting applied there is proportional to the text
+   * rather than repeated around every block.
+   */
+  protected handlePaste(event: ClipboardEvent, editor: HTMLElement): void {
+    const clipboard = event.clipboardData;
+
+    if (!clipboard) {
+      return;
+    }
+
+    const text = clipboard.getData('text/plain');
+
+    // The browser's own paste is refused either way. An empty plain-text reading means the
+    // clipboard holds something that is not text at all - an image, most often - which has no
+    // place in any of these fields.
+    event.preventDefault();
+
+    if (text.length === 0) {
+      return;
+    }
+
+    // insertText keeps the caret, the undo stack and the surrounding formatting intact, which
+    // rewriting innerHTML by hand does not.
+    try {
+      document.execCommand('insertText', false, text);
+    } catch {
+      /* Unavailable in some hosts - the field simply takes no paste there. */
+      return;
+    }
+
+    this.syncEditor(editor);
+  }
+
   /** Mirror an editor's markup + plain text into the correct backing signals. */
   protected syncEditor(editor: HTMLElement): void {
     // Hard character cap: contenteditable ignores maxlength, so if this input pushed
@@ -1049,9 +1095,13 @@ export class CampaignWizardComponent {
       activationMode: this.activationMode(),
       reminderDaysBefore: this.reminderDaysBefore() ?? undefined,
       reminderTime: this.reminderTime() || undefined,
-      // A Campaign Manager acting as their own campaign's manager; otherwise left for the
-      // notification fallback (routes to the Campaign Manager role) to pick up.
-      ...(role === 'Campaign Manager' ? { managerReference: this.user.reference() } : {}),
+      // An Approver creating a campaign is named as its own accountable manager; anyone else
+      // leaves it unset for the notification fallback, which routes to the Approver role.
+      //
+      // THE NAME CHANGED WITH THE CATALOGUE. This read 'Campaign Manager', which no token
+      // carries since the role set was cut to four - so the field was silently never set and
+      // every campaign fell through to the fallback.
+      ...(role === 'Approver' ? { managerReference: this.user.reference() } : {}),
     };
     if (ref) {
       // The stable reference (store key) is never rewritten from an in-progress edit
@@ -1281,16 +1331,40 @@ export class CampaignWizardComponent {
     this.successRef.set('Deleted');
     this.toast.show('Draft deleted', ref ? `${ref} was removed.` : 'The unused draft was removed.', 'success');
     this.uiState.set('ready');
+
+    // The record it was editing no longer exists, so staying on its form is staying on a screen
+    // about nothing. The register is where the remaining campaigns are.
+    this.leaveToRegister();
   }
 
-  // ----- Discard (top header) — maps to Delete unused draft when a draft exists -----
+  /**
+   * Discard — leaves the wizard.
+   *
+   * IT USED TO STAY. With no draft saved yet it called `resetForm()`, which blanks every field
+   * and sets `stepIndex` back to zero — so the only visible effect of pressing Discard was the
+   * progress bar sliding back to step one, on a form the person had just decided to abandon.
+   * They were still in the wizard, with no way out but the sidebar.
+   *
+   * Discard now returns to the Campaign Register, which is where somebody who has decided not to
+   * create a campaign wants to be. The form is reset first so re-entering the wizard starts
+   * clean rather than resuming abandoned input.
+   *
+   * A SAVED DRAFT STILL GOES THROUGH DELETE, because a committed record needs a named reason and
+   * a consequence preview before it disappears; `confirmDeleteDraft` navigates once that is done.
+   */
   protected discard(): void {
     if (this.lifecycleState() === 'Draft') {
       this.requestDeleteDraft();
-    } else {
-      // No committed record yet; a No-record discard simply resets the unsaved form.
-      this.resetForm();
+      return;
     }
+
+    this.resetForm();
+    this.leaveToRegister();
+  }
+
+  /** Back to the Campaign Register. */
+  private leaveToRegister(): void {
+    this.router.navigate(['/app/fundraising/campaigns/campaign-register']);
   }
 
   private resetForm(): void {

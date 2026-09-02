@@ -56,7 +56,15 @@ public sealed record VerifyPaymentRequest(
 // Payment event queue - SCR-PAY-003
 // =====================================================================================
 
-/// <summary>One row of the payment event queue.</summary>
+/// <summary>
+/// One row of the payment queue.
+///
+/// THE LAST FOUR FIELDS COME FROM THE INTENT, NOT FROM THE EVENT, and they are here because the
+/// screen the workflow document draws is a list of DONORS whose payment did not complete - donor
+/// name, e-mail, campaign, amount, status, received time - rather than a list of webhook bodies.
+/// Without them the browser could only show a gateway event id and would have to fetch each
+/// intent separately to fill a row, which is one request per row on every page.
+/// </summary>
 public sealed record PaymentEventListItemResponse(
     Guid Id,
     PaymentEventType EventType,
@@ -75,7 +83,31 @@ public sealed record PaymentEventListItemResponse(
     int ProcessingAttempts,
     Guid? DonationIntentId,
     string? IntentReference,
-    long Version);
+    long Version,
+
+    /// <summary>The donor as the intent recorded them. Null when the event matched no intent.</summary>
+    string? DonorName,
+
+    /// <summary>
+    /// The donor's e-mail, MASKED unless the caller holds pay.donations.view-sensitive-donor.
+    ///
+    /// Masked here rather than in the browser, because a value the browser is trusted to hide is
+    /// a value the browser was sent.
+    /// </summary>
+    string? DonorEmail,
+
+    string? CampaignName,
+
+    /// <summary>
+    /// Fail, Pending or Success - the DONATION's outcome, which is not the same question as
+    /// <see cref="Status"/>.
+    ///
+    /// THE TWO ARE ROUTINELY DIFFERENT AND THAT IS THE POINT. `Status` says whether we finished
+    /// processing the webhook; this says whether the donor's money moved. A `payment.failed`
+    /// webhook that we processed perfectly is Status=Processed and PaymentOutcome=Fail, and it is
+    /// the second one the queue is triaging.
+    /// </summary>
+    string PaymentOutcome);
 
 /// <summary>One queued event in full, with its raw payload.</summary>
 public sealed record PaymentEventDetailResponse(
@@ -140,6 +172,24 @@ public sealed class PaymentEventSearchFilter : PaginationRequest
 
     /// <summary>Pending or Failed - the events still needing somebody.</summary>
     public bool? OutstandingOnly { get; set; }
+
+    /// <summary>
+    /// Fail / Pending / Success - the DONATION outcome the queue filters on.
+    ///
+    /// THE DOCUMENT'S QUEUE IS DEFINED BY THIS, not by the webhook status: "Success -> the payment
+    /// does NOT appear in the Payment Event Queue", "Fail -> appears with status Fail", "Pending ->
+    /// appears with status Pending". Leaving it unset returns Fail and Pending together, which is
+    /// the queue as the document describes it.
+    /// </summary>
+    public PaymentOutcomeFilter? PaymentOutcome { get; set; }
+
+    /// <summary>
+    /// Donor name, e-mail, campaign and intent reference, as well as the gateway ids.
+    ///
+    /// The base <c>Search</c> only matched gateway identifiers, which nobody triaging a queue has
+    /// to hand - they have the donor's name because the donor rang up about it.
+    /// </summary>
+    public bool SearchIncludesDonor { get; set; } = true;
 }
 
 // =====================================================================================

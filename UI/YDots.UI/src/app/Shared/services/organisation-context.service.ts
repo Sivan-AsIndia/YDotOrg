@@ -8,6 +8,7 @@ import {
 } from '../models/auth.model';
 import { AuthTokenService } from './auth-token.service';
 import { NavigationService } from './navigation.service';
+import { OrganisationScopeService } from './organisation-scope.service';
 
 /**
  * Which Organisation the session is working inside, and how to change it.
@@ -45,10 +46,24 @@ export class OrganisationContextService {
   private readonly authApi = inject(AuthApiService);
   private readonly tokens = inject(AuthTokenService);
   private readonly navigation = inject(NavigationService);
+  private readonly organisationScope = inject(OrganisationScopeService);
 
   /** The Organisations a global caller may step into. Empty for everybody else. */
   private readonly selectableState = signal<TenantOptionResponse[]>([]);
   readonly selectable = this.selectableState.asReadonly();
+
+  constructor() {
+    // THE SWITCHER LIST IS DROPPED ON EVERY SCOPE CHANGE, and it has to be, because the only
+    // thing that refills it is the switcher finding it empty - see `onSwitcherOpened`. Held
+    // across a switch it went stale in three ways that all show on the screen: an Organisation
+    // approved since it was fetched still read "review only", one created since was missing
+    // altogether, and the whole platform's list of Organisations sat in memory after sign-out,
+    // waiting for whoever signed in next in the same tab.
+    //
+    // Dropping rather than re-fetching: for nearly everybody the answer is "you cannot switch",
+    // and the list is wanted only when somebody actually opens the switcher.
+    this.organisationScope.onOrganisationChange(() => this.selectableState.set([]));
+  }
 
   private readonly loadingState = signal(false);
   readonly loading = this.loadingState.asReadonly();

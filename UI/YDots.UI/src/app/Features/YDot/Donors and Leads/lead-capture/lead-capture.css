@@ -130,6 +130,18 @@
   font-weight: 700;
 }
 
+/* Server-side rules this form has no control for. Full width so the list is not squeezed
+   alongside the summary sentence by the flex row above. */
+.lc-banner-list {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.lc-banner-list li {
+  margin-top: 2px;
+}
+
 .lc-banner-danger {
   background: var(--lc-danger-bg);
   border-color: #fbd5d5;
@@ -653,6 +665,18 @@ select.lc-input {
   gap: 10px 18px;
 }
 
+/* The channel group is a group, not a control, so `.lc-field.has-error` does not reach it.
+   Marked here so "choose at least one channel" has something visible to point at. */
+.lc-consent-checks.has-error {
+  border: 1px solid var(--lc-danger-text);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.lc-consent-checks .lc-error {
+  grid-column: 1 / -1;
+}
+
 .lc-checkbox {
   display: flex;
   align-items: flex-start;
@@ -766,4 +790,91 @@ select.lc-input {
     transition: none;
     animation: none;
   }
+}
+/* ==================================================================== *
+ * ONE MODE AT A TIME
+ *
+ * Bulk upload and single capture are separate submissions. The styles
+ * below draw whichever one is not currently active as unavailable rather
+ * than hiding it, so the screen still explains itself.
+ * ==================================================================== */
+
+/* Wraps the whole capture form so `disabled` reaches every control in it,
+   including any added later. Reset to nothing visually. */
+.lc-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.lc-fieldset:disabled {
+  opacity: 0.55;
+}
+
+.lc-fieldset:disabled .lc-input,
+.lc-fieldset:disabled .lc-select,
+.lc-fieldset:disabled textarea {
+  cursor: not-allowed;
+}
+
+/* The calm blue banner over a form that is paused, not broken. */
+.lc-banner-info {
+  background: var(--lc-info-bg);
+  border-color: var(--lc-info-bg);
+  color: var(--lc-info-text);
+}
+
+/* "You have already started entering a lead" — the two-way choice. */
+.lc-bulk-choice {
+  padding: 14px 16px;
+  border: 1px solid var(--lc-border);
+  border-left: 3px solid var(--lc-primary);
+  border-radius: var(--lc-radius-sm);
+  background: var(--lc-primary-tint);
+}
+
+.lc-bulk-choice-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--lc-text);
+}
+
+.lc-bulk-choice-body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--lc-text-muted);
+}
+
+.lc-bulk-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Detaching a staged file is the way back to the single-lead form, so it
+   sits on the file row itself rather than somewhere else on the page. */
+.lc-bulk-file-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin-left: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lc-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* What the button beside it actually submits. */
+.lc-bulk-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--lc-text-faint);
+}
+
+.lc-action-bar-buttons .lc-action-bar-hint {
+  margin-right: 8px;
 }

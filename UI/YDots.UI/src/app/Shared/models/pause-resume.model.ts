@@ -21,6 +21,16 @@ export type ViewState =
   | 'no-access'
   | 'conflict'
   | 'dependency-failure'
+
+  /**
+   * The transition was REFUSED and the campaign has not changed.
+   *
+   * DISTINCT FROM 'conflict', which says the record moved under you and invites a retry. This one
+   * carries the server's own reason - a 403, a 409 from a state that no longer permits the move,
+   * a version mismatch - and the panel had no state for it at all, because it never waited to
+   * find out: the outcome banner was set on a timer and always said "Saved successfully".
+   */
+  | 'error'
   | 'success';
 
 /** The lifecycle actions on this screen (doc 03 §4.8.3) plus Activate (Scheduled → Active),

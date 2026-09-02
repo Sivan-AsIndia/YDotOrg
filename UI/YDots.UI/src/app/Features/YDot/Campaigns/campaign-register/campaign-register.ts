@@ -462,11 +462,25 @@ export class CampaignRegisterComponent {
   }
 
   /** Open the Campaign Readiness Checklist for this specific campaign, carrying its reference so the
-   *  launch-gate opens on the right record (the sidebar link opens it bare, with no ref). */
+   *  launch-gate opens on the right record. This is now the ONLY way in: the checklist has come
+   *  off the sidebar, because opened bare it is a list of checks against no campaign. */
   protected openReadiness(record: CampaignRecord): void {
     this.openRowMenu.set(null);
     this.router.navigate(['/app/cam/campaign-readiness-checklist'], { queryParams: { ref: record.code } });
   }
+
+  /** Open the Tracking Asset Manager scoped to this campaign — the register's counterpart to the
+   *  same button on Campaign detail, and the other half of the sidebar entry's replacement. */
+  protected openTrackingAssets(record: CampaignRecord): void {
+    this.openRowMenu.set(null);
+    if (!this.canViewTrackingAssets()) return;
+    this.router.navigate(['/app/fundraising/campaigns/tracking-asset-manager'], {
+      queryParams: { campaign: record.code },
+    });
+  }
+  protected readonly canViewTrackingAssets = computed(() =>
+    this.user.hasPermission('cam.tracking-assets.view'),
+  );
 
   // ----- Row overflow menu (Open / Export / Delete unused draft) -----
   protected readonly openRowMenu = signal<string | null>(null);
@@ -488,10 +502,17 @@ export class CampaignRegisterComponent {
   }
 
   /**
-   * Approve is offered for a Submitted campaign to a Super Admin or Campaign Manager
-   * holding cam.campaign.approve — but never to the person who created it (segregation
-   * of duty). In practice this means a Campaign Manager's own submission always waits
-   * for the Super Admin, while a Campaign Owner's submission can be approved by either.
+   * Approve is offered for a Submitted campaign to anybody holding `cam.campaigns.approve` -
+   * TENANT_ADMIN and APPROVER - but never to the person who created it.
+   *
+   * THE ROLE NAMES IN THIS COMMENT USED TO BE Super Admin, Campaign Manager and Campaign Owner.
+   * The last two no longer exist: the catalogue is TENANT_ADMIN, INITIATOR and APPROVER, and an
+   * INITIATOR is defined by holding no approval at all.
+   *
+   * THIS IS HALF THE SEGREGATION RULE and the server enforces the other half. The creator is
+   * excluded here; the SUBMITTER is excluded server-side too, and the browser has no trustworthy
+   * way to know who that was. A row that slips through is refused with a clear message rather
+   * than silently approved.
    */
   protected canApprove(record: CampaignRecord): boolean {
     return (
@@ -713,6 +734,7 @@ export class CampaignRegisterComponent {
     if (person) {
       return {
         reference: person.reference,
+        code: person.code,
         name: person.name,
         context: person.context,
         initials: person.initials,
@@ -722,10 +744,13 @@ export class CampaignRegisterComponent {
       };
     }
 
+    // AN UNRESOLVED OWNER IS NOT GIVEN THE RAW ID AS A NAME. The reference here is an API Guid,
+    // and printing it where a person's name belongs is the same class of mistake as printing it
+    // as their code: it puts an identifier on screen and calls it a person.
     return {
       reference,
-      name: reference || 'Unassigned',
-      context: 'Owner not resolved',
+      name: 'Unassigned',
+      context: reference ? 'Owner not resolved' : '',
       initials: '??',
       tone: 'plum',
     };

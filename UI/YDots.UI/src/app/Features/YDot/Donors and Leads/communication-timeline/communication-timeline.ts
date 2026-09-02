@@ -1,10 +1,18 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Output, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Output,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { WorkflowDonor, WorkflowStateService } from '../../../../Service/workflow-state.service';
-import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { ToastService } from '../../../../Shared/services/toast.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { CommunicationTimelineResponse } from '../../../../Shared/models/donor-contract.model';
 
 type CommunicationType =
   | 'Call'
@@ -85,20 +93,30 @@ interface SuggestedAction {
   styleUrl: './communication-timeline.css',
 })
 export class CommunicationTimelineComponent {
-  /** Who is actually logging this - the signed-in person, not a constant. */
-  protected actorName(): string {
-    return this.tokens.displayName() || 'Signed-in user';
-  }
-
-  private readonly people = inject(PeopleDirectoryService);
-  private readonly tokens = inject(AuthTokenService);
-
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
+  private readonly toast = inject(ToastService);
+
+  /**
+   * The server's answer for this lead or donor.
+   *
+   * ONE CALL FILLS BOTH HALVES OF THE SCREEN - the profile card and the timeline beneath it -
+   * so the header can never describe one person while the conversations belong to another.
+   */
+  readonly timeline = signal<CommunicationTimelineResponse | null>(null);
+  readonly loading = signal(false);
+  readonly loadError = signal('');
   readonly donorId = signal(this.route.snapshot.queryParamMap.get('donorId'));
   readonly leadId = signal(this.route.snapshot.queryParamMap.get('leadId'));
-  readonly recordId = computed(() => this.donorId() ?? this.leadId() ?? 'LEAD-2026-0142');
+  /**
+   * The record this timeline belongs to.
+   *
+   * NO FALLBACK CONSTANT. It used to default to the literal 'LEAD-2026-0142', so opening the
+   * screen without a query string showed one particular fabricated lead - and any note recorded
+   * there was attached to it.
+   */
+  readonly recordId = computed(() => this.donorId() ?? this.leadId() ?? '');
 
   @Output() navigateToLeads = new EventEmitter<void>();
 
@@ -131,24 +149,34 @@ export class CommunicationTimelineComponent {
   readonly dateFromFilter = signal('');
   readonly dateToFilter = signal('');
 
+  /**
+   * The profile beside the timeline.
+   *
+   * EVERY FIELD IS THE SERVER'S. The old version fell back to a fabricated person - "Ramesh
+   * Kumar", "+91 98765 43210", "ramesh.kumar@example.com", "Tamil", "Evenings" - whenever the
+   * in-memory store had nothing, which is to say on every fresh page load. Somebody could ring
+   * that number.
+   */
   readonly relationship = computed(() => {
-    const lead = this.workflow.getLead(this.leadId());
-    const donor = this.workflow.getDonor(this.donorId());
+    const data = this.timeline();
     return {
-      reference: lead?.id ?? donor?.donorId ?? this.recordId(),
-      name: lead?.name ?? donor?.name ?? '',
-      mobile: lead?.mobile ?? donor?.mobile ?? '+91 98765 43210',
-      email: lead?.email ?? donor?.email ?? 'ramesh.kumar@example.com',
-      campaign: lead?.campaign ?? donor?.campaign ?? 'Educate a Child 2026',
-      source: lead?.source ?? (donor ? 'Donation & Payments' : 'Website form'),
-      language: lead?.language ?? 'Tamil',
-      owner: lead?.owner ?? donor?.owner ?? 'Unassigned',
-      preferredContactMethod: 'WhatsApp',
-      preferredLanguage: lead?.language ?? 'Tamil',
-      bestContactTime: 'Evenings',
-      stage: lead?.stage ?? 'Engaged',
-      qualificationReadiness: lead?.qualificationReadiness ?? 'Partially Ready',
-      readinessScore: lead?.healthScore ?? 68,
+      reference: data?.leadReference ?? data?.donorReference ?? '',
+      name: data?.displayName ?? '',
+
+      // ALREADY MASKED, OR ALREADY NOT - `isContactMasked` says which, and the screen shows it
+      // rather than deciding.
+      mobile: data?.mobileNumber ?? '',
+      email: data?.emailAddress ?? '',
+      campaign: data?.campaignName ?? '',
+      source: data?.source ?? '',
+      language: data?.preferredLanguage ?? '',
+      owner: data?.ownerName ?? 'Unassigned',
+      preferredContactMethod: '',
+      preferredLanguage: data?.preferredLanguage ?? '',
+      bestContactTime: '',
+      stage: data?.status ?? '',
+      qualificationReadiness: '',
+      readinessScore: data?.healthScore ?? 0,
     };
   });
 
@@ -192,116 +220,99 @@ export class CommunicationTimelineComponent {
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
-  readonly records = signal<CommunicationRecord[]>([
-    {
-      id: 'COM-2026-00871',
-      type: 'Call',
-      date: '20 Aug 2026',
-      time: '10:30 AM',
-      createdBy: this.actorName(),
-      direction: 'Outgoing',
-      outcome: 'Interested',
-      summary:
-        'Ramesh confirmed interest in the Educate a Child campaign and requested a detailed explanation of the donation options.',
-      engagement: 'High',
-      quality: 'Excellent',
-      important: true,
-      attachment: 'campaign-brochure.pdf',
-      followUpDate: '25 Aug 2026',
-      followUpPriority: 'High',
-      followUpPurpose: 'Walk through recurring donation options',
-      followUpStatus: 'Pending',
-    },
-    {
-      id: 'COM-2026-00863',
-      type: 'WhatsApp',
-      date: '19 Aug 2026',
-      time: '06:15 PM',
-      createdBy: this.actorName(),
-      direction: 'Outgoing',
-      outcome: 'Requested Information',
-      summary:
-        'Campaign overview and impact information were shared. The lead requested additional information about recurring donations.',
-      engagement: 'Medium',
-      quality: 'Good',
-      important: false,
-      attachment: 'educate-a-child-overview.pdf',
-    },
-    {
-      id: 'COM-2026-00841',
-      type: 'Meeting',
-      date: '16 Aug 2026',
-      time: '04:00 PM',
-      createdBy: this.actorName(),
-      direction: 'Outgoing',
-      outcome: 'Meeting Completed',
-      summary:
-        'Completed relationship discussion. The lead showed strong interest and agreed to consider a monthly contribution.',
-      engagement: 'High',
-      quality: 'Excellent',
-      important: true,
-      followUpDate: '18 Aug 2026',
-      followUpStatus: 'Completed',
-    },
-    {
-      id: 'COM-2026-00827',
-      type: 'Email',
-      date: '14 Aug 2026',
-      time: '11:20 AM',
-      createdBy: this.actorName(),
-      direction: 'Outgoing',
-      outcome: 'Requested Information',
-      summary:
-        'Sent detailed information about campaign objectives, donor impact and available contribution methods.',
-      engagement: 'Medium',
-      quality: 'Average',
-      important: false,
-    },
-  ]);
+  /**
+   * The conversations, newest first.
+   *
+   * IT WAS A LITERAL ARRAY of four invented exchanges - "Ramesh confirmed interest in the Educate
+   * a Child campaign", "campaign-brochure.pdf" - seeded into `WorkflowStateService` on every
+   * construction, so every lead in every organisation had had the same four conversations.
+   */
+  readonly records = signal<CommunicationRecord[]>([]);
 
   constructor() {
-    /*
-     * IT NO LONGER CREATES A LEAD.
-     *
-     * Opening this screen with a record id that had not loaded CREATED ONE - 'Ramesh Kumar', with
-     * a phone number, an e-mail address and a campaign, all invented - and, now that addLead posts
-     * to the server, that would have written a real lead into the organisation's data every time
-     * somebody followed a stale link.
-     *
-     * A record that is not there is not there. The screen shows its empty state and says so.
-     */
-    this.syncRecords();
-    const lead = this.workflow.getLead(this.leadId());
-    if (lead) {
-      this.currentTemperature.set(lead.temperature);
-      this.newTemperature.set(lead.temperature);
-      this.donationPotential.set(lead.donationPotential);
-      this.newDonationPotential.set(lead.donationPotential);
+    this.load();
+  }
+
+  /**
+   * Loads the profile and the conversations together.
+   *
+   * IT SENDS WHICHEVER ID IT HAS. The screen is reached with a lead id from the queues and a
+   * donor id from Donor 360; the server resolves one to the other, so a lead that has since
+   * converted still shows everything said before the conversion.
+   */
+  private load(): void {
+    if (!this.recordId()) {
+      this.loadError.set('No lead or donor was named, so there is no timeline to show.');
+      return;
+    }
+
+    this.loading.set(true);
+    this.loadError.set('');
+
+    this.api.getCommunicationTimeline(this.leadId(), this.donorId()).subscribe({
+      next: (response) => {
+        this.timeline.set(response);
+        this.records.set(response.entries.map((entry) => this.toRecord(entry)));
+
+        this.currentTemperature.set(response.temperature as Temperature);
+        this.newTemperature.set(response.temperature as Temperature);
+        this.donationPotential.set(response.donationPotential as DonationPotential);
+        this.newDonationPotential.set(response.donationPotential as DonationPotential);
+
+        this.loading.set(false);
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        this.loadError.set(apiErrorMessage(error));
+        this.toast.show('Timeline unavailable', this.loadError(), 'error');
+      },
+    });
+  }
+
+  /**
+   * Maps one server entry onto the row this screen draws.
+   *
+   * THE DATE IS SPLIT FOR DISPLAY ONLY. The API stores one UTC instant; the timeline groups by
+   * day and shows a time beside each line, so both are derived here rather than stored twice.
+   */
+  private toRecord(entry: import('../../../../Shared/models/donor-contract.model').CommunicationTimelineEntry): CommunicationRecord {
+    const occurred = new Date(entry.occurredAtUtc);
+
+    return {
+      id: entry.id,
+      type: this.toCommunicationType(entry.interactionType, entry.channel),
+      date: this.toDisplayDateFrom(occurred),
+      time: occurred.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      createdBy: entry.performedByName ?? '',
+      direction: entry.direction === 'Incoming' ? 'Incoming' : 'Outgoing',
+      outcome: entry.outcome as Outcome,
+      summary: entry.summary,
+
+      // WITHHELD RATHER THAN BLANK. `isNotesMasked` is why there is nothing here, and the screen
+      // says so instead of implying the conversation had no notes.
+      notes: entry.notes ?? undefined,
+      engagement: 'Medium',
+      quality: undefined,
+      important: false,
+    };
+  }
+
+  private toCommunicationType(interactionType: string, channel: string | null): CommunicationType {
+    switch (channel ?? interactionType) {
+      case 'Call': return 'Call';
+      case 'Email': return 'Email';
+      case 'Sms':
+      case 'SMS': return 'SMS';
+      case 'WhatsApp': return 'WhatsApp';
+      case 'Meeting': return 'Meeting';
+      case 'Visit': return 'Visit';
+      default: return 'Internal Note';
     }
   }
 
-  private syncRecords(): void {
-    const records = this.workflow.communicationsFor(this.recordId()).map((record) => ({
-      id: record.id,
-      type: record.type as CommunicationType,
-      date: record.date,
-      time: record.time,
-      createdBy: record.createdBy,
-      direction: record.direction as 'Incoming' | 'Outgoing',
-      outcome: record.outcome as Outcome,
-      summary: record.summary,
-      notes: record.notes,
-      engagement: (record.engagement ?? 'Medium') as EngagementLevel,
-      quality: record.quality as CommunicationQuality | undefined,
-      important: record.important ?? false,
-      attachment: record.attachment,
-      followUpDate: record.followUpDate,
-      followUpTime: record.followUpTime,
-      followUpPriority: record.followUpPriority as FollowUpPriority | undefined,
-      followUpPurpose: record.followUpPurpose,
-      followUpStatus: record.followUpStatus as 'Pending' | 'Completed' | 'Overdue' | undefined,
-    }));
-    this.records.set(records);
+  private toDisplayDateFrom(value: Date): string {
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${day} ${this.monthNames[value.getMonth()]} ${value.getFullYear()}`;
   }
 
   readonly form = signal<CommunicationForm>(this.createEmptyForm('Call'));
@@ -600,26 +611,67 @@ export class CommunicationTimelineComponent {
       this.records.update((records) => [newRecord, ...records]);
     }
 
-    const storedRecord = this.records().find((record) => record.id === (editingId ?? this.records()[0]?.id));
-    if (storedRecord) {
-      if (editingId) {
-        this.workflow.replaceCommunication(this.recordId(), { ...storedRecord, recordId: this.recordId() });
-      } else {
-        this.workflow.addCommunication({ ...storedRecord, recordId: this.recordId(), type: storedRecord.type, outcome: storedRecord.outcome, summary: storedRecord.summary });
-      }
+    // RECORDED THROUGH THE LEAD'S CONTACT COMMAND, which is the same write the Lead Queue uses.
+    // That endpoint applies the consent rules - it refuses a channel the lead has withdrawn -
+    // and writes the audit entry, neither of which a local array could do.
+    const leadId = this.leadId();
+    if (!leadId) {
+      this.toast.show(
+        'Cannot record this',
+        'A conversation is recorded against a lead. Open this timeline from the Lead Queue to add one.',
+        'warning',
+      );
+      this.closeEntryDrawer();
+      return;
     }
-    this.syncRecords();
-    this.closeEntryDrawer();
+
+    this.api
+      .contactLead(leadId, {
+        channel: this.toConsentChannel(value.type),
+        outcome: value.outcome,
+
+        // THE SUMMARY LEADS THE NOTE. `ContactLeadRequest` carries one free-text field, and the
+        // server uses the interaction's Name for the summary line, so both are sent together
+        // rather than dropping what the person typed in the summary box.
+        notes: [value.summary.trim(), value.notes.trim()].filter(Boolean).join(' — ') || null,
+      })
+      .subscribe({
+        next: () => {
+          this.closeEntryDrawer();
+          this.toast.show('Conversation recorded', 'The timeline has been updated.', 'success');
+          this.load();
+        },
+        error: (error: unknown) => {
+          this.toast.show('Not recorded', apiErrorMessage(error), 'error');
+          this.load();
+        },
+      });
   }
 
+  /** The screen's own type names, mapped onto the consent channel the API records against. */
+  private toConsentChannel(type: CommunicationType): string {
+    switch (type) {
+      case 'Call': return 'PhoneCall';
+      case 'Email': return 'Email';
+      case 'SMS': return 'Sms';
+      case 'WhatsApp': return 'WhatsApp';
+      default: return 'Email';
+    }
+  }
+
+  /**
+   * Flagging a line as important.
+   *
+   * IT IS THIS BROWSER'S FLAG ONLY, and now says so. The API has no "important" field on an
+   * interaction, and the old version wrote it into an in-memory store that made it look shared -
+   * a colleague opening the same timeline saw nothing flagged.
+   */
   toggleImportant(record: CommunicationRecord): void {
     this.records.update((records) =>
       records.map((item) =>
         item.id === record.id ? { ...item, important: !item.important } : item,
       ),
     );
-    const updated = this.records().find((item) => item.id === record.id);
-    if (updated) this.workflow.replaceCommunication(this.recordId(), { ...updated, recordId: this.recordId() });
     this.closeActionMenu();
   }
 
@@ -634,16 +686,33 @@ export class CommunicationTimelineComponent {
     this.isTemperatureModalOpen.set(false);
   }
 
+  /**
+   * Temperature and donation potential, saved through the lead's qualify command.
+   *
+   * THE REASON IS THE AUDIT ENTRY, which is why the dialog insists on one and why this is a
+   * server call rather than a signal update: "warm to hot" is a judgement somebody made, and the
+   * trail should record who and why.
+   */
   saveTemperature(): void {
-    if (!this.temperatureReason().trim()) {
+    const reason = this.temperatureReason().trim();
+    const leadId = this.leadId();
+    if (!reason || !leadId) {
       return;
     }
 
-    this.currentTemperature.set(this.newTemperature());
-    if (this.leadId()) {
-      this.workflow.patchLead(this.leadId()!, { temperature: this.newTemperature(), lastActivity: `Temperature updated: ${this.newTemperature()}` });
-    }
-    this.isTemperatureModalOpen.set(false);
+    this.api
+      .qualifyLead(leadId, {
+        qualificationNotes: `Temperature set to ${this.newTemperature()}. ${reason}`,
+        moveToNurture: false,
+      })
+      .subscribe({
+        next: () => {
+          this.isTemperatureModalOpen.set(false);
+          this.toast.show('Temperature updated', `Set to ${this.newTemperature()}.`, 'success');
+          this.load();
+        },
+        error: (error: unknown) => this.toast.show('Not updated', apiErrorMessage(error), 'error'),
+      });
   }
 
   openDonationPotentialModal(): void {
@@ -658,15 +727,25 @@ export class CommunicationTimelineComponent {
   }
 
   saveDonationPotential(): void {
-    if (!this.donationPotentialReason().trim()) {
+    const reason = this.donationPotentialReason().trim();
+    const leadId = this.leadId();
+    if (!reason || !leadId) {
       return;
     }
 
-    this.donationPotential.set(this.newDonationPotential());
-    if (this.leadId()) {
-      this.workflow.patchLead(this.leadId()!, { donationPotential: this.newDonationPotential(), lastActivity: `Donation potential updated: ${this.newDonationPotential()}` });
-    }
-    this.isDonationPotentialModalOpen.set(false);
+    this.api
+      .qualifyLead(leadId, {
+        qualificationNotes: `Donation potential set to ${this.newDonationPotential()}. ${reason}`,
+        moveToNurture: false,
+      })
+      .subscribe({
+        next: () => {
+          this.isDonationPotentialModalOpen.set(false);
+          this.toast.show('Donation potential updated', `Set to ${this.newDonationPotential()}.`, 'success');
+          this.load();
+        },
+        error: (error: unknown) => this.toast.show('Not updated', apiErrorMessage(error), 'error'),
+      });
   }
 
 
@@ -700,7 +779,7 @@ export class CommunicationTimelineComponent {
     this.isRefreshing.set(true);
     this.isFilterOpen.set(false);
     this.closeActionMenu();
-    window.setTimeout(() => { this.syncRecords(); this.isRefreshing.set(false); }, 150);
+    window.setTimeout(() => { this.load(); this.isRefreshing.set(false); }, 150);
   }
 
   handleOpenMyLeads(): void {

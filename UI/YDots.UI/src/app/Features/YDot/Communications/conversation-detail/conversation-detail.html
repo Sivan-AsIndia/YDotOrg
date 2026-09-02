@@ -17,7 +17,7 @@
         <span class="user-avatar" aria-hidden="true">{{ owner.name.charAt(0) }}</span>
         <span class="user-meta">
           <strong>{{ owner.name }}</strong>
-          <small>{{ role === 'supervisor' ? 'Supervisor' : role === 'agent' ? 'Assigned agent' : 'Restricted view' }}</small>
+          <small>{{ role === 'tenant-admin' ? 'Tenant admin' : role === 'approver' ? 'Approver' : role === 'initiator' ? 'Initiator' : 'Restricted view' }}</small>
         </span>
       </div>
     </div>

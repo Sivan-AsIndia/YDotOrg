@@ -103,6 +103,20 @@ public interface IReceiptReadService
         AccessScope scope,
         bool canSeeSensitiveDonor,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The Receipt Register - issued receipts and failed payments together, with the totals.
+    ///
+    /// SEPARATE FROM <c>SearchAsync</c> ON PURPOSE. That one answers "which receipts exist", which
+    /// is the right question for correcting or voiding one. This answers "what happened to every
+    /// payment", which is what the document's register shows, and the two sets are deliberately
+    /// different sizes.
+    /// </summary>
+    Task<ReceiptRegisterResponse> GetRegisterAsync(
+        ReceiptRegisterFilter filter,
+        AccessScope scope,
+        bool canSeeSensitiveDonor,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Read side for the refund and chargeback registers.</summary>

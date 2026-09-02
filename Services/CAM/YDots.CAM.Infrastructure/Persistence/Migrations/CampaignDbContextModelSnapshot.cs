@@ -404,8 +404,8 @@ namespace YDots.CAM.Infrastructure.Persistence.Migrations
                         .HasColumnName("name");
 
                     b.Property<string>("PublicDescription")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
                         .HasColumnName("public_description");
 
                     b.Property<string>("Purpose")
@@ -450,8 +450,8 @@ namespace YDots.CAM.Infrastructure.Persistence.Migrations
                         .HasColumnName("tenant_id");
 
                     b.Property<string>("TermsAndNotice")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)")
+                        .HasMaxLength(80000)
+                        .HasColumnType("character varying(80000)")
                         .HasColumnName("terms_and_notice");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")

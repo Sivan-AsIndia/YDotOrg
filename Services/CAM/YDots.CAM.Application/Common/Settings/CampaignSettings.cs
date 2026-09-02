@@ -21,12 +21,38 @@ public sealed class CampaignSettings
     // it against the same account.
 
     /// <summary>
-    /// Whether a campaign may go live with a required readiness check still outstanding.
+    /// Whether an APPROVED campaign may be activated by hand with a required readiness check
+    /// still outstanding.
     ///
     /// Off by default, which is the safe direction: the checklist exists to stop a campaign
     /// launching without its payment configuration or its consent wording.
+    ///
+    /// IT HAS NOTHING TO SAY ABOUT A SCHEDULED CAMPAIGN. Once a campaign has been approved and
+    /// scheduled, its start date takes it live whatever the checklist says - that is the module
+    /// brief's rule, not a setting - so this governs only the case where somebody launches an
+    /// Approved campaign early.
     /// </summary>
     public bool AllowLaunchWithOutstandingChecks { get; set; }
+
+    /// <summary>
+    /// Whether the background sweep takes scheduled campaigns live on their start date.
+    ///
+    /// ON BY DEFAULT, because a campaign in Scheduled that nothing ever activates is worse than
+    /// no scheduling at all: the wizard promises the campaign will start on its own, and until
+    /// this existed nothing kept that promise. It is a switch rather than a constant so a test
+    /// environment restored from a production snapshot does not start activating real campaigns.
+    /// </summary>
+    public bool EnableAutomaticActivation { get; set; } = true;
+
+    /// <summary>
+    /// How often the activation sweep runs, in minutes. Clamped to 1..720.
+    ///
+    /// FIFTEEN MINUTES IS THE RESOLUTION OF "STARTS ON ITS START DATE". The trigger is a DATE
+    /// rather than a time, so a campaign becomes due at midnight UTC and goes live within one
+    /// interval of it; a shorter sweep buys precision nobody asked for against a database query
+    /// every few seconds.
+    /// </summary>
+    public int ActivationSweepMinutes { get; set; } = 15;
 
     /// <summary>How long a campaign may run. Guards a typo that would schedule one for a decade.</summary>
     public int MaximumCampaignDurationDays { get; set; } = 1095;

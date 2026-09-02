@@ -2,7 +2,10 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Output, computed, inj
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { WorkflowStateService } from '../../../../Service/workflow-state.service';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { ToastService } from '../../../../Shared/services/toast.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { LeadListItem } from '../../../../Shared/models/donor-contract.model';
 
 // ============================================================================
 // DATA MODEL
@@ -23,7 +26,17 @@ export interface LeadItem {
   lastContactOutcome: string;
   recommendedNextAction: string;
   contactRestricted: boolean;
-  /** Contact identity — used for payment → lead matching (WorkflowStateService). */
+
+  /**
+   * The reference a person quotes, e.g. LED-2026-001245.
+   *
+   * SEPARATE FROM `reference`, WHICH IS NOW THE API'S ID. Every write on this screen is addressed
+   * to the id; the grid and every message show this.
+   */
+  displayReference: string;
+
+  /** The server's row version, sent back on every write for the concurrency check. */
+  version: number;
   email?: string;
   mobile?: string;
 }
@@ -102,458 +115,14 @@ export interface LeadsScreenData {
 }
 
 
-export const LEADS_SOURCE: LeadsScreenData = {
-  "screen": {
-    "viewId": "SCR-DON-005",
-    "title": "My leads",
-    "route": "/fundraising/relationships/my-leads",
-    "purpose": "Work assigned leads through to qualification: prioritise, engage and track follow-ups.",
-    "primaryAction": "Communicate",
-    "viewPermission": "don.my-leads.view",
-    "primaryUsers": [
-      "Fundraiser",
-      "Team Lead"
-    ],
-    "scope": "YDot Foundation · Tamil Nadu · My assignment",
-    "lastRefresh": "01 Aug 2026, 02:10 PM · IST"
-  },
-  "permissions": {
-    "view": true,
-    "updateStage": true,
-    "updateTemperature": true,
-    "logCommunication": true,
-    "scheduleFollowUp": true,
-    "executeFollowUp": true,
-    "qualify": true,
-    "markLost": true,
-    "markDormant": true,
-    "bulkActions": true,
-    "exportGrid": true
-  },
-  "kpis": {
-    "assignedLeads": 11,
-    "coldLeads": 6,
-    "warmLeads": 4,
-    "hotLeads": 1,
-    "followUpsDueToday": 3,
-    "followUpsOverdue": 2
-  },
-  "pipeline": [
-    {
-      "stage": "Assigned",
-      "count": 4
-    },
-    {
-      "stage": "Contacted",
-      "count": 2
-    },
-    {
-      "stage": "Engaged",
-      "count": 2
-    },
-    {
-      "stage": "Warm",
-      "count": 1
-    },
-    {
-      "stage": "Hot",
-      "count": 0
-    },
-    {
-      "stage": "Qualified",
-      "count": 1
-    },
-    {
-      "stage": "Lost",
-      "count": 0
-    },
-    {
-      "stage": "Dormant",
-      "count": 1
-    }
-  ],
-  "groups": [
-    {
-      "key": "assigned",
-      "label": "Assigned",
-      "count": 4,
-      "items": [
-        {
-          "reference": "LEAD-2026-0142",
-          "name": "Ramesh Kumar",
-          "campaign": "Educate a Child 2026",
-          "owner": "Unassigned",
-          "stage": "Assigned",
-          "temperature": "Cold",
-          "healthScore": 20,
-          "nextFollowUp": "01 Aug 2026, 05:00 PM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Not Ready",
-          "language": "Tamil",
-          "source": "Website form",
-          "lastContactOutcome": "No contact yet",
-          "recommendedNextAction": "Initial contact",
-          "contactRestricted": true
-        },
-        {
-          "reference": "LEAD-2026-0143",
-          "name": "Anitha S",
-          "campaign": "Clean Water 2026",
-          "owner": "Unassigned",
-          "stage": "Assigned",
-          "temperature": "Cold",
-          "healthScore": 20,
-          "nextFollowUp": "01 Aug 2026, 06:30 PM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Not Ready",
-          "language": "English",
-          "source": "Facebook",
-          "lastContactOutcome": "No contact yet",
-          "recommendedNextAction": "Initial contact",
-          "contactRestricted": true
-        },
-        {
-          "reference": "LEAD-2026-0144",
-          "name": "Priya Venkatesh",
-          "campaign": "Educate a Child 2026",
-          "owner": "Unassigned",
-          "stage": "Assigned",
-          "temperature": "Cold",
-          "healthScore": 20,
-          "nextFollowUp": "02 Aug 2026, 10:00 AM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Not Ready",
-          "language": "Tamil",
-          "source": "Referral",
-          "lastContactOutcome": "No contact yet",
-          "recommendedNextAction": "Initial contact",
-          "contactRestricted": true
-        },
-        {
-          "reference": "LEAD-2026-0145",
-          "name": "Mohammed Irfan",
-          "campaign": "Health Camps 2026",
-          "owner": "Unassigned",
-          "stage": "Assigned",
-          "temperature": "Cold",
-          "healthScore": 20,
-          "nextFollowUp": "02 Aug 2026, 11:30 AM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Not Ready",
-          "language": "Urdu",
-          "source": "Instagram",
-          "lastContactOutcome": "No contact yet",
-          "recommendedNextAction": "Initial contact",
-          "contactRestricted": true
-        }
-      ]
-    },
-    {
-      "key": "contacted",
-      "label": "Contacted",
-      "count": 2,
-      "items": [
-        {
-          "reference": "LEAD-2026-0138",
-          "name": "Sundar Rajan",
-          "campaign": "Clean Water 2026",
-          "owner": "Arun Kumar",
-          "stage": "Contacted",
-          "temperature": "Warm",
-          "healthScore": 50,
-          "nextFollowUp": "01 Aug 2026, 03:00 PM",
-          "followUpStatus": "Due",
-          "qualificationReadiness": "Partially Ready",
-          "language": "Tamil",
-          "source": "Website form",
-          "lastContactOutcome": "Interested — call back",
-          "recommendedNextAction": "Qualification call",
-          "contactRestricted": true
-        },
-        {
-          "reference": "LEAD-2026-0135",
-          "name": "Lakshmi Narayanan",
-          "campaign": "Clean Water 2026",
-          "owner": "Neha Patel",
-          "stage": "Contacted",
-          "temperature": "Cold",
-          "healthScore": 15,
-          "nextFollowUp": "31 Jul 2026, 05:00 PM",
-          "followUpStatus": "Overdue",
-          "qualificationReadiness": "Not Ready",
-          "language": "Tamil",
-          "source": "Website form",
-          "lastContactOutcome": "No answer",
-          "recommendedNextAction": "Follow-up call",
-          "contactRestricted": true
-        }
-      ]
-    },
-    {
-      "key": "engaged",
-      "label": "Engaged",
-      "count": 2,
-      "items": [
-        {
-          "reference": "LEAD-2026-0139",
-          "name": "Divya Bharathi",
-          "campaign": "Educate a Child 2026",
-          "owner": "Neha Patel",
-          "stage": "Engaged",
-          "temperature": "Warm",
-          "healthScore": 60,
-          "nextFollowUp": "01 Aug 2026, 04:00 PM",
-          "followUpStatus": "Due",
-          "qualificationReadiness": "Partially Ready",
-          "language": "English",
-          "source": "Event",
-          "lastContactOutcome": "Requested brochure",
-          "recommendedNextAction": "Send information pack",
-          "contactRestricted": true
-        },
-        {
-          "reference": "LEAD-2026-0136",
-          "name": "Suresh Babu",
-          "campaign": "Educate a Child 2026",
-          "owner": "Arun Kumar",
-          "stage": "Engaged",
-          "temperature": "Warm",
-          "healthScore": 40,
-          "nextFollowUp": "31 Jul 2026, 03:30 PM",
-          "followUpStatus": "Overdue",
-          "qualificationReadiness": "Partially Ready",
-          "language": "Telugu",
-          "source": "Facebook",
-          "lastContactOutcome": "Asked to call later",
-          "recommendedNextAction": "Qualification call",
-          "contactRestricted": true
-        }
-      ]
-    },
-    {
-      "key": "warm",
-      "label": "Warm",
-      "count": 1,
-      "items": [
-        {
-          "reference": "LEAD-2026-0130",
-          "name": "Ravi Shankar",
-          "campaign": "Health Camps 2026",
-          "owner": "Arun Kumar",
-          "stage": "Warm",
-          "temperature": "Warm",
-          "healthScore": 65,
-          "nextFollowUp": "06 Aug 2026, 11:00 AM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Partially Ready",
-          "language": "Kannada",
-          "source": "Referral",
-          "lastContactOutcome": "Interested later",
-          "recommendedNextAction": "Nurture call",
-          "contactRestricted": true
-        }
-      ]
-    },
-    {
-      "key": "qualified",
-      "label": "Qualified",
-      "count": 1,
-      "items": [
-        {
-          "reference": "LEAD-2026-0140",
-          "name": "Karthik Raja",
-          "campaign": "Health Camps 2026",
-          "owner": "Arun Kumar",
-          "stage": "Qualified",
-          "temperature": "Hot",
-          "healthScore": 100,
-          "nextFollowUp": "01 Aug 2026, 05:30 PM",
-          "followUpStatus": "Due",
-          "qualificationReadiness": "Ready",
-          "language": "Tamil",
-          "source": "Referral",
-          "lastContactOutcome": "Qualified — high interest",
-          "recommendedNextAction": "Consent confirmation",
-          "contactRestricted": true
-        }
-      ]
-    },
-    {
-      "key": "dormant",
-      "label": "Dormant",
-      "count": 1,
-      "items": [
-        {
-          "reference": "LEAD-2026-0129",
-          "name": "Meena Kumari",
-          "campaign": "Educate a Child 2026",
-          "owner": "Neha Patel",
-          "stage": "Dormant",
-          "temperature": "Cold",
-          "healthScore": 5,
-          "nextFollowUp": "05 Aug 2026, 10:00 AM",
-          "followUpStatus": "Upcoming",
-          "qualificationReadiness": "Not Ready",
-          "language": "Tamil",
-          "source": "Event",
-          "lastContactOutcome": "Not ready — nurture",
-          "recommendedNextAction": "Nurture email",
-          "contactRestricted": true
-        }
-      ]
-    }
-  ],
-  "savedFilters": [
-    "All leads (Default)",
-    "Due today",
-    "Overdue",
-    "Hot leads",
-    "Ready for qualification",
-    "Action required"
-  ],
-  "fieldContracts": [
-    {
-      "label": "Lead reference",
-      "control": "readonly",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Lead name",
-      "control": "readonly",
-      "required": false,
-      "visibility": "Restricted"
-    },
-    {
-      "label": "Mobile / email",
-      "control": "telephone",
-      "required": false,
-      "visibility": "Restricted"
-    },
-    {
-      "label": "Campaign",
-      "control": "searchable-select",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Lead source",
-      "control": "select",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Stage",
-      "control": "select",
-      "required": true,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Temperature",
-      "control": "select",
-      "required": true,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Lead health score",
-      "control": "readonly",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Next follow-up",
-      "control": "datetime",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Follow-up status",
-      "control": "badge",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Qualification readiness",
-      "control": "badge",
-      "required": false,
-      "visibility": "Internal"
-    },
-    {
-      "label": "Last contact outcome",
-      "control": "readonly",
-      "required": false,
-      "visibility": "Restricted"
-    }
-  ],
-  "actions": [
-    {
-      "id": "open",
-      "label": "Open",
-      "placement": "grid-row",
-      "permission": "don.my-leads.view",
-      "allowedState": "Any",
-      "result": "Open the lead quick preview drawer without page navigation."
-    },
-    {
-      "id": "preview",
-      "label": "Preview",
-      "placement": "grid-row",
-      "permission": "don.my-leads.view",
-      "allowedState": "Any",
-      "result": "Open the right-side preview drawer without page navigation."
-    },
-    {
-      "id": "communicate",
-      "label": "Communicate",
-      "placement": "grid-row",
-      "permission": "don.my-leads.logCommunication",
-      "allowedState": "Any",
-      "result": "Navigate to Communication Timeline, passing the lead ID."
-    },
-    {
-      "id": "scheduleFollowUp",
-      "label": "Schedule Follow-Up",
-      "placement": "grid-row",
-      "permission": "don.my-leads.scheduleFollowUp",
-      "allowedState": "Any",
-      "result": "Open Follow-Up Planner, passing the lead ID."
-    },
-    {
-      "id": "executeFollowUp",
-      "label": "Execute Follow-Up",
-      "placement": "grid-row",
-      "permission": "don.my-leads.executeFollowUp",
-      "allowedState": "Any",
-      "result": "Open Follow-Up Execution, passing the lead ID and follow-up ID."
-    },
-    {
-      "id": "qualify",
-      "label": "Qualify",
-      "placement": "grid-row",
-      "permission": "don.my-leads.qualify",
-      "allowedState": "Temperature = Hot AND Qualification readiness = Ready",
-      "result": "Open Lead Qualification, passing the lead ID."
-    },
-    {
-      "id": "markLost",
-      "label": "Mark Lost",
-      "placement": "danger",
-      "permission": "don.my-leads.markLost",
-      "allowedState": "Compatible current state only",
-      "result": "Set stage to Lost and preserve linked history.",
-      "requiresReason": false
-    },
-    {
-      "id": "markDormant",
-      "label": "Mark Dormant",
-      "placement": "danger",
-      "permission": "don.my-leads.markDormant",
-      "allowedState": "Compatible current state only",
-      "result": "Set stage to Dormant and preserve linked history.",
-      "requiresReason": false
-    }
-  ]
-};
+/**
+ * LEADS_SOURCE - REMOVED.
+ *
+ * It was a `LeadsScreenData` literal compiled into the bundle: eleven named leads with campaigns,
+ * owners, health scores and follow-up dates. The constructor flattened it into
+ * `WorkflowStateService`, so every fundraiser in every organisation opened My Leads to the same
+ * eleven people, and qualifying one of them lasted until the tab was refreshed.
+ */
 
 
 // ============================================================================
@@ -561,7 +130,6 @@ export const LEADS_SOURCE: LeadsScreenData = {
 // ============================================================================
 type FilterValue = 'All' | string;
 
-const DATA = LEADS_SOURCE;
 
 @Component({
   selector: 'app-my-leads',
@@ -574,7 +142,8 @@ styleUrl: './my-leads.css',
 export class MyLeadsComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
+  private readonly toast = inject(ToastService);
   // ---- compatibility outputs; actions are also wired directly to Router/state ----
   @Output() communicate = new EventEmitter<string>();
   @Output() scheduleFollowUp = new EventEmitter<string>();
@@ -586,13 +155,50 @@ export class MyLeadsComponent {
   @Output() viewLeadQueue = new EventEmitter<void>();
   @Output() exportGrid = new EventEmitter<LeadItem[]>();
 
-  // ---- static screen metadata from the source data ----
-  readonly screen = DATA.screen;
-  readonly permissions = DATA.permissions;
-  readonly kpis = DATA.kpis;
-  readonly pipeline = DATA.pipeline;
-  readonly savedFilters = DATA.savedFilters;
-  readonly actionDefs: ActionDef[] = DATA.actions;
+  // ---- Screen chrome ----
+  //
+  // THE COUNTS ARE COMPUTED FROM THE SERVER'S ROWS, not read from a constant. `kpis` and
+  // `pipeline` used to be literal arrays in the same file as the leads, so the cards showed
+  // "11 leads, 4 due today" whatever the queue actually contained.
+  readonly screen = {
+    title: 'My leads',
+    purpose: 'The leads assigned to you. Work them, schedule follow-ups and record what happened.',
+    scope: 'Assigned to you',
+  };
+
+  /** What the caller may do, from the server's permitted actions for the queue. */
+  readonly permissions = signal<Record<string, boolean>>({ view: false });
+
+  /**
+   * The summary cards.
+   *
+   * COUNTED FROM THE SERVER'S ROWS. They used to be a literal object in the same file as the
+   * leads themselves, so the cards agreed with the file rather than with the queue.
+   */
+  readonly kpis = computed(() => {
+    const rows = this.sourceLeads();
+    return {
+      assignedLeads: rows.length,
+      followUpsDueToday: rows.filter((l) => l.followUpStatus === 'Due').length,
+      followUpsOverdue: rows.filter((l) => l.followUpStatus === 'Overdue').length,
+      hotLeads: rows.filter((l) => l.temperature === 'Hot').length,
+      warmLeads: rows.filter((l) => l.temperature === 'Warm').length,
+      coldLeads: rows.filter((l) => l.temperature === 'Cold').length,
+    };
+  });
+
+  readonly pipeline = computed(() => {
+    const rows = this.sourceLeads();
+    const counts = new Map<string, number>();
+    for (const lead of rows) {
+      counts.set(lead.stage, (counts.get(lead.stage) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([stage, count]) => ({ stage, count }));
+  });
+
+  readonly savedFilters = ['All my leads', 'Due today', 'Overdue', 'Hot leads'];
+
+  readonly actionDefs: ActionDef[] = [];
 
   // ---- state ----
   private readonly sourceLeads = signal<LeadItem[]>([]);
@@ -613,59 +219,102 @@ export class MyLeadsComponent {
   private copiedRefTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    const seed = DATA.groups.flatMap((group) => group.items).map((lead) => ({
-      id: lead.reference,
-      name: lead.name,
-      mobile: lead.mobile ?? '',
-      email: lead.email ?? '',
-      source: lead.source,
-      campaign: lead.campaign,
-      stage: lead.stage,
-      temperature: lead.temperature,
-      donationPotential: lead.temperature === 'Hot' ? 'High' as const : lead.temperature === 'Warm' ? 'Medium' as const : 'Low' as const,
-      owner: lead.owner,
-      lastActivity: lead.lastContactOutcome,
-      nextFollowUp: lead.nextFollowUp,
-      healthScore: lead.healthScore,
-      healthReasons: [],
-      lastContactOutcome: lead.lastContactOutcome,
-      language: lead.language,
-      createdAt: '2026-08-01T00:00:00.000Z',
-      masked: false,
-      converted: false,
-      followUpStatus: lead.followUpStatus,
-      qualificationReadiness: lead.qualificationReadiness,
-      recommendedNextAction: lead.recommendedNextAction,
-      contactRestricted: lead.contactRestricted,
-    }));
-    this.syncFromWorkflow();
-    const requestedId = this.route.snapshot.queryParamMap.get('leadId');
-    this.activeRef.set(requestedId && this.sourceLeads().some((lead) => lead.reference === requestedId)
-      ? requestedId
-      : this.sourceLeads()[0]?.reference ?? null);
+    this.load();
   }
 
-  private syncFromWorkflow(): void {
-    const leads = this.workflow.leads()
-      .filter((lead) => lead.owner !== 'Unassigned' || ['Assigned', 'Contacted', 'Engaged', 'Warm', 'Hot', 'Qualified', 'Dormant', 'Lost'].includes(lead.stage))
-      .map((lead) => ({
-        reference: lead.id,
-        name: lead.name,
-        campaign: lead.campaign,
-        owner: lead.owner,
-        stage: lead.stage,
-        temperature: lead.temperature,
-        healthScore: lead.healthScore,
-        nextFollowUp: lead.nextFollowUp,
-        followUpStatus: (lead.followUpStatus ?? 'Upcoming') as LeadItem['followUpStatus'],
-        qualificationReadiness: lead.qualificationReadiness ?? 'Not Ready',
-        language: lead.language,
-        source: lead.source,
-        lastContactOutcome: lead.lastContactOutcome,
-        recommendedNextAction: lead.recommendedNextAction ?? 'Initial contact',
-        contactRestricted: lead.contactRestricted ?? false,
-      }));
-    this.sourceLeads.set(leads);
+  /**
+   * SCR-DON-009 - My Leads.
+   *
+   * THE DOCUMENT DEFINES THE SCOPE: "My Leads is the owner-specific list page: it shows the leads
+   * assigned to a single owner." `onlyMine` is how the server is told that, and resolving it from
+   * the token rather than from a value this browser sends is what makes it true - a browser
+   * cannot be trusted to say whose leads it is asking for.
+   *
+   * WHAT THIS REPLACES. The constructor flattened `LEADS_SOURCE` - a constant compiled into the
+   * bundle - into `WorkflowStateService`, so every fundraiser in every organisation saw the same
+   * leads and every qualification was forgotten on refresh.
+   */
+  private load(): void {
+    this.loading.set(true);
+    this.loadError.set(null);
+
+    this.api.getLeadWorkQueue({ page: 1, pageSize: 200, onlyMine: true }).subscribe({
+      next: (response) => {
+        this.sourceLeads.set(response.leads.items.map((row) => this.toLeadItem(row)));
+
+        // VERBS, from the same endpoint the Lead Queue reads:
+        // ['Accept','Filter','Open','Assign','Contact','Qualify','Close'].
+        const permitted = response.permittedActions ?? [];
+        this.permissions.set({
+          view: permitted.includes('Open') || permitted.includes('Filter'),
+          contact: permitted.includes('Contact'),
+          qualify: permitted.includes('Qualify'),
+          close: permitted.includes('Close'),
+          schedule: permitted.includes('Contact'),
+        });
+
+        this.loading.set(false);
+
+        const requestedId = this.route.snapshot.queryParamMap.get('leadId');
+        const rows = this.sourceLeads();
+        this.activeRef.set(
+          requestedId && rows.some((lead) => lead.reference === requestedId)
+            ? requestedId
+            : rows[0]?.reference ?? null,
+        );
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        this.loadError.set(apiErrorMessage(error));
+      },
+    });
+  }
+
+  private toLeadItem(row: LeadListItem): LeadItem {
+    return {
+      // THE API'S ID, NOT THE REFERENCE. Every write below is addressed to it; the reference is
+      // what a person quotes and is shown in the grid.
+      reference: row.id,
+      displayReference: row.leadReference,
+      name: row.name,
+      campaign: row.campaignName ?? '',
+      owner: row.ownerName ?? 'Unassigned',
+      stage: row.status,
+      temperature: row.temperature as LeadItem['temperature'],
+      healthScore: row.healthScore,
+      nextFollowUp: this.formatDate(row.nextActionDueUtc),
+      followUpStatus: this.toFollowUpStatus(row.slaState),
+      qualificationReadiness: row.donationPotential === 'High' ? 'Ready' : 'Not Ready',
+      language: row.preferredLanguage,
+      source: row.source ?? '',
+      lastContactOutcome: row.lastContactOutcome,
+      recommendedNextAction: row.nextAction ?? 'Initial contact',
+
+      // MASKED BY THE SERVER, and a masked lead is one this caller may not contact directly.
+      contactRestricted: row.isContactMasked,
+      version: row.version,
+    };
+  }
+
+  /** The SLA badge the server computed, in this screen's own words. */
+  private toFollowUpStatus(slaState: string): LeadItem['followUpStatus'] {
+    switch (slaState) {
+      case 'Overdue': return 'Overdue';
+      case 'DueToday':
+      case 'Due today': return 'Due';
+      case 'Completed': return 'Completed';
+      default: return 'Upcoming';
+    }
+  }
+
+  private formatDate(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? ''
+      : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
   readonly stageOptions = computed<FilterValue[]>(() => [
@@ -736,45 +385,49 @@ export class MyLeadsComponent {
     return 'health-low';
   }
 
-  // ---- permission gating (reads the real permissions map, no invented logic) ----
-  private permissionFor(action: ActionDef): boolean {
-    const key = action.permission.split('.').pop() as keyof PermissionMap | undefined;
-    if (!key || !(key in this.permissions)) return false;
-    return this.permissions[key];
-  }
+  // ---- Permission gating ----
+  //
+  // ONE SOURCE: the codes the server listed for this caller. The old version looked each action
+  // up in a `PermissionMap` object that lived in the same file as the leads, so what somebody
+  // could do was decided by the bundle rather than by their token.
+  //
+  // THE THREE-ROLE MODEL NEEDS NO CODE HERE. An APPROVER holds no `don.lead-work-queue.qualify`,
+  // so Qualify is not drawn for them; TENANT_ADMIN and INITIATOR both hold it.
 
   canQualify(lead: LeadItem): boolean {
-    const def = this.actionDefs.find((a) => a.id === 'qualify');
-    if (!def || !this.permissionFor(def)) return false;
-    return lead.temperature === 'Hot' && lead.qualificationReadiness === 'Ready';
+    // STATE AS WELL AS PERMISSION. A lead that is not ready is not qualifiable by anybody.
+    return this.permissions()['qualify'] === true
+      && lead.temperature === 'Hot'
+      && lead.qualificationReadiness === 'Ready';
   }
 
   canMarkLost(lead: LeadItem): boolean {
-    const def = this.actionDefs.find((a) => a.id === 'markLost');
-    if (!def || !this.permissionFor(def)) return false;
-    return lead.stage !== 'Lost';
+    return this.permissions()['close'] === true && lead.stage !== 'Lost';
   }
 
   canMarkDormant(lead: LeadItem): boolean {
-    const def = this.actionDefs.find((a) => a.id === 'markDormant');
-    if (!def || !this.permissionFor(def)) return false;
-    return lead.stage !== 'Dormant';
+    return this.permissions()['close'] === true && lead.stage !== 'Dormant';
   }
 
   get canCommunicate(): boolean {
-    return this.permissions.logCommunication;
+    return this.permissions()['contact'] === true;
   }
+
   get canScheduleFollowUp(): boolean {
-    return this.permissions.scheduleFollowUp;
+    return this.permissions()['schedule'] === true;
   }
+
   get canExecuteFollowUp(): boolean {
-    return this.permissions.executeFollowUp;
+    return this.permissions()['schedule'] === true;
   }
+
+  /** Export is available to every role that can see the list - the document treats it that way. */
   get canExport(): boolean {
-    return this.permissions.exportGrid;
+    return this.permissions()['view'] === true;
   }
+
   get canBulkAct(): boolean {
-    return this.permissions.bulkActions;
+    return this.permissions()['view'] === true;
   }
 
   // ---- interactions ----
@@ -849,7 +502,7 @@ export class MyLeadsComponent {
     // Replace with a real HTTP call once a data service is available.
     this.loadError.set(null);
     try {
-      this.syncFromWorkflow();
+      this.load();
     } catch {
       this.loadError.set('Unable to load assigned leads.');
     }
@@ -891,47 +544,85 @@ export class MyLeadsComponent {
     this.router.navigate(['/app/don/follow-up-planner'], { queryParams: { leadId: ref, mode: 'create' } });
   }
 
+  /**
+   * Execute Follow-Up - "opens the Follow-Up Execution page", per the document.
+   *
+   * IT NO LONGER INVENTS A FOLLOW-UP. The old version created one on the spot when the lead had
+   * none, so pressing Execute manufactured the very task it then claimed to be executing. The
+   * execution screen loads the lead's real follow-ups and says so when there are none.
+   */
   requestExecuteFollowUp(ref: string): void {
-    if (!this.canExecuteFollowUp) return;
-    this.executeFollowUp.emit(ref);
-    let followUp = this.workflow.followUpsFor(ref).find((item) => item.status === 'Pending' || item.status === 'Rescheduled') ?? this.workflow.followUpsFor(ref)[0];
-    if (!followUp) {
-      const lead = this.workflow.getLead(ref);
-      followUp = this.workflow.addFollowUp({
-        recordId: ref,
-        recordName: lead?.name,
-        assignedTo: lead?.owner,
-        campaign: lead?.campaign,
-        phone: lead?.mobile,
-        email: lead?.email,
-        purpose: lead?.recommendedNextAction ?? 'Relationship follow-up',
-      });
+    if (!this.canExecuteFollowUp) {
+      return;
     }
+    this.executeFollowUp.emit(ref);
     this.router.navigate(['/app/fundraising/relationships/follow-up-execution'], {
-      queryParams: { leadId: ref, followUpId: followUp.id },
+      queryParams: { leadId: ref },
     });
   }
 
+  /**
+   * Qualify - saved through the lead's own qualify command.
+   *
+   * THE NOTES ARE REQUIRED, 10 to 2000 characters, because qualifying is a judgement somebody
+   * made and the audit trail should carry why. The old version set a local string.
+   */
   requestQualify(lead: LeadItem): void {
-    if (!this.canQualify(lead)) return;
-    this.workflow.patchLead(lead.reference, { stage: 'Qualified', qualificationReadiness: 'Ready', lastActivity: 'Qualification completed' });
-    this.syncFromWorkflow();
-    this.qualify.emit(lead.reference);
-    this.router.navigate(['/app/fundraising/relationships/donor-360'], { queryParams: { leadId: lead.reference, conversion: 'pending' } });
+    if (!this.canQualify(lead)) {
+      return;
+    }
+
+    this.api
+      .qualifyLead(lead.reference, {
+        qualificationNotes: `Qualified from My Leads. Recommended next action: ${lead.recommendedNextAction}.`,
+        moveToNurture: false,
+        expectedVersion: lead.version,
+      })
+      .subscribe({
+        next: () => {
+          this.qualify.emit(lead.reference);
+          this.toast.show('Lead qualified', `${lead.displayReference} is now qualified.`, 'success');
+          this.load();
+        },
+        error: (error: unknown) => this.toast.show('Not qualified', apiErrorMessage(error), 'error'),
+      });
   }
 
   requestMarkLost(lead: LeadItem): void {
-    if (!this.canMarkLost(lead)) return;
-    this.workflow.patchLead(lead.reference, { stage: 'Lost', lastActivity: 'Marked lost' });
-    this.syncFromWorkflow();
-    this.markLost.emit(lead.reference);
+    if (!this.canMarkLost(lead)) {
+      return;
+    }
+    this.closeLead(lead, 'Lost', 'Marked lost from My Leads.');
   }
 
   requestMarkDormant(lead: LeadItem): void {
-    if (!this.canMarkDormant(lead)) return;
-    this.workflow.patchLead(lead.reference, { stage: 'Dormant', lastActivity: 'Marked dormant' });
-    this.syncFromWorkflow();
-    this.markDormant.emit(lead.reference);
+    if (!this.canMarkDormant(lead)) {
+      return;
+    }
+    this.closeLead(lead, 'Dormant', 'Marked dormant from My Leads.');
+  }
+
+  /**
+   * Closes a lead with a recorded reason.
+   *
+   * LOST AND DORMANT ARE THE SAME WRITE with a different reason, which is why they share this.
+   * Both take the lead out of the working queue, and the trail should say which one it was.
+   */
+  private closeLead(lead: LeadItem, outcome: string, reason: string): void {
+    this.api
+      .closeLead(lead.reference, { reason: `${outcome}: ${reason}`, expectedVersion: lead.version })
+      .subscribe({
+        next: () => {
+          if (outcome === 'Lost') {
+            this.markLost.emit(lead.reference);
+          } else {
+            this.markDormant.emit(lead.reference);
+          }
+          this.toast.show(`Marked ${outcome.toLowerCase()}`, `${lead.displayReference} was closed.`, 'success');
+          this.load();
+        },
+        error: (error: unknown) => this.toast.show('Not saved', apiErrorMessage(error), 'error'),
+      });
   }
 
   requestOpenFollowUpQueue(): void {

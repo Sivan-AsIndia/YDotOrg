@@ -1,25 +1,76 @@
-<main class="app-wrapper">
+<main class="app-wrapper" [class.pdi-donor-shell]="!isInternalView()">
+
+<!-- ============ DONOR-FACING HERO (Fig 1) ============
+     ONLY FOR THE ANONYMOUS VISITOR. A signed-in member of staff opening the same component
+     under Donations & Payments gets Fig 2 - the panel chrome, no hero - because they are here
+     for reference and support rather than to be persuaded. -->
+@if (!isInternalView()) {
+  <aside class="pdi-hero" aria-label="About giving to this cause">
+    <img class="pdi-hero-bg" src="assets/images/auth/Login page.png" alt="" aria-hidden="true" />
+    <div class="pdi-hero-body">
+      <img class="pdi-hero-logo" src="assets/images/Outline ydot logo 2.svg" alt="YDot" />
+      <h2 class="pdi-hero-title">A gift that<br />starts<br />with a scan.</h2>
+      <p class="pdi-hero-lead">
+        You reached this page from the YDot giving QR — a few details and your donation goes
+        straight to the cause you scanned for.
+      </p>
+      <ul class="pdi-hero-points">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          Secure Razorpay payment — UPI, card or netbanking
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          Instant receipt sent to you by e-mail
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          Eligible for 80G tax benefits
+        </li>
+      </ul>
+      <div class="pdi-hero-badges">
+        <span class="pdi-hero-badge">80G tax benefits</span>
+        <span class="pdi-hero-badge">Razorpay secured</span>
+      </div>
+    </div>
+  </aside>
+}
+
 <div class="page-wrapper">
   <div class="container-fluid px-4 py-3">
 <div [attr.data-ui-state]="uiState()">
 
   <!-- ============ TASK HEADER (4.2.1 Application shell + Task header) ============ -->
-  <header class="task-header" aria-labelledby="pdi-title">
-    <div class="task-header-main">
-      <div class="task-identity">
-        <span class="pdi-eyebrow">Donations &amp; Payments · Public donation initiation</span>
-        <h1 class="page-title" id="pdi-title">{{ pageTitle() }}</h1>
-        <p class="page-subtitle">{{ pageSubtitle() }}</p>
-      </div>
+  @if (isInternalView()) {
+    <!-- Fig 2: the panel's view. The eyebrow names where in the menu this sits, and Owner /
+         Time zone are the two facts a support user needs beside a donation they did not make. -->
+    <header class="task-header" aria-labelledby="pdi-title">
+      <div class="task-header-main">
+        <div class="task-identity">
+          <span class="pdi-eyebrow">Donations &amp; Payments · Public donation initiation</span>
+          <h1 class="page-title" id="pdi-title">{{ pageTitle() }}</h1>
+          <p class="page-subtitle">{{ pageSubtitle() }}</p>
+        </div>
 
-      <div class="pdi-hero-meta">
-        <!-- <span class="state-pill" [class.is-submitted]="lifecycleState() === 'Submitted'">{{ lifecycleState() }}</span> -->
-        <span class="pdi-meta-item"><span class="pdi-meta-k">Owner</span><span class="pdi-meta-v">{{ owner() }}</span></span>
-        <span class="pdi-meta-item"><span class="pdi-meta-k">Time zone</span><span class="pdi-meta-v">{{ operatingTimeZone() }}</span></span>
-      
+        <div class="pdi-hero-meta">
+          <span class="pdi-meta-item"><span class="pdi-meta-k">Owner</span><span class="pdi-meta-v">{{ owner() }}</span></span>
+          <span class="pdi-meta-item"><span class="pdi-meta-k">Time zone</span><span class="pdi-meta-v">{{ operatingTimeZone() }}</span></span>
+        </div>
       </div>
-    </div>
-  </header>
+    </header>
+  } @else {
+    <!-- Fig 1: the donor's view. No eyebrow - a donor has no menu to be located in - and no
+         Owner row, because "Donor · not yet identified" is a fact about our records rather than
+         anything the person reading it needs. -->
+    <header class="task-header pdi-donor-header" aria-labelledby="pdi-title">
+      <h1 class="page-title" id="pdi-title">{{ pageTitle() }}</h1>
+      <p class="page-subtitle">{{ pageSubtitle() }}</p>
+      <p class="pdi-donor-meta">
+        Secure Razorpay checkout <span class="pdi-donor-meta-dot">•</span>
+        TZ {{ operatingTimeZone() }}
+      </p>
+    </header>
+  }
 
   <!-- ============ MAIN WORK (4.2.1) — state-driven ============ -->
   @switch (uiState()) {
@@ -220,45 +271,56 @@
                 }
               </label>
 
-              <!-- PAN or tax identifier — decimal currency input or read-only formatted amount; Conditional; Restricted (4.2.2 / 4.2.5) -->
-              <label class="field ">
-                <span class="field-label">PAN or tax identifier</span>
-                @if (!formLocked()) {
-                  <input id="fld-panOrTaxId" type="text" inputmode="numeric" class="input"
-                         placeholder="Enter PAN or tax identifier (for the tax receipt)"
-                         [ngModel]="panOrTaxId()" (ngModelChange)="panOrTaxId.set($event)" name="panOrTaxId"
-                         [attr.aria-invalid]="panInvalid()" />
-                } @else {
-                  <span class="input input-readonly">{{ panMasked() || '—' }}</span>
-                }
-                <!-- <span class="field-hint">Restricted — masked in list, export and support views.</span> -->
-                @if (panInvalid()) {
-                  <span class="field-error">Review PAN or tax identifier. The value does not meet the stated format or range.</span>
-                }
-              </label>
-   <!-- Address — structured geography selector; Conditional; Restricted (4.2.2 / 4.2.5) -->
-              <label class="field">
-                <span class="field-label">Address geography</span>
-                <div class="select-wrap">
-                  <select id="fld-geography" class="input" [ngModel]="geography()" (ngModelChange)="geography.set($event)"
-                          name="geography" aria-label="Address geography" [disabled]="formLocked()">
-                    <option value="">Select approved administrative geography</option>
-                    @for (g of geographyCatalogue(); track g.reference) { <option [value]="g.reference">{{ g.label }}</option> }
-                  </select>
-                  <svg class="chev-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-                @if (geography()) {
-                  <span class="field-hint">Selected: {{ geographyLabel(geography()) }} · serviceability verified separately.</span>
-                }
-              </label>
+              <!-- ===== FIG 2 ONLY: PAN, geography and address text =====
+                   THE DONOR'S FORM DOES NOT ASK FOR THESE, and Fig 1 is explicit about it -
+                   campaign, name, contact, amount, currency and consent, and nothing else. The
+                   reason is not screen space: every extra box on a donation form is somewhere a
+                   stranger stops and reconsiders, and none of these three is needed to TAKE the
+                   money. A PAN is needed to PRINT an 80G receipt, and the donor is asked for it
+                   once the payment has cleared and they have an account to save it against.
+                   Staff keep all three here, because somebody entering a donation on a donor's
+                   behalf usually has the details in front of them. -->
+              @if (isInternalView()) {
+                <!-- PAN or tax identifier — decimal currency input or read-only formatted amount; Conditional; Restricted (4.2.2 / 4.2.5) -->
+                <label class="field ">
+                  <span class="field-label">PAN or tax identifier</span>
+                  @if (!formLocked()) {
+                    <input id="fld-panOrTaxId" type="text" inputmode="numeric" class="input"
+                           placeholder="Enter PAN or tax identifier (for the tax receipt)"
+                           [ngModel]="panOrTaxId()" (ngModelChange)="panOrTaxId.set($event)" name="panOrTaxId"
+                           [attr.aria-invalid]="panInvalid()" />
+                  } @else {
+                    <span class="input input-readonly">{{ panMasked() || '—' }}</span>
+                  }
+                  <!-- <span class="field-hint">Restricted — masked in list, export and support views.</span> -->
+                  @if (panInvalid()) {
+                    <span class="field-error">Review PAN or tax identifier. The value does not meet the stated format or range.</span>
+                  }
+                </label>
+     <!-- Address — structured geography selector; Conditional; Restricted (4.2.2 / 4.2.5) -->
+                <label class="field">
+                  <span class="field-label">Address geography</span>
+                  <div class="select-wrap">
+                    <select id="fld-geography" class="input" [ngModel]="geography()" (ngModelChange)="geography.set($event)"
+                            name="geography" aria-label="Address geography" [disabled]="formLocked()">
+                      <option value="">Select approved administrative geography</option>
+                      @for (g of geographyCatalogue(); track g.reference) { <option [value]="g.reference">{{ g.label }}</option> }
+                    </select>
+                    <svg class="chev-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                  @if (geography()) {
+                    <span class="field-hint">Selected: {{ geographyLabel(geography()) }} · serviceability verified separately.</span>
+                  }
+                </label>
 
-              <label class="field">
-                <span class="field-label">Address text</span>
-                <input type="text" class="input" maxlength="160" autocomplete="off"
-                       placeholder="Enter address text (preserved as entered)" [disabled]="formLocked()"
-                       [ngModel]="addressText()" (ngModelChange)="addressText.set($event)" name="addressText" />
-                <!-- <span class="field-hint">Restricted — masked in list, export and support views.</span> -->
-              </label>
+                <label class="field">
+                  <span class="field-label">Address text</span>
+                  <input type="text" class="input" maxlength="160" autocomplete="off"
+                         placeholder="Enter address text (preserved as entered)" [disabled]="formLocked()"
+                         [ngModel]="addressText()" (ngModelChange)="addressText.set($event)" name="addressText" />
+                  <!-- <span class="field-hint">Restricted — masked in list, export and support views.</span> -->
+                </label>
+              }
  
             </div>
              <label class="consent-row" [class.is-disabled]="formLocked()" style="width:100%;margin-top:20px"
@@ -321,6 +383,50 @@
   
     }
   }
+  <!-- ============ SECTION 3: THE LEAD / DONOR BRANCH ============
+       WHY THIS IS A STOP RATHER THAN A TOAST. The page used to recognise a returning donor,
+       show a "welcome back" message and redirect to the gateway in the same breath - so the
+       choice the document gives the donor ("they can pay right away, or log in") was made for
+       them before the toast had finished appearing. Recognition is only worth doing if it
+       changes what happens next. -->
+  @if (identityChoiceOpen()) {
+    <div class="dialog-backdrop">
+      <div class="dialog pdi-identity-dialog" role="dialog" aria-modal="true" aria-labelledby="pdi-identity-title">
+        <h2 class="dialog-title" id="pdi-identity-title">Welcome back</h2>
+        <p class="state-text">
+          We already have a record for {{ recognisedContact() }} with this organisation. Your
+          donation {{ intentReference() }} is saved either way — choose how you would like to
+          finish it.
+        </p>
+
+        @if (donorCheck()?.message) {
+          <p class="state-text pdi-identity-note">{{ donorCheck()!.message }}</p>
+        }
+
+        <div class="pdi-identity-actions">
+          @if (canSignIn()) {
+            <button type="button" class="btn btn-primary btn-sm" (click)="signInAndContinue()">
+              Sign in, then pay
+            </button>
+            <span class="pdi-identity-hint">
+              Signing in lets you see your previous payments and receipts. You come straight back
+              to this donation afterwards.
+            </span>
+          } @else {
+            <span class="pdi-identity-hint">
+              Your account has not been activated yet, so there is nothing to sign in to. Finish
+              the payment and we will e-mail you an activation link with the receipt.
+            </span>
+          }
+
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="continueWithoutSigningIn()">
+            Continue to payment
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
 <!-- 
   @if (submitDialogOpen()) {
     <div class="dialog-backdrop" (click)="cancelSubmit()">
@@ -332,7 +438,7 @@
           <div><dt>Affected record</dt><dd>Public donation initiation (new)</dd></div>
           <div><dt>Before</dt><dd>{{ lifecycleState() }}</dd></div>
           <div><dt>After</dt><dd>Submitted</dd></div>
-          <div><dt>Effective permission</dt><dd>Public donation - no permission required</dd></div>
+          <div><dt>Effective permission</dt><dd>pay.public-donation-initiation.submit</dd></div>
           <div><dt>Evidence</dt><dd>Consent acknowledged {{ consentEffectiveTime() }}</dd></div>
           <div><dt>Effective time</dt><dd>On confirmation · {{ operatingTimeZone() }}</dd></div>
         </dl>

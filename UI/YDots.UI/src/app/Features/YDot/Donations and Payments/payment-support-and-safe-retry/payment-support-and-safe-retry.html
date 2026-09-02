@@ -243,8 +243,8 @@
           <!-- Available actions on this record (§4.7.3) -->
           <div class="psr-detail-actions">
             <!-- @if (verifyAllowed(r)) { <button type="button" class="btn btn-primary btn-sm" (click)="verifyStatus(r)">Verify status</button> } -->
-            @if (resendAllowed(r)) { <button type="button" class="btn btn-secondary btn-sm" (click)="requestResend(r)">Resend active link</button> }
-            @if (replaceAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="replaceExpiredLink(r)">Resend expired link</button> }
+            <!-- @if (resendAllowed(r)) { <button type="button" class="btn btn-secondary btn-sm" (click)="requestResend(r)">Resend active link</button> } -->
+            <!-- @if (replaceAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="replaceExpiredLink(r)">Resend expired link</button> } -->
             @if (openSupportAllowed(r)) { <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openSupportCase(r)">Open support case</button> }
             @if (cancelAllowed(r)) { <button type="button" class="btn btn-danger btn-sm" (click)="requestCancel(r)">Cancel intent</button> }
             @if (!verifyAllowed(r) && !anyOverflowAllowed(r)) { <span class="psr-actions-note">No further action available in this state.</span> }

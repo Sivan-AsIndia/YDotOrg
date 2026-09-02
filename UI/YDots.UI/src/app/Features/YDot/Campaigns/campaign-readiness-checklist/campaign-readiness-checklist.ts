@@ -115,14 +115,110 @@ export class CampaignReadinessChecklistComponent {
   }
 
   // ================= Effective permissions =================
-  protected readonly permissions = computed(() => ({
-    view: this.currentUser.hasPermission('cam.readiness.view'),
-    validate: this.currentUser.hasPermission('cam.readiness.pass'),
-    assignBlocker: this.currentUser.hasPermission('cam.readiness.manage-blockers'),
-    requestApproval: this.currentUser.hasPermission('cam.readiness.edit'),
-    approveLaunch: this.currentUser.hasPermission('cam.readiness.approve'),
-    returnToDraft: this.currentUser.hasPermission('cam.readiness.return-to-draft'),
-  }));
+
+  /**
+   * The server's own Actions menu for this caller, on this campaign, right now.
+   *
+   * THIS IS THE AUTHORITY, and the contract on `CampaignReadiness.permittedActions` says so in as
+   * many words. Deciding the menu from permission codes in the browser cannot work, because two
+   * of the three inputs are not knowable here:
+   *
+   *   - THE CAMPAIGN'S STATUS. "Request approval" applies to a Draft campaign and to nothing
+   *     else. A campaign already Submitted has been requested; the next act is somebody else's
+   *     approval. The browser's gate never looked at status, so on a Submitted campaign it left
+   *     Request approval greyed out and explained it with the wrong reason entirely - "Budget
+   *     approval and Tracking readiness must pass" - when the true answer was "this has already
+   *     been submitted".
+   *   - SEGREGATION OF DUTIES. `Campaign.CanBeApprovedBy` refuses the person who submitted it.
+   *     The browser does not know who that was until the record loads, and must not guess.
+   *
+   * The permission codes remain as the fallback for the moment before the readiness record
+   * arrives, so the menu does not flicker from empty to populated on every load.
+   */
+  private readonly serverActions = computed<readonly string[] | null>(() => {
+    const verdict = this.checklistStore.verdict(this.campaignRef);
+    return verdict?.permittedActions ?? null;
+  });
+
+  private serverAllows(action: string, fallback: boolean): boolean {
+    const actions = this.serverActions();
+    return actions === null ? fallback : actions.includes(action);
+  }
+
+  protected readonly permissions = computed(() => {
+    // APPROVE LAUNCH IS CAMPAIGN APPROVAL, reached from this screen rather than from the detail
+    // one, so it is gated on `cam.campaigns.approve`. It used to check `cam.readiness.approve` -
+    // a code that gates no endpoint anywhere and has since been retired - and Request approval
+    // used to check `cam.readiness.edit`, which is the code for editing a checklist item and has
+    // nothing to do with submitting a campaign.
+    const canApprove = this.currentUser.hasPermission('cam.campaigns.approve');
+
+    return {
+      view: this.currentUser.hasPermission('cam.readiness.view'),
+
+      // PASSING A CHECK AND FAILING ONE ARE DIFFERENT PERMISSIONS, and the screen has to know
+      // both. `cam.readiness.pass` is declared an APPROVE action, so an Initiator does not hold
+      // it; `cam.readiness.fail` is an Operate action, which both roles do. The menu offered
+      // both verbs to everybody, and the half nobody could use came back 403.
+      validate: this.currentUser.hasPermission('cam.readiness.pass'),
+      recordFailure: this.currentUser.hasPermission('cam.readiness.fail'),
+
+      // RAISING A BLOCKER AND CLEARING ONE ARE TWO PERMISSIONS. They were one, which meant
+      // whoever could flag a problem could also wave their own flag away - and an open blocker is
+      // exactly what stops a check being passed, so holding both emptied the mechanism. The maker
+      // raises; the checker resolves.
+      assignBlocker: this.currentUser.hasPermission('cam.readiness.manage-blockers'),
+      addCheck: this.serverAllows(
+        'AddCheck', this.currentUser.hasPermission('cam.readiness.create')),
+
+      // AN APPROVER NEVER SEES "REQUEST APPROVAL". They hold the approval, so a request they
+      // raised is one they must then refuse to approve - the platform's four-eyes rule forbids
+      // one person doing both halves. This is why an Organisation Administrator was being shown
+      // Request approval with Approve launch greyed out beside it: exactly backwards.
+      requestApproval: this.serverAllows(
+        'RequestApproval',
+        this.currentUser.hasPermission('cam.campaigns.submit') && !canApprove),
+
+      approveLaunch: this.serverAllows('ApproveLaunch', canApprove),
+      returnToDraft: this.serverAllows(
+        'ReturnToDraft', this.currentUser.hasPermission('cam.readiness.return-to-draft')),
+    };
+  });
+
+  /**
+   * What this ROLE holds, before any question of the record's state.
+   *
+   * THE TWO ARE DIFFERENT QUESTIONS AND THE SCREEN NOW ASKS THEM SEPARATELY.
+   * `permissions()` above blends them - it reads the server's `permittedActions`, which encodes
+   * the permission AND the campaign's status AND the four-eyes rule - and every action on this
+   * screen was rendered from that one answer, disabled, with a sentence underneath. So an
+   * Initiator was shown "Approve launch" greyed out on every campaign they would ever open, and
+   * an Approver was shown "Request approval" the same way.
+   *
+   * The rule is now: a permission this role does not hold HIDES the item, because it is never
+   * going to become available and a permanently dead control is noise. A state that does not
+   * suit yet SHOWS it disabled with the reason, because that one changes.
+   */
+  protected readonly capabilities = computed(() => {
+    const canApprove = this.currentUser.hasPermission('cam.campaigns.approve');
+
+    return {
+      addCheck: this.currentUser.hasPermission('cam.readiness.create'),
+      editCheck: this.currentUser.hasPermission('cam.readiness.edit'),
+      deleteCheck: this.currentUser.hasPermission('cam.readiness.delete'),
+      pass: this.currentUser.hasPermission('cam.readiness.pass'),
+      fail: this.currentUser.hasPermission('cam.readiness.fail'),
+      assignBlocker: this.currentUser.hasPermission('cam.readiness.manage-blockers'),
+      resolveBlocker: this.currentUser.hasPermission('cam.readiness.resolve-blockers'),
+
+      // An approver never raises a launch request: they would be the one approving it, and the
+      // four-eyes rule then refuses the pair. This is a property of the ROLE, not of the record,
+      // so it belongs on this side of the split.
+      requestApproval: this.currentUser.hasPermission('cam.campaigns.submit') && !canApprove,
+      approveLaunch: canApprove,
+      returnToDraft: this.currentUser.hasPermission('cam.readiness.return-to-draft'),
+    };
+  });
 
   // ================= Campaign + readiness record (live from the shared stores) =================
   protected readonly campaign = computed(() =>
@@ -439,14 +535,19 @@ export class CampaignReadinessChecklistComponent {
       'success',
     );
   }
-  /** Retry only the failed dependency using a stable correlation reference. */
+  /**
+   * Retry only the failed dependency.
+   *
+   * IT RELOADS, rather than declaring the service reachable again. `setReachable` is an empty
+   * method - reachability is what the last request answered, not a flag a screen may set - so
+   * calling it here achieved nothing and the retry re-validated against the same stale failure.
+   * Reloading the checklist is what actually re-asks the question.
+   *
+   * The "Simulate content/payment service outage" link that sat beside this is gone with it: it
+   * was the same no-op call with `false`, and did nothing at all when clicked.
+   */
   protected retryDependency(): void {
-    this.contentStub.setReachable(true);
-    this.validateReadiness();
-  }
-  /** Dev affordance to demonstrate the dependency-failure path (stub service outage). */
-  protected simulateDependencyOutage(): void {
-    this.contentStub.setReachable(false);
+    this.checklistStore.load(this.campaignRef);
     this.validateReadiness();
   }
 
@@ -569,27 +670,78 @@ export class CampaignReadinessChecklistComponent {
     this.lastRefresh.set('Just now · IST');
   }
 
-  /** Row "Pass/Completed" — manually approves a Pending check; it moves out of Pending
-   *  without waiting on a computed result. */
+  /**
+   * Row "Pass/Completed" — signs a check off.
+   *
+   * THE TOAST WAITS FOR THE SERVER. Both of these used to announce success on the line after
+   * dispatching the call, so a refusal - and `cam.readiness.pass` is an approval permission an
+   * Initiator does not hold, so refusals are routine - produced "marked as passed" over a card
+   * that had not moved. The card is the truth; the toast now says what the card is going to say.
+   */
   protected markChecklistPassed(check: ReadinessCheck): void {
     this.closeChecklistRowMenu();
-    this.checklistStore.setStatus(this.campaignRef, check.id, 'Passed');
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check updated', `${check.name} marked as passed.`, 'success');
+    if (!this.permissions().validate) return;
+    this.recordVerdict(check, 'Passed');
   }
-  /** Row "Fail" — manually rejects a check. */
+  /** Row "Fail" — records that a check is not ready. A separate permission from passing it. */
   protected markChecklistFailed(check: ReadinessCheck): void {
     this.closeChecklistRowMenu();
-    this.checklistStore.setStatus(this.campaignRef, check.id, 'Failed');
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check updated', `${check.name} marked as failed.`, 'success');
+    if (!this.permissions().recordFailure) return;
+    this.recordVerdict(check, 'Failed');
+  }
+  private recordVerdict(check: ReadinessCheck, status: 'Passed' | 'Failed'): void {
+    const verb = status === 'Passed' ? 'passed' : 'failed';
+
+    this.checklistStore.setStatus(this.campaignRef, check.id, status, undefined, (outcome) => {
+      if (!outcome.recorded) {
+        this.toast.show(
+          'Verdict not recorded',
+          outcome.error ?? `${check.name} could not be marked as ${verb}.`,
+          'error');
+        return;
+      }
+
+      this.lastRefresh.set('Just now · IST');
+      this.toast.show('Readiness check updated', `${check.name} marked as ${verb}.`, 'success');
+    });
   }
   /** Row "Delete" — removes the check entirely. */
+  /** Whether this check can actually be removed: Pending, unblocked, and the role holds it. */
+  protected deleteCheckAllowed(check: ReadinessCheck): boolean {
+    return this.capabilities().deleteCheck && check.status === 'Pending' && !check.openBlocker;
+  }
+  protected deleteCheckDisabledReason(check: ReadinessCheck): string {
+    if (check.status !== 'Pending') {
+      return `Only a Pending check can be deleted. This one is ${check.status}, and the verdict on it would go too.`;
+    }
+    if (!!check.openBlocker) {
+      return 'This check has a blocker raised against it. Resolve it before removing the check.';
+    }
+    return '';
+  }
+
+  /**
+   * Removes a check from the checklist.
+   *
+   * IT CALLS THE API NOW, AND REPORTS WHAT HAPPENED. It used to call the store's `removeCheck`,
+   * which marked the check "not required for launch" because CAM had no delete - so a check the
+   * screen said was "deleted" was still on the list, still attributable, just no longer blocking.
+   * CAM has a DELETE for a Pending check now; anything judged is still refused, because deleting
+   * it would destroy somebody's verdict along with the question.
+   */
   protected deleteChecklistItem(check: ReadinessCheck): void {
     this.closeChecklistRowMenu();
-    this.checklistStore.removeCheck(this.campaignRef, check.id);
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check deleted', `${check.name} was removed.`, 'success');
+    if (!this.deleteCheckAllowed(check)) return;
+
+    this.checklistStore.deleteCheck(this.campaignRef, check.id, (outcome) => {
+      if (!outcome.deleted) {
+        this.toast.show('Check not deleted', outcome.error ?? 'That check could not be removed.', 'error');
+        return;
+      }
+
+      this.lastRefresh.set('Just now · IST');
+      this.toast.show('Readiness check deleted', `${check.name} was removed.`, 'success');
+    });
   }
 
   // ================= Assign blocker =================
@@ -667,8 +819,15 @@ export class CampaignReadinessChecklistComponent {
       this.showSuccess(this.campaignRef, `Blocker on ${label}`, 'Resolve the blocker or Validate readiness');
     });
   }
+  /**
+   * Resolves a blocker.
+   *
+   * GUARDED ON RESOLVE, NOT ON ASSIGN. It checked the assign permission, which is the code for
+   * RAISING one - so anybody who could flag a problem could clear their own flag, and an open
+   * blocker is exactly what stops a check being passed.
+   */
   protected removeBlocker(id: string): void {
-    if (!this.permissions().assignBlocker) return;
+    if (!this.capabilities().resolveBlocker) return;
 
     this.readinessStore.removeBlocker(this.campaignRef, id, (outcome) => {
       this.syncSnapshot();
@@ -692,6 +851,31 @@ export class CampaignReadinessChecklistComponent {
   protected readonly requestReasonValid = computed(
     () => !this.exceptionRecorded() || this.exceptionReason().trim().length >= 10,
   );
+
+  /**
+   * Why Request approval is unavailable, in the words of whatever is actually blocking it.
+   *
+   * IT USED TO GIVE ONE REASON FOR TWO CAUSES. The template offered "Budget approval and Tracking
+   * readiness must pass" whenever the item was disabled, so a campaign that had ALREADY been
+   * submitted - the commonest case by far, since submitting is what disables it - was explained
+   * with a sentence about budgets. The status check comes first here because it is the one the
+   * person can do nothing about by working the checklist harder.
+   */
+  protected requestDisabledReason(): string {
+    const status = this.campaign()?.status;
+
+    if (status && status !== 'Draft') {
+      return this.currentUser.hasPermission('cam.campaigns.approve')
+        ? 'Approvers do not raise launch requests; use Approve launch.'
+        : `Already ${status.toLowerCase()} — a launch request has been raised for this campaign.`;
+    }
+
+    if (!this.requestApprovalEligible()) {
+      return 'Budget approval and Tracking readiness must pass, or an exception must be recorded, first.';
+    }
+
+    return '';
+  }
 
   protected openRequestDialog(): void {
     this.closeActionsMenu();
@@ -773,9 +957,15 @@ export class CampaignReadinessChecklistComponent {
     // keeps its current lifecycle state.
     return !!rec && rec.requestState === 'Submitted' && this.permissions().approveLaunch;
   });
+  /**
+   * Why Approve launch is unavailable.
+   *
+   * IT NO LONGER EXPLAINS A MISSING PERMISSION. A caller without `cam.campaigns.approve` is not
+   * shown the item at all, so the only reason left to give is the one that can change: nobody has
+   * requested the launch yet.
+   */
   protected approveDisabledReason(): string {
     const rec = this.readiness();
-    if (!this.permissions().approveLaunch) return 'Approve launch requires the independent-approver permission.';
     if (!rec || rec.requestState !== 'Submitted') return 'Approve launch is only available after Request approval.';
     return '';
   }

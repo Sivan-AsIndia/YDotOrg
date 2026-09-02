@@ -7,7 +7,6 @@ using YDot.IAM.Application.ServiceContainer;
 using YDot.IAM.Infrastructure.Persistence;
 using YDot.IAM.Infrastructure.Persistence.Seed;
 using YDot.IAM.Infrastructure.ServiceContainer;
-using Microsoft.AspNetCore.HttpOverrides;
 
 // Serilog is started BEFORE the host so that a failure during startup — a bad connection string,
 // a missing signing key — is still written somewhere a person can read, rather than disappearing
@@ -53,19 +52,12 @@ try
     //   - Every audit row records the proxy as the actor's address, so "where did this come
     //     from" has one answer for every event ever recorded.
     //
-    // KnownNetworks and KnownProxies are cleared deliberately. The default trusts only loopback,
-    // and nginx reaches this service from the compose bridge network instead - so the header
-    // would be ignored exactly where it is needed. That is safe HERE because nothing but the
-    // platform's own nginx can reach the container's port: it is not published to the host except
-    // through that proxy. If this service is ever exposed directly, name the proxy explicitly
-    // rather than clearing the list, or a caller can forge their own address.
-    app.UseForwardedHeaders(new ForwardedHeadersOptions
-    {
-        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-        ForwardLimit = 2,
-        KnownNetworks = { },
-        KnownProxies = { }
-    });
+    // WHICH PROXIES ARE TRUSTED is the part that has to be right, and it used to be written as
+    // `KnownNetworks = { }` in an object initialiser — which adds nothing and leaves the
+    // loopback-only defaults standing, so the header nginx sets was silently ignored and every
+    // session recorded the proxy's own container address. See ForwardedHeadersConfiguration for
+    // the full account and for the environment variable that narrows the trusted set.
+    app.UseForwardedHeaders(ForwardedHeadersConfiguration.Build(builder.Configuration));
 
     // 1. Correlation first, so even a request rejected at the very edge carries an id.
     app.UseMiddleware<CorrelationIdMiddleware>();

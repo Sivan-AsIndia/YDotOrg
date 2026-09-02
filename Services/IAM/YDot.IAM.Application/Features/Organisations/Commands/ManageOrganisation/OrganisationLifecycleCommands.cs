@@ -111,7 +111,28 @@ public sealed class OrganisationLifecycleCommandHandler(
                 "An archived organisation cannot be edited."));
         }
 
-        command.Request.ApplyProfile(tenant);
+        // ---- WHAT AN APPROVED ORGANISATION MAY STILL CHANGE ------------------------------------
+        //
+        // Everything, until SuperAdmin approves it; contact e-mail, telephone and address only,
+        // afterwards. The identity fields — name, legal name, registration number, PAN, GSTIN,
+        // type — are what the reviewer checked the registration certificate against, so leaving
+        // them writable would let an Organisation be approved as one legal entity and then become
+        // another with the accepted documents still attached.
+        //
+        // THE FIELDS ARE DROPPED RATHER THAN THE REQUEST REFUSED. The screen posts the whole form
+        // whether or not it changed, so rejecting a request that merely REPEATS the stored name
+        // would make an address correction impossible. `ApplyContactAndAddress` simply never
+        // reads the other properties.
+        var verified = OrganisationMappingConfig.IsProfileVerified(tenant.Status);
+
+        if (verified)
+        {
+            command.Request.ApplyContactAndAddress(tenant);
+        }
+        else
+        {
+            command.Request.ApplyProfile(tenant);
+        }
 
         await audit.WriteAsync(
             AuditActionCodes.TenantUpdated, nameof(Tenant), tenant.Id, tenant.Name,
@@ -121,13 +142,17 @@ public sealed class OrganisationLifecycleCommandHandler(
 
         var outstanding = OrganisationMappingConfig.OutstandingProfileFields(tenant);
 
+        var message = verified
+            ? "Contact details and address saved."
+            : outstanding.Count == 0
+                ? "Organisation profile saved. It is ready to submit."
+                : $"Organisation profile saved. {outstanding.Count} field(s) still needed before you can submit.";
+
         return Result.Success(new OutcomeResponse(
             tenant.Id,
             tenant.Status.ToString(),
             tenant.Version,
-            outstanding.Count == 0
-                ? "Organisation profile saved. It is ready to submit."
-                : $"Organisation profile saved. {outstanding.Count} field(s) still needed before you can submit.",
+            message,
             OrganisationMappingConfig.PermittedActionsFor(tenant)));
     }
 

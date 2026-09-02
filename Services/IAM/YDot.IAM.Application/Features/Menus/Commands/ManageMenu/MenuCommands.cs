@@ -1,4 +1,4 @@
-using YDot.IAM.Application.Common.Abstractions.Persistence;
+﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -385,14 +385,37 @@ public sealed class MenuCommandHandler(
         var existing = await menus.GetRoleMenusAsync(role.Id, cancellationToken);
         menus.RemoveRoleMenus(existing);
 
+        var tenantId = role.TenantId ?? tenantContext.RequireTenantId();
+
+        var requested = (request.VisibleMenuIds ?? []).Distinct().ToHashSet();
+
         var mapped = 0;
+        var hidden = 0;
         var skipped = 0;
 
-        foreach (var menuId in (request.VisibleMenuIds ?? []).Distinct())
+        // EVERY NODE THIS SCREEN LETS SOMEBODY DECIDE ABOUT GETS A ROW, ticked or not.
+        //
+        // THE BUG THIS FIXES. The loop used to walk VisibleMenuIds alone and write one
+        // IsVisible = true row per ticked node, so an UNTICKED node ended up with no row at
+        // all. Every reader - BuildForCurrentUserAsync, BuildForRoleAsync and the mapping
+        // screen itself - reads a missing row as "inherit the default", and the default is
+        // visible. Unticking an item therefore did nothing whatsoever: it did not hide the
+        // item, and the screen showed it ticked again on the next load, so the administrator
+        // could not even tell their decision had been discarded.
+        //
+        // "NO ROW" HAS TO GO ON MEANING VISIBLE, which is why the answer is to write the
+        // false rows rather than to invert the reader. A node shipped after this role was
+        // last mapped has no row, and it must appear rather than being invisible until
+        // somebody remembers to re-save every role.
+        //
+        // A NODE THE ROLE CANNOT REACH GETS NO ROW EITHER WAY. The screen renders its
+        // checkbox disabled - see IsPermitted in GetRoleMenuMappingQuery - so nobody has
+        // expressed a preference about it, and the permission filter already removes it. A
+        // false row there would silently outlive a later permission grant.
+        foreach (var definition in catalogue)
         {
-            if (!byId.TryGetValue(menuId, out var definition) || definition.IsPlatformOnly)
+            if (definition.IsPlatformOnly || definition.Status == MenuStatus.Retired)
             {
-                skipped++;
                 continue;
             }
 
@@ -400,38 +423,60 @@ public sealed class MenuCommandHandler(
                             || string.IsNullOrWhiteSpace(definition.RequiredPermissionCode)
                             || held.Contains(definition.RequiredPermissionCode);
 
-            if (!permitted)
+            var isVisible = requested.Contains(definition.Id);
+
+            if (isVisible && !permitted)
             {
+                // Ticked, but the role's permission set would still make the screen answer
+                // 403. Mapping it would produce a menu item that leads to an error page.
                 skipped++;
+                continue;
+            }
+
+            if (!isVisible && !permitted)
+            {
                 continue;
             }
 
             await menus.AddRoleMenuAsync(new RoleMenu
             {
-                TenantId = role.TenantId ?? tenantContext.RequireTenantId(),
+                TenantId = tenantId,
                 BusinessUnitId = role.BusinessUnitId,
                 RoleId = role.Id,
                 MenuDefinitionId = definition.Id,
-                IsVisible = true,
-                IsLandingPage = request.LandingMenuId == definition.Id,
+                IsVisible = isVisible,
+                IsLandingPage = isVisible && request.LandingMenuId == definition.Id,
                 MappedAtUtc = now,
                 MappedByUserId = currentUser.UserId
             }, cancellationToken);
 
-            mapped++;
+            if (isVisible)
+            {
+                mapped++;
+            }
+            else
+            {
+                hidden++;
+            }
         }
+
+        // A ticked id that names nothing in the catalogue, or names the platform branch, is
+        // counted as skipped so the message still accounts for everything that was sent.
+        skipped += requested.Count(
+            menuId => !byId.TryGetValue(menuId, out var definition) || definition.IsPlatformOnly);
 
         await audit.WriteAsync(
             AuditActionCodes.MenuRoleMapped, nameof(Role), role.Id, role.Name,
-            new { Mapped = mapped, Skipped = skipped }, cancellationToken: cancellationToken);
+            new { Mapped = mapped, Hidden = hidden, Skipped = skipped }, cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version,
             skipped == 0
-                ? $"Navigation mapped. {mapped} item(s) visible to this role."
-                : $"Navigation mapped. {mapped} item(s) visible; {skipped} skipped because this role lacks the permission.",
+                ? $"Navigation mapped. {mapped} item(s) visible to this role, {hidden} hidden."
+                : $"Navigation mapped. {mapped} item(s) visible, {hidden} hidden; "
+                  + $"{skipped} skipped because this role lacks the permission.",
             []));
     }
 }

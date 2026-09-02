@@ -193,9 +193,14 @@
              WHAT MOVED OUT OF THIS CONTROLLER. It used to carry <c>readiness/request-approval</c> and
              <c>readiness/approve</c>, which moved a campaign through Submitted to Approved from inside
              the readiness feature. That was a second approval path with its own copy of the status rules
-             and NO segregation-of-duties check - so a Campaign Manager who could not approve a campaign
-             on the campaigns endpoint could approve the same campaign here. Campaign approval now
-             happens in exactly one place.
+             and NO segregation-of-duties check - so somebody refused on the campaigns endpoint could
+             approve the same campaign here. Campaign approval now happens in exactly one place, and the
+             readiness screen's "Approve launch" button posts to that one place.
+            
+             WHAT THE SCREEN MAY DO IS ON THE READINESS RESPONSE, in its PermittedActions - AddCheck,
+             RequestApproval, ApproveLaunch, ReturnToDraft. An Organisation administrator never gets
+             RequestApproval, because they are the approver: asking them to raise a request means asking
+             them to approve their own, which the platform then refuses.
              </summary>
         </member>
         <member name="M:YDots.CAM.API.Controllers.CampaignReadinessController.#ctor(YDots.CAM.Application.Features.CampaignReadiness.Commands.ManageReadiness.ReadinessCommandHandler,YDots.CAM.Application.Features.CampaignReadiness.Queries.ReadinessQueries.ReadinessQueryHandler)">
@@ -209,9 +214,14 @@
              WHAT MOVED OUT OF THIS CONTROLLER. It used to carry <c>readiness/request-approval</c> and
              <c>readiness/approve</c>, which moved a campaign through Submitted to Approved from inside
              the readiness feature. That was a second approval path with its own copy of the status rules
-             and NO segregation-of-duties check - so a Campaign Manager who could not approve a campaign
-             on the campaigns endpoint could approve the same campaign here. Campaign approval now
-             happens in exactly one place.
+             and NO segregation-of-duties check - so somebody refused on the campaigns endpoint could
+             approve the same campaign here. Campaign approval now happens in exactly one place, and the
+             readiness screen's "Approve launch" button posts to that one place.
+            
+             WHAT THE SCREEN MAY DO IS ON THE READINESS RESPONSE, in its PermittedActions - AddCheck,
+             RequestApproval, ApproveLaunch, ReturnToDraft. An Organisation administrator never gets
+             RequestApproval, because they are the approver: asking them to raise a request means asking
+             them to approve their own, which the platform then refuses.
              </summary>
         </member>
         <member name="M:YDots.CAM.API.Controllers.CampaignReadinessController.GetReadinessAsync(System.Guid,System.Threading.CancellationToken)">
@@ -244,9 +254,24 @@
              verifying the thing, and auto-passing would make raise-then-clear a way of skipping the
              verification entirely.
              </summary>
+             <summary>
+             Declares a blocker cleared.
+            
+             GATED ON <c>cam.readiness.resolve-blockers</c>, NOT ON MANAGE-BLOCKERS. Raising an
+             obstacle and waving it away were one permission, so whoever could flag a problem could
+             also clear their own flag - which empties the mechanism, because an open blocker is
+             exactly what stops a check being passed. Raising stays with the maker; clearing is the
+             checker's call.
+             </summary>
         </member>
-        <member name="M:YDots.CAM.API.Controllers.CampaignReadinessController.ReturnToDraftAsync(System.Guid,YDots.CAM.Application.Features.CampaignReadiness.DTOs.ReturnCampaignToDraftRequest,System.Threading.CancellationToken)">
-            <summary>Sends a campaign back to Draft. A reason is mandatory.</summary>
+        <member name="M:YDots.CAM.API.Controllers.CampaignReadinessController.DeleteCheckAsync(System.Guid,YDots.CAM.Application.Features.CampaignReadiness.DTOs.ReadinessVerdictRequest,System.Threading.CancellationToken)">
+             <summary>Sends a campaign back to Draft. A reason is mandatory.</summary>
+             <summary>
+             Removes a Pending check from the checklist.
+            
+             A MAKER'S TIDY-UP, and Pending-only: a judged check holds somebody's verdict, and removing
+             it would destroy the record that a person looked.
+             </summary>
         </member>
         <member name="T:YDots.CAM.API.Controllers.CampaignsController">
              <summary>
@@ -396,6 +421,26 @@
         </member>
         <member name="M:YDots.CAM.API.Controllers.TrackingAssetsController.ActivateAsync(System.Guid,YDots.CAM.Application.Features.TrackingAssets.DTOs.TrackingAssetLifecycleRequest,System.Threading.CancellationToken)">
             <summary>Approved to Active. Mints the tracking reference and the generated URL.</summary>
+        </member>
+        <member name="M:YDots.CAM.API.Controllers.TrackingAssetsController.RequestDisableAsync(System.Guid,YDots.CAM.Application.Features.TrackingAssets.DTOs.TrackingAssetLifecycleRequest,System.Threading.CancellationToken)">
+             <summary>
+             Asks for a live asset to be taken down. Active to DisableRequested.
+            
+             THE MAKER'S HALF of the disable pair: taking an asset down stops a printed QR code
+             resolving, so the person who made it asks and somebody else decides.
+             </summary>
+        </member>
+        <member name="M:YDots.CAM.API.Controllers.TrackingAssetsController.DeactivateAsync(System.Guid,YDots.CAM.Application.Features.TrackingAssets.DTOs.TrackingAssetLifecycleRequest,System.Threading.CancellationToken)">
+            <summary>Decides a disable request, or takes a live asset down directly.</summary>
+        </member>
+        <member name="M:YDots.CAM.API.Controllers.TrackingAssetsController.DeleteDraftAsync(System.Guid,YDots.CAM.Application.Features.TrackingAssets.DTOs.TrackingAssetLifecycleRequest,System.Threading.CancellationToken)">
+             <summary>
+             Destroys an unused Draft asset.
+            
+             THE ONLY DELETE IN THE MODULE. It is safe only because a Draft has never been activated:
+             it holds no tracking reference, so no donation can have been attributed through it.
+             Anything past Draft is retired by deactivating it instead.
+             </summary>
         </member>
         <member name="T:YDots.CAM.API.Filters.FluentValidationFilter">
              <summary>
@@ -547,6 +592,71 @@
         </member>
         <member name="M:YDots.CAM.API.ServiceContainer.DependencyInjection.WriteEnvelopeAsync(Microsoft.AspNetCore.Http.HttpContext,YDots.CAM.Application.Common.Results.Error)">
             <summary>Writes an error envelope directly, for the two JWT events that bypass MVC.</summary>
+        </member>
+        <member name="T:YDots.CAM.API.ServiceContainer.ForwardedHeadersConfiguration">
+             <summary>
+             Builds the <see cref="T:Microsoft.AspNetCore.Builder.ForwardedHeadersOptions"/> that recover the real caller address from
+             behind nginx.
+            
+             WHY THIS IS A CLASS RATHER THAN AN OBJECT INITIALISER IN Program.cs, and it is not a matter
+             of taste. The options used to be written like this:
+            
+             <code>
+             new ForwardedHeadersOptions
+             {
+                 KnownNetworks = { },   // intended: "trust every proxy"
+                 KnownProxies  = { }
+             }
+             </code>
+            
+             <c>KnownNetworks = { }</c> inside an object initialiser is a COLLECTION initialiser, not an
+             assignment. It calls <c>Add</c> once per element listed, and nothing is listed — so it adds
+             nothing and LEAVES THE DEFAULTS IN PLACE. The defaults are IPv6 loopback and
+             <c>::ffff:127.0.0.0/104</c>, so the middleware still trusted loopback and only loopback.
+             nginx reaches this service from the compose bridge network (172.20.0.0/16), which is not
+             loopback, so <c>ForwardedHeadersMiddleware</c> stopped at the first unknown proxy and applied
+             nothing at all. The header was set correctly by nginx, forwarded correctly, and then ignored.
+            
+             The symptom: every row this service writes recorded <c>::ffff:172.20.0.9</c> — the address of
+             the nginx CONTAINER — instead of the caller's own. So every audit row names the proxy, and
+             "where did this come from" has one answer for every event ever recorded, which is the same as
+             having no answer. IAM had the same defect, where it also flattened the per-IP sign-in rate
+             limit into a single global bucket.
+            
+             Clearing the lists has to be done with <c>Clear()</c>, and that is what happens below.
+            
+             TRUSTING EVERY PROXY IS STILL NOT WHAT WE WANT. X-Forwarded-For is caller-controlled, so an
+             empty known-proxy list lets anybody who can open a socket to this service write whatever
+             address they like into the audit trail and step around the per-IP limit. In this compose file
+             the container's port IS published to the host (6704), so "only nginx can reach it" is not
+             true. The trusted set is therefore explicit: loopback plus the private ranges a container
+             network uses, overridable per environment with
+            
+             <code>ForwardedHeaders__KnownNetworks__0=10.42.0.0/16</code>
+            
+             so a real deployment can narrow it to the one proxy in front of it.
+             </summary>
+        </member>
+        <member name="F:YDots.CAM.API.ServiceContainer.ForwardedHeadersConfiguration.SectionName">
+            <summary>Configuration section holding the CIDR list, when one is supplied.</summary>
+        </member>
+        <member name="F:YDots.CAM.API.ServiceContainer.ForwardedHeadersConfiguration.DefaultKnownNetworks">
+             <summary>
+             Loopback plus the three RFC 1918 ranges and the IPv4-mapped forms of them.
+            
+             These are the addresses a reverse proxy on the same private network arrives from. They
+             are never routable from the internet, so a forged header still cannot come from outside;
+             what it does cover is every container network Docker, Compose and Kubernetes hand out by
+             default, which is the whole point.
+             </summary>
+        </member>
+        <member name="M:YDots.CAM.API.ServiceContainer.ForwardedHeadersConfiguration.TryParseNetwork(System.String,Microsoft.AspNetCore.HttpOverrides.IPNetwork@)">
+             <summary>
+             Parses one CIDR entry.
+            
+             A malformed entry is skipped rather than thrown on. A typo in an environment variable
+             should narrow what is trusted — the safe direction — not stop the service booting.
+             </summary>
         </member>
         <member name="T:Program">
             <summary>

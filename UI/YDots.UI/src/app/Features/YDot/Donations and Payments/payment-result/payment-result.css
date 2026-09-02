@@ -1,0 +1,205 @@
+/* =========================================================
+   Payment result — the donor's landing page after paying.
+
+   DONOR-FACING, SO IT CARRIES NO APPLICATION CHROME. There is
+   no sidebar, no menu and no account: the person reading this
+   has just given money and needs one sentence telling them
+   what happened.
+   ========================================================= */
+:host {
+  --pr-paper: #f4f6f9;
+  --pr-card: #ffffff;
+  --pr-ink: #101828;
+  --pr-ink-soft: #475467;
+  --pr-muted: #98a2b3;
+  --pr-border: #e4e7ec;
+
+  --pr-accent: var(--primary, #315746);
+  --pr-good: #1f7a4d;
+  --pr-good-soft: #e6f4ec;
+  --pr-warn: #9a6a12;
+  --pr-warn-soft: #fbf1dd;
+  --pr-error: #b3271e;
+  --pr-error-soft: #fbeae9;
+
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: var(--pr-ink);
+}
+* {
+  box-sizing: border-box;
+}
+
+.pr-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--pr-paper);
+}
+
+.pr-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--pr-card);
+  border: 1px solid var(--pr-border);
+  border-radius: 16px;
+  padding: 44px 40px 36px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px rgba(16, 24, 40, 0.06);
+}
+
+.pr-logo {
+  width: 52px;
+  height: auto;
+  margin: 0 auto 28px;
+  display: block;
+  opacity: 0.9;
+}
+
+/* ---------- The one status icon ---------- */
+.pr-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pr-icon svg {
+  width: 32px;
+  height: 32px;
+}
+.pr-icon-good {
+  background: var(--pr-good-soft);
+  color: var(--pr-good);
+}
+.pr-icon-bad {
+  background: var(--pr-error-soft);
+  color: var(--pr-error);
+}
+.pr-icon-wait {
+  background: var(--pr-warn-soft);
+  color: var(--pr-warn);
+}
+
+/* The waiting icon turns, so a donor can see the page is still working rather than stuck. */
+.pr-icon-wait svg {
+  animation: pr-spin 2.4s linear infinite;
+}
+@keyframes pr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Somebody who has asked their system not to animate gets a still icon instead. */
+@media (prefers-reduced-motion: reduce) {
+  .pr-icon-wait svg {
+    animation: none;
+  }
+}
+
+.pr-title {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 650;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+.pr-lead {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--pr-ink-soft);
+  margin: 0 0 8px;
+}
+.pr-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pr-muted);
+  margin: 16px 0 0;
+}
+
+/* ---------- Actions ---------- */
+.pr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+  padding: 10px 22px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pr-btn-primary {
+  background: var(--pr-accent);
+  color: #ffffff;
+}
+.pr-btn-primary:hover {
+  filter: brightness(0.92);
+  color: #ffffff;
+}
+.pr-btn-outline {
+  background: transparent;
+  border-color: var(--pr-border);
+  color: var(--pr-ink);
+}
+.pr-btn-outline:hover {
+  background: var(--pr-paper);
+}
+.pr-btn:focus-visible {
+  outline: 3px solid var(--pr-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- The reference, which is what support will ask for ---------- */
+.pr-facts {
+  margin: 28px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--pr-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.pr-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+.pr-fact dt {
+  color: var(--pr-muted);
+  margin: 0;
+}
+.pr-fact dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.pr-error {
+  margin: 18px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--pr-muted);
+}
+
+@media (max-width: 560px) {
+  .pr-card {
+    padding: 32px 22px 28px;
+  }
+  .pr-title {
+    font-size: 19px;
+  }
+  .pr-fact {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

@@ -1,12 +1,11 @@
-/* Fonts are self-hosted from assets/fonts/fonts.css, loaded once in index.html.
-   Do NOT re-add an @import to fonts.googleapis.com: it makes the Angular production
-   build reach the network at compile time, which fails the Docker image build. */
 /* ==========================================================================
    Follow-Up Execution — design tokens & component styles
    Visual system derived from the Receipt Register reference:
    warm-neutral surface, serif display headings, soft green primary,
    pill badges, hairline-bordered cards, quiet data tables.
    ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :host {
   display: block;

@@ -1,13 +1,20 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { AuthTokenService } from './auth-token.service';
 
-/** The campaign roles the screens name. Derived from the token's roles, never chosen locally. */
+/**
+ * The roles the screens name. Derived from the token's roles, never chosen locally.
+ *
+ * FOUR NAMES, NOT SIX. The platform's role catalogue was cut from fourteen job-shaped roles to
+ * four authority-shaped ones - Super Admin, Organisation Administrator, Approver, Initiator - so
+ * 'Campaign Manager', 'Campaign Owner', 'Finance Officer' and 'Auditor' are names no token can
+ * carry any more. Leaving them in this union would not have failed to compile; it would have left
+ * every comparison against them silently false, which is the worse outcome.
+ */
 export type CampaignRole =
   | 'Super Admin'
-  | 'Campaign Manager'
-  | 'Campaign Owner'
-  | 'Finance Officer'
-  | 'Auditor'
+  | 'Organisation Administrator'
+  | 'Approver'
+  | 'Initiator'
   | 'User';
 
 /**
@@ -166,20 +173,18 @@ export class CurrentUserService {
       return 'Super Admin';
     }
 
-    if (roles.includes('CAMPAIGN_MANAGER')) {
-      return 'Campaign Manager';
+    if (roles.includes('TENANT_ADMIN')) {
+      return 'Organisation Administrator';
     }
 
-    if (roles.includes('CAMPAIGN_OWNER')) {
-      return 'Campaign Owner';
+    // APPROVER BEFORE INITIATOR, because the order here is most-privileged-first and somebody
+    // holding both should be labelled by the authority they carry rather than the work they do.
+    if (roles.includes('APPROVER')) {
+      return 'Approver';
     }
 
-    if (roles.includes('FINANCE_OFFICER')) {
-      return 'Finance Officer';
-    }
-
-    if (roles.includes('AUDITOR')) {
-      return 'Auditor';
+    if (roles.includes('INITIATOR')) {
+      return 'Initiator';
     }
 
     return 'User';

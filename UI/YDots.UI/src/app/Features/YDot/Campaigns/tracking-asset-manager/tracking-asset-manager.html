@@ -12,7 +12,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
         </span>
       </h1>
-      <p class="tam-subtitle">{{ pageSubtitle }}</p>
+      <p class="tam-subtitle">
+        {{ pageSubtitle }}
+        @if (campaignFilter()) {
+          <span class="tam-scope-note"> Scoped to <strong>{{ campaignFilterName() }}</strong> ({{ campaignFilter() }}).</span>
+        }
+      </p>
       <!-- Stable reference, lifecycle state, owner and freshness -->
       <div class="tam-task-meta">
         <span class="tam-ref">{{ taskReference }}</span>
@@ -30,12 +35,16 @@
         {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
         @if (activeFilterSummary().length) { <span class="tam-count">{{ activeFilterSummary().length }}</span> }
       </button>
-      <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()"
-              [disabled]="!generateAllowed()"
-              [attr.title]="generateAllowed() ? null : generateDisabledReason()">
-        <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        Create
-      </button>
+      <!-- HIDDEN WITHOUT THE CREATE PERMISSION rather than shown greyed out: an Approver
+           creates nothing, so the button would never come alive for them. -->
+      @if (permissions().generate) {
+        <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="openGenerate()"
+                [disabled]="!generateAllowed()"
+                [attr.title]="generateAllowed() ? null : generateDisabledReason()">
+          <svg class="tam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Create
+        </button>
+      }
     </div>
   </header>
 
@@ -406,15 +415,39 @@
                       @if (openRowMenu() === r.trackingReference) {
                         <div class="tam-menu" role="menu" aria-label="Tracking asset actions"
                              appClickOutside [clickOutsideExcept]="tamRowBtn" (appClickOutside)="openRowMenu.set(null)">
+                          <!-- A VERB THIS ROLE DOES NOT HOLD IS NOT RENDERED AT ALL. Every item
+                               below is wrapped in the permission that governs it; what stays
+                               inside `[disabled]` is the record's STATE, which is a "not yet"
+                               worth explaining rather than a "never". A menu of greyed-out verbs
+                               a role can never use teaches people to stop reading it. -->
                           <button type="button" class="tam-menu-item" role="menuitem" (click)="selectAsset(r.trackingReference)">Open</button>
-                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestSubmit(r)"
-                                  [disabled]="!submitAllowed(r)" [title]="submitAllowed(r) ? '' : submitDisabledReason(r)">Submit</button>
-                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestApprove(r)"
-                                  [disabled]="!approveAllowed(r)" [title]="approveAllowed(r) ? '' : approveDisabledReason(r)">Approve</button>
-                          <button type="button" class="tam-menu-item" role="menuitem" (click)="requestEdit(r)"
-                                  [disabled]="!editAllowed(r)" [title]="editAllowed(r) ? '' : editDisabledReason(r)">Edit</button>
-                          <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem" (click)="requestDisable(r)"
-                                  [disabled]="!disableAllowed(r)" [title]="disableAllowed(r) ? '' : disableDisabledReason(r)">Disable</button>
+                          @if (canEverSubmit()) {
+                            <button type="button" class="tam-menu-item" role="menuitem" (click)="requestSubmit(r)"
+                                    [disabled]="!submitAllowed(r)" [title]="submitAllowed(r) ? '' : submitDisabledReason(r)">Submit</button>
+                          }
+                          @if (canEverApprove()) {
+                            <button type="button" class="tam-menu-item" role="menuitem" (click)="requestApprove(r)"
+                                    [disabled]="!approveAllowed(r)" [title]="approveAllowed(r) ? '' : approveDisabledReason(r)">Approve</button>
+                          }
+                          @if (canEverActivate()) {
+                            <button type="button" class="tam-menu-item" role="menuitem" (click)="requestActivate(r)"
+                                    [disabled]="!activateAllowed(r)" [title]="activateAllowed(r) ? '' : activateDisabledReason(r)">Activate</button>
+                          }
+                          @if (canEverEdit()) {
+                            <button type="button" class="tam-menu-item" role="menuitem" (click)="requestEdit(r)"
+                                    [disabled]="!editAllowed(r)" [title]="editAllowed(r) ? '' : editDisabledReason(r)">Edit</button>
+                          }
+                          @if (canEverRequestDisable()) {
+                            <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem" (click)="askForDisable(r)"
+                                    [disabled]="!requestDisableAllowed(r)"
+                                    [title]="requestDisableAllowed(r) ? '' : requestDisableDisabledReason(r)">Request disable</button>
+                          }
+                          @if (canEverDisable()) {
+                            <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem" (click)="requestDisable(r)"
+                                    [disabled]="!disableAllowed(r)" [title]="disableAllowed(r) ? '' : disableDisabledReason(r)">
+                              {{ r.assetStatus === 'Disable requested' ? 'Approve disable' : 'Disable' }}
+                            </button>
+                          }
                           @if (canDeleteDraft(r)) {
                             <button type="button" class="tam-menu-item tam-menu-danger" role="menuitem"
                                     (click)="requestDeleteDraft(r)">Delete unused draft</button>
@@ -546,10 +579,29 @@
 
             <!-- Available workflow actions on this asset -->
             <div class="tam-detail-actions">
-              <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="requestSubmit(a)" [disabled]="!submitAllowed(a)" [title]="submitAllowed(a) ? '' : submitDisabledReason(a)">Submit</button>
-              <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestApprove(a)" [disabled]="!approveAllowed(a)" [title]="approveAllowed(a) ? '' : approveDisabledReason(a)">Approve</button>
-              <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestEdit(a)" [disabled]="!editAllowed(a)" [title]="editAllowed(a) ? '' : editDisabledReason(a)">Edit</button>
-              <button type="button" class="tam-btn tam-btn-danger tam-btn-sm" (click)="requestDisable(a)" [disabled]="!disableAllowed(a)" [title]="disableAllowed(a) ? '' : disableDisabledReason(a)">Disable</button>
+              @if (canEverSubmit()) {
+                <button type="button" class="tam-btn tam-btn-primary tam-btn-sm" (click)="requestSubmit(a)" [disabled]="!submitAllowed(a)" [title]="submitAllowed(a) ? '' : submitDisabledReason(a)">Submit</button>
+              }
+              @if (canEverApprove()) {
+                <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestApprove(a)" [disabled]="!approveAllowed(a)" [title]="approveAllowed(a) ? '' : approveDisabledReason(a)">Approve</button>
+              }
+              @if (canEverActivate()) {
+                <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestActivate(a)" [disabled]="!activateAllowed(a)" [title]="activateAllowed(a) ? '' : activateDisabledReason(a)">Activate</button>
+              }
+              @if (canEverEdit()) {
+                <button type="button" class="tam-btn tam-btn-ghost tam-btn-sm" (click)="requestEdit(a)" [disabled]="!editAllowed(a)" [title]="editAllowed(a) ? '' : editDisabledReason(a)">Edit</button>
+              }
+              @if (canEverRequestDisable()) {
+                <button type="button" class="tam-btn tam-btn-danger tam-btn-sm" (click)="askForDisable(a)" [disabled]="!requestDisableAllowed(a)" [title]="requestDisableAllowed(a) ? '' : requestDisableDisabledReason(a)">Request disable</button>
+              }
+              @if (canEverDisable()) {
+                <button type="button" class="tam-btn tam-btn-danger tam-btn-sm" (click)="requestDisable(a)" [disabled]="!disableAllowed(a)" [title]="disableAllowed(a) ? '' : disableDisabledReason(a)">
+                  {{ a.assetStatus === 'Disable requested' ? 'Approve disable' : 'Disable' }}
+                </button>
+              }
+              @if (canDeleteDraft(a)) {
+                <button type="button" class="tam-btn tam-btn-danger tam-btn-sm" (click)="requestDeleteDraft(a)">Delete draft</button>
+              }
             </div>
             <!-- Disabled options explain the missing permission, state or dependency rather than a
                  plain grey-out. -->
@@ -725,8 +777,9 @@
                           </span>
                         }
                         <span class="tam-preview-body">
-                          <span class="tam-preview-ref mono">{{ placePreviewReference(i) }} @if (p.label.trim()) { · {{ p.label.trim() }} }</span>
+                          <span class="tam-preview-ref">@if (p.label.trim()) { {{ p.label.trim() }} } @else { This place }</span>
                           <code class="tam-preview-url">{{ placePreviewUrl(i) }}</code>
+                          <span class="tam-preview-note">Encodes the destination. The printed code carries a tracking link issued on approval.</span>
                         </span>
                       </div>
                     }
@@ -847,9 +900,13 @@
                   </svg>
                 </span>
               }
+              <!-- THE DESTINATION, NOT AN INVENTED REFERENCE. The tracking reference and the
+                   short URL are allocated by the server on approval, so there is nothing real to
+                   preview until then; this line used to show a client-side placeholder
+                   ('QR-PENDING-271381') beside an empty URL and an empty QR square. -->
               <span class="tam-preview-body">
-                <span class="tam-preview-ref mono">{{ previewReference() }}</span>
                 <code class="tam-preview-url">{{ previewUrl() }}</code>
+                <span class="tam-preview-note">Encodes the destination. The tracking reference and short link are issued when this asset is approved.</span>
               </span>
             </div>
           </div>
@@ -910,6 +967,60 @@
         <div class="tam-modal-actions">
           <button type="button" class="tam-btn tam-btn-outline" (click)="cancelApprove()">Cancel</button>
           <button type="button" class="tam-btn tam-btn-primary" (click)="confirmApprove()" [disabled]="!approveReasonValid()">Confirm approve</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ ACTIVATE DIALOG ============ -->
+  @if (activateDialogOpen() && activateTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelActivate()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-activate-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-activate-title" class="tam-modal-title">Activate tracking asset</h2>
+        <p class="tam-modal-lead">Bring this approved asset live. From Active it resolves scans and clicks inside its own
+          date window; the tracking reference, generated URL and history are unchanged.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ activateTarget()!.trackingReference }}</dd></div>
+          <div><dt>Destination</dt><dd class="tam-break">{{ activateTarget()!.destination }}</dd></div>
+          <div><dt>Before &rarr; after</dt><dd>{{ activateTarget()!.assetStatus }} &rarr; Active</dd></div>
+          <div><dt>Live window</dt><dd>{{ formatDate(activateTarget()!.activeFrom) }} &ndash; {{ formatDate(activateTarget()!.activeTo) }}</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelActivate()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmActivate()">Confirm activate</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ REQUEST DISABLE DIALOG ============ -->
+  @if (requestDisableDialogOpen() && requestDisableTarget()) {
+    <div class="tam-modal-backdrop" (click)="cancelRequestDisable()">
+      <div class="tam-modal" role="dialog" aria-modal="true" aria-labelledby="tam-request-disable-title" (click)="$event.stopPropagation()">
+        <h2 id="tam-request-disable-title" class="tam-modal-title">Request disable</h2>
+        <p class="tam-modal-lead">Ask an approver to take this asset down. It stays live and goes on resolving scans
+          until the request is decided; the tracking reference and history are preserved either way.</p>
+        <dl class="tam-kv">
+          <div><dt>Tracking reference</dt><dd>{{ requestDisableTarget()!.trackingReference }}</dd></div>
+          <div><dt>Destination</dt><dd class="tam-break">{{ requestDisableTarget()!.destination }}</dd></div>
+          <div><dt>Before &rarr; after</dt><dd>{{ requestDisableTarget()!.assetStatus }} &rarr; Disable requested</dd></div>
+          <div><dt>Consequence</dt><dd>None yet &mdash; an approver decides whether the asset comes down</dd></div>
+          <div><dt>Effective time</dt><dd>{{ lastRefresh() }}</dd></div>
+        </dl>
+        <div class="tam-field">
+          <label class="tam-field-label" for="tam-request-disable-reason">Reason <span class="tam-conf-tag">Required</span></label>
+          <textarea id="tam-request-disable-reason" class="tam-input tam-textarea" rows="3"
+                    [ngModel]="requestDisableReason()" (ngModelChange)="requestDisableReason.set($event)"
+                    [attr.maxlength]="requestDisableReasonMax"
+                    placeholder="Why should this asset be taken down?"></textarea>
+          <p class="tam-field-hint" [class.tam-field-error]="requestDisableReasonCount() > 0 && !requestDisableReasonValid()" role="status">
+            {{ requestDisableReasonCount() }} / {{ requestDisableReasonMax }} characters (minimum {{ requestDisableReasonMin }})
+          </p>
+        </div>
+        <div class="tam-modal-actions">
+          <button type="button" class="tam-btn tam-btn-outline" (click)="cancelRequestDisable()">Cancel</button>
+          <button type="button" class="tam-btn tam-btn-primary" (click)="confirmRequestDisable()" [disabled]="!requestDisableReasonValid()">Send request</button>
         </div>
       </div>
     </div>

@@ -86,12 +86,14 @@ public sealed class UsersController(
     public async Task<IActionResult> GetStatisticsAsync(CancellationToken cancellationToken) =>
         FromResult(await queries.HandleAsync(new GetUserStatisticsQuery(), cancellationToken));
 
-    /// <summary>The caller own profile. No id, so it cannot be pointed at anybody else.</summary>
-    [HttpGet("me")]
-    [AllowedWhileOnboarding]
-    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMyProfileAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetMyProfileQuery(), cancellationToken));
+    // THE CALLER'S OWN PROFILE HAS MOVED to GET /api/v1/my-profile — see MyProfileController.
+    //
+    // It could not stay here. This controller requires TenantContextRequired at class level,
+    // and an Authorize attribute on an action ANDs with the controller's rather than replacing
+    // it, so "my own record" demanded a resolved Organisation like every administrative route
+    // around it. A SuperAdmin who had not yet chosen an Organisation was refused their own
+    // profile with a flat 403, which is what the profile screen surfaced as "Could not load
+    // that person — You do not have permission to perform this action."
 
     [HttpGet("export")]
     [HasPermission(PermissionCodes.UsersExport)]

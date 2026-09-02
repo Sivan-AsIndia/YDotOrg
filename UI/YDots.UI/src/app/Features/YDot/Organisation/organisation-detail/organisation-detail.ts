@@ -185,6 +185,40 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
   readonly outstandingFields = computed(() => this.organisation()?.outstandingProfileFields ?? []);
   readonly isProfileComplete = computed(() => this.organisation()?.isProfileComplete === true);
 
+  /**
+   * Which boxes the server will actually accept a value from, lower-cased for comparison.
+   *
+   * NULL, NOT AN EMPTY ARRAY, IS THE "NO RESTRICTION" CASE. An API build that predates the
+   * field sends nothing, and treating that as "no field is editable" would grey out the whole
+   * form; an API that deliberately closes the profile — while a submission is with a reviewer,
+   * or after archival — sends `[]` and means it. The two have to stay distinguishable.
+   */
+  private readonly editableFieldSet = computed<ReadonlySet<string> | null>(() => {
+    const fields = this.organisation()?.editableProfileFields;
+
+    return fields ? new Set(fields.map((field) => field.toLowerCase())) : null;
+  });
+
+  /** True when this state limits editing to contact e-mail, telephone and address. */
+  readonly isProfileRestricted = computed(() => {
+    const fields = this.editableFieldSet();
+
+    return !!fields && fields.size > 0 && !fields.has('name');
+  });
+
+  /**
+   * Whether one profile box may be typed into.
+   *
+   * The server decides and this only draws the answer — a disabled box is a courtesy so nobody
+   * types a new registration number, saves, and watches it come back unchanged with no
+   * explanation.
+   */
+  canEditField(field: string): boolean {
+    const fields = this.editableFieldSet();
+
+    return fields === null || fields.has(field.toLowerCase());
+  }
+
   readonly documents = computed(() => this.organisation()?.documents ?? []);
 
   /**

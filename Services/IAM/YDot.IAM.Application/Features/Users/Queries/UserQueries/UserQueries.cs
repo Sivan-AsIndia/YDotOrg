@@ -1,4 +1,4 @@
-using YDot.IAM.Application.Common.Abstractions.Persistence;
+﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -151,9 +151,18 @@ public sealed class UserQueryHandler(
 
         // The Organisation filter is the query filter on the context, not something written here:
         // a member can only ever see their own Organisation's people.
+        // THE ROLE AND THE UNIT COME BACK TOO. A picker's second line is what tells two colleagues
+        // with the same name apart, and without these the clients had nothing to put there but the
+        // person's own code - which they then displayed under a heading reading "Role & region".
+        // The list projection already carries both, so this costs no extra query.
         return Result.Success<IReadOnlyList<PersonLookupResponse>>(
         [
-            .. page.Items.Select(user => new PersonLookupResponse(user.Id, user.DisplayName, user.Code))
+            .. page.Items.Select(user => new PersonLookupResponse(
+                user.Id,
+                user.DisplayName,
+                user.Code,
+                user.RoleNames.Count > 0 ? string.Join(", ", user.RoleNames) : null,
+                user.OrganisationUnitName ?? user.DepartmentName))
         ]);
     }
 

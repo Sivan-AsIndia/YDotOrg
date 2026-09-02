@@ -19,6 +19,7 @@ using YDots.DON.Application.Features.IdentityVerification.Queries.GetVerificatio
 using YDots.DON.Application.Features.LeadCapture.Commands.CaptureLead;
 using YDots.DON.Application.Features.LeadCapture.Queries.GetLeadCapture;
 using YDots.DON.Application.Features.LeadWorkQueue.Commands.LeadWorkQueueActions;
+using YDots.DON.Application.Features.CommunicationTimeline.Queries;
 using YDots.DON.Application.Features.LeadWorkQueue.Queries.GetLeadWorkQueue;
 using YDots.DON.Application.Features.Navigation.Queries.GetDonorMenu;
 using YDots.DON.Application.Features.ReferenceData.Queries.GetReferenceData;
@@ -53,6 +54,7 @@ public static class DependencyInjection
 
         // ---- SCR-DON-001 Lead work queue ---------------------------------------------------------
         services.AddScoped<LeadWorkQueueQueryHandler>();
+        services.AddScoped<CommunicationTimelineQueryHandler>();
         services.AddScoped<LeadWorkQueueCommandHandler>();
 
         // ---- SCR-DON-002 Lead capture -------------------------------------------------------------

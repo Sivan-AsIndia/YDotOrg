@@ -1,7 +1,17 @@
 // ================= Tracking Asset related shared models =================
 
 /** Asset lifecycle status — current catalogue values only. */
-export type AssetStatus = 'Draft' | 'Submitted' | 'Approved' | 'Active' | 'Inactive' | 'Paused' | 'Disabled';
+export type AssetStatus =
+  | 'Draft'
+  | 'Submitted'
+  | 'Approved'
+  | 'Active'
+
+  /** Live, with a disable request on it awaiting an approver. It still resolves scans. */
+  | 'Disable requested'
+  | 'Inactive'
+  | 'Paused'
+  | 'Disabled';
 
 /** Approval state — read-only, server-derived badge. */
 export type ApprovalState = 'Not required' | 'Pending review' | 'Approved' | 'Rejected';
@@ -15,7 +25,33 @@ export interface TrackingAssetPermissions {
   readonly generate: boolean;
   readonly test: boolean;
   readonly approve: boolean;
+
+  /**
+   * `cam.tracking-assets.activate`.
+   *
+   * NEW, AND THE LIFECYCLE DID NOT REACH ITS END WITHOUT IT. The server's states run
+   * Draft -> Submitted -> Approved -> Active -> Inactive, and the client offered every step of
+   * that except this one - so an approved asset had nowhere left to go. It could never become
+   * live, which is the only state in which it actually resolves a scan.
+   */
+  readonly activate: boolean;
+
+  /**
+   * `cam.tracking-assets.request-disable` - asking for a live asset to be taken down.
+   *
+   * THE MAKER'S HALF. Disabling an asset stops a printed QR code resolving, so an Initiator asks
+   * and an Approver decides; `disable` below is the decision, and the maker no longer holds it.
+   */
+  readonly requestDisable: boolean;
   readonly disable: boolean;
+
+  /**
+   * `cam.tracking-assets.delete-draft`.
+   *
+   * IT USED TO BORROW `disable`, which meant the maker who owns a draft could not discard their
+   * own unless they were also trusted to end live assets.
+   */
+  readonly deleteDraft: boolean;
   readonly replace: boolean;
 }
 

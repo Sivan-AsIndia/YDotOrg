@@ -41,18 +41,12 @@ try
     // would say "the proxy" and "where did this come from?" would have one answer for every event
     // ever recorded.
     //
-    // KnownNetworks and KnownProxies are cleared deliberately: the default trusts only loopback,
-    // and nginx reaches this service across the compose bridge network, so the header would be
-    // ignored exactly where it is needed. Safe here because the container's port is not published
-    // to the host except through that proxy. If this service is ever exposed directly, name the
-    // proxy explicitly rather than clearing the list, or a caller can forge their own address.
-    app.UseForwardedHeaders(new ForwardedHeadersOptions
-    {
-        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-        ForwardLimit = 2,
-        KnownNetworks = { },
-        KnownProxies = { }
-    });
+    // WHICH PROXIES ARE TRUSTED is the part that has to be right, and it used to be written as
+    // `KnownNetworks = { }` in an object initialiser - which adds nothing and leaves the
+    // loopback-only defaults standing, so the header nginx sets was silently ignored and every
+    // row recorded the proxy's own container address. See ForwardedHeadersConfiguration for the
+    // full account and for the environment variable that narrows the trusted set.
+    app.UseForwardedHeaders(ForwardedHeadersConfiguration.Build(builder.Configuration));
 
     await app.InitialiseDatabaseAsync();
 

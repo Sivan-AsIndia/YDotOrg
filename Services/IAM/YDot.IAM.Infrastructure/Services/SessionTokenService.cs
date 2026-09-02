@@ -99,6 +99,17 @@ public sealed class SessionTokenService(
             DeviceIdentifier = deviceIdentifier,
             ClientType = clientType,
             UserAgent = currentUser.UserAgent,
+
+            // WITHOUT THESE TWO the session list on the security screen has nothing to show but
+            // a dash. The columns have always existed and the read side has always projected
+            // them; nothing ever wrote them, so "Active sessions" listed device after device
+            // with no browser against any of them — while the sign-in activity feed on the same
+            // page named the browser correctly, because the sign-in handler parses the agent for
+            // its own row. The session is the record a person acts on when they spot one that is
+            // not theirs, so it is the one that most needs to say what it was.
+            Browser = currentUser.Browser,
+            OperatingSystem = currentUser.OperatingSystem,
+
             IpAddress = currentUser.IpAddress,
             IssuedAtUtc = now,
             ExpiresAtUtc = now.AddHours(absoluteHours),

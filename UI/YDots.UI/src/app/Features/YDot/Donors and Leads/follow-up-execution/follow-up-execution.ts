@@ -26,8 +26,9 @@ import {
   ValidatorFn,
   Validators,
 } from '@angular/forms';
-import { Observable, delay, finalize, of, throwError } from 'rxjs';
-import { WorkflowStateService } from '../../../../Service/workflow-state.service';
+import { Observable, catchError, delay, finalize, forkJoin, map, of, switchMap, throwError } from 'rxjs';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 
 // ---------------------------------------------------------------------------
 // Domain models
@@ -304,6 +305,12 @@ export interface FollowUpExecutionSnapshot {
 
 export interface CompleteFollowUpPayload {
   followUpId: string;
+
+  /** The lead the conversation is recorded against. The completion write needs it. */
+  leadId: string;
+
+  /** Which channel was actually used. Checked against the lead's consent before it is accepted. */
+  followUpType: FollowUpType;
   execution: ExecutionFormValue;
   temperature: TemperatureUpdateValue;
   stage: StageProgressionValue;
@@ -323,127 +330,260 @@ export interface CompleteFollowUpPayload {
  */
 @Injectable({ providedIn: 'root' })
 export class FollowUpExecutionService {
-  private readonly simulatedLatencyMs = 100;
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
 
+  /**
+   * Everything the execution screen needs about one follow-up and its lead.
+   *
+   * TWO CALLS, NOT ONE, BECAUSE THERE IS NO COMBINED ENDPOINT. The planner answers the follow-up
+   * and its siblings; the communication timeline answers the lead's profile and its conversation
+   * history. Both are needed to draw this screen, and asking for them in parallel costs one round
+   * trip rather than two.
+   *
+   * THE STATS AND THE READINESS CHECKS ARE COMPUTED FROM THOSE ANSWERS, not invented. Each check
+   * below is a fact one of the two responses already contains - "has a conversation been
+   * recorded", "has a follow-up been completed" - rather than a number chosen to look plausible.
+   */
   loadSnapshot(leadId: string, followUpId: string): Observable<FollowUpExecutionSnapshot> {
-    const lead = this.workflow.getLead(leadId);
-    const donor = this.workflow.getDonor(leadId);
-    const followUp = this.workflow.getFollowUp(followUpId) ?? this.workflow.followUpsFor(leadId)[0];
-    const stage = (lead?.stage === 'New' || !lead?.stage ? 'Assigned' : lead.stage === 'Converted' ? 'Qualified' : lead.stage) as LeadStage;
-    const communications = this.workflow.communicationsFor(leadId);
-    const relatedFollowUps = this.workflow.followUpsFor(leadId);
-    const snapshot: FollowUpExecutionSnapshot = {
-      lead: {
-        leadId: lead?.id ?? leadId,
-        fullName: lead?.name ?? donor?.name ?? 'Unknown record',
-        phone: lead?.mobile ?? donor?.mobile ?? '',
-        email: lead?.email ?? donor?.email ?? '',
-        campaign: lead?.campaign ?? donor?.campaign ?? '',
-        leadSource: lead?.source ?? (donor ? 'Donation & Payments' : ''),
-        currentOwner: lead?.owner ?? donor?.owner ?? 'Unassigned',
-        currentStage: stage,
-        currentTemperature: lead?.temperature ?? 'Cold',
-        qualificationReadiness: (lead?.qualificationReadiness ?? 'Not Ready') as QualificationReadiness,
-        followUpStats: {
-          open: relatedFollowUps.filter((item) => item.status === 'Pending' || item.status === 'Rescheduled').length,
-          completed: relatedFollowUps.filter((item) => item.status === 'Completed').length,
-          overdue: relatedFollowUps.filter((item) => item.slaStatus === 'Breached' && item.status !== 'Completed').length,
-        },
-      },
-      followUp: {
-        followUpId: followUp?.id ?? followUpId,
-        type: (['Call', 'Email', 'SMS', 'WhatsApp', 'Meeting', 'Event'].includes(followUp?.followUpType ?? '') ? followUp?.followUpType : 'Call') as FollowUpType,
-        subject: followUp?.purpose ?? 'Relationship follow-up',
-        priority: (followUp?.priority === 'Urgent' ? 'Critical' : followUp?.priority ?? 'Medium') as FollowUpPriority,
-        scheduledDate: followUp?.scheduledDate ?? new Date().toISOString().slice(0, 10),
-        scheduledTime: followUp?.scheduledTime ?? '',
-        assignedUser: followUp?.assignedTo ?? lead?.owner ?? donor?.owner ?? 'Unassigned',
-        originalPurpose: followUp?.purpose ?? 'Relationship follow-up',
-        expectedOutcome: followUp?.expectedOutcome ?? 'Progress relationship',
-      },
-      executionHistory: [
-        ...communications.slice(0, 5).map((item) => ({ id: item.id, date: item.date, type: item.type as ExecutionHistoryEntry['type'], outcome: item.outcome, detail: item.summary })),
-        ...relatedFollowUps.filter((item) => item.status === 'Completed').slice(0, 3).map((item) => ({ id: item.id, date: item.scheduledDate, type: 'Follow-Up' as const, outcome: 'Completed', detail: item.purpose })),
-      ],
-      riskIndicator: lead && lead.healthScore >= 70 ? { level: 'Healthy', reason: 'Recent engagement is healthy.' } : lead && lead.healthScore < 35 ? { level: 'At Risk', reason: 'Low relationship health score.' } : { level: 'Needs Attention', reason: 'Relationship needs continued follow-up.' },
-      readinessScore: lead?.healthScore ?? 20,
-      qualificationChecks: [
-        { label: 'Communication Recorded', complete: communications.length > 0 },
-        { label: 'Follow-Up Completed', complete: relatedFollowUps.some((item) => item.status === 'Completed') },
-        { label: 'Engagement High', complete: (lead?.healthScore ?? 0) >= 70 },
-        { label: 'Temperature Hot', complete: lead?.temperature === 'Hot' },
-        { label: 'Positive Outcome', complete: !!lead && !['No contact yet', 'No answer', 'Not interested'].includes(lead.lastContactOutcome) },
-      ],
-    };
-    return of(snapshot).pipe(delay(this.simulatedLatencyMs));
+    return forkJoin({
+      planner: this.api.getFollowUpPlanner({ page: 1, pageSize: 50, leadId }),
+      // ONLY ASKED FOR WHEN THERE IS A LEAD TO ASK ABOUT. The timeline endpoint requires an id
+      // and answers 400 without one, so opening this screen from a bookmark - no query string -
+      // used to fire a request that could only fail. The catchError below still covers a genuine
+      // failure; this stops the request that was guaranteed to be one.
+      timeline: leadId
+        ? this.api.getCommunicationTimeline(leadId, null).pipe(catchError(() => of(null)))
+        : of(null),
+    }).pipe(
+      map(({ planner, timeline }) => {
+        const followUps = planner.followUps.items;
+        const followUp = followUps.find((item) => item.id === followUpId) ?? followUps[0];
+        const entries = timeline?.entries ?? [];
+
+        const completed = followUps.filter((item) => item.status === 'Completed');
+        const open = followUps.filter((item) => item.status === 'Scheduled' || item.status === 'Rescheduled');
+        const overdue = open.filter(
+          (item) => item.dueAtUtc !== null && new Date(item.dueAtUtc).getTime() < Date.now(),
+        );
+
+        const health = timeline?.healthScore ?? 0;
+
+        const snapshot: FollowUpExecutionSnapshot = {
+          lead: {
+            leadId,
+            fullName: timeline?.displayName ?? '',
+
+            // MASKED BY THE SERVER unless this caller holds the sensitive-contact permission.
+            phone: timeline?.mobileNumber ?? '',
+            email: timeline?.emailAddress ?? '',
+            campaign: timeline?.campaignName ?? '',
+            leadSource: timeline?.source ?? '',
+            currentOwner: timeline?.ownerName ?? 'Unassigned',
+            currentStage: (timeline?.status ?? 'Assigned') as LeadStage,
+            currentTemperature: (timeline?.temperature ?? 'Cold') as 'Cold' | 'Warm' | 'Hot',
+            qualificationReadiness: (health >= 70 ? 'Ready' : 'Not Ready') as QualificationReadiness,
+            followUpStats: {
+              open: open.length,
+              completed: completed.length,
+              overdue: overdue.length,
+            },
+          },
+          followUp: {
+            followUpId: followUp?.id ?? followUpId,
+            type: this.toFollowUpType(followUp?.permittedChannel),
+            subject: followUp?.purpose ?? '',
+            priority: (followUp?.priority === 'Urgent' ? 'Critical' : followUp?.priority ?? 'Medium') as FollowUpPriority,
+            scheduledDate: followUp?.dueAtUtc ? followUp.dueAtUtc.slice(0, 10) : '',
+            scheduledTime: followUp?.dueAtUtc
+              ? new Date(followUp.dueAtUtc).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+              : '',
+            assignedUser: followUp?.relationshipOwnerName ?? 'Unassigned',
+            originalPurpose: followUp?.purpose ?? '',
+            expectedOutcome: followUp?.nextAction ?? '',
+          },
+          executionHistory: [
+            ...entries.slice(0, 5).map((entry) => ({
+              id: entry.id,
+              date: entry.occurredAtUtc.slice(0, 10),
+              type: entry.interactionType as ExecutionHistoryEntry['type'],
+              outcome: entry.outcome,
+              detail: entry.summary,
+            })),
+            ...completed.slice(0, 3).map((item) => ({
+              id: item.id,
+              date: item.completedAtUtc ? item.completedAtUtc.slice(0, 10) : '',
+              type: 'Follow-Up' as const,
+              outcome: 'Completed',
+              detail: item.completionOutcome ?? item.purpose ?? '',
+            })),
+          ],
+          riskIndicator:
+            health >= 70
+              ? { level: 'Healthy', reason: 'Recent engagement is healthy.' }
+              : health < 35
+                ? { level: 'At Risk', reason: 'Low relationship health score.' }
+                : { level: 'Needs Attention', reason: 'Relationship needs continued follow-up.' },
+          readinessScore: health,
+          qualificationChecks: [
+            { label: 'Communication Recorded', complete: entries.length > 0 },
+            { label: 'Follow-Up Completed', complete: completed.length > 0 },
+            { label: 'Engagement High', complete: health >= 70 },
+            { label: 'Temperature Hot', complete: timeline?.temperature === 'Hot' },
+            {
+              label: 'Positive Outcome',
+              complete: entries.some(
+                (entry) => entry.outcome === 'Reached' || entry.outcome === 'CallbackRequested',
+              ),
+            },
+          ],
+        };
+
+        return snapshot;
+      }),
+    );
   }
 
-  saveDraft(payload: CompleteFollowUpPayload): Observable<{ savedAt: string }> {
-    return of({ savedAt: new Date().toISOString() }).pipe(delay(this.simulatedLatencyMs));
+  private toFollowUpType(channel: string | undefined): FollowUpType {
+    switch (channel) {
+      case 'Email': return 'Email';
+      case 'Sms':
+      case 'SMS': return 'SMS';
+      case 'WhatsApp': return 'WhatsApp';
+      case 'Meeting': return 'Meeting';
+      case 'PhoneCall':
+      case 'Call': return 'Call';
+      default: return 'Call';
+    }
   }
 
+  /**
+   * Save draft.
+   *
+   * THERE IS NO DRAFT ON THE SERVER, and saying so is better than pretending. A follow-up is
+   * either scheduled or completed; the API has no half-executed state to persist. The screen
+   * keeps the typed values in memory, which is what it was already doing - the difference is
+   * that it no longer reports a save that did not happen.
+   */
+  saveDraft(_payload: CompleteFollowUpPayload): Observable<{ savedAt: string }> {
+    return throwError(() => new Error(
+      'Drafts are not saved on the server. Complete the follow-up, or leave the page and start again.',
+    ));
+  }
+
+  /**
+   * Complete Follow-Up - the document's own action.
+   *
+   * "Complete the required fields on the Follow-Up Execution page. Select Complete Follow-Up. The
+   * follow-up details are updated in the Communication Timeline."
+   *
+   * THREE WRITES, IN ORDER, AND THE ORDER MATTERS. The conversation is recorded first, so that a
+   * failure part-way leaves the contact on the timeline rather than losing what was said; the
+   * follow-up is then completed; and a next follow-up is scheduled only if one was asked for.
+   */
   completeFollowUp(
     payload: CompleteFollowUpPayload,
   ): Observable<{ completedAt: string; nextFollowUpId: string | null }> {
-    if (!payload.execution.outcome) return throwError(() => new Error('Outcome is required.'));
+    if (!payload.execution.outcome) {
+      return throwError(() => new Error('Outcome is required.'));
+    }
     if (!payload.execution.completionNotes || payload.execution.completionNotes.trim().length < 20) {
       return throwError(() => new Error('Completion notes are required.'));
     }
 
-    const followUp = this.workflow.getFollowUp(payload.followUpId);
-    const recordId = followUp?.recordId;
-    if (recordId) {
-      this.workflow.patchFollowUp(payload.followUpId, {
-        status: payload.execution.executionStatus === 'Cancelled' ? 'Cancelled' : 'Completed',
-        history: [...(followUp?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Executed: ${payload.execution.outcome}` }],
-      });
-      const current = this.workflow.getLead(recordId);
-      if (current) {
-        this.workflow.patchLead(recordId, {
-          temperature: (payload.temperature.newTemperature ?? current.temperature ?? 'Cold') as 'Cold' | 'Warm' | 'Hot',
-          stage: payload.stage.newStage ?? current.stage ?? 'Contacted',
-          lastContactOutcome: payload.execution.outcome,
-          lastActivity: `Follow-up completed: ${payload.execution.outcome}`,
-          healthScore: Math.min(100, (current.healthScore ?? 20) + (payload.execution.engagementLevel === 'High' ? 20 : 10)),
-          qualificationReadiness: payload.execution.outcome === 'Qualification Ready' ? 'Ready' : current.qualificationReadiness,
-        });
-      }
-      this.workflow.addCommunication({
-        recordId,
-        type: followUp?.followUpType ?? 'Call',
-        date: payload.execution.actualContactDate,
-        time: payload.execution.actualContactTime,
-        direction: 'Outgoing',
-        outcome: payload.execution.outcome,
-        summary: payload.execution.completionNotes,
-        engagement: payload.execution.engagementLevel ?? undefined,
-        quality: payload.execution.communicationQuality ?? undefined,
-        notes: payload.execution.internalNotes || undefined,
-        attachment: payload.attachments[0]?.name,
-      });
-    }
+    const leadId = payload.leadId;
 
-    let nextFollowUpId: string | null = null;
-    if (recordId && payload.nextFollowUp.enabled) {
-      nextFollowUpId = this.workflow.addFollowUp({
-        recordId,
-        followUpType: payload.nextFollowUp.type ?? 'Call',
-        scheduledDate: payload.nextFollowUp.date,
-        scheduledTime: payload.nextFollowUp.time,
-        priority: payload.nextFollowUp.priority ?? 'Medium',
-        purpose: payload.nextFollowUp.purpose,
-        assignedTo: payload.nextFollowUp.owner,
-      }).id;
-    }
+    // THE CONVERSATION FIRST. It is the part a person actually typed, and the part that would be
+    // most annoying to lose.
+    const recordContact = this.api.contactLead(leadId, {
+      channel: this.toConsentChannel(payload.followUpType),
+      outcome: payload.execution.outcome,
+      notes: [payload.execution.completionNotes.trim(), payload.execution.internalNotes?.trim()]
+        .filter(Boolean)
+        .join(' \u2014 '),
+      occurredAtUtc: this.toUtc(payload.execution.actualContactDate, payload.execution.actualContactTime),
+    });
 
-    return of({ completedAt: new Date().toISOString(), nextFollowUpId }).pipe(delay(this.simulatedLatencyMs));
+    return recordContact.pipe(
+      switchMap(() =>
+        this.api.completeFollowUp(payload.followUpId, {
+          completionOutcome: payload.execution.outcome!,
+          completedAtUtc: new Date().toISOString(),
+        }),
+      ),
+      switchMap(() => {
+        if (!payload.nextFollowUp.enabled || !payload.nextFollowUp.date) {
+          return of<{ completedAt: string; nextFollowUpId: string | null }>({
+            completedAt: new Date().toISOString(),
+            nextFollowUpId: null,
+          });
+        }
+
+        return this.api
+          .scheduleFollowUp({
+            leadId,
+            purpose: payload.nextFollowUp.purpose,
+            permittedChannel: this.toConsentChannel(payload.nextFollowUp.type ?? 'Call'),
+            nextAction: payload.nextFollowUp.purpose,
+            dueAtUtc: this.toUtc(payload.nextFollowUp.date, payload.nextFollowUp.time),
+            priority: payload.nextFollowUp.priority ?? 'Medium',
+            consentWarningAcknowledged: false,
+          })
+          .pipe(
+            map((created) => ({
+              completedAt: new Date().toISOString(),
+              nextFollowUpId: created.id,
+            })),
+          );
+      }),
+    );
   }
 
+  /**
+   * Escalate.
+   *
+   * A REASSIGNMENT WITH A REASON. There is no escalation state on a follow-up; escalating means
+   * handing it to somebody more senior and recording why, which is what `assign` does - and
+   * unlike a local status string, the new owner sees it in their own queue.
+   */
   escalate(leadId: string, escalation: EscalationValue): Observable<{ escalated: true }> {
-    const target = this.workflow.followUpsFor(leadId).find((item) => item.status === 'Pending' || item.status === 'Rescheduled');
-    if (target) this.workflow.patchFollowUp(target.id, { status: 'Escalated', history: [...target.history, { date: new Date().toLocaleDateString('en-GB'), label: `Escalated to ${escalation.escalateTo}: ${escalation.reason}` }] });
-    return of({ escalated: true as const }).pipe(delay(this.simulatedLatencyMs));
+    return this.api.getFollowUpPlanner({ page: 1, pageSize: 20, leadId }).pipe(
+      switchMap((planner) => {
+        const target = planner.followUps.items.find(
+          (item) => item.status === 'Scheduled' || item.status === 'Rescheduled',
+        );
+
+        if (!target) {
+          return throwError(() => new Error('There is no open follow-up to escalate.'));
+        }
+
+        const owner = planner.ownerOptions.find((option) => option.label === escalation.escalateTo);
+        if (!owner) {
+          return throwError(() => new Error('Choose somebody to escalate to.'));
+        }
+
+        return this.api.assignFollowUp(target.id, {
+          relationshipOwnerUserId: owner.value,
+          relationshipOwnerName: owner.label,
+          reason: `Escalated: ${escalation.reason}`,
+          expectedVersion: target.version,
+        });
+      }),
+      map(() => ({ escalated: true as const })),
+    );
+  }
+
+  private toConsentChannel(type: string): string {
+    switch (type) {
+      case 'Call': return 'PhoneCall';
+      case 'Email': return 'Email';
+      case 'SMS': return 'Sms';
+      case 'WhatsApp': return 'WhatsApp';
+      default: return 'Email';
+    }
+  }
+
+  private toUtc(date: string, time: string): string {
+    return new Date(`${date}T${time || '09:00'}`).toISOString();
   }
 
   /** Client-side guard mirroring the "Assigned → Qualified without engagement" rule. */
@@ -493,27 +633,21 @@ export class FollowUpExecutionComponent implements OnInit {
   private readonly executionService = inject(FollowUpExecutionService);
 
   private readonly params = toSignal(this.route.queryParamMap, { initialValue: null });
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
+  /**
+   * The record and follow-up this screen is executing.
+   *
+   * NO FABRICATED FALLBACKS. `followUpId` used to fall back to the literal 'FUP-2026-00421' and
+   * `leadId` to 'LEAD-2026-0142' when the query string carried neither - so arriving without
+   * parameters silently executed a follow-up against an invented lead. An absent id is now an
+   * empty string, and the screen says it has nothing to execute.
+   */
+  private readonly requestedLeadId = computed(() => this.params()?.get('leadId') ?? '');
+  private readonly requestedDonorId = computed(() => this.params()?.get('donorId') ?? '');
 
-  private readonly requestedLeadId = computed(() => this.params()?.get('leadId'));
-  private readonly requestedDonorId = computed(() => this.params()?.get('donorId'));
-  readonly followUpId = computed(() => {
-    const requested = this.params()?.get('followUpId');
-    if (requested) return requested;
-    const recordId = this.requestedLeadId() ?? this.requestedDonorId();
-    return (recordId ? this.workflow.followUpsFor(recordId)[0]?.id : undefined) ?? 'FUP-2026-00421';
-  });
-  private readonly selectedFollowUp = computed(() => this.workflow.getFollowUp(this.followUpId()));
-  readonly donorId = computed(() =>
-    this.requestedDonorId() ?? (this.selectedFollowUp()?.recordType === 'Donor' ? this.selectedFollowUp()!.recordId : null),
-  );
-  readonly leadId = computed(() =>
-    this.requestedLeadId()
-      ?? (this.selectedFollowUp()?.recordType === 'Lead' ? this.selectedFollowUp()!.recordId : null)
-      ?? this.donorId()
-      ?? this.workflow.leads()[0]?.id
-      ?? 'LEAD-2026-0142',
-  );
+  readonly followUpId = computed(() => this.params()?.get('followUpId') ?? '');
+  readonly donorId = computed(() => this.requestedDonorId() || null);
+  readonly leadId = computed(() => this.requestedLeadId() || this.requestedDonorId() || '');
 
   // ---- Async state -------------------------------------------------------
   readonly loading = signal(true);
@@ -792,9 +926,31 @@ export class FollowUpExecutionComponent implements OnInit {
   }
 
 
+  /**
+   * Confirms the lead is ready to qualify.
+   *
+   * IT SAVES BEFORE IT NAVIGATES. The old version patched an in-memory lead and moved to Donor
+   * 360, so the "Qualified" state existed only in the tab that set it - and Donor 360, reading
+   * the server, showed the lead exactly as it had been.
+   */
   startQualification(): void {
-    this.workflow.patchLead(this.leadId(), { stage: 'Qualified', qualificationReadiness: 'Ready', lastActivity: 'Qualification readiness confirmed' });
-    this.router.navigate(['/app/fundraising/relationships/donor-360'], { queryParams: { leadId: this.leadId(), conversion: 'pending' } });
+    const leadId = this.leadId();
+    if (!leadId) {
+      return;
+    }
+
+    this.api
+      .qualifyLead(leadId, {
+        qualificationNotes: 'Qualification readiness confirmed from follow-up execution.',
+        moveToNurture: false,
+      })
+      .subscribe({
+        next: () =>
+          this.router.navigate(['/app/fundraising/relationships/donor-360'], {
+            queryParams: { leadId, conversion: 'pending' },
+          }),
+        error: (error: unknown) => this.formError.set(apiErrorMessage(error)),
+      });
   }
 
   backToQueue(): void {
@@ -879,6 +1035,8 @@ export class FollowUpExecutionComponent implements OnInit {
 
     const payload: CompleteFollowUpPayload = {
       followUpId: this.followUpId(),
+      leadId: this.leadId(),
+      followUpType: this.snapshot()?.followUp.type ?? 'Call',
       execution: this.executionForm.getRawValue(),
       temperature: this.temperatureForm.getRawValue(),
       stage: this.stageForm.getRawValue(),

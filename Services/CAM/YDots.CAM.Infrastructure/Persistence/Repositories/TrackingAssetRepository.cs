@@ -10,6 +10,8 @@ public sealed class TrackingAssetRepository(CampaignDbContext context) : ITracki
     public async Task AddAsync(TrackingAsset trackingAsset, CancellationToken cancellationToken) =>
         await context.TrackingAssets.AddAsync(trackingAsset, cancellationToken);
 
+    public void Remove(TrackingAsset trackingAsset) => context.TrackingAssets.Remove(trackingAsset);
+
     /// <summary>One asset with its placements and their custom fields, tracked for editing.</summary>
     public Task<TrackingAsset?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.TrackingAssets

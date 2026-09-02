@@ -20,6 +20,7 @@ interface SessionView {
   ipAddress: string;
   lastActive: string;
   isCurrent: boolean;
+  icon: string;
 }
 
 /** One enrolled factor, as the page lists it. */
@@ -37,11 +38,15 @@ interface TrustedDeviceView {
   device: string;
   type: string;
   trustedOn: string;
+  /** When the trust lapses on its own. Carried by the payload and never shown before. */
+  expiresOn: string;
+  lastSeen: string;
   isExpired: boolean;
 }
 
 /** One line of the activity feed. */
 interface ActivityView {
+  id: string;
   event: string;
   details: string;
   dateTime: string;
@@ -130,6 +135,12 @@ export class MySecurityComponent {
       recoveryCodesRemaining: model.recoveryCodesRemaining ?? 0,
       isLockedOut: model.isLockedOut === true,
       mustChangePassword: model.mustChangePassword === true,
+
+      // How many attempts have failed since the last success, and how many are left before the
+      // account locks. Both come straight off the payload and neither was shown anywhere.
+      accessFailedCount: model.accessFailedCount ?? 0,
+      attemptsRemaining: model.attemptsRemaining ?? 0,
+
       mfaMethods: this.mfaMethods(),
       activeSessions: this.activeSessions(),
       trustedDevices: this.trustedDevices(),
@@ -137,16 +148,69 @@ export class MySecurityComponent {
     };
   });
 
+  // =========================================================================================
+  // The Security Level pipeline.
+  //
+  // Two of its four steps used to be marked complete in the template with a fixed CSS class,
+  // so they showed a tick for everybody whatever the account's actual state. These are the
+  // tests that replace them, and each one can genuinely fail.
+  // =========================================================================================
+
+  /**
+   * A password counts as healthy when it exists, is not under a forced-change order, and the
+   * account is not locked out.
+   *
+   * "Password Set" is trivially true of every account that can sign in, so on its own it was a
+   * step that could never fail. Read this way it answers something worth knowing.
+   */
+  readonly passwordHealthy = computed(() => {
+    const model = this.security();
+
+    return model !== null
+      && model.mustChangePassword !== true
+      && model.isLockedOut !== true;
+  });
+
+  /**
+   * True when the only live session is the one being read right now.
+   *
+   * THE OLD TEST WAS "at least one session exists", which is true of anybody looking at the
+   * page — so the step ticked itself for every visitor and told them nothing. What a person
+   * actually wants to know here is whether they are signed in somewhere they do not recognise.
+   */
+  readonly onlyThisDevice = computed(() => {
+    const sessions = this.activeSessions();
+    return sessions.length > 0 && sessions.every((session) => session.isCurrent);
+  });
+
+  /** How many of the four steps are satisfied. Shown beside the pipeline heading. */
+  readonly securityScore = computed(() =>
+    [
+      this.passwordHealthy(),
+      this.mfaMethods().length > 0,
+      this.onlyThisDevice(),
+      (this.security()?.recoveryCodesRemaining ?? 0) > 0,
+    ].filter(Boolean).length);
+
+  /** Backup codes need a factor to back up; the server refuses otherwise. */
+  readonly canGenerateRecoveryCodes = computed(() =>
+    this.security()?.mfaEnabled === true && this.mfaMethods().length > 0);
+
   readonly activeSessions = computed<SessionView[]>(() =>
     (this.security()?.activeSessions ?? []).map((session) => ({
       id: session.id ?? '',
       device: session.deviceName ?? this.clientTypeLabel(session.clientType),
+
+      // Reads "Chrome on Windows". These two columns were empty on every session row until the
+      // server started stamping them — the read side had always projected them, but nothing
+      // wrote them, so the browser was blank while the sign-in feed below named it correctly.
       browser: [session.browser, session.operatingSystem].filter(Boolean).join(' on ') || '—',
       ipAddress: session.ipAddress ?? '—',
       lastActive: session.lastActivityAtUtc
         ? this.formatDateTime(session.lastActivityAtUtc)
         : '—',
       isCurrent: session.isCurrent === true,
+      icon: this.clientTypeIcon(session.clientType),
     })));
 
   readonly mfaMethods = computed<MfaMethodView[]>(() =>
@@ -168,6 +232,8 @@ export class MySecurityComponent {
       device: device.deviceName ?? this.clientTypeLabel(device.clientType),
       type: [device.browser, device.operatingSystem].filter(Boolean).join(' on ') || '—',
       trustedOn: device.trustedAtUtc ? this.formatDateTime(device.trustedAtUtc) : '—',
+      expiresOn: device.expiresAtUtc ? this.formatDateTime(device.expiresAtUtc) : '—',
+      lastSeen: device.lastSeenAtUtc ? this.formatDateTime(device.lastSeenAtUtc) : '—',
       isExpired: device.isExpired === true,
     })));
 
@@ -180,6 +246,9 @@ export class MySecurityComponent {
    */
   readonly recentActivity = computed<ActivityView[]>(() =>
     (this.security()?.recentAttempts ?? []).map((attempt) => ({
+      // The row was tracked by its timestamp, which two attempts a second apart share - and
+      // Angular throws on a duplicate track key rather than merely rendering it oddly.
+      id: attempt.id ?? `${attempt.attemptedAtUtc}-${attempt.ipAddress ?? ''}`,
       event: this.attemptTitle(attempt),
       details: [
         attempt.browser && attempt.operatingSystem
@@ -193,6 +262,44 @@ export class MySecurityComponent {
         : attempt.triggeredLockout ? 'ri-lock-line'
           : 'ri-error-warning-line',
     })));
+
+  // =========================================================================================
+  // The sidebar's jump list
+  // =========================================================================================
+
+  /** Which card the sidebar last jumped to, so the destination is visibly the one asked for. */
+  readonly highlightedSection = signal('');
+
+  /**
+   * Scrolls to one of the cards in the left column.
+   *
+   * IT USED TO BE `href="#sessions-section"` AND IT LANDED ON THE DASHBOARD. A bare fragment in
+   * an href is resolved against the document's BASE url, and index.html declares
+   * `<base href="/">` — so every row in this list resolved to `/#sessions-section`, which is the
+   * application root, which redirects to the sign-in form, which bounces an already-signed-in
+   * person to the dashboard. Five rows, all of them leaving the page.
+   *
+   * Scrolling in code sidesteps the base-url rule entirely and keeps the address bar unchanged,
+   * which is the honest outcome for a link that moves you within one page.
+   */
+  scrollToSection(sectionId: string): void {
+    const target = document.getElementById(sectionId);
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // A jump that only moves the scrollbar is easy to miss on a long page, so the card it
+    // landed on says so for a moment.
+    this.highlightedSection.set(sectionId);
+    setTimeout(() => {
+      if (this.highlightedSection() === sectionId) {
+        this.highlightedSection.set('');
+      }
+    }, 1600);
+  }
 
   // =========================================================================================
   // Loading
@@ -301,6 +408,17 @@ export class MySecurityComponent {
    * than discovering it with a printed sheet that no longer works.
    */
   generateRecoveryCodes(): void {
+    // THE SERVER REFUSES THIS WITHOUT A SECOND FACTOR, and it is right to: a backup code is a
+    // way past the factor, so a batch issued for an account with no factor is just a second
+    // password nobody asked for. The button used to be offered regardless and answered with a
+    // red toast; it is now disabled with the reason said in advance.
+    if (!this.canGenerateRecoveryCodes()) {
+      this.toast.show('Set up two-step verification first',
+        'Backup codes stand in for your second factor, so there has to be one to stand in for.',
+        'info');
+      return;
+    }
+
     this.busy.set(true);
 
     this.api.generateRecoveryCodes().subscribe({
@@ -425,6 +543,23 @@ export class MySecurityComponent {
       case 'desktop': return 'Desktop app';
       case 'api': return 'API client';
       default: return 'Unknown device';
+    }
+  }
+
+  /**
+   * The icon beside a session.
+   *
+   * Every row used to carry a desktop monitor whatever it was, which made a session from a
+   * phone look like one from a computer — on the list somebody scans to spot the one that is
+   * not theirs.
+   */
+  private clientTypeIcon(clientType: ClientType | undefined): string {
+    switch (clientType) {
+      case 'web': return 'ri-computer-line';
+      case 'mobile': return 'ri-smartphone-line';
+      case 'desktop': return 'ri-mac-line';
+      case 'api': return 'ri-terminal-box-line';
+      default: return 'ri-question-line';
     }
   }
 

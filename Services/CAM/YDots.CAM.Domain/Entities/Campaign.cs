@@ -64,9 +64,10 @@ public class Campaign : TenantEntity, ICodedEntity
     /// Who submitted it for approval, and when.
     ///
     /// STORED RATHER THAN DERIVED FROM THE AUDIT TRAIL, because the segregation-of-duties rule
-    /// needs it on every approval check: a Campaign Manager may not approve a campaign they
-    /// personally created or submitted. Reading that from the audit table on each approval
-    /// would be a scan of an append-only log to answer a question the row itself can hold.
+    /// needs it on every approval check: nobody may approve a campaign they personally created
+    /// or submitted, whatever role they hold. Reading that from the audit table on each
+    /// approval would be a scan of an append-only log to answer a question the row itself can
+    /// hold.
     /// </summary>
     public Guid? SubmittedByUserId { get; set; }
 
@@ -91,8 +92,12 @@ public class Campaign : TenantEntity, ICodedEntity
     ///
     /// The rule from section 5.2 of the module brief, expressed once on the entity rather than
     /// re-derived in each of the approval handlers. Creator and submitter are BOTH excluded:
-    /// a Campaign Owner who created a campaign and had a colleague submit it would otherwise
-    /// still be able to approve their own work.
+    /// somebody who created a campaign and had a colleague submit it would otherwise still be
+    /// able to approve their own work.
+    ///
+    /// IT ASKS NOTHING ABOUT THE CALLER'S ROLE, and that is the point. TENANT_ADMIN holds every
+    /// permission in the Organisation and is refused here exactly like everybody else, because
+    /// four-eyes is the one control the platform does not let a role grant its way past.
     /// </summary>
     public bool CanBeApprovedBy(Guid userId) =>
         CreatedByUserId != userId && SubmittedByUserId != userId;

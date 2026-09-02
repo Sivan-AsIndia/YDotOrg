@@ -721,6 +721,16 @@
                             >
                               Open readiness checklist
                             </button>
+                            @if (canViewTrackingAssets()) {
+                              <button
+                                type="button"
+                                class="cr-menu-item"
+                                role="menuitem"
+                                (click)="openTrackingAssets(r)"
+                              >
+                                Tracking assets
+                              </button>
+                            }
                             @if (canApprove(r)) {
                               <button
                                 type="button"
@@ -898,7 +908,8 @@
                     }
                     <span class="cr-owner-inner">
                       <span class="cr-owner-name">{{ o.name }}</span>
-                      <span class="cr-owner-context">{{ o.context }}</span>
+                      @if (o.context) { <span class="cr-owner-context">{{ o.context }}</span> }
+                      @else if (o.code) { <span class="cr-owner-context mono">{{ o.code }}</span> }
                     </span>
                   </button>
                 </li>
@@ -931,14 +942,22 @@
               }
               <div>
                 <h2 id="cr-owner-detail-title" class="cr-modal-title">{{ o.name }}</h2>
-                <p class="cr-owner-detail-sub">{{ o.context }}</p>
+                @if (o.context) { <p class="cr-owner-detail-sub">{{ o.context }}</p> }
               </div>
             </div>
+            <!-- REFERENCE IS THE USR CODE, NOT THE API ID. It used to print `o.reference`, which
+                 is the Guid every request carries — so the popup showed a 36-character
+                 identifier under a heading a person reads as "the reference I can quote". Role
+                 and region appear only when the directory actually knows them; they used to
+                 repeat the same code a second time. -->
             <dl class="cr-kv">
-              <div><dt>Reference</dt><dd class="mono">{{ o.reference }}</dd></div>
-              <div><dt>Role &amp; region</dt><dd>{{ o.context }}</dd></div>
+              @if (o.code) { <div><dt>Reference</dt><dd class="mono">{{ o.code }}</dd></div> }
+              @if (o.context) { <div><dt>Role &amp; unit</dt><dd>{{ o.context }}</dd></div> }
               @if (o.email) { <div><dt>Email</dt><dd>{{ o.email }}</dd></div> }
               @if (o.phone) { <div><dt>Phone</dt><dd>{{ o.phone }}</dd></div> }
+              @if (!o.code && !o.context && !o.email && !o.phone) {
+                <div><dt>Details</dt><dd>No further details are recorded for this owner.</dd></div>
+              }
             </dl>
             <div class="cr-modal-actions">
               <button type="button" class="cr-btn cr-btn-primary" (click)="closeOwnerDetail()">

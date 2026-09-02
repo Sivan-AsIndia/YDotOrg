@@ -105,9 +105,18 @@ public static class ModulePermissionCatalogue
     ];
 
     /// <summary>
-    /// Section 03 Campaigns. Kept deliberately small: the CAM service does not yet enforce
-    /// permission claims, so these exist to make the menu and role screens meaningful rather
-    /// than to gate an endpoint. Expand when CAM adopts the same attribute.
+    /// Section 03 Campaigns.
+    ///
+    /// EVERY CODE HERE GATES A REAL ENDPOINT. That was not true when this list was written - the
+    /// comment used to say CAM did not enforce permission claims and these existed only to make
+    /// the menu and role screens meaningful - but CAM now carries <c>[HasPermission]</c> on every
+    /// route, so a code missing from this list is a 403 on a screen that looks correctly
+    /// configured.
+    ///
+    /// THE ACTIONS ARE MIRRORED IN <c>YDots.CAM.Application/Common/Constants/PermissionCodes.cs</c>,
+    /// entry for entry. IAM derives INITIATOR and APPROVER from the action declared here, and CAM
+    /// states the same action beside its own constant so the two can be compared; a code the two
+    /// services classify differently is granted by one and withheld by the other.
     /// </summary>
     public static readonly IReadOnlyList<PermissionSeed> Campaigns =
     [
@@ -140,7 +149,20 @@ public static class ModulePermissionCatalogue
         new("cam.tracking-assets.submit", "Submit tracking assets", "CAM", "TrackingAssets", PermissionAction.Submit),
         new("cam.tracking-assets.approve", "Approve tracking assets", "CAM", "TrackingAssets", PermissionAction.Approve, IsSensitive: true),
         new("cam.tracking-assets.activate", "Activate tracking assets", "CAM", "TrackingAssets", PermissionAction.Operate),
-        new("cam.tracking-assets.deactivate", "Deactivate tracking assets", "CAM", "TrackingAssets", PermissionAction.Operate, IsSensitive: true),
+
+        // THE DISABLE PAIR. Taking a live asset down stops a PRINTED QR code resolving, so the
+        // person who made the asset asks and somebody else decides - the same maker-checker split
+        // the campaign close already has. Request is a Submit, which keeps it out of APPROVER;
+        // the decision is an Operate named in PostApprovalOperations, which keeps it out of
+        // INITIATOR.
+        new("cam.tracking-assets.request-disable", "Request a tracking asset disable", "CAM", "TrackingAssets", PermissionAction.Submit),
+        new("cam.tracking-assets.deactivate", "Approve a tracking asset disable", "CAM", "TrackingAssets", PermissionAction.Operate, IsSensitive: true),
+
+        // DELETE-DRAFT USED TO BORROW `deactivate`, which was wrong both ways round: it let
+        // anybody who could take a live asset down destroy drafts, and it stopped the maker who
+        // owns a draft discarding their own. Destroying a draft nothing points at is a tidy-up;
+        // ending a live asset is a decision.
+        new("cam.tracking-assets.delete-draft", "Delete draft tracking assets", "CAM", "TrackingAssets", PermissionAction.Operate, IsSensitive: true),
         new("cam.tracking-assets.export", "Export tracking assets", "CAM", "TrackingAssets", PermissionAction.Export, IsSensitive: true),
 
         // ---- Readiness checklist -------------------------------------------------------------------
@@ -152,8 +174,25 @@ public static class ModulePermissionCatalogue
         new("cam.readiness.edit", "Edit readiness checks", "CAM", "Readiness", PermissionAction.Edit),
         new("cam.readiness.pass", "Pass readiness checks", "CAM", "Readiness", PermissionAction.Approve, IsSensitive: true),
         new("cam.readiness.fail", "Fail readiness checks", "CAM", "Readiness", PermissionAction.Operate),
-        new("cam.readiness.approve", "Approve readiness", "CAM", "Readiness", PermissionAction.Approve, IsSensitive: true),
-        new("cam.readiness.manage-blockers", "Manage readiness blockers", "CAM", "Readiness", PermissionAction.Operate),
+
+        // RETIRED IN CAM, AND STILL SEEDED HERE ON PURPOSE. It gated a second campaign-approval
+        // path inside the readiness feature that carried no segregation-of-duties check; that
+        // path is gone, and the readiness screen's "Approve launch" is now campaign approval
+        // reached from another screen, gated on cam.campaigns.approve. The row stays because
+        // withdrawing a published code removes the claim from every token that carries it, and
+        // any client still keying a button off this one would lose it without warning. Grant it
+        // to nothing new, and drop it once no client reads it.
+        new("cam.readiness.approve", "Approve readiness (retired - use cam.campaigns.approve)", "CAM", "Readiness", PermissionAction.Approve, IsSensitive: true),
+        // THE BLOCKER PAIR. These were one code, so whoever could raise an obstacle could also
+        // wave their own away - which empties the mechanism, since an open blocker is precisely
+        // what stops a check being passed. Raising one is the maker noticing a problem; declaring
+        // it cleared is the checker's call, so only the second is in PostApprovalOperations.
+        new("cam.readiness.manage-blockers", "Assign readiness blockers", "CAM", "Readiness", PermissionAction.Operate),
+        new("cam.readiness.resolve-blockers", "Resolve readiness blockers", "CAM", "Readiness", PermissionAction.Operate),
+
+        // Removing a check from the list. Pending checks only - CAM refuses the rest, because a
+        // judged check holds somebody's verdict.
+        new("cam.readiness.delete", "Delete readiness checks", "CAM", "Readiness", PermissionAction.Operate, IsSensitive: true),
         new("cam.readiness.return-to-draft", "Return a campaign to draft", "CAM", "Readiness", PermissionAction.Operate, IsSensitive: true),
 
         // ---- Budget and target plans ------------------------------------------------------------------

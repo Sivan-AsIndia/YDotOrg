@@ -28,7 +28,7 @@ services:
   # ===============================================================================================
 
   ydot-postgres:
-    image: sivan67906/ydot-postgres:8.9.2
+    image: sivan67906/ydot-postgres:9.1.1
     build:
       context: ./docker/postgres
       dockerfile: Dockerfile
@@ -98,7 +98,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: sivan67906/ydot-iam:8.9.2
+    image: sivan67906/ydot-iam:9.1.1
     build:
       context: .
       dockerfile: Services/IAM/YDot.IAM.Api/Dockerfile
@@ -280,7 +280,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: sivan67906/ydot-cam:8.9.2
+    image: sivan67906/ydot-cam:9.1.1
     build:
       context: .
       dockerfile: Services/CAM/YDots.CAM.API/Dockerfile
@@ -330,7 +330,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: sivan67906/ydot-don:8.9.2
+    image: sivan67906/ydot-don:9.1.1
     build:
       context: .
       dockerfile: Services/DON/YDots.DON.Api/Dockerfile
@@ -381,7 +381,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: sivan67906/ydot-pay:8.9.2
+    image: sivan67906/ydot-pay:9.1.1
     build:
       context: .
       dockerfile: Services/PAY/YDot.PAY.Api/Dockerfile
@@ -403,16 +403,39 @@ services:
 
       PaymentSettings__FinancialYearStartMonth: "4"
       PaymentSettings__DefaultPaymentLinkValidityMinutes: "60"
-      PaymentSettings__MaximumAttemptsBeforeSupport: "3"
+      # TWO: the original attempt plus one retry. The donation flow document says a
+      # record whose RETRY also fails moves to Payment Support and Safe Retry, and at
+      # three it never got there - the queue just offered a third identical button.
+      PaymentSettings__MaximumAttemptsBeforeSupport: "2"
       PaymentSettings__AutoIssueReceiptOnDonation: "true"
       PaymentSettings__AutoDeliverReceipt: "true"
       PaymentSettings__ReceiptDocumentRoot: "/var/ydot/receipts"
 
+      # ---- Donor portal accounts ---------------------------------------------------------------
+      #
       # Creating a donor account when a stranger gives is IAM's decision, so PAY asks over HTTP
-      # rather than writing iam_users itself. Off by default: a failure here must never fail a
-      # donation.
-      IdentityIntegration__Enabled: "false"
+      # rather than writing iam_users itself.
+      #
+      # ON, BECAUSE THE FLOW ENDS HERE. The donation document's last step is the giver becoming a
+      # Donor who can sign in: the Lead is converted, a donor login is created and an activation
+      # link is e-mailed for them to click. With this off, PAY recorded the donation, converted
+      # the Lead, and then returned "donor portal accounts are not enabled for this installation"
+      # - so the account and the invitation silently never happened and the final step of the
+      # flow had no way to occur at all.
+      #
+      # A FAILURE HERE STILL NEVER FAILS A DONATION. The money is already taken by the time this
+      # runs, so every failure comes back as a result and is logged rather than thrown.
+      IdentityIntegration__Enabled: "${PAY_IDENTITY_ENABLED:-true}"
       IdentityIntegration__BaseUrl: "http://ydot-iam:8080"
+
+      # THE CREDENTIAL PAY SIGNS IN WITH to create the donor's account. It needs iam.users.create
+      # in the Organisation the donation belongs to, so the activated sample Organisation's
+      # administrator - who holds TENANT_ADMIN - is the default, and shares the seed password by
+      # the seeder's own design. Set PAY_IDENTITY_SERVICE_* in .env to use a dedicated service
+      # account instead, which is what any environment past a demonstration should do: a named
+      # person's credential in a service config cannot be rotated without breaking this job.
+      IdentityIntegration__ServiceAccountUsername: "${PAY_IDENTITY_SERVICE_USERNAME:-rajat.sivan@yahoo.com}"
+      IdentityIntegration__ServiceAccountPassword: "${PAY_IDENTITY_SERVICE_PASSWORD:-${IAM_SUPERADMIN_PASSWORD:-}}"
 
       # ---- Mail ------------------------------------------------------------------------------
       #
@@ -511,7 +534,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: sivan67906/ydot-ui:8.9.2
+    image: sivan67906/ydot-ui:9.1.1
     build:
       context: UI/YDots.UI
       dockerfile: Dockerfile

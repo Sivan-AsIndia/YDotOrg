@@ -36,13 +36,26 @@
 <span class="info-box__label">Password Last Changed</span>
 <span class="info-box__value">{{ data()?.passwordLastChanged }}</span>
 </div>
+<!--
+  THIS PILL USED TO READ "✓ Available" UNCONDITIONALLY. It was a literal, so an account with
+  no backup codes at all was told it had them — on the header of the page whose job is to say
+  whether you can still get in when your phone is gone. It now counts what the server holds,
+  and says the honest thing when that is zero.
+-->
 <div class="info-box">
 <span class="info-box__label">Recovery Codes</span>
-<span class="pill pill--success"><i class="ri-checkbox-circle-fill"></i> Available</span>
+        @if ((data()?.recoveryCodesRemaining ?? 0) > 0) {
+<span class="pill pill--success">
+<i class="ri-checkbox-circle-fill"></i> {{ data()?.recoveryCodesRemaining }} left
+</span>
+        } @else {
+<span class="pill pill--danger"><i class="ri-error-warning-fill"></i> None left</span>
+        }
 </div>
 <div class="sec-header__actions">
 <button class="btn-primary btn btn-sm" (click)="enrolMfa()">
-<i class="ri-shield-keyhole-line"></i> Enrol MFA
+<i class="ri-shield-keyhole-line"></i>
+        @if (mfaMethods().length > 0) { Add another method } @else { Enrol MFA }
 </button>
 <button class="btn btn-outline-primary btn-sm ms-2" (click)="showChangePassword.set(true)">
 <i class="ri-lock-password-line me-1"></i> Change Password
@@ -74,13 +87,47 @@
         <!-- LEFT COLUMN -->
 <div class="col-lg-7">
 
+          <!--
+            THE TWO BANNERS BELOW WERE COMPUTED AND NEVER RENDERED. `isLockedOut` and
+            `mustChangePassword` were both read off the payload into `data()` and then displayed
+            nowhere, so the two states that most need saying out loud - your account is locked,
+            you are under an order to change your password - were invisible on the security
+            page itself.
+          -->
+          @if (data()?.isLockedOut) {
+<div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+<i class="ri-lock-line mt-1"></i>
+<div>
+<strong>This account is locked.</strong>
+<div class="small">
+                  Sign-in is blocked until the lockout expires or an administrator clears it.
+</div>
+</div>
+</div>
+          }
+
+          @if (data()?.mustChangePassword) {
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+<i class="ri-key-2-line mt-1"></i>
+<div>
+<strong>A password change is required.</strong>
+<div class="small">You will be asked for a new password at your next sign-in.</div>
+</div>
+</div>
+          }
+
           <!-- Account Fields -->
-<div class="sec-card sec-row-anim" id="account-security-section">
+<div class="sec-card sec-row-anim" id="account-security-section"
+     [class.is-jump-target]="highlightedSection() === 'account-security-section'">
 <div class="sec-card__body">
 <div class="field-grid">
 <div class="field">
 <span class="field__label">Display Name</span>
 <span class="field__value">{{ data()?.displayName }}</span>
+</div>
+<div class="field">
+<span class="field__label">Username</span>
+<span class="field__value mono">{{ data()?.username || '—' }}</span>
 </div>
 <div class="field">
 <span class="field__label">Login Email</span>
@@ -94,19 +141,41 @@
 <span class="field__label">MFA Requirement</span>
 <span class="pill pill--accent">{{ data()?.mfaRequirement }}</span>
 </div>
+<div class="field">
+<span class="field__label">Failed Sign-ins Since Last Success</span>
+<span class="field__value">
+                {{ data()?.accessFailedCount }}
+                @if ((data()?.attemptsRemaining ?? 0) > 0) {
+<span class="muted-sm">· {{ data()?.attemptsRemaining }} attempts left</span>
+                }
+</span>
+</div>
 </div>
 </div>
 </div>
 
-          <!-- Security Level pipeline (signature element) -->
+          <!--
+            Security Level pipeline.
+
+            EVERY STEP IS NOW A REAL TEST. Two of the four used to carry a bare `is-complete`
+            class - "Password Set" and "Recovery Ready" - so they showed a green tick for
+            everybody, including an account that had never generated a backup code and one
+            standing under a "you must change your password" order. A third, "Sessions
+            Reviewed", ticked as soon as any session existed, which is true of every signed-in
+            person by definition and so said nothing at all. A progress indicator that cannot
+            fail is decoration; this one can.
+          -->
 <div class="sec-card mt-4 sec-row-anim">
 <div class="sec-card__header">
 <h6>Security Level</h6>
+<span class="count-pill">{{ securityScore() }} of 4</span>
 </div>
 <div class="sec-card__body">
 <div class="security-steps">
-<div class="step is-complete">
-<span class="step__circle"><i class="ri-check-line"></i></span>
+<div class="step" [class.is-complete]="passwordHealthy()">
+<span class="step__circle">
+                    @if (passwordHealthy()) { <i class="ri-check-line"></i> } @else { 1 }
+</span>
 <span class="step__label">Password Set</span>
 </div>
 <div class="step" [class.is-complete]="(data()?.mfaMethods ?? []).length > 0">
@@ -119,18 +188,24 @@
 </span>
 <span class="step__label">MFA Enrolled</span>
 </div>
-<div class="step" [class.is-complete]="(data()?.activeSessions ?? []).length > 0">
+                <!--
+                  "Only this device" rather than "any session exists". The thing worth telling
+                  somebody is that they are signed in somewhere they may not recognise.
+                -->
+<div class="step" [class.is-complete]="onlyThisDevice()">
 <span class="step__circle">
-                    @if ((data()?.activeSessions ?? []).length > 0) {
-<i class="ri-check-line"></i>
-                    } @else {
-                      3
-                    }
+                    @if (onlyThisDevice()) { <i class="ri-check-line"></i> } @else { 3 }
 </span>
 <span class="step__label">Sessions Reviewed</span>
 </div>
-<div class="step is-complete">
-<span class="step__circle"><i class="ri-check-line"></i></span>
+<div class="step" [class.is-complete]="(data()?.recoveryCodesRemaining ?? 0) > 0">
+<span class="step__circle">
+                    @if ((data()?.recoveryCodesRemaining ?? 0) > 0) {
+<i class="ri-check-line"></i>
+                    } @else {
+                      4
+                    }
+</span>
 <span class="step__label">Recovery Ready</span>
 </div>
 </div>
@@ -138,7 +213,8 @@
 </div>
 
           <!-- Active Sessions -->
-<div class="sec-card mt-4 sec-row-anim" id="sessions-section">
+<div class="sec-card mt-4 sec-row-anim" id="sessions-section"
+     [class.is-jump-target]="highlightedSection() === 'sessions-section'">
 <div class="sec-card__header">
 <h6>Active Sessions</h6>
 <span class="count-pill">{{ (data()?.activeSessions ?? []).length }}</span>
@@ -147,7 +223,8 @@
 <div class="sec-list">
                 @for (session of (data()?.activeSessions ?? []); track session.id; let i = $index) {
 <div class="sec-list__row session-row" [style.animation-delay]="(i*0.05)+'s'">
-<div class="session-row__icon"><i class="ri-computer-line"></i></div>
+                    <!-- The icon follows the client type rather than always being a desktop. -->
+<div class="session-row__icon"><i class="{{ session.icon }}"></i></div>
 <div class="session-row__info">
 <strong>
                         {{ session.device }}
@@ -174,7 +251,8 @@
 </div>
 
           <!-- Trusted Devices -->
-<div class="sec-card mt-4 sec-row-anim" id="devices-section">
+<div class="sec-card mt-4 sec-row-anim" id="devices-section"
+     [class.is-jump-target]="highlightedSection() === 'devices-section'">
 <div class="sec-card__header">
 <h6>Remembered Devices</h6>
 <span class="count-pill">{{ (data()?.trustedDevices ?? []).length }}</span>
@@ -192,7 +270,15 @@
                         }
 </strong>
 <span class="mono">{{ device.type }}</span>
-<span class="muted-sm">Remembered since {{ device.trustedOn }}</span>
+                    <!-- The expiry was on the payload from the start and shown nowhere, so a
+                         device three days from being challenged again looked exactly like one
+                         with a month left. -->
+<span class="muted-sm">
+                      Remembered since {{ device.trustedOn }} ·
+                      @if (device.isExpired) { expired {{ device.expiresOn }} }
+                      @else { remembered until {{ device.expiresOn }} }
+</span>
+<span class="muted-sm">Last used: {{ device.lastSeen }}</span>
 </div>
 <button class="btn-danger-ghost" [disabled]="busy()" (click)="revokeTrustedDevice(device)">
 <i class="ri-close-circle-line"></i> Forget
@@ -201,7 +287,8 @@
                 } @empty {
 <p class="muted-sm p-3 mb-0">
                     No device is remembered. You will be asked to verify every time, which is the
-                    safer setting.
+                    safer setting. Tick <strong>Remember this device</strong> when you sign in to
+                    add the one you are using.
 </p>
                 }
 </div>
@@ -209,7 +296,8 @@
 </div>
 
           <!-- Backup codes -->
-<div class="sec-card mt-4 sec-row-anim" id="recovery-section">
+<div class="sec-card mt-4 sec-row-anim" id="recovery-section"
+     [class.is-jump-target]="highlightedSection() === 'recovery-section'">
 <div class="sec-card__header">
 <h6>Backup Codes</h6>
 <span class="count-pill">{{ data()?.recoveryCodesRemaining ?? 0 }}</span>
@@ -223,14 +311,26 @@
                 Generating a new set stops every earlier code working, including any you have
                 printed.
 </p>
-<button class="btn btn-primary btn-sm" [disabled]="busy()" (click)="generateRecoveryCodes()">
+              <!--
+                THE SERVER REFUSES THIS WITHOUT A SECOND FACTOR. The button was offered anyway and
+                answered with a red error, which reads as a fault rather than as the rule it is.
+              -->
+              @if (!canGenerateRecoveryCodes()) {
+<p class="muted-sm mb-2">
+<i class="ri-information-line me-1"></i>
+                  Backup codes stand in for your second factor, so set one up first.
+</p>
+              }
+<button class="btn btn-primary btn-sm" [disabled]="busy() || !canGenerateRecoveryCodes()"
+              (click)="generateRecoveryCodes()">
 <i class="ri-key-2-line me-1"></i> Generate new codes
 </button>
 </div>
 </div>
 
           <!-- MFA Methods -->
-<div class="sec-card mt-4 sec-row-anim" id="mfa-section">
+<div class="sec-card mt-4 sec-row-anim" id="mfa-section"
+     [class.is-jump-target]="highlightedSection() === 'mfa-section'">
 <div class="sec-card__header">
 <h6>MFA Methods</h6>
 <span class="count-pill">{{ (data()?.mfaMethods ?? []).length }}</span>
@@ -264,36 +364,43 @@
           <!-- Quick summary -->
 <div class="sec-card sec-row-anim">
 <div class="sec-card__body sec-card__body--flush">
+<!--
+              EVERY ROW HERE USED TO LEAVE THE PAGE. They were `href="#sessions-section"`, and a
+              bare fragment resolves against the document's BASE url - index.html declares
+              `<base href="/">` - so each one navigated to `/#sessions-section`, which is the
+              application root, which redirects to sign-in, which bounces a signed-in person to
+              the dashboard. They are buttons that scroll now, and the address bar stays put.
+            -->
 <div class="quick-list">
-<a class="quick-list__row" href="#sessions-section">
-<span class="quick-list__icon"><i class="ri-device-line"></i></span>
+<button type="button" class="quick-list__row" (click)="scrollToSection('sessions-section')">
+<span class="quick-list__icon"><i class="ri-computer-line"></i></span>
 <span class="quick-list__label">Active Sessions</span>
 <span class="quick-list__count">{{ (data()?.activeSessions ?? []).length }}</span>
 <i class="ri-arrow-right-s-line quick-list__chevron"></i>
-</a>
-<a class="quick-list__row" href="#mfa-section">
+</button>
+<button type="button" class="quick-list__row" (click)="scrollToSection('mfa-section')">
 <span class="quick-list__icon"><i class="ri-shield-keyhole-line"></i></span>
 <span class="quick-list__label">MFA Methods</span>
 <span class="quick-list__count">{{ (data()?.mfaMethods ?? []).length }}</span>
 <i class="ri-arrow-right-s-line quick-list__chevron"></i>
-</a>
-<a class="quick-list__row" href="#devices-section">
+</button>
+<button type="button" class="quick-list__row" (click)="scrollToSection('devices-section')">
 <span class="quick-list__icon"><i class="ri-device-line"></i></span>
 <span class="quick-list__label">Remembered Devices</span>
 <span class="quick-list__count">{{ (data()?.trustedDevices ?? []).length }}</span>
 <i class="ri-arrow-right-s-line quick-list__chevron"></i>
-</a>
-<a class="quick-list__row" href="#recovery-section">
+</button>
+<button type="button" class="quick-list__row" (click)="scrollToSection('recovery-section')">
 <span class="quick-list__icon"><i class="ri-key-2-line"></i></span>
 <span class="quick-list__label">Backup Codes</span>
 <span class="quick-list__count">{{ data()?.recoveryCodesRemaining ?? 0 }}</span>
 <i class="ri-arrow-right-s-line quick-list__chevron"></i>
-</a>
-<a class="quick-list__row" href="#account-security-section">
+</button>
+<button type="button" class="quick-list__row" (click)="scrollToSection('account-security-section')">
 <span class="quick-list__icon"><i class="ri-lock-line"></i></span>
 <span class="quick-list__label">Account Info</span>
 <i class="ri-arrow-right-s-line quick-list__chevron"></i>
-</a>
+</button>
 </div>
 </div>
 </div>
@@ -306,7 +413,7 @@
 </div>
 <div class="sec-card__body sec-card__body--flush">
 <div class="activity-feed">
-                @for (event of (data()?.recentActivity ?? []); track event.dateTime; let i = $index) {
+                @for (event of (data()?.recentActivity ?? []); track event.id; let i = $index) {
 <div class="activity-feed__row" [style.animation-delay]="(i*0.05)+'s'">
 <span class="activity-feed__icon"><i class="{{ event.icon }}"></i></span>
 <div class="activity-feed__info">
@@ -315,6 +422,8 @@
 <span class="muted-sm mono">{{ event.dateTime }}</span>
 </div>
 </div>
+                } @empty {
+<p class="muted-sm p-3 mb-0">No sign-in activity has been recorded yet.</p>
                 }
 </div>
 </div>
@@ -329,6 +438,11 @@
 <div class="sec-error">
 <i class="ri-error-warning-line"></i>
 <p>We couldn't load your security data. Please try again.</p>
+      <!-- `retry()` existed on the component but nothing on the page called it, so "please try
+           again" left the person nothing to try again with but a full page reload. -->
+<button class="btn btn-primary btn-sm" (click)="retry()">
+<i class="ri-refresh-line me-1"></i> Retry
+</button>
 </div>
     }
 

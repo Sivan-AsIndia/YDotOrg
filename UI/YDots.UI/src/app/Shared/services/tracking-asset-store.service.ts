@@ -187,6 +187,12 @@ export class TrackingAssetStoreService {
         activeTo: this.toInstant(asset.activeTo),
         contentTag: asset.contentTag || null,
 
+        // THE STATUS THE FORM ASKED FOR, SENT EXPLICITLY. It used to be left off entirely and the
+        // server defaulted it to Draft - so the "Asset status" the person chose on the Generate
+        // form was collected, shown back to them in the success toast, and never left the browser.
+        // The server now requires it.
+        status: this.toApiStatus(asset.assetStatus),
+
         places: asset.place
           ? [
               {
@@ -263,10 +269,23 @@ export class TrackingAssetStoreService {
       return;
     }
 
+    // THE MAKER'S HALF OF THE DISABLE PAIR. An Initiator holds request-disable and not
+    // deactivate, so routing their click to the decision endpoint answered 403.
+    if (patch.assetStatus === 'Disable requested') {
+      this.api.requestDisableTrackingAsset(id, { expectedVersion }).subscribe({
+        next: () => this.refresh(),
+        error: (error: unknown) =>
+          this.failed(apiErrorMessage(error, 'The disable request could not be raised.')),
+      });
+
+      return;
+    }
+
     if (patch.assetStatus === 'Paused' || patch.assetStatus === 'Disabled') {
       this.api.deactivateTrackingAsset(id, { expectedVersion }).subscribe({
         next: () => this.refresh(),
-        error: () => this.failed('The asset could not be deactivated.'),
+        error: (error: unknown) =>
+          this.failed(apiErrorMessage(error, 'The asset could not be deactivated.')),
       });
 
       return;
@@ -303,12 +322,17 @@ export class TrackingAssetStoreService {
   }
 
   /**
-   * Retires an asset.
+   * Discards an unused DRAFT asset, or retires anything further along.
    *
-   * IT DEACTIVATES RATHER THAN DELETES, and the API has no delete at all. An asset's reference
-   * keeps resolving for reporting - donations already attributed through it must stay attributed
-   * - and what stops is its ability to take NEW donations. Deleting it would orphan every gift it
-   * ever produced.
+   * THE TWO ARE DIFFERENT ACTS AND NOW CALL DIFFERENT ENDPOINTS. A draft has never been
+   * activated, so it holds no tracking reference and nothing can have been attributed through it
+   * - it can simply go, and CAM's DELETE removes it. Anything past Draft is DEACTIVATED instead,
+   * because its reference has to keep resolving for the donations already credited through it;
+   * deleting one of those would orphan every gift it ever produced.
+   *
+   * IT USED TO DEACTIVATE IN BOTH CASES, with a note saying the API had no delete. It has one
+   * now, so a draft discarded from the register is actually gone rather than left on the list as
+   * an Inactive row nobody asked for.
    */
   delete(ref: string): void {
     const id = this.idsByReference.get(ref);
@@ -317,14 +341,32 @@ export class TrackingAssetStoreService {
       return;
     }
 
+    const expectedVersion = this.versionsByReference.get(ref) ?? 0;
+
+    if (this.get(ref)?.assetStatus === 'Draft') {
+      this.api
+        .deleteDraftTrackingAsset(id, {
+          expectedVersion,
+          reason: 'Unused draft discarded from the tracking asset manager.',
+        })
+        .subscribe({
+          next: () => this.refresh(),
+          error: (error: unknown) =>
+            this.failed(apiErrorMessage(error, 'The draft could not be deleted.')),
+        });
+
+      return;
+    }
+
     this.api
       .deactivateTrackingAsset(id, {
-        expectedVersion: this.versionsByReference.get(ref) ?? 0,
+        expectedVersion,
         reason: 'Retired from the tracking asset manager.',
       })
       .subscribe({
         next: () => this.refresh(),
-        error: () => this.failed('The asset could not be retired.'),
+        error: (error: unknown) =>
+          this.failed(apiErrorMessage(error, 'The asset could not be retired.')),
       });
   }
 
@@ -416,6 +458,7 @@ export class TrackingAssetStoreService {
         return 'Pending review';
       case 'approved':
       case 'active':
+      case 'disableRequested':
         return 'Approved';
       case 'inactive':
         return 'Approved';
@@ -427,20 +470,66 @@ export class TrackingAssetStoreService {
   /**
    * The screen's asset status.
    *
-   * `isLive` IS PART OF THE ANSWER, not just the status. An approved asset outside its own active
-   * window is not live, and a screen that showed it as Active would have somebody printing a
-   * poster for a run that has ended.
+   * IT NOW REPORTS THE STATUS THE SERVER ACTUALLY HOLDS. Two of the five collapsed onto something
+   * else, and both were visible to anyone using the screen:
+   *
+   *   - `submitted` returned 'Draft'. An initiator submitted an asset for approval, the API moved
+   *     it to Submitted, and the Status column went on saying Draft - so the submission looked
+   *     like it had not happened. Worse, `submitAllowed` and `editAllowed` both test for 'Draft',
+   *     so the row went on offering Submit and Edit on an asset that was already out for review.
+   *
+   *   - `approved` fell through to `isLive ? 'Active' : 'Paused'`, and `IsLiveAt` on the server is
+   *     `Status == Active && inside the window` - so a freshly approved asset is never live, and
+   *     the approver saw their own approval land as 'Paused'. A state nobody chose, describing a
+   *     stop that nobody made.
+   *
+   * `isLive` STILL DECIDES ONE THING, and only that one: an Active asset outside its own window is
+   * shown as Paused rather than Active, because it is not resolving scans. That is the case the
+   * flag was added for - somebody printing a poster for a run that has ended - and it is the only
+   * case where the calendar, rather than the status, is the honest answer.
    */
   private toAssetStatus(status: TrackingAssetStatus, isLive: boolean): AssetStatus {
-    if (status === 'draft' || status === 'submitted') {
-      return 'Draft';
-    }
+    switch (status) {
+      case 'draft':
+        return 'Draft';
 
-    if (status === 'inactive') {
-      return 'Disabled';
-    }
+      case 'submitted':
+        return 'Submitted';
 
-    return isLive ? 'Active' : 'Paused';
+      case 'approved':
+        return 'Approved';
+
+      // STILL LIVE, and the badge says what is pending rather than what has happened. The asset
+      // goes on resolving scans until somebody decides the request - nothing about asking should
+      // change what a donor's scan does.
+      case 'disableRequested':
+        return 'Disable requested';
+
+      // 'Disabled' rather than 'Inactive' because that is the word the Disable action writes, and
+      // the badge for the two is the same.
+      case 'inactive':
+        return 'Disabled';
+
+      default:
+        return isLive ? 'Active' : 'Paused';
+    }
+  }
+
+  /**
+   * The screen's asset status back onto the API's enum, for a create.
+   *
+   * ONLY DRAFT AND SUBMITTED ARE REACHABLE HERE, which is why everything else collapses onto
+   * Submitted rather than being mapped faithfully. The API refuses a create in any further state:
+   * Approved, Active and Inactive are reached through their own endpoints, each with its own
+   * permission and its own rules, and accepting one on a create would route around all of them.
+   */
+  private toApiStatus(status: AssetStatus): TrackingAssetStatus {
+    return status === 'Draft' ? 'draft' : 'submitted';
+  }
+
+  /** True while a disable request is waiting on an approver. */
+  awaitingDisableDecision(ref: string): boolean {
+    return this.get(ref)?.assetStatus === 'Disable requested';
   }
 
   /**

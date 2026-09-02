@@ -8,7 +8,7 @@
     <button type="button" class="sim__toggle" (click)="togglePreview()" [attr.aria-expanded]="previewOpen()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       Preview controls
-      <span class="sim__pill">{{ role() === 'donor-care' ? 'Donor Care' : role() === 'supervisor' ? 'Supervisor' : 'Unauthorised' }}</span>
+      <span class="sim__pill">{{ role() === 'tenant-admin' ? 'Tenant admin' : role() === 'initiator' ? 'Initiator' : role() === 'approver' ? 'Approver' : 'Unauthorised' }}</span>
     </button>
 
     @if (previewOpen()) {
@@ -592,7 +592,7 @@
           <div><dt>Record</dt><dd>{{ caseData().reference }}</dd></div>
           <div><dt>Current state</dt><dd>{{ stateLabel() }}</dd></div>
           <div><dt>Resulting state</dt><dd>{{ pastTenseFor[action] }} → {{ nextStateFor[action] === 'reopened' ? 'Reopened' : (nextStateFor[action] | titlecase) }}</dd></div>
-          <div><dt>Effective permission</dt><dd>{{ role() === 'supervisor' ? 'Supervisor — full workflow authority' : 'Donor Care — assigned queue authority' }}</dd></div>
+          <div><dt>Effective permission</dt><dd>{{ role() === 'tenant-admin' ? 'Tenant admin — full authority in this organisation' : role() === 'approver' ? 'Approver — views, edits and decides' : role() === 'initiator' ? 'Initiator — raises and works, approves nothing' : 'No authority on this case' }}</dd></div>
           <div><dt>Evidence on file</dt><dd>{{ caseData().evidence.length }} item(s) attached</dd></div>
         </dl>
 

@@ -211,6 +211,24 @@ textarea:focus-visible,
   background: #eef1ec;
   color: var(--rr-muted);
 }
+/* ---------- Status badge variants ----------
+   THESE WERE REFERENCED AND NEVER DEFINED. `issueStateClass` and `deliveryStateClass` return
+   rr-badge-good, rr-badge-danger, rr-badge-gold and rr-badge-muted; only the last existed, so a
+   Success badge and a Failed badge rendered as the same uncoloured pill and the Status column
+   carried no signal at all beyond its text. */
+.rr-badge-good {
+  background: var(--rr-good-soft);
+  color: var(--rr-good);
+}
+.rr-badge-danger {
+  background: var(--rr-error-soft);
+  color: var(--rr-error);
+}
+.rr-badge-gold {
+  background: var(--rr-gold-soft);
+  color: var(--rr-gold);
+}
+
 
 /* ---------- Context and filters (4.5.1) ---------- */
 .rr-context {

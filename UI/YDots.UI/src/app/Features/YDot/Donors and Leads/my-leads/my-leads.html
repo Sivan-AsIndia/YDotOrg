@@ -2,7 +2,7 @@
   <div class="page-wrapper">
     <div class="container-fluid px-4 py-3 my-leads">
 
-      @if (!permissions.view) {
+      @if (!permissions()['view']) {
         <div class="state-panel state-panel--error" role="alert">
           <span class="state-panel__icon" aria-hidden="true">&#9888;</span>
           <p>You do not have permission to view assigned leads.</p>
@@ -14,7 +14,8 @@
           <div class="page-header__top">
             <div>
         
-              <h1 class="page-header__title">{{ screen.title }}</h1>
+              <h1 class="page-header__title"  style="
+        font-size: 40px !important;font-family:Georgia !important ;">{{ screen.title }}</h1>
               <p class="page-header__subtitle">{{ screen.purpose }}</p>
             
             </div>
@@ -48,7 +49,7 @@
             <span class="kpi-card__icon kpi-card__icon--neutral" aria-hidden="true">&#9776;</span>
             <div>
               <p class="kpi-card__label">Assigned Leads</p>
-              <p class="kpi-card__value">{{ kpis.assignedLeads }}</p>
+              <p class="kpi-card__value">{{ kpis().assignedLeads }}</p>
               <p class="kpi-card__sub">In your assignment</p>
             </div>
           </div>
@@ -57,7 +58,7 @@
             <span class="kpi-card__icon kpi-card__icon--gray" aria-hidden="true">&#10052;</span>
             <div>
               <p class="kpi-card__label">Cold Leads</p>
-              <p class="kpi-card__value">{{ kpis.coldLeads }}</p>
+              <p class="kpi-card__value">{{ kpis().coldLeads }}</p>
               <p class="kpi-card__sub">In selected scope</p>
             </div>
           </div>
@@ -66,7 +67,7 @@
             <span class="kpi-card__icon kpi-card__icon--warm" aria-hidden="true">&#9728;</span>
             <div>
               <p class="kpi-card__label">Warm Leads</p>
-              <p class="kpi-card__value">{{ kpis.warmLeads }}</p>
+              <p class="kpi-card__value">{{ kpis().warmLeads }}</p>
               <p class="kpi-card__sub">In selected scope</p>
             </div>
           </div>
@@ -75,7 +76,7 @@
             <span class="kpi-card__icon kpi-card__icon--hot" aria-hidden="true">&#128293;</span>
             <div>
               <p class="kpi-card__label">Hot Leads</p>
-              <p class="kpi-card__value">{{ kpis.hotLeads }}</p>
+              <p class="kpi-card__value">{{ kpis().hotLeads }}</p>
               <p class="kpi-card__sub">In selected scope</p>
             </div>
           </div>
@@ -84,7 +85,7 @@
             <span class="kpi-card__icon kpi-card__icon--info" aria-hidden="true">&#128337;</span>
             <div>
               <p class="kpi-card__label">Today's Follow-Ups</p>
-              <p class="kpi-card__value">{{ kpis.followUpsDueToday }}</p>
+              <p class="kpi-card__value">{{ kpis().followUpsDueToday }}</p>
               <p class="kpi-card__sub">Due today</p>
             </div>
           </div>
@@ -93,7 +94,7 @@
             <span class="kpi-card__icon kpi-card__icon--danger" aria-hidden="true">&#10071;</span>
             <div>
               <p class="kpi-card__label">Overdue Follow-Ups</p>
-              <p class="kpi-card__value">{{ kpis.followUpsOverdue }}</p>
+              <p class="kpi-card__value">{{ kpis().followUpsOverdue }}</p>
               <p class="kpi-card__sub">Needs attention</p>
             </div>
           </div>
@@ -101,7 +102,7 @@
 
         <!-- Pipeline -->
         <section class="pipeline" aria-label="Lead pipeline">
-          @for (stage of pipeline; track stage.stage) {
+          @for (stage of pipeline(); track stage.stage) {
             <button
               type="button"
               class="pipeline__stage"

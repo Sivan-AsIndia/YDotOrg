@@ -213,8 +213,15 @@ export class ReadinessChecklistStoreService {
    * `Pending` IS NOT A VERDICT. There is no endpoint for it and there should not be: a check
    * returns to pending by being reopened, not by somebody withdrawing their own sign-off.
    */
-  setStatus(campaignRef: string, id: string, status: ReadinessCheckStatus, notes?: string): void {
+  setStatus(
+    campaignRef: string,
+    id: string,
+    status: ReadinessCheckStatus,
+    notes?: string,
+    onDone?: (outcome: { readonly recorded: boolean; readonly error?: string }) => void,
+  ): void {
     if (status === 'Pending') {
+      onDone?.({ recorded: false, error: 'A check cannot be returned to Pending.' });
       return;
     }
 
@@ -226,8 +233,21 @@ export class ReadinessChecklistStoreService {
         : this.api.failReadinessCheck(id, request);
 
     call.subscribe({
-      next: () => this.load(campaignRef),
-      error: () => this.failed(campaignRef, 'The verdict could not be recorded.'),
+      next: () => {
+        this.load(campaignRef);
+        onDone?.({ recorded: true });
+      },
+
+      // THE CALLER IS TOLD, AND TOLD WHY. `cam.readiness.pass` is an APPROVE permission, so an
+      // Initiator does not hold it - and this call answered 403 while the screen, which announced
+      // its own success on the line after invoking this, said "marked as passed" and left the
+      // card exactly as it was. A refusal a person can act on ("you cannot sign this off", "there
+      // is a blocker open against it") was being reported as nothing at all.
+      error: (error: unknown) => {
+        const message = apiErrorMessage(error, 'The verdict could not be recorded.');
+        this.failed(campaignRef, message);
+        onDone?.({ recorded: false, error: message });
+      },
     });
   }
 
@@ -241,6 +261,35 @@ export class ReadinessChecklistStoreService {
    */
   removeCheck(campaignRef: string, id: string): void {
     this.updateCheck(campaignRef, id, { requiredForLaunch: false });
+  }
+
+  /**
+   * Deletes a check outright.
+   *
+   * DISTINCT FROM `removeCheck` ABOVE, which marks a check as not required for launch and leaves
+   * it on the list - the closest thing to a delete available while CAM had no delete endpoint.
+   * CAM has one now, restricted to a PENDING check with no blocker on it, because a judged check
+   * holds somebody's verdict and a blocked one holds somebody's objection. The screen offers this
+   * for exactly that case and `removeCheck` remains for the rest.
+   */
+  deleteCheck(
+    campaignRef: string,
+    id: string,
+    onDone?: (outcome: { readonly deleted: boolean; readonly error?: string }) => void,
+  ): void {
+    this.api
+      .deleteReadinessCheck(id, { expectedVersion: this.versionsByCheckId.get(id) ?? 0 })
+      .subscribe({
+        next: () => {
+          this.load(campaignRef);
+          onDone?.({ deleted: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'That readiness check could not be deleted.');
+          this.failed(campaignRef, message);
+          onDone?.({ deleted: false, error: message });
+        },
+      });
   }
 
   /**

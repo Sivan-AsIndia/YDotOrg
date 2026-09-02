@@ -1,71 +1,49 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { WorkflowLead, WorkflowStateService } from '../../../../Service/workflow-state.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 import { DonorApiService } from '../../../../Service/donor-api.service';
-
-/**
- * The screen's own copy.
- *
- * WHAT THIS REPLACES. A JSON file compiled into the bundle supplied not only these two strings
- * but also the scope line and the refresh time - and those two were the problem. The scope read
- * "YDot Foundation - Tamil Nadu - This queue" for every organisation on the platform, and the
- * refresh time was frozen at 01 Aug 2026, so a stale queue looked exactly as current as a fresh
- * one. Both now come from the server; see `activeScope` and `lastRefresh` below.
- *
- * The kpis, pipeline, savedViews and filterOptions the old file also declared were already null
- * in it, and the code already fell back to defaults for each - so nothing is lost by their going.
- */
-/**
- * The KPI cards' labels and hints. The NUMBERS are never here.
- *
- * THESE CARDS USED TO RENDER NOTHING AT ALL. The list they were built from lived in this screen's
- * JSON, where it was null, so the row across the top of the queue was silently empty on every
- * load - the code that filled in the counts ran over an empty array and produced an empty array.
- *
- * Declaring the cards here and taking every value from the live lead list is what makes the row
- * appear, and it cannot drift from the queue below it because both read the same leads.
- */
-const KPI_CARDS: readonly { readonly id: string; readonly label: string; readonly hint: string }[] = [
-  { id: 'total', label: 'Total leads', hint: 'Every lead in your effective scope' },
-  { id: 'unassigned', label: 'Unassigned', hint: 'Waiting for an owner' },
-  { id: 'hot', label: 'Hot', hint: 'Marked hot by the person who last spoke to them' },
-  { id: 'qualified', label: 'Qualified', hint: 'Ready to be asked' },
-  { id: 'converted', label: 'Converted', hint: 'Have since given' },
-  { id: 'overdue', label: 'Overdue', hint: 'Past the response time promised for this lead' },
-];
-
-const SCREEN = {
-  title: 'Lead work queue',
-  purpose: 'Prioritise new, due, overdue and nurture leads.',
-  breadcrumb: ['Fundraising', 'Relationships', 'Lead work queue'] as readonly string[],
-} as const;
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import {
+  DonLookupItem,
+  LeadListItem,
+  LeadWorkQueueFilter,
+  LeadWorkQueueResponse,
+} from '../../../../Shared/models/donor-contract.model';
 
 export type UiState = 'ready' | 'loading' | 'success' | 'error' | 'empty';
 
+/**
+ * One row of the queue, as this screen draws it.
+ *
+ * IT IS A VIEW OF `LeadListItem`, NOT A SEPARATE TRUTH. Every field is copied straight from the
+ * server's row; nothing is computed here that the server also computes. `masked` in particular
+ * is the server's `isContactMasked` - whether the caller may read a donor's phone number is a
+ * permission decision, and a browser that decided it for itself would be deciding it wrongly.
+ */
 export interface LeadItem {
   readonly id: string;
+  readonly reference: string;
   readonly name: string;
   readonly mobile: string;
   readonly email: string;
   readonly source: string;
   readonly campaign: string;
   readonly stage: string;
-  readonly temperature: 'Cold' | 'Warm' | 'Hot';
-  readonly donationPotential: 'Low' | 'Medium' | 'High';
+  readonly temperature: string;
+  readonly donationPotential: string;
   readonly owner: string;
+  readonly ownerUserId: string | null;
   readonly lastActivity: string;
   readonly nextFollowUp: string;
   readonly healthScore: number;
-  readonly healthReasons: readonly string[];
   readonly lastContactOutcome: string;
   readonly language: string;
-  readonly createdAt: string;
   readonly masked: boolean;
   readonly converted: boolean;
-  readonly donorId?: string;
+  readonly donorId: string | null;
+  readonly version: number;
+  readonly permittedActions: readonly string[];
 }
 
 export interface KpiCard {
@@ -88,231 +66,326 @@ export interface LeadQueuePermissions {
   readonly communicate: boolean;
   readonly schedule: boolean;
   readonly export: boolean;
-  readonly updateTemperature: boolean;
-  readonly updatePotential: boolean;
 }
 
-export interface ScreenData {
-  readonly screen: {
-    readonly viewId: string;
-    readonly title: string;
-    readonly route: string;
-    readonly purpose: string;
-    readonly primaryAction: string;
-    readonly viewPermission: string;
-    readonly primaryUsers: readonly string[];
-    readonly scope: string;
-    readonly lastRefresh: string;
-    readonly breadcrumb: readonly string[];
-  };
-  readonly permissions: LeadQueuePermissions;
-  readonly kpis: readonly KpiCard[];
-  readonly pipeline: readonly PipelineStage[];
-  readonly savedViews: readonly string[];
-  readonly leads: readonly LeadItem[];
-  readonly filterOptions: {
-    readonly stages: readonly string[];
-    readonly temperatures: readonly string[];
-    readonly potentials: readonly string[];
-    readonly sources: readonly string[];
-  };
-  readonly actions: readonly {
-    id: string;
-    label: string;
-    placement: string;
-    permission: string;
-    result: string;
-  }[];
-}
+/** Nothing until the server answers. A screen that assumes permissions shows buttons that 403. */
+const NO_PERMISSIONS: LeadQueuePermissions = {
+  view: false,
+  create: false,
+  assign: false,
+  communicate: false,
+  schedule: false,
+  export: false,
+};
 
 /**
- * SCR-DON-001 — Lead Queue.
- * Central inbox for all fundraising leads.
- * Temperature + Donation Potential replace formal qualification.
- * Auto-conversion after first donation.
- */
-/**
- * What a caller may do on this screen.
+ * The tabs across the top of the queue, exactly as the workflow document draws them.
  *
- * NAMED RATHER THAN A BARE RECORD, so a template asking for a capability that does not exist is a
- * compile error rather than a silently-false condition that hides a button forever.
+ * EACH ONE IS A SERVER FILTER, not a predicate over an array in this browser. The distinction
+ * matters because the grid is paged: filtering the current page client-side would show "4
+ * unassigned" when the organisation has ninety, and the count on the tab would disagree with the
+ * rows underneath it.
  */
-interface LeadWorkQueuePermissions {
-  readonly assign: boolean;
-  readonly communicate: boolean;
-  readonly create: boolean;
-  readonly export: boolean;
-  readonly schedule: boolean;
-  /** Step 5 of the guided flow. The convert endpoint is guarded by don.donors.create. */
-  readonly convert: boolean;
-}
+const SAVED_VIEWS = [
+  'All Leads',
+  'Unassigned Leads',
+  'Assigned Leads',
+  'Hot Leads',
+  'High Donation Potential',
+  'Recently Added',
+  'Converted Leads',
+] as const;
+type SavedView = (typeof SAVED_VIEWS)[number];
 
+/**
+ * SCR-DON-001 - Lead Queue. The document's central list page.
+ *
+ * WHAT THIS REPLACES. The component imported two JSON files at build time -
+ * `donors-leads/lead-work-queue.json` for the screen chrome and `my-leads.json` for the rows -
+ * seeded a `WorkflowStateService` signal from them and worked over that array in memory. Four
+ * things followed, and all four were real:
+ *
+ *   - NOTHING WAS EVER SAVED. A lead assigned or contacted here was back to its old state on
+ *     refresh, because no request ever left the browser.
+ *   - EVERY ORGANISATION SAW THE SAME ELEVEN LEADS. A file compiled into the bundle has no idea
+ *     who is asking, so tenant isolation stopped at the API boundary.
+ *   - THE MASKING RULES COULD NOT WORK. Whether a lead's mobile number is visible depends on
+ *     `don.donors.view-sensitive-contact`, which the server checks; a static file has one answer
+ *     for everybody and it was "show it".
+ *   - THE COUNTS WERE FICTION. The KPI cards and the pipeline tabs counted the rows in the file.
+ *
+ * IT NOW READS `GET /api/v1/donors/lead-work-queue`, which answers the rows, the dropdowns, the
+ * status counts, the summary cards and the caller's permitted actions in ONE call - so the tabs
+ * and the grid can never disagree, because they came from the same answer.
+ */
 @Component({
   selector: 'app-lead-work-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './lead-work-queue.html',
   styleUrl: './lead-work-queue.css',
 })
 export class LeadWorkQueueComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
 
-  /**
-   * Why the queue is empty, when the reason is a failed read rather than no leads.
-   *
-   * THE STORE HAS ALWAYS CARRIED THIS and no template read it, so every load failure rendered
-   * as the ordinary "No leads found." empty state — the one that tells the reader to adjust
-   * their filters.
-   */
-  protected readonly loadError = this.workflow.loadError;
-
-  // Palette used to derive a consistent, distinct avatar color per lead name.
+  // Palette used to derive a consistent, distinct avatar colour per lead name.
   private readonly avatarPalette: readonly string[] = [
     '#2d6a4f', '#3b82c4', '#b45309', '#6d28d9',
     '#0f766e', '#c53030', '#0e7490', '#4f46e5',
   ];
 
-  protected readonly screen = SCREEN;
+  // ===========================================================================================
+  // Screen chrome. Signals rather than constants, because the server supplies them.
+  // ===========================================================================================
+  protected readonly screen = signal({
+    viewId: 'SCR-DON-001',
+    title: 'Lead Queue',
+    route: '/app/fundraising/relationships/lead-work-queue',
+    purpose: 'Manage and monitor all fundraising leads.',
+    scope: '',
+    lastRefresh: '',
+    breadcrumb: ['Fundraising', 'Relationships', 'Lead Queue'] as readonly string[],
+  });
 
-  /** The scope and refresh time the server reports, not a string frozen in the bundle. */
-  protected readonly activeScope = signal('');
-  protected readonly lastRefresh = signal('');
+  protected readonly uiState = signal<UiState>('loading');
+  protected readonly errorMessage = signal<string>('');
 
-  protected readonly uiState = signal<UiState>('ready');
-  protected readonly savedView = signal<string>('');
+  protected readonly permissions = signal<LeadQueuePermissions>(NO_PERMISSIONS);
+  protected readonly kpis = signal<readonly KpiCard[]>([]);
+  protected readonly pipeline = signal<readonly PipelineStage[]>([]);
+  protected readonly savedViews = signal<readonly string[]>(SAVED_VIEWS);
+  protected readonly filterOptions = signal<{
+    readonly stages: readonly string[];
+    readonly temperatures: readonly string[];
+    readonly potentials: readonly string[];
+    readonly sources: readonly string[];
+  }>({ stages: [], temperatures: [], potentials: [], sources: [] });
+  protected readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
+
+  // ===========================================================================================
+  // Filter state. Every one of these re-queries the server.
+  // ===========================================================================================
+  protected readonly savedView = signal<string>('All Leads');
   protected readonly searchTerm = signal('');
   protected readonly stageFilter = signal<string>('');
   protected readonly temperatureFilter = signal<string>('');
   protected readonly potentialFilter = signal<string>('');
   protected readonly sourceFilter = signal<string>('');
   protected readonly ownerFilter = signal<string>('');
+  protected readonly showFilters = signal(false);
+
+  protected readonly leads = signal<readonly LeadItem[]>([]);
+  protected readonly totalCount = signal(0);
   protected readonly selectedIds = signal<Set<string>>(new Set());
   protected readonly selectedLead = signal<LeadItem | null>(null);
   protected readonly copiedField = signal<string | null>(null);
-  protected readonly showFilters = signal(false);
-
-  private readonly tokens = inject(AuthTokenService);
-
-  /**
-   * What this caller may actually do.
-   *
-   * THE SIX HARD-CODED `true`s ARE GONE. They lived in this screen's JSON page data, so every
-   * button on the screen was drawn for everybody who could reach it - a read-only reviewer saw the
-   * same controls as the person who owns the work, and found out which ones they were not allowed
-   * to press by pressing them.
-   *
-   * The server enforces these codes whatever this object says; reading them here is what stops the
-   * screen offering an action the API will refuse.
-   */
-  protected readonly permissions = computed<LeadWorkQueuePermissions>(() => ({
-    assign: this.tokens.hasAnyPermission('don.lead-work-queue.assign'),
-    communicate: this.tokens.hasAnyPermission('don.lead-work-queue.contact'),
-    create: this.tokens.hasAnyPermission('don.donors.create'),
-    export: this.tokens.hasAnyPermission('don.donors.export'),
-    schedule: this.tokens.hasAnyPermission('don.lead-work-queue.view'),
-
-    // The same code the convert endpoint enforces, so the button and the API agree.
-    convert: this.tokens.hasAnyPermission('don.donors.create'),
-  }));
-  /**
-   * The summary tiles.
-   *
-   * COUNTED FROM THE LOADED QUEUE, not read from the page's JSON. The four numbers were literals
-   * in a file compiled into the bundle, so a queue holding three leads reported whatever the
-   * fixture said - and every organisation on the platform saw the same figures. The labels and
-   * hints still come from the page definition; only the numbers are the server's.
-   */
-  protected readonly kpis = computed<readonly KpiCard[]>(() => {
-    const leads = this.workflow.leads();
-
-    const counts: Record<string, number> = {
-      total: leads.length,
-      unassigned: leads.filter((lead) => lead.owner === 'Unassigned').length,
-      hot: leads.filter((lead) => lead.temperature === 'Hot').length,
-      qualified: leads.filter((lead) => lead.stage === 'Qualified').length,
-      converted: leads.filter((lead) => lead.converted).length,
-      overdue: leads.filter((lead) => lead.healthReasons.includes('Breached')).length,
-    };
-
-    return KPI_CARDS.map((card) => ({ ...card, value: counts[card.id] ?? 0 }));
-  });
-  protected readonly pipeline: readonly PipelineStage[] = [];
-  protected readonly savedViews: readonly string[] = [];
-  protected readonly filterOptions = {
-    stages: [],
-    temperatures: [],
-    potentials: [],
-    sources: [],
-  };
-  protected readonly actions: ScreenData['actions'] = [];
-
-  private readonly donorApi = inject(DonorApiService);
 
   constructor() {
-    this.loadScope();
+    this.load();
 
-    // The leads themselves come from WorkflowStateService, which reads them from the donors API
-    // and shares one copy across this screen, My leads and the donation-to-donor flow - so the
-    // queue always matches the real leads rather than holding a second, divergent list.
+    // Coming back from Lead Capture. The reference is the API's, not one this browser minted,
+    // so the row it opens is the row that was actually saved.
     const createdLeadId = this.route.snapshot.queryParamMap.get('createdLeadId');
     if (createdLeadId) {
-      const created = this.workflow.getLead(createdLeadId);
-      if (created) this.selectedLead.set({ ...created, healthReasons: [...created.healthReasons] } as LeadItem);
+      this.openAfterLoad = createdLeadId;
     }
   }
 
-  /**
-   * The scope line and the refresh time, asked of the server.
-   *
-   * A SEPARATE, DELIBERATELY TINY READ. `pageSize: 1` because this call wants the envelope, not
-   * the leads - those already arrived through WorkflowStateService, and fetching two hundred of
-   * them twice to read one string off the second copy would be wasteful.
-   */
-  private loadScope(): void {
-    this.donorApi.getLeadWorkQueue({ pageSize: 1 }).subscribe({
-      next: (response) => {
-        this.activeScope.set(response.activeScope ?? '');
-        this.lastRefresh.set(
-          new Date().toLocaleString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        );
-      },
+  private openAfterLoad: string | null = null;
 
-      // Left blank rather than guessed. The template prints an em dash, which is honest about
-      // not knowing - unlike the fixed organisation name this used to show everybody.
-      error: () => {
-        this.activeScope.set('');
-        this.lastRefresh.set('');
+  // ===========================================================================================
+  // Loading
+  // ===========================================================================================
+
+  /**
+   * One call fills the whole screen.
+   *
+   * THE FILTERS GO TO THE SERVER, not to a `.filter()` over what is already here. The grid is
+   * paged, so a client-side predicate would filter one page and label it as the whole set.
+   */
+  private load(): void {
+    this.uiState.set('loading');
+    this.errorMessage.set('');
+
+    this.api.getLeadWorkQueue(this.buildFilter()).subscribe({
+      next: (response) => this.applyResponse(response),
+      error: (error: unknown) => {
+        this.errorMessage.set(apiErrorMessage(error));
+        this.uiState.set('error');
       },
     });
   }
 
-  /** Maps assets/data/my-leads.json (the real leads source) into seed records. */
+  /** The saved view and the filter controls, translated into the API's query string. */
+  private buildFilter(): LeadWorkQueueFilter {
+    const filter: LeadWorkQueueFilter = {
+      page: 1,
+      pageSize: 100,
+      search: this.searchTerm().trim() || undefined,
+      status: this.stageFilter() || null,
+      temperature: this.temperatureFilter() || null,
+      donationPotential: this.potentialFilter() || null,
+    };
+
+    const owner = this.ownerFilter();
+    if (owner === 'Unassigned') {
+      filter.assignmentState = 'Unassigned';
+    } else if (owner && owner !== 'All') {
+      filter.ownerUserId = owner;
+    }
+
+    switch (this.savedView() as SavedView) {
+      case 'Unassigned Leads':
+        filter.assignmentState = 'Unassigned';
+        break;
+      case 'Assigned Leads':
+        filter.assignmentState = 'Assigned';
+        break;
+      case 'Hot Leads':
+        filter.temperature = 'Hot';
+        break;
+      case 'High Donation Potential':
+        filter.donationPotential = 'High';
+        break;
+      case 'Recently Added':
+        filter.newestFirst = true;
+        break;
+
+      // THE ONLY TAB THAT ASKS FOR CONVERTED ROWS. Everywhere else they are hidden, because the
+      // document says a converted lead leaves this queue for the Donor List.
+      case 'Converted Leads':
+        filter.isConverted = true;
+        break;
+    }
+
+    return filter;
+  }
+
+  private applyResponse(response: LeadWorkQueueResponse): void {
+    this.leads.set(response.leads.items.map((row) => this.toRow(row)));
+    this.totalCount.set(response.leads.totalCount);
+
+    this.screen.update((current) => ({
+      ...current,
+      scope: response.activeScope,
+      lastRefresh: this.formatDateTime(response.lastRefreshedAtUtc),
+    }));
+
+    // THE CARDS COME FROM THE SERVER'S SUMMARY, not from counting the page. The summary is
+    // scope-wide; the page is a hundred rows at most, and the two are different numbers.
+    const summary = response.summary;
+    this.kpis.set([
+      { id: 'total', label: 'Total Leads', value: summary.totalLeads, hint: 'In selected scope' },
+      { id: 'unassigned', label: 'Unassigned Leads', value: summary.unassignedLeads, hint: 'In selected scope' },
+      { id: 'assigned', label: 'Assigned Leads', value: summary.assignedLeads, hint: 'In selected scope' },
+      { id: 'hot', label: 'Hot Leads', value: summary.hotLeads, hint: 'In selected scope' },
+      { id: 'converted', label: 'Converted Leads', value: summary.convertedLeads, hint: 'Donation recorded' },
+      { id: 'potential', label: 'High Donation Potential', value: summary.highDonationPotential, hint: 'In selected scope' },
+    ]);
+
+    this.pipeline.set(
+      response.statusOptions.map((option) => ({
+        key: option.value,
+        label: option.label,
+        count: response.statusCounts[option.value] ?? 0,
+      })),
+    );
+
+    this.filterOptions.set({
+      stages: response.statusOptions.map((o) => o.label),
+      temperatures: response.temperatureOptions.map((o) => o.label),
+      potentials: response.donationPotentialOptions.map((o) => o.label),
+      sources: this.distinct(response.leads.items.map((row) => row.source ?? '').filter(Boolean)),
+    });
+    this.ownerOptions.set(response.ownerOptions);
+
+    this.permissions.set(this.toPermissions(response.permittedActions));
+
+    this.uiState.set(this.leads().length === 0 ? 'empty' : 'ready');
+
+    if (this.openAfterLoad) {
+      const created = this.leads().find(
+        (lead) => lead.id === this.openAfterLoad || lead.reference === this.openAfterLoad,
+      );
+      if (created) {
+        this.selectedLead.set(created);
+      }
+      this.openAfterLoad = null;
+    }
+  }
+
+  private toRow(row: LeadListItem): LeadItem {
+    return {
+      id: row.id,
+      reference: row.leadReference,
+      name: row.name,
+
+      // ALREADY MASKED, OR ALREADY NOT. The server sends '+91 98•••••210' or the real number
+      // depending on the caller's permission, so there is nothing left to decide here.
+      mobile: row.mobileNumber ?? '',
+      email: row.emailAddress ?? '',
+      source: row.source ?? '',
+      campaign: row.campaignName ?? '',
+      stage: row.status,
+      temperature: row.temperature,
+      donationPotential: row.donationPotential,
+      owner: row.ownerName ?? 'Unassigned',
+      ownerUserId: row.ownerUserId,
+      lastActivity: row.lastContactOutcome,
+      nextFollowUp: this.formatDate(row.nextActionDueUtc),
+      healthScore: row.healthScore,
+      lastContactOutcome: row.lastContactOutcome,
+      language: row.preferredLanguage,
+      masked: row.isContactMasked,
+      converted: row.isConverted,
+      donorId: row.convertedDonorId,
+      version: row.version,
+      permittedActions: row.permittedActions ?? [],
+    };
+  }
+
   /**
-   * REMOVED: the static lead seed.
+   * The caller's permitted actions, as the server listed them.
    *
-   * This built a lead list from `assets/data/my-leads.json` at BUILD TIME and pushed it into the
-   * shared workspace. Every organisation therefore saw the same fabricated leads, nothing anybody
-   * did to them reached the server, and the contact details came through unmasked because a file
-   * cannot know who is asking.
-   *
-   * Leads now come from `DON /api/v1/donors/lead-work-queue` through `WorkflowStateService`,
-   * which loads them once for the whole section. The method is kept as an empty source so its
-   * call site still compiles and reads as what it is: nothing to seed.
+   * THIS IS THE WHOLE ROLE MODEL ON THIS SCREEN. TENANT_ADMIN, INITIATOR and APPROVER differ
+   * only in which verbs appear in `permittedActions`, so nothing here names a role. The
+   * endpoints re-check every one of these, so a hidden button is a courtesy rather than a
+   * control.
    */
-  private realLeadSeeds(): WorkflowLead[] {{
-    return [];
-  }}
+  private toPermissions(permitted: readonly string[]): LeadQueuePermissions {
+    // THE SERVER ANSWERS IN VERBS, NOT PERMISSION CODES. This used to compare against strings
+    // like 'don.lead-work-queue.assign', which match nothing the API returns - so every flag was
+    // false and Create Lead, Export, Communicate and Assign were all hidden. The endpoint answers
+    // ['Accept','Filter','Open','Create','Assign','Contact','Qualify','Close'].
+    //
+    // CREATE IS ITS OWN VERB, and it has to be. It was read off `Accept || Contact`, which are
+    // rights over leads that ALREADY EXIST and say nothing about whether this caller may save a
+    // new one - the form behind the button is Lead Capture, gated on `don.lead-capture.save`.
+    // The queue endpoint now answers 'Create' for exactly that permission.
+    const has = (verb: string) => permitted.includes(verb);
+    return {
+      view: has('Open') || has('Filter'),
+      create: has('Create'),
+      assign: has('Assign'),
+      communicate: has('Contact'),
+      schedule: has('Contact'),
+      export: has('Filter') || has('Open'),
+    };
+  }
+
+  private distinct(values: readonly string[]): readonly string[] {
+    return [...new Set(values)].sort();
+  }
+
+  // ===========================================================================================
+  // Derived view state
+  // ===========================================================================================
+
   protected readonly activeFilterChips = computed(() => {
     const chips: { key: string; label: string }[] = [];
-    if (this.savedView() !== ('')) {
+    if (this.savedView() !== 'All Leads') {
       chips.push({ key: 'view', label: `View: ${this.savedView()}` });
     }
     if (this.searchTerm().trim()) {
@@ -336,58 +409,16 @@ export class LeadWorkQueueComponent {
     return chips;
   });
 
+  /**
+   * The rows on screen.
+   *
+   * SOURCE IS THE ONE FILTER STILL APPLIED HERE, because the API has no source parameter. It is
+   * a narrowing of the page rather than of the set, and the chip says so.
+   */
   protected readonly filteredLeads = computed(() => {
-    let list = this.workflow.leads().map((lead) => ({ ...lead, healthReasons: [...lead.healthReasons] })) as LeadItem[];
-    const term = this.searchTerm().trim().toLowerCase();
-    const view = this.savedView();
-    const stage = this.stageFilter();
-    const temp = this.temperatureFilter();
-    const pot = this.potentialFilter();
-    const src = this.sourceFilter();
-    const own = this.ownerFilter();
-
-    if (view === 'Unassigned Leads') {
-      list = list.filter((l) => l.owner === 'Unassigned');
-    } else if (view === 'Assigned Leads') {
-      list = list.filter((l) => l.owner !== 'Unassigned');
-    } else if (view === 'Hot Leads') {
-      list = list.filter((l) => l.temperature === 'Hot');
-    } else if (view === 'High Donation Potential') {
-      list = list.filter((l) => l.donationPotential === 'High');
-    } else if (view === 'Converted Leads') {
-      list = list.filter((l) => l.converted);
-    } else if (view === 'Recently Added') {
-      list = [...list].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    }
-
-    if (term) {
-      list = list.filter(
-        (l) =>
-          l.id.toLowerCase().includes(term) ||
-          l.name.toLowerCase().includes(term) ||
-          l.mobile.toLowerCase().includes(term) ||
-          l.email.toLowerCase().includes(term),
-      );
-    }
-    if (stage) {
-      list = list.filter((l) => l.stage === stage);
-    }
-    if (temp) {
-      list = list.filter((l) => l.temperature === temp);
-    }
-    if (pot) {
-      list = list.filter((l) => l.donationPotential === pot);
-    }
-    if (src) {
-      list = list.filter((l) => l.source === src);
-    }
-    if (own === 'Unassigned') {
-      list = list.filter((l) => l.owner === 'Unassigned');
-    } else if (own && own !== 'All') {
-      list = list.filter((l) => l.owner === own);
-    }
-
-    return list;
+    const source = this.sourceFilter();
+    const rows = this.leads();
+    return source ? rows.filter((lead) => lead.source === source) : rows;
   });
 
   protected readonly hasResults = computed(() => this.filteredLeads().length > 0);
@@ -398,10 +429,16 @@ export class LeadWorkQueueComponent {
   });
 
   protected readonly statusPill = computed(() => {
-    if (this.uiState() === 'success') {
-      return { label: 'Updated', cls: 'lq-badge-good' };
+    switch (this.uiState()) {
+      case 'loading':
+        return { label: 'Loading', cls: 'lq-badge-muted' };
+      case 'error':
+        return { label: 'Unavailable', cls: 'lq-badge-danger' };
+      case 'success':
+        return { label: 'Updated', cls: 'lq-badge-good' };
+      default:
+        return { label: 'Live queue', cls: 'lq-badge-good' };
     }
-    return { label: 'Live queue', cls: 'lq-badge-good' };
   });
 
   protected readonly healthSummary = computed(() => {
@@ -415,43 +452,37 @@ export class LeadWorkQueueComponent {
     };
   });
 
+  // ===========================================================================================
+  // Filter controls. Each one reloads, because each one is a server filter.
+  // ===========================================================================================
+
   protected selectSavedView(view: string): void {
     this.savedView.set(view);
     this.clearAdvancedFilters();
+    this.load();
   }
 
   protected selectPipelineStage(key: string): void {
-    const stage = this.pipeline.find((p) => p.key === key);
-    if (stage) {
-      this.stageFilter.set(stage.label);
-      this.savedView.set('');
+    const stage = this.pipeline().find((p) => p.key === key);
+    if (!stage) {
+      return;
     }
+    this.stageFilter.set(stage.label);
+    this.savedView.set('All Leads');
+    this.load();
   }
 
   protected removeFilterChip(key: string): void {
     switch (key) {
-      case 'view':
-        this.savedView.set('');
-        break;
-      case 'search':
-        this.searchTerm.set('');
-        break;
-      case 'stage':
-        this.stageFilter.set('');
-        break;
-      case 'temperature':
-        this.temperatureFilter.set('');
-        break;
-      case 'potential':
-        this.potentialFilter.set('');
-        break;
-      case 'source':
-        this.sourceFilter.set('');
-        break;
-      case 'owner':
-        this.ownerFilter.set('');
-        break;
+      case 'view': this.savedView.set('All Leads'); break;
+      case 'search': this.searchTerm.set(''); break;
+      case 'stage': this.stageFilter.set(''); break;
+      case 'temperature': this.temperatureFilter.set(''); break;
+      case 'potential': this.potentialFilter.set(''); break;
+      case 'source': this.sourceFilter.set(''); break;
+      case 'owner': this.ownerFilter.set(''); break;
     }
+    this.load();
   }
 
   protected clearAdvancedFilters(): void {
@@ -463,26 +494,28 @@ export class LeadWorkQueueComponent {
   }
 
   protected clearAllFilters(): void {
-    this.savedView.set('');
+    this.savedView.set('All Leads');
     this.searchTerm.set('');
     this.clearAdvancedFilters();
+    this.load();
   }
 
   protected applyFilters(): void {
     this.showFilters.set(false);
+    this.load();
   }
 
   protected toggleFilters(): void {
     this.showFilters.update((v) => !v);
   }
 
+  // ===========================================================================================
+  // Selection
+  // ===========================================================================================
+
   protected toggleSelectAll(): void {
     const ids = this.filteredLeads().map((l) => l.id);
-    if (this.allSelected()) {
-      this.selectedIds.set(new Set());
-    } else {
-      this.selectedIds.set(new Set(ids));
-    }
+    this.selectedIds.set(this.allSelected() ? new Set() : new Set(ids));
   }
 
   protected toggleSelect(id: string): void {
@@ -499,11 +532,11 @@ export class LeadWorkQueueComponent {
     return this.selectedIds().has(id);
   }
 
+  // ===========================================================================================
+  // Row actions - the document's Action-to-Destination matrix
+  // ===========================================================================================
+
   protected previewLead(lead: LeadItem): void {
-    if (lead.converted && lead.donorId) {
-      this.selectedLead.set(lead);
-      return;
-    }
     this.selectedLead.set(lead);
   }
 
@@ -513,6 +546,116 @@ export class LeadWorkQueueComponent {
 
   protected closePreview(): void {
     this.selectedLead.set(null);
+  }
+
+  /** Assign - "available only for an unassigned lead; opens the Assignment Board". */
+  protected onAssign(lead: LeadItem): void {
+    this.router.navigate(['/app/fundraising/relationships/assignment-board'], {
+      queryParams: { leadId: lead.id },
+    });
+  }
+
+  /** Communicate - "opens the selected lead's Communication Timeline". */
+  protected onCommunicate(lead: LeadItem): void {
+    this.router.navigate(['/app/fundraising/relationships/communication-timeline'], {
+      queryParams: { leadId: lead.id },
+    });
+  }
+
+  /** Schedule Follow-Up - "opens the Follow-Up Planner". */
+  protected onSchedule(lead: LeadItem): void {
+    this.router.navigate(['/app/don/follow-up-planner'], {
+      queryParams: { leadId: lead.id, mode: 'create' },
+    });
+  }
+
+  /** Open Timeline - the same destination as Communicate, per the document. */
+  protected onTimeline(lead: LeadItem): void {
+    this.onCommunicate(lead);
+  }
+
+  protected bulkAssign(): void {
+    if (this.selectionCount() === 0) {
+      return;
+    }
+    this.router.navigate(['/app/fundraising/relationships/assignment-board'], {
+      queryParams: { leadIds: [...this.selectedIds()].join(',') },
+    });
+  }
+
+  protected createLead(): void {
+    this.router.navigate(['/app/fundraising/relationships/lead-capture']);
+  }
+
+  // ===========================================================================================
+  // Export
+  // ===========================================================================================
+
+  /**
+   * Export - the document's shared function.
+   *
+   * IT EXPORTS WHAT IS ON SCREEN. The server has its own donor export endpoint for a full
+   * extract; this is the filtered view the person is looking at, which is what the control
+   * beside the grid means.
+   */
+  protected exportLeads(): void {
+    this.exportRows(this.filteredLeads());
+  }
+
+  protected bulkExport(): void {
+    if (this.selectionCount() === 0) {
+      return;
+    }
+    this.exportRows(this.filteredLeads().filter((lead) => this.selectedIds().has(lead.id)));
+  }
+
+  private exportRows(rows: readonly LeadItem[]): void {
+    const headers = [
+      'Lead ID', 'Name', 'Mobile', 'Email', 'Source', 'Campaign',
+      'Stage', 'Temperature', 'Donation Potential', 'Owner', 'Next Follow-Up',
+    ];
+    const lines = rows.map((lead) =>
+      [
+        lead.reference, lead.name, lead.mobile, lead.email, lead.source, lead.campaign,
+        lead.stage, lead.temperature, lead.donationPotential, lead.owner, lead.nextFollowUp,
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(','),
+    );
+
+    const blob = new Blob([[headers.join(','), ...lines].join('\n')], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'lead-work-queue.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ===========================================================================================
+  // Bulk qualification - REMOVED
+  //
+  // The bulk bar used to carry "Update Temperature" and "Update Donation Potential", and neither
+  // appears anywhere in the Donors and Leads workflow document: its Lead Work Queue offers
+  // Preview, Communicate and Assign, and its only bulk operation is Bulk Assign on the Assignment
+  // Board. Both buttons also had no endpoint behind them - `QualifyLeadRequest` carries
+  // qualification notes and a next action, not a temperature - so they set a local `success`
+  // banner and changed nothing. Selection now serves Assign and Export, which the document does
+  // describe.
+  // ===========================================================================================
+
+  // ===========================================================================================
+  // Presentation helpers
+  // ===========================================================================================
+
+  protected refresh(): void {
+    this.load();
+  }
+
+  protected dismissBanner(): void {
+    this.uiState.set(this.leads().length === 0 ? 'empty' : 'ready');
   }
 
   protected async copyValue(label: string, value: string): Promise<void> {
@@ -531,48 +674,32 @@ export class LeadWorkQueueComponent {
 
   protected stageClass(stage: string): string {
     switch (stage) {
-      case 'New':
-        return 'lq-badge-blue';
-      case 'Assigned':
-        return 'lq-badge-meadow';
-      case 'Contacted':
-        return 'lq-badge-warn';
-      case 'Engaged':
-        return 'lq-badge-good';
-      case 'Dormant':
-        return 'lq-badge-muted';
-      case 'Lost':
-        return 'lq-badge-danger';
-      case 'Converted':
-        return 'lq-badge-good';
-      default:
-        return 'lq-badge-muted';
+      case 'New': return 'lq-badge-blue';
+      case 'Assigned': return 'lq-badge-meadow';
+      case 'Contacted': return 'lq-badge-warn';
+      case 'Engaged': return 'lq-badge-good';
+      case 'Dormant': return 'lq-badge-muted';
+      case 'Lost': return 'lq-badge-danger';
+      case 'Converted': return 'lq-badge-good';
+      default: return 'lq-badge-muted';
     }
   }
 
   protected temperatureClass(temp: string): string {
     switch (temp) {
-      case 'Hot':
-        return 'lq-badge-danger';
-      case 'Warm':
-        return 'lq-badge-warn';
-      case 'Cold':
-        return 'lq-badge-muted';
-      default:
-        return 'lq-badge-muted';
+      case 'Hot': return 'lq-badge-danger';
+      case 'Warm': return 'lq-badge-warn';
+      case 'Cold': return 'lq-badge-muted';
+      default: return 'lq-badge-muted';
     }
   }
 
   protected potentialClass(pot: string): string {
     switch (pot) {
-      case 'High':
-        return 'lq-badge-good';
-      case 'Medium':
-        return 'lq-badge-warn';
-      case 'Low':
-        return 'lq-badge-muted';
-      default:
-        return 'lq-badge-muted';
+      case 'High': return 'lq-badge-good';
+      case 'Medium': return 'lq-badge-warn';
+      case 'Low': return 'lq-badge-muted';
+      default: return 'lq-badge-muted';
     }
   }
 
@@ -591,204 +718,42 @@ export class LeadWorkQueueComponent {
       .toUpperCase();
   }
 
-  /**
-   * Deterministic avatar color per lead name — same lead always gets the
-   * same color, and different leads are visually distinguishable from a
-   * fixed brand-safe palette.
-   */
+  /** Deterministic avatar colour per name, so a lead always looks the same in the grid. */
   protected getAvatarColor(name: string): string {
-    if (!name) return this.avatarPalette[0];
+    if (!name) {
+      return this.avatarPalette[0];
+    }
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const index = Math.abs(hash) % this.avatarPalette.length;
-    return this.avatarPalette[index];
+    return this.avatarPalette[Math.abs(hash) % this.avatarPalette.length];
   }
 
-  /**
-   * Renders a normalized '-' for empty/null/undefined table values instead
-   * of leaving the grid cell blank.
-   */
   protected displayValue(value: string | null | undefined): string {
     return value && value.trim().length > 0 ? value : '-';
   }
 
-  protected onAssign(lead: LeadItem): void {
-    this.router.navigate(['/app/fundraising/relationships/assignment-board'], { queryParams: { leadId: lead.id } });
-  }
-
-  protected onCommunicate(lead: LeadItem): void {
-    this.router.navigate(['/app/fundraising/relationships/communication-timeline'], { queryParams: { leadId: lead.id } });
-  }
-
-  protected onSchedule(lead: LeadItem): void {
-    this.router.navigate(['/app/don/follow-up-planner'], { queryParams: { leadId: lead.id, mode: 'create' } });
-  }
-
-  protected onTimeline(lead: LeadItem): void {
-    this.router.navigate(['/app/fundraising/relationships/communication-timeline'], { queryParams: { leadId: lead.id } });
-  }
-
-  protected bulkAssign(): void {
-    if (this.selectionCount() === 0) return;
-    this.router.navigate(['/app/fundraising/relationships/assignment-board'], { queryParams: { leadIds: [...this.selectedIds()].join(',') } });
-  }
-
-  protected bulkExport(): void {
-    if (this.selectionCount() === 0) return;
-    this.exportRows(this.filteredLeads().filter((lead) => this.selectedIds().has(lead.id)));
-  }
-
-  protected exportLeads(): void {
-    this.exportRows(this.filteredLeads());
-  }
-
-  private exportRows(rows: LeadItem[]): void {
-    const headers = ['Lead ID', 'Name', 'Mobile', 'Email', 'Source', 'Campaign', 'Stage', 'Temperature', 'Donation Potential', 'Owner', 'Next Follow-Up'];
-    const lines = rows.map((lead) => [lead.id, lead.name, lead.mobile, lead.email, lead.source, lead.campaign, lead.stage, lead.temperature, lead.donationPotential, lead.owner, lead.nextFollowUp]
-      .map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','));
-    const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'lead-work-queue.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  /**
-   * Step 5 of the guided flow: a qualified lead becomes a donor.
-   *
-   * THIS SCREEN HAD NO WAY TO DO IT, and neither did any other. `DonorApiService.convertLead`
-   * and `POST /lead-work-queue/{id}/convert` both existed and nothing in the application called
-   * either, so a lead reached Qualified and stopped there for ever - the donor record that
-   * carries its campaign attribution was never created from the lead at all.
-   */
-  /**
-   * Whether this lead can still change hands.
-   *
-   * NOT "IS IT UNASSIGNED". Both Assign controls used to test `lead.owner === 'Unassigned'`,
-   * which made reassignment impossible from this screen: the server gives every lead an owner
-   * at capture - the caller, when nobody else is named - so the condition was false for almost
-   * every row and the button simply never appeared. The server allows assignment right up until
-   * the lead is converted, closed or suppressed, so that is the test.
-   */
-  protected canAssign(lead: LeadItem): boolean {
-    return (
-      this.permissions().assign
-      && !['Converted', 'Closed', 'Suppressed'].includes(lead.stage)
-    );
-  }
-
-  protected canConvert(lead: LeadItem): boolean {
-    return this.permissions().convert && lead.stage === 'Qualified' && !lead.converted;
-  }
-
-  protected readonly convertTarget = signal<LeadItem | null>(null);
-  protected readonly convertReason = signal('');
-  protected readonly convertBusy = signal(false);
-  protected readonly convertReasonMin = 10;
-  protected readonly convertReasonValid = computed(
-    () => this.convertReason().trim().length >= this.convertReasonMin,
-  );
-
-  protected openConvert(lead: LeadItem): void {
-    if (!this.canConvert(lead)) return;
-    this.convertReason.set('');
-    this.convertTarget.set(lead);
-  }
-
-  protected cancelConvert(): void {
-    this.convertTarget.set(null);
-    this.convertReason.set('');
-  }
-
-  protected confirmConvert(): void {
-    const lead = this.convertTarget();
-
-    if (!lead || !this.convertReasonValid() || this.convertBusy()) {
-      return;
+  private formatDate(value: string | null): string {
+    if (!value) {
+      return '';
     }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? ''
+      : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
 
-    this.convertBusy.set(true);
-
-    this.workflow.convertLead(lead.id, { conversionReason: this.convertReason() }, (outcome) => {
-      this.convertBusy.set(false);
-
-      // A REFUSAL LEAVES THE DIALOG OPEN. The store has already put the server's reason in
-      // `loadError`, which the banner shows, and closing on failure would hide the one sentence
-      // that says what to do about it.
-      if (!outcome.converted) {
-        return;
-      }
-
-      this.convertTarget.set(null);
-      this.convertReason.set('');
-      this.uiState.set('success');
-
-      if (outcome.donorId) {
-        this.router.navigate(['/app/fundraising/relationships/donor-360'], {
-          queryParams: { donorId: outcome.donorId },
+  private formatDateTime(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? ''
+      : parsed.toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
         });
-      }
-    });
-  }
-
-  /**
-   * Bulk temperature and potential.
-   *
-   * THESE ARE SCORING FIELDS ON THE LEAD, and both methods used to set the success banner and
-   * change nothing - so a person could select twenty leads, mark them all Hot, be told it
-   * worked and find every one unchanged on the next load. `patchLead` routes a score change to
-   * the lead's own PUT, so the write is real and the banner is earned.
-   */
-  protected bulkUpdateTemperature(temperature: LeadItem['temperature'] = 'Hot'): void {
-    if (this.selectionCount() === 0) return;
-
-    for (const lead of this.filteredLeads().filter((row) => this.selectedIds().has(row.id))) {
-      this.workflow.patchLead(lead.id, {
-        temperature,
-        lastActivity: `Temperature set to ${temperature} from the lead queue.`,
-      });
-    }
-
-    this.selectedIds.set(new Set());
-    this.uiState.set('success');
-  }
-
-  protected bulkUpdatePotential(potential: LeadItem['donationPotential'] = 'High'): void {
-    if (this.selectionCount() === 0) return;
-
-    for (const lead of this.filteredLeads().filter((row) => this.selectedIds().has(row.id))) {
-      this.workflow.patchLead(lead.id, {
-        donationPotential: potential,
-        lastActivity: `Donation potential set to ${potential} from the lead queue.`,
-      });
-    }
-
-    this.selectedIds.set(new Set());
-    this.uiState.set('success');
-  }
-
-  /**
-   * Re-asks the server.
-   *
-   * IT USED TO BE A `setTimeout` that put the screen back to 'ready' after 400ms and fetched
-   * nothing, so Refresh on a queue somebody else had just added to showed the same rows it
-   * showed before.
-   */
-  protected refresh(): void {
-    this.uiState.set('loading');
-    this.workflow.refresh();
-    this.uiState.set('ready');
-  }
-
-  protected dismissBanner(): void {
-    this.uiState.set('ready');
-  }
-
-  protected createLead(): void {
-    this.router.navigate(['/app/fundraising/relationships/lead-capture']);
   }
 }

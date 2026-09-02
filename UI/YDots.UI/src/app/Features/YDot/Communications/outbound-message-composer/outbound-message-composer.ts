@@ -1,6 +1,7 @@
-import { Component, ElementRef, QueryList, ViewChildren } from '@angular/core';
+import { Component, ElementRef, QueryList, ViewChildren, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 
 /* ---------------------------------------------------------------------- */
 /*  4.7 COM-UI-07 — Outbound message composer — supporting data contracts */
@@ -108,7 +109,29 @@ export class OutboundMessageComposerComponent {
 
   /* ---------------------------- Shell / scope --------------------------- */
 
-  readonly effectiveRole = 'Fundraiser';
+  private readonly tokens = inject(AuthTokenService);
+
+  /**
+   * The role shown in the scope pill.
+   *
+   * READ FROM THE TOKEN, not hard-coded. This was the literal string 'Fundraiser', so the pill
+   * told every visitor they were a fundraiser - a role IAM stopped issuing when its catalogue was
+   * reduced to TENANT_ADMIN, INITIATOR and APPROVER. A scope indicator that names the wrong role
+   * is worse than one that names none, because it is the line somebody checks before deciding
+   * whether they are allowed to send.
+   *
+   * A LABEL, NEVER A DECISION. What the composer permits is decided by permission codes; this
+   * only says who the token says you are. APPROVER is reported ahead of INITIATOR because the
+   * order is most-privileged-first and somebody holding both should be named by their authority.
+   */
+  readonly effectiveRole = computed(() => {
+    if (this.tokens.isSuperAdmin()) return 'Super Admin';
+    const roles = this.tokens.roles().map((role) => role.toUpperCase());
+    if (roles.includes('TENANT_ADMIN')) return 'Tenant Admin';
+    if (roles.includes('APPROVER')) return 'Approver';
+    if (roles.includes('INITIATOR')) return 'Initiator';
+    return 'User';
+  });
   readonly effectiveScopes = [
     { label: 'Donation Operations', inScope: true },
     { label: 'Community Outreach', inScope: true },
@@ -211,10 +234,10 @@ export class OutboundMessageComposerComponent {
   ];
 
   readonly owners: OwnerOption[] = [
-    { id: 'own-1', name: 'Sarah Johnson', role: 'Fundraiser', scope: 'Donation Operations', initials: 'SJ', inScope: true },
-    { id: 'own-2', name: 'Arjun Nair', role: 'Donor Care', scope: 'Community Outreach', initials: 'AN', inScope: true },
-    { id: 'own-3', name: 'Priya Menon', role: 'Supervisor', scope: 'Donation Operations', initials: 'PM', inScope: true },
-    { id: 'own-4', name: 'Karthik Rao', role: 'Fundraiser', scope: 'Major Gifts', initials: 'KR', inScope: false },
+    { id: 'own-1', name: 'Sarah Johnson', role: 'Initiator', scope: 'Donation Operations', initials: 'SJ', inScope: true },
+    { id: 'own-2', name: 'Arjun Nair', role: 'Initiator', scope: 'Community Outreach', initials: 'AN', inScope: true },
+    { id: 'own-3', name: 'Priya Menon', role: 'Approver', scope: 'Donation Operations', initials: 'PM', inScope: true },
+    { id: 'own-4', name: 'Karthik Rao', role: 'Initiator', scope: 'Major Gifts', initials: 'KR', inScope: false },
   ];
 
   /* ------------------------------ Recipient (read-only) -------------------- */

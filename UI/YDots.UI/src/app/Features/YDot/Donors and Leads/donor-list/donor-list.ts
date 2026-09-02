@@ -5,7 +5,9 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { WorkflowStateService } from '../../../../Service/workflow-state.service';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { DonorListItem } from '../../../../Shared/models/donor-contract.model';
 
 /** Donor record as surfaced from the Donation & Payments module. */
 export interface Donor {
@@ -84,7 +86,14 @@ const CONSENT_TAGS: ConsentStatus[] = [
 })
 export class DonorListComponent {
   /** ----- Raw data + async state ----- */
-  protected readonly donors = computed<Donor[]>(() => this.workflow.donors() as Donor[]);
+  /**
+   * The donor records.
+   *
+   * FROM `GET /api/v1/donors`. The document describes this list as the destination of a
+   * conversion: "the lead becomes a donor, is removed from the Lead Work Queue and is added to
+   * the Donor List". That only works if the list reads the same store the conversion writes to.
+   */
+  protected readonly donors = signal<Donor[]>([]);
   protected readonly loading = signal<boolean>(true);
   protected readonly error = signal<string | null>(null);
   protected readonly lastRefreshed = signal<Date>(new Date());
@@ -124,46 +133,109 @@ export class DonorListComponent {
 
   constructor(
     private readonly router: Router,
-    private readonly workflow: WorkflowStateService,
+    private readonly api: DonorApiService,
   ) {
     this.loadDonors();
   }
 
   /**
-   * Loads the donor directory.
+   * Loads the donors.
    *
-   * WHAT THIS USED TO DO. It fetched `/assets/data/donors.json` - a static file served by the web
-   * server - and then threw the result away without using it, leaving the list to be populated by
-   * whatever had been seeded into local storage. Three things were wrong with that:
-   *
-   *   - THE FILE WAS THE SAME FOR EVERY ORGANISATION, because a static asset has no idea who is
-   *     asking. Tenant isolation stopped at the API boundary.
-   *   - IT CARRIED UNMASKED CONTACT DETAILS. Whether a donor's phone number may be shown depends
-   *     on a permission the server checks per caller; a file has one answer for everybody.
-   *   - The fetch's own result was discarded, so the screen showed local storage regardless.
-   *
-   * The directory now comes from `DON /api/v1/donors` through `WorkflowStateService`, which loads
-   * it once for the whole section. This asks that store to reload and mirrors its state, so the
-   * refresh button, the spinner and the error banner all still work.
+   * IT USED TO `fetch('/assets/data/donors.json')` - a static file served from the bundle, with a
+   * comment saying to swap the URL "once the real endpoint is available". Three things followed:
+   * every organisation saw the same donors, the contact columns were never masked because a file
+   * cannot check a permission, and a donor created by a donation never appeared here at all.
    */
   private loadDonors(): void {
     this.loading.set(true);
     this.error.set(null);
 
-    this.workflow.refresh();
+    this.api.searchDonors({ page: 1, pageSize: 200 }).subscribe({
+      next: (page) => {
+        this.donors.set(page.items.map((row) => this.toDonor(row)));
+        this.lastRefreshed.set(new Date());
+        this.loading.set(false);
+      },
+      error: (error: unknown) => {
+        this.error.set(apiErrorMessage(error));
+        this.loading.set(false);
+      },
+    });
+  }
 
-    // The store owns the request; this follows its outcome so the screen's own loading and error
-    // states stay in step with it rather than guessing.
-    const poll = setInterval(() => {
-      if (this.workflow.isLoading()) {
-        return;
-      }
+  private toDonor(row: DonorListItem): Donor {
+    const owner = row.relationshipOwnerName ?? 'Unassigned';
 
-      clearInterval(poll);
-      this.loading.set(false);
-      this.error.set(this.workflow.loadError());
-      this.lastRefreshed.set(new Date());
-    }, 100);
+    return {
+      donorId: row.id,
+      reference: row.displayCode,
+      name: row.displayName,
+
+      // ALREADY MASKED, OR ALREADY NOT. `isContactMasked` is the server's decision.
+      mobile: row.mobileNumber ?? '',
+      email: row.emailAddress ?? '',
+      location: '',
+      region: '',
+      campaign: row.campaignName ?? '',
+      owner,
+      ownerInitials: this.initialsFor(owner),
+      ownerColor: this.colourFor(owner),
+      lastDonationAmount: row.lastDonationAmount ?? 0,
+      lastDonationDate: row.lastDonationAtUtc ?? '',
+      lifetimeGiving: row.lifetimeGiving,
+      followUpStatus: row.followUpStatus as FollowUpStatus,
+      consentStatus: this.toConsentStatus(row.consentStatus),
+      verificationStatus: row.verificationStatus as VerificationStatus,
+      engagementTag: this.toEngagementTag(row),
+      consentReviewRequired: row.consentReviewRequired,
+      createdDate: row.updatedAtUtc,
+    };
+  }
+
+  /** The screen's three consent words, from the server's four. */
+  private toConsentStatus(state: string): ConsentStatus {
+    switch (state) {
+      case 'Granted': return 'Full Consent';
+      case 'Partial': return 'Partial';
+      default: return 'Do Not Contact';
+    }
+  }
+
+  /**
+   * The engagement badge.
+   *
+   * DERIVED FROM FACTS THE SERVER SENT, in a fixed order so the same donor always gets the same
+   * badge. It was a stored string in the JSON file, which meant it could disagree with every
+   * other column on the row.
+   */
+  private toEngagementTag(row: DonorListItem): EngagementTag {
+    if (row.followUpStatus === 'Overdue' || row.followUpStatus === 'Due Today') {
+      return 'Follow-Up Due';
+    }
+    if (row.lifetimeGiving >= 100000) {
+      return 'High Potential';
+    }
+    if (row.lastDonationAtUtc === null) {
+      return 'No Contact';
+    }
+    return 'Dormant';
+  }
+
+  private initialsFor(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '??';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  /** Deterministic per owner, so the same person is the same colour on every row. */
+  private colourFor(name: string): string {
+    const palette = ['#2d6a4f', '#3b82c4', '#b45309', '#6d28d9', '#0f766e', '#c53030'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return palette[Math.abs(hash) % palette.length];
   }
 
   /** ----- Derived filter option lists ----- */

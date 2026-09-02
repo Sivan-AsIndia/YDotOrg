@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IVerificationRepository, VerificationRepository>();
         services.AddScoped<IFollowUpRepository, FollowUpRepository>();
         services.AddScoped<IDonor360Repository, Donor360Repository>();
+        services.AddScoped<IInteractionTimelineReader, InteractionTimelineReader>();
         services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
 
         // ---- Security and supporting services -------------------------------------------------------

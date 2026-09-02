@@ -31,12 +31,20 @@
           <div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
               <h4 class="fw-bold mb-0">{{ data()?.displayName }}</h4>
-              <span class="status-pill status-active"><span class="dot"></span> {{ data()?.accountStatus }}</span>
-              <span class="status-pill status-neutral">{{ data()?.accountCategory }}</span>
+              <!--
+                THE COLOUR CAME FROM A LITERAL. `status-active` was hardcoded, so a suspended
+                account wore the green pill with the word "Suspended" inside it.
+              -->
+              <span class="status-pill" [ngClass]="accountStatusPill()">
+                <span class="dot"></span> {{ data()?.accountStatus || 'Unknown' }}
+              </span>
+              @if (data()?.accountCategory) {
+                <span class="status-pill status-neutral">{{ data()?.accountCategory }}</span>
+              }
             </div>
-            <p class="text-muted mb-0 small">
-              {{ data()?.designation }} · {{ data()?.department }} · {{ data()?.reference }}
-            </p>
+            <!-- Joined with a filter rather than fixed separators: a person with no
+                 designation and no department used to read " ·  · USR-0007". -->
+            <p class="text-muted mb-0 small">{{ headerSummary() }}</p>
           </div>
         </div>
 
@@ -74,12 +82,14 @@
               </div>
               <div class="detail-card-body">
                 <div class="row g-4">
-                  <div class="col-md-4"><small class="info-label d-block">Reference</small><span class="info-value">{{ data()?.reference }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Employee ID</small><span class="info-value">{{ data()?.employeeId }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Username</small><span class="info-value">{{ data()?.username }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Email</small><span class="info-value">{{ data()?.loginEmail }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Mobile</small><span class="info-value">{{ data()?.mobileNumber }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Language and timezone</small><span class="info-value">{{ data()?.preferredLanguage }} · {{ data()?.timeZone }}</span></div>
+                  <!-- EVERY VALUE FALLS BACK TO AN EM DASH. A blank cell looks like a screen
+                       that failed to load; "—" says the field is genuinely empty. -->
+                  <div class="col-md-4"><small class="info-label d-block">Reference</small><span class="info-value">{{ data()?.reference || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Employee ID</small><span class="info-value">{{ data()?.employeeId || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Username</small><span class="info-value">{{ data()?.username || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Email</small><span class="info-value">{{ data()?.loginEmail || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Mobile</small><span class="info-value">{{ data()?.mobileNumber || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Language and timezone</small><span class="info-value">{{ localeSummary() }}</span></div>
                 </div>
               </div>
             </div>
@@ -92,12 +102,22 @@
               </div>
               <div class="detail-card-body">
                 <div class="row g-4">
-                  <div class="col-md-4"><small class="info-label d-block">Organisation unit</small><span class="info-value">{{ data()?.organisationUnit }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Department</small><span class="info-value">{{ data()?.department }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Designation</small><span class="info-value">{{ data()?.designation }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Manager</small><span class="info-value">{{ data()?.manager }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Work location</small><span class="info-value">{{ data()?.workLocation }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Joined</small><span class="info-value">{{ data()?.accessStartDate }}</span></div>
+                  <!--
+                    WORK LOCATION IS GONE. There is no such column on a user and there never was,
+                    so the component wrote it as an empty string and this row rendered blank for
+                    every account on the platform — which reads as data that failed to load
+                    rather than as a field nobody collects.
+
+                    JOINED NOW READS `joinedOn` rather than the access-window start, which is a
+                    different fact and only coincidentally the same date. The access window keeps
+                    its own two rows on the Access tab.
+                  -->
+                  <div class="col-md-4"><small class="info-label d-block">Organisation unit</small><span class="info-value">{{ data()?.organisationUnit || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Department</small><span class="info-value">{{ data()?.department || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Designation</small><span class="info-value">{{ data()?.designation || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Manager</small><span class="info-value">{{ data()?.manager || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Joined</small><span class="info-value">{{ data()?.joinedOn || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Data scopes</small><span class="info-value">{{ data()?.dataScopes || '—' }}</span></div>
                 </div>
               </div>
             </div>
@@ -110,9 +130,12 @@
                 <a href="javascript:void(0)" class="edit-link" (click)="setTab('access')">View all <i class="ri-arrow-right-line ms-1"></i></a>
               </div>
               <div class="search-sort-bar">
+                <!-- BOUND NOW. It was a bare <input>: you could type a role name into it and
+                     the table below never changed, which reads as "no such role here". -->
                 <div class="search-sort-input">
                   <i class="ri-search-line"></i>
-                  <input type="text" placeholder="Search assigned roles...">
+                  <input type="text" placeholder="Search assigned roles..."
+                         [ngModel]="roleSearch()" (ngModelChange)="roleSearch.set($event)">
                 </div>
    <div class="position-relative">
                   <button type="button" class="sort-btn" (click)="toggleSortMenu()">
@@ -136,10 +159,18 @@
               <div class="table-responsive">
                 <table class="table role-table mb-0">
                   <thead>
-                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th><th class="text-end"></th></tr>
+                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th></tr>
                   </thead>
                   <tbody>
-                    @for (r of roleAssignments(); track r.role) {
+                    <!--
+                      `visibleRoleAssignments`, not the raw list. Both tables iterated
+                      `roleAssignments()`, so the Sort by menu ticked a field and changed nothing
+                      — `sortedRoleAssignments` was computed and never read by anything.
+
+                      The trailing chevron is gone with the empty column it sat in: it made every
+                      row look like it opened something, and no row has ever opened anything.
+                    -->
+                    @for (r of visibleRoleAssignments(); track r.role) {
                       <tr>
                         <td>
                           <div class="fw-semibold">{{ r.role }}</div>
@@ -154,18 +185,32 @@
                             <span class="pill-soft pill-amber"><span class="dot"></span> {{ r.term }}</span>
                           }
                         </td>
-                        <td class="text-end"><i class="ri-arrow-right-s-line row-chevron"></i></td>
                       </tr>
                     }
                     @empty {
-                      <tr><td colspan="5" class="text-center text-muted py-3">No role assignments found.</td></tr>
+                      <tr><td colspan="4" class="text-center text-muted py-3">
+                        @if (roleSearch().trim()) {
+                          No assigned role matches “{{ roleSearch() }}”.
+                        } @else {
+                          No role assignments found.
+                        }
+                      </td></tr>
                     }
                   </tbody>
                 </table>
               </div>
+              <!--
+                THE ARROWS ARE GONE. They were two icons with no handler, on a table that is not
+                paged — a person's roles arrive in one payload and all of them are on screen.
+                The count now describes what is actually rendered, so it stops disagreeing with
+                the table the moment somebody searches.
+              -->
               <div class="pagination-footer-simple">
-                <span>1-{{ roleAssignments().length }} of {{ roleAssignments().length }}</span>
-                <span class="pf-arrows"><i class="ri-arrow-left-s-line"></i><i class="ri-arrow-right-s-line"></i></span>
+                <span>
+                  Showing {{ visibleRoleAssignments().length }} of
+                  {{ roleAssignments().length }}
+                  {{ roleAssignments().length === 1 ? 'role' : 'roles' }}
+                </span>
               </div>
             </div>
           }
@@ -176,9 +221,12 @@
                 <h6 class="mb-0 fw-bold">Role Assignments & Data Scopes</h6>
               </div>
               <div class="search-sort-bar">
+                <!-- BOUND NOW. It was a bare <input>: you could type a role name into it and
+                     the table below never changed, which reads as "no such role here". -->
                 <div class="search-sort-input">
                   <i class="ri-search-line"></i>
-                  <input type="text" placeholder="Search assigned roles...">
+                  <input type="text" placeholder="Search assigned roles..."
+                         [ngModel]="roleSearch()" (ngModelChange)="roleSearch.set($event)">
                 </div>
    <div class="position-relative">
                   <button type="button" class="sort-btn" (click)="toggleSortMenu()">
@@ -202,10 +250,18 @@
               <div class="table-responsive">
                 <table class="table role-table mb-0">
                   <thead>
-                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th><th class="text-end"></th></tr>
+                    <tr><th>Role</th><th>Scope</th><th>Permissions</th><th>Term</th></tr>
                   </thead>
                   <tbody>
-                    @for (r of roleAssignments(); track r.role) {
+                    <!--
+                      `visibleRoleAssignments`, not the raw list. Both tables iterated
+                      `roleAssignments()`, so the Sort by menu ticked a field and changed nothing
+                      — `sortedRoleAssignments` was computed and never read by anything.
+
+                      The trailing chevron is gone with the empty column it sat in: it made every
+                      row look like it opened something, and no row has ever opened anything.
+                    -->
+                    @for (r of visibleRoleAssignments(); track r.role) {
                       <tr>
                         <td>
                           <div class="fw-semibold">{{ r.role }}</div>
@@ -220,42 +276,91 @@
                             <span class="pill-soft pill-amber"><span class="dot"></span> {{ r.term }}</span>
                           }
                         </td>
-                        <td class="text-end"><i class="ri-arrow-right-s-line row-chevron"></i></td>
                       </tr>
                     }
                     @empty {
-                      <tr><td colspan="5" class="text-center text-muted py-3">No role assignments found.</td></tr>
+                      <tr><td colspan="4" class="text-center text-muted py-3">
+                        @if (roleSearch().trim()) {
+                          No assigned role matches “{{ roleSearch() }}”.
+                        } @else {
+                          No role assignments found.
+                        }
+                      </td></tr>
                     }
                   </tbody>
                 </table>
               </div>
+              <!--
+                THE ARROWS ARE GONE. They were two icons with no handler, on a table that is not
+                paged — a person's roles arrive in one payload and all of them are on screen.
+                The count now describes what is actually rendered, so it stops disagreeing with
+                the table the moment somebody searches.
+              -->
               <div class="pagination-footer-simple">
-                <span>1-{{ roleAssignments().length }} of {{ roleAssignments().length }}</span>
-                <span class="pf-arrows"><i class="ri-arrow-left-s-line"></i><i class="ri-arrow-right-s-line"></i></span>
+                <span>
+                  Showing {{ visibleRoleAssignments().length }} of
+                  {{ roleAssignments().length }}
+                  {{ roleAssignments().length === 1 ? 'role' : 'roles' }}
+                </span>
               </div>
               <div class="detail-card-body border-top">
                 <div class="row g-4">
-                  <div class="col-md-4"><small class="info-label d-block">Access start</small><span class="info-value">{{ data()?.accessStartDate }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Access end</small><span class="info-value">{{ data()?.accessEndDate }}</span></div>
-                  <div class="col-md-4"><small class="info-label d-block">Review due</small><span class="info-value">{{ data()?.accessReviewDue }}</span></div>
+                  <!--
+                    "REVIEW DUE" WAS ALWAYS BLANK. There is no review date on a user: a
+                    certification is a record on the review campaign, and this page has no
+                    endpoint for one. The row now points at the screen that does hold the
+                    answer instead of showing an empty date beside two real ones.
+                  -->
+                  <div class="col-md-4"><small class="info-label d-block">Access start</small><span class="info-value">{{ data()?.accessStartDate || '—' }}</span></div>
+                  <div class="col-md-4"><small class="info-label d-block">Access end</small><span class="info-value">{{ data()?.accessEndDate || 'No end date' }}</span></div>
+                  <div class="col-md-4">
+                    <small class="info-label d-block">Access review</small>
+                    <a class="edit-link" routerLink="/app/administration/access/access-review-campaign">
+                      Open the review campaign <i class="ri-arrow-right-line ms-1"></i>
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
           }
 
           @if (activeTab() === 'security') {
+            @if (securityUnavailable()) {
+              <div class="detail-card">
+                <div class="detail-card-body text-center py-5">
+                  <div class="empty-state-icon"><i class="ri-lock-line"></i></div>
+                  <h6 class="fw-bold mb-1">Security details unavailable</h6>
+                  <p class="text-muted mb-0 small">
+                    You do not have permission to see the sessions, devices and sign-in history
+                    for this account.
+                  </p>
+                </div>
+              </div>
+            } @else {
             <div class="detail-card">
               <div class="detail-card-header">
                 <h6 class="mb-0 fw-bold">Security Overview</h6>
+                @if (securityLoading()) {
+                  <span class="spinner-border spinner-border-sm text-muted"></span>
+                }
               </div>
               <div class="detail-card-body">
+                <!--
+                  THESE FOUR USED TO READ 0, 0, 0 FOR EVERY ACCOUNT. The component set them to
+                  zero with a comment saying the security tab would fill them in, and then never
+                  made the call. They now come from the security endpoint.
+                -->
                 <div class="row g-4">
                   <div class="col-md-6"><small class="info-label d-block">MFA status</small><span class="status-pill" [class.status-active]="mfaEnabled()" [class.status-neutral]="!mfaEnabled()"><span class="dot"></span> {{ getMfaStatusLabel() }}</span></div>
-                  <div class="col-md-6"><small class="info-label d-block">Active sessions</small><span class="info-value">{{ data()?.activeSessions }}</span></div>
-                  <div class="col-md-6"><small class="info-label d-block">Trusted devices</small><span class="info-value">{{ data()?.trustedDevices }}</span></div>
-                  <div class="col-md-6"><small class="info-label d-block">Failed sign-ins (24h)</small><span class="info-value">{{ data()?.failedSignins?.last24Hours }}</span></div>
+                  <div class="col-md-6"><small class="info-label d-block">Active sessions</small><span class="info-value">{{ activeSessionCount() }}</span></div>
+                  <div class="col-md-6"><small class="info-label d-block">Trusted devices</small><span class="info-value">{{ trustedDeviceCount() }}</span></div>
+                  <div class="col-md-6">
+                    <small class="info-label d-block">Failed sign-ins (24h / 7d)</small>
+                    <span class="info-value">
+                      {{ failedSignIns().last24Hours }} / {{ failedSignIns().last7Days }}
+                    </span>
+                  </div>
                 </div>
-           
               </div>
             </div>
 
@@ -263,10 +368,16 @@
             <div class="detail-card mt-4">
               <div class="detail-card-header">
                 <h6 class="mb-0 fw-bold">Authentication Methods</h6>
-                <span class="tab-count-pill">{{ mfaMethods().filter(m => m.enabled).length }} enabled</span>
+                <span class="tab-count-pill">{{ mfaMethods().length }} enrolled</span>
               </div>
               <div class="detail-card-body">
                 <div class="mfa-methods-list">
+                  <!--
+                    WHAT IS ACTUALLY ENROLLED, not a catalogue of what could be. This list used
+                    to be five fixed rows written in the component with `enabled: false` on every
+                    one, so it showed the same five "Not set up" methods for everybody — including
+                    one ("Biometric") the server does not support at all.
+                  -->
                   @for (method of mfaMethods(); track method.id) {
                     <div class="mfa-method-row" [class.enabled]="method.enabled">
                       <div class="mfa-method-icon" [class.tone-success]="method.enabled" [class.tone-muted]="!method.enabled">
@@ -280,23 +391,36 @@
                         Remove, not a switch. A factor cannot be turned back on from here:
                         enrolling one needs a code from the device it lives on, which is the
                         entire point of it. A toggle promised something nobody can deliver.
+
+                        AND ONLY ON YOUR OWN ACCOUNT — there is no per-method endpoint for
+                        somebody else's, so removing one of theirs means Reset two-step
+                        verification, which clears the lot together.
                       -->
                       <div class="mfa-method-toggle">
-                        @if (method.enabled) {
+                        @if (isSelf()) {
                         <button type="button" class="btn btn-sm btn-outline-danger"
                                 [disabled]="submitting()"
                                 (click)="removeMfaMethod(method.id)">
                           <i class="ri-delete-bin-line me-1"></i> Remove
                         </button>
                         } @else {
-                        <span class="badge bg-secondary-subtle text-secondary">Not set up</span>
+                        <span class="badge bg-secondary-subtle text-secondary">
+                          {{ method.enabled ? 'Active' : 'Pending' }}
+                        </span>
                         }
                       </div>
                     </div>
                   }
+                  @empty {
+                    <p class="text-muted small mb-0">
+                      No second factor is set up. Anybody with the password can sign in to this
+                      account.
+                    </p>
+                  }
                 </div>
               </div>
             </div>
+            }
           }
 
     
@@ -305,61 +429,105 @@
         <!-- Persistent Sidebar — notification-style rows: tinted icon,
              bold title, muted sub-line, trailing status on the right. -->
         <div class="col-lg-4">
+          <!--
+            EVERY ROW HERE IS READ FROM THE SECURITY ENDPOINT. It used to be four hardcoded
+            lines: "Multi-factor / Authenticator app / Enrolled" for accounts with no factor,
+            "Password / Changed 68 days ago / Rotate soon" for one changed this morning, and an
+            access review "due in 19 days, last certified 12 February 2026" for somebody who has
+            never been reviewed. A panel that states a security position gets acted on, so it
+            has to be reporting one.
+          -->
           <div class="detail-card mb-3">
-            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Security</h6></div>
+            <div class="detail-card-header">
+              <h6 class="mb-0 fw-bold">Security</h6>
+              @if (securityLoading()) {
+                <span class="spinner-border spinner-border-sm text-muted"></span>
+              }
+            </div>
             <div class="detail-card-body">
-              <div class="notif-row">
-                <div class="notif-avatar tone-success"><i class="ri-shield-check-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Multi-factor</div>
-                  <div class="notif-sub">Authenticator app</div>
+              @if (securityUnavailable()) {
+                <p class="text-muted small mb-0">
+                  <i class="ri-lock-line me-1"></i>
+                  The security details for this account are not available to you.
+                </p>
+              } @else {
+                @if (lockout().locked) {
+                  <div class="alert alert-danger py-2 small">
+                    <i class="ri-lock-line me-1"></i>
+                    <strong>Locked out.</strong> {{ lockout().reason }}
+                    @if (lockout().until) { <span> Until {{ lockout().until }}.</span> }
+                  </div>
+                }
+                <div class="notif-row">
+                  <div class="notif-avatar" [class]="'notif-avatar ' + mfaSummary().iconTone">
+                    <i class="ri-shield-check-line"></i>
+                  </div>
+                  <div class="notif-body">
+                    <div class="notif-title">Multi-factor</div>
+                    <div class="notif-sub">{{ mfaSummary().detail }}</div>
+                  </div>
+                  <span class="notif-trailing" [class]="'notif-trailing ' + mfaSummary().tone">
+                    {{ mfaSummary().status }}
+                  </span>
                 </div>
-                <span class="notif-trailing text-success">Enrolled</span>
-              </div>
-              <div class="notif-row">
-                <div class="notif-avatar tone-warning"><i class="ri-lock-password-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Password</div>
-                  <div class="notif-sub">Changed 68 days ago</div>
+                <div class="notif-row">
+                  <div class="notif-avatar" [class]="'notif-avatar ' + passwordSummary().iconTone">
+                    <i class="ri-lock-password-line"></i>
+                  </div>
+                  <div class="notif-body">
+                    <div class="notif-title">Password</div>
+                    <div class="notif-sub">{{ passwordSummary().detail }}</div>
+                  </div>
+                  <span class="notif-trailing" [class]="'notif-trailing ' + passwordSummary().tone">
+                    {{ passwordSummary().trailing }}
+                  </span>
                 </div>
-                <span class="notif-trailing text-warning">Rotate soon</span>
-              </div>
-              <div class="notif-row">
-                <div class="notif-avatar tone-accent"><i class="ri-login-circle-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Last sign-in</div>
-                  <div class="notif-sub">{{ data()?.lastSignIn }}</div>
+                <div class="notif-row">
+                  <div class="notif-avatar tone-accent"><i class="ri-login-circle-line"></i></div>
+                  <div class="notif-body">
+                    <div class="notif-title">Last sign-in</div>
+                    <div class="notif-sub">{{ data()?.lastSignIn }}</div>
+                  </div>
                 </div>
-              </div>
-              <div class="notif-row border-0">
-                <div class="notif-avatar tone-muted"><i class="ri-computer-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Active sessions</div>
-                  <div class="notif-sub">{{ data()?.activeSessionDevices }}</div>
+                <div class="notif-row border-0">
+                  <div class="notif-avatar tone-muted"><i class="ri-computer-line"></i></div>
+                  <div class="notif-body">
+                    <div class="notif-title">Active sessions</div>
+                    <div class="notif-sub">
+                      @if (activeSessionCount() === 0) {
+                        Not signed in anywhere
+                      } @else {
+                        On {{ activeSessionDevices() }}
+                        {{ activeSessionDevices() === 1 ? 'device' : 'devices' }}
+                      }
+                    </div>
+                  </div>
+                  <span class="notif-trailing text-muted">{{ activeSessionCount() }}</span>
                 </div>
-                <span class="notif-trailing text-muted">{{ data()?.activeSessions }}</span>
-              </div>
+              }
             </div>
           </div>
 
+          <!--
+            ACCESS REVIEW IS NOT A FIELD ON A PERSON. It is a governance record owned by the
+            access-review campaign screen, and this page has no endpoint for it — which is why
+            the two rows that used to be here could only ever be the literals "19 days" and
+            "12 February 2026". Rather than invent a date, the card points at the screen that
+            actually holds the answer.
+          -->
           <div class="detail-card">
             <div class="detail-card-header"><h6 class="mb-0 fw-bold">Access review</h6></div>
             <div class="detail-card-body">
-              <div class="notif-row">
-                <div class="notif-avatar tone-warning"><i class="ri-calendar-check-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Next review due</div>
-                  <div class="notif-sub">{{ data()?.accessReviewDue }}</div>
-                </div>
-                <span class="notif-trailing text-warning">19 days</span>
-              </div>
               <div class="notif-row border-0">
-                <div class="notif-avatar tone-accent"><i class="ri-user-star-line"></i></div>
+                <div class="notif-avatar tone-accent"><i class="ri-calendar-check-line"></i></div>
                 <div class="notif-body">
-                  <div class="notif-title">Last certified</div>
-                  <div class="notif-sub">12 February 2026</div>
+                  <div class="notif-title">Certification history</div>
+                  <div class="notif-sub">Recorded against the review campaign, not the account</div>
                 </div>
-                <span class="notif-trailing text-muted">{{ data()?.manager }}</span>
+                <a class="notif-trailing edit-link"
+                   routerLink="/app/administration/access/access-review-campaign">
+                  Open <i class="ri-arrow-right-line ms-1"></i>
+                </a>
               </div>
             </div>
           </div>
@@ -378,13 +546,53 @@
             <button type="button" class="btn-close" (click)="closeEditModal()"></button>
           </div>
           <div class="modal-body">
+            <!--
+              THREE FIELDS SAVE, AND THE DIALOG NOW ONLY OFFERS THOSE THREE.
+
+              It used to collect six. E-mail was never sent, because changing what somebody signs
+              in with has its own verified flow; Department and Manager could not be sent, because
+              the contract takes ids and these were free-text names. All three were accepted,
+              discarded, and answered with "The changes have been saved."
+            -->
             <div class="row g-3">
-              <div class="col-md-6"><label class="form-label small fw-semibold">Display Name</label><input type="text" class="form-control" [ngModel]="editForm().displayName" (ngModelChange)="editForm.set({...editForm(), displayName: $event})"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Email</label><input type="email" class="form-control" [ngModel]="editForm().email" (ngModelChange)="editForm.set({...editForm(), email: $event})"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Mobile</label><input type="text" class="form-control" [ngModel]="editForm().mobile" (ngModelChange)="editForm.set({...editForm(), mobile: $event})"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Department</label><input type="text" class="form-control" [ngModel]="editForm().department" (ngModelChange)="editForm.set({...editForm(), department: $event})"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Designation</label><input type="text" class="form-control" [ngModel]="editForm().designation" (ngModelChange)="editForm.set({...editForm(), designation: $event})"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Manager</label><input type="text" class="form-control" [ngModel]="editForm().manager" (ngModelChange)="editForm.set({...editForm(), manager: $event})"></div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Display name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" [ngModel]="editForm().displayName"
+                       (ngModelChange)="editForm.set({...editForm(), displayName: $event})">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Designation</label>
+                <input type="text" class="form-control" [ngModel]="editForm().designation"
+                       (ngModelChange)="editForm.set({...editForm(), designation: $event})">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-semibold">Country code</label>
+                <input type="text" class="form-control" placeholder="+91"
+                       [ngModel]="editForm().mobileCountryCode"
+                       (ngModelChange)="editForm.set({...editForm(), mobileCountryCode: $event})">
+              </div>
+              <div class="col-md-9">
+                <label class="form-label small fw-semibold">Mobile number</label>
+                <input type="text" class="form-control" [ngModel]="editForm().mobileNumber"
+                       (ngModelChange)="editForm.set({...editForm(), mobileNumber: $event})">
+                <div class="form-text">The server validates the code and the number together.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Email</label>
+                <input type="email" class="form-control" [ngModel]="editForm().email" disabled>
+                <div class="form-text">
+                  <i class="ri-lock-line me-1"></i>
+                  This is what the account signs in with, so it changes through
+                  <a class="edit-link" (click)="viewLoginIdentifierChange()" role="button">
+                    Change sign-in identifier</a>, which verifies the new address first.
+                </div>
+              </div>
+              <div class="col-12">
+                <p class="text-muted small mb-0">
+                  Department, manager and organisation unit are set from the organisation
+                  structure rather than here.
+                </p>
+              </div>
             </div>
           </div>
           <div class="modal-footer border-top mt-6" style="padding-top: 13px !important">

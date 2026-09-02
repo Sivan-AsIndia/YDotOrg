@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using YDot.IAM.Application.Common.Abstractions.Security;
+using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
 using YDot.IAM.Application.Common.Models;
 using YDot.IAM.Domain.Enums;
@@ -16,7 +17,8 @@ namespace YDot.IAM.Infrastructure.Security;
 /// </summary>
 public sealed class CurrentUser(
     IHttpContextAccessor httpContextAccessor,
-    ITenantContext tenantContext) : ICurrentUser
+    ITenantContext tenantContext,
+    IUserAgentParser userAgentParser) : ICurrentUser
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
@@ -87,8 +89,33 @@ public sealed class CurrentUser(
     /// trail and slip past the per-IP rate limit. Behind a real proxy, ForwardedHeaders
     /// middleware rewrites the connection address from a configured list of trusted proxies,
     /// which is the only safe way to honour it.
+    ///
+    /// AN IPv4 ADDRESS IS WRITTEN IN IPv4 FORM. Kestrel listens on a dual-stack socket, so an
+    /// ordinary IPv4 caller arrives as the mapped form <c>::ffff:172.20.0.1</c> and every
+    /// session row, audit row and security screen showed that. It is the same address written
+    /// in a way almost nobody reads, and it also means the SAME caller can be stored two ways
+    /// depending on which socket the request landed on — so "how many sessions from this
+    /// address" quietly gets the wrong answer. Unmapping here fixes every reader at once,
+    /// because every one of them goes through this property.
     /// </summary>
-    public string? IpAddress => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    public string? IpAddress
+    {
+        get
+        {
+            var address = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress;
+
+            if (address is null)
+            {
+                return null;
+            }
+
+            // A genuine IPv6 caller is left exactly as it is; only the mapped IPv4 form is
+            // unwrapped.
+            return address.IsIPv4MappedToIPv6
+                ? address.MapToIPv4().ToString()
+                : address.ToString();
+        }
+    }
 
     public string? UserAgent
     {
@@ -118,9 +145,30 @@ public sealed class CurrentUser(
         }
     }
 
-    public string? Browser => null;
+    /// <summary>
+    /// The browser and operating system, read off the User-Agent.
+    ///
+    /// BOTH OF THESE USED TO RETURN A LITERAL <c>null</c>, and the effect was visible on the
+    /// security screen. <c>SessionTokenService</c> stamps a new session from this interface, so
+    /// every session row was written with an empty browser and an empty operating system, and
+    /// "Active sessions" showed a dash where the device should be — while the sign-in activity
+    /// feed immediately below it said "Chrome on Windows", because the sign-in handler parses
+    /// the agent itself. Two lists on one page, disagreeing about the same request.
+    ///
+    /// Parsing here rather than at each call site means the answer is the same everywhere it is
+    /// read, and the parse is a handful of string comparisons over a header that is already in
+    /// memory — see <see cref="IUserAgentParser"/> for why it is deliberately approximate and
+    /// never used for an authorisation decision.
+    ///
+    /// Computed on demand and not cached: <c>ICurrentUser</c> is scoped to one request, so the
+    /// agent cannot change underneath it, and a session is stamped once.
+    /// </summary>
+    public string? Browser => ParsedClient.Browser;
 
-    public string? OperatingSystem => null;
+    public string? OperatingSystem => ParsedClient.OperatingSystem;
+
+    private ClientInfo ParsedClient =>
+        userAgentParser.Parse(UserAgent, httpContextAccessor.HttpContext?.Request.Headers["X-Client-Type"]);
 
     /// <summary>
     /// Device identifier from a mobile client.

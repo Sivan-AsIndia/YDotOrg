@@ -1,6 +1,7 @@
-using FluentValidation;
+﻿using FluentValidation;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
+using YDots.CAM.Application.Common.Constants;
 using YDots.CAM.Application.Common.Settings;
 using YDots.CAM.Application.Features.Campaigns.DTOs;
 using YDots.CAM.Domain.Enums;
@@ -111,7 +112,7 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
 
         RuleFor(request => request.Purpose)
             .NotEmpty().WithMessage("Describe what the campaign is for.")
-            .MaximumLength(1000);
+            .MaximumLength(CampaignFieldLimits.Purpose);
 
         RuleFor(request => request.FundOrProgramme)
             .NotEmpty().WithMessage("Name the fund or programme this campaign raises for.")
@@ -174,18 +175,60 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
         RuleFor(request => request.CurrencyId)
             .NotEmpty().WithMessage("Choose the currency the campaign is stated in.");
 
+        // ---- Step 2: channels and sources ------------------------------------------------------
+        //
+        // EVERY FIELD ON THIS STEP IS REQUIRED, and none of them was. The wizard drew an asterisk
+        // beside country, state, city, zip code, the channels and the reminder pair; the contract
+        // accepted a request with all seven missing. A campaign saved that way then had nothing to
+        // show on its detail screen - Channel "-", Location "-" - which is not a rendering fault
+        // but a record that was genuinely empty.
         RuleFor(request => request.CountryId)
             .NotEmpty().WithMessage("Choose the country the campaign runs in.");
 
+        RuleFor(request => request.StateId)
+            .NotEmpty().WithMessage("Choose the state or province the campaign runs in.");
+
+        RuleFor(request => request.CityId)
+            .NotEmpty().WithMessage("Choose the city the campaign runs in.");
+
+        RuleFor(request => request.ZipCode)
+            .NotEmpty().WithMessage("Enter the postal or zip code.")
+            .MaximumLength(20);
+
         RuleFor(request => request.LifecycleActivation).IsInEnum();
 
+        // NOTNULL BEFORE THE RANGE, because 0 is a legitimate answer here - "remind me on the
+        // day" - and an int that was never sent arrives as 0 too. Nullable on the request is the
+        // only way the two can be told apart, and the difference matters: one is a choice and the
+        // other is an unfinished form.
         RuleFor(request => request.DaysBeforeStart)
+            .NotNull().WithMessage("Choose how many days before the start date the reminder runs.")
             .InclusiveBetween(0, 365)
             .WithMessage("The activation reminder runs from 0 to 365 days before the start date.");
 
-        RuleFor(request => request.ZipCode).MaximumLength(20);
-        RuleFor(request => request.PublicDescription).MaximumLength(1000);
-        RuleFor(request => request.TermsAndNotice).MaximumLength(20000);
+        RuleFor(request => request.ReminderTime)
+            .NotNull().WithMessage("Choose the time of day the reminder is sent.");
+
+        // A campaign with no channel has no route to anybody, and the tracking assets created
+        // against it have no channel to inherit.
+        RuleFor(request => request.ChannelIds)
+            .NotEmpty().WithMessage("Choose at least one channel.")
+            .Must(channels => channels.All(id => id != Guid.Empty))
+            .WithMessage("A channel id cannot be empty.");
+
+        // ---- Step 3: publication and notice ----------------------------------------------------
+        //
+        // BOTH REQUIRED. These are the words a donor reads before giving - what the campaign is
+        // for, and the terms the gift is made under - so a campaign that reaches a donor without
+        // them is the one case where an empty optional field has a consequence outside the
+        // building.
+        RuleFor(request => request.PublicDescription)
+            .NotEmpty().WithMessage("Write the description donors will see.")
+            .MaximumLength(CampaignFieldLimits.PublicDescription);
+
+        RuleFor(request => request.TermsAndNotice)
+            .NotEmpty().WithMessage("Enter the terms and notice shown with this campaign.")
+            .MaximumLength(CampaignFieldLimits.TermsAndNotice);
 
         // A campaign with no owner has nobody accountable for it, and nobody to notify when it
         // needs attention.
@@ -194,10 +237,6 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
             .Must(owners => owners.All(id => id != Guid.Empty))
             .WithMessage("An owner id cannot be empty.")
             .MustAllExist(people, tenant);
-
-        RuleFor(request => request.ChannelIds)
-            .Must(channels => channels is null || channels.All(id => id != Guid.Empty))
-            .WithMessage("A channel id cannot be empty.");
 
         // ONLY DRAFT OR SUBMITTED ON CREATE. Everything further along the lifecycle is reached
         // through an endpoint with its own permission and its own rules; accepting Active here
@@ -232,7 +271,7 @@ public sealed class UpdateCampaignRequestValidator : AbstractValidator<UpdateCam
 
         RuleFor(request => request.Purpose)
             .NotEmpty().WithMessage("Describe what the campaign is for.")
-            .MaximumLength(1000);
+            .MaximumLength(CampaignFieldLimits.Purpose);
 
         RuleFor(request => request.FundOrProgramme)
             .NotEmpty().WithMessage("Name the fund or programme this campaign raises for.")
@@ -265,18 +304,41 @@ public sealed class UpdateCampaignRequestValidator : AbstractValidator<UpdateCam
         RuleFor(request => request.CurrencyId)
             .NotEmpty().WithMessage("Choose the currency the campaign is stated in.");
 
+        // ---- Step 2 and step 3 --------------------------------------------------------------
+        //
+        // THE SAME MANDATORY SET AS CREATE, and it has to be: an edit that could clear the
+        // channels, the location or the public description would be a second route to the
+        // half-empty campaign the create rules now refuse.
         RuleFor(request => request.CountryId)
             .NotEmpty().WithMessage("Choose the country the campaign runs in.");
+
+        RuleFor(request => request.StateId)
+            .NotEmpty().WithMessage("Choose the state or province the campaign runs in.");
+
+        RuleFor(request => request.CityId)
+            .NotEmpty().WithMessage("Choose the city the campaign runs in.");
+
+        RuleFor(request => request.ZipCode)
+            .NotEmpty().WithMessage("Enter the postal or zip code.")
+            .MaximumLength(20);
 
         RuleFor(request => request.LifecycleActivation).IsInEnum();
 
         RuleFor(request => request.DaysBeforeStart)
+            .NotNull().WithMessage("Choose how many days before the start date the reminder runs.")
             .InclusiveBetween(0, 365)
             .WithMessage("The activation reminder runs from 0 to 365 days before the start date.");
 
-        RuleFor(request => request.ZipCode).MaximumLength(20);
-        RuleFor(request => request.PublicDescription).MaximumLength(1000);
-        RuleFor(request => request.TermsAndNotice).MaximumLength(20000);
+        RuleFor(request => request.ReminderTime)
+            .NotNull().WithMessage("Choose the time of day the reminder is sent.");
+
+        RuleFor(request => request.PublicDescription)
+            .NotEmpty().WithMessage("Write the description donors will see.")
+            .MaximumLength(CampaignFieldLimits.PublicDescription);
+
+        RuleFor(request => request.TermsAndNotice)
+            .NotEmpty().WithMessage("Enter the terms and notice shown with this campaign.")
+            .MaximumLength(CampaignFieldLimits.TermsAndNotice);
 
         RuleFor(request => request.OwnerIds)
             .NotEmpty().WithMessage("Assign at least one owner.")
@@ -285,7 +347,8 @@ public sealed class UpdateCampaignRequestValidator : AbstractValidator<UpdateCam
             .MustAllExist(people, tenant);
 
         RuleFor(request => request.ChannelIds)
-            .Must(channels => channels is null || channels.All(id => id != Guid.Empty))
+            .NotEmpty().WithMessage("Choose at least one channel.")
+            .Must(channels => channels.All(id => id != Guid.Empty))
             .WithMessage("A channel id cannot be empty.");
     }
 }

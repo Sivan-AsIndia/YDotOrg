@@ -77,6 +77,26 @@ public class Lead : AuditEntity, IOrganisationOwned
 
     public ContactOutcome LastContactOutcome { get; set; } = ContactOutcome.NotContacted;
 
+    // ---- Engagement reading ---------------------------------------------------------------
+    //
+    // TEMPERATURE AND POTENTIAL REPLACE FORMAL QUALIFICATION, which is why they sit on the lead
+    // rather than in a side table: every queue row, filter and summary card in the module reads
+    // them, and a join for two small enums on every list page is a cost with nothing to show for
+    // it. Both are judgements the owner records, so both are stored.
+
+    /// <summary>How engaged this lead is now. Set by the owner after contact.</summary>
+    public LeadTemperature Temperature { get; set; } = LeadTemperature.Cold;
+
+    /// <summary>How much this lead might give, as a band rather than an amount.</summary>
+    public DonationPotential DonationPotential { get; set; } = DonationPotential.Low;
+
+    // LEAD HEALTH IS NOT STORED. It was, briefly, on the argument that the queue would want to
+    // sort by it in the database - but nothing sorts or filters on health (the queue orders by
+    // NextActionDueUtc), and nothing wrote the column, so every row held 0. A stored score would
+    // also go stale on its own: its largest component is how recently somebody made contact,
+    // which decays with time rather than with an edit, so a value written on save is wrong by the
+    // next morning. <c>LeadHealth.Calculate</c> computes it per read against that read's instant.
+
     public DateTimeOffset? LastContactedAtUtc { get; set; }
 
     public DateTimeOffset? AcceptedAtUtc { get; set; }

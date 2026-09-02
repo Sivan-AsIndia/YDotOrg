@@ -1,3 +1,4 @@
+using YDots.DON.Application.Features.LeadWorkQueue.DTOs;
 using Microsoft.EntityFrameworkCore;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Models;
@@ -61,6 +62,16 @@ public sealed class LeadRepository(DonDbContext context, PeopleDirectory people)
             leads = leads.Where(lead => lead.SlaState == filter.SlaState);
         }
 
+        if (filter.Temperature is not null)
+        {
+            leads = leads.Where(lead => lead.Temperature == filter.Temperature);
+        }
+
+        if (filter.DonationPotential is not null)
+        {
+            leads = leads.Where(lead => lead.DonationPotential == filter.DonationPotential);
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.PreferredLanguage))
         {
             leads = leads.Where(lead => lead.PreferredLanguage == filter.PreferredLanguage);
@@ -86,14 +97,41 @@ public sealed class LeadRepository(DonDbContext context, PeopleDirectory people)
             leads = leads.Where(lead => lead.NextActionDueUtc != null && lead.NextActionDueUtc >= filter.DueAfterUtc);
         }
 
+        // ASSIGNED MEANS "HAS AN OWNER", and it has to be asked as a null check rather than as an
+        // owner id, because a null OwnerUserId on the filter already means "do not filter by
+        // owner". The Lead Queue's Unassigned tab is the entry point to the Assignment Board.
+        if (filter.AssignmentState is not null)
+        {
+            leads = filter.AssignmentState == LeadAssignmentState.Unassigned
+                ? leads.Where(lead => lead.OwnerUserId == null)
+                : leads.Where(lead => lead.OwnerUserId != null);
+        }
+
+        // A CONVERTED LEAD LEAVES THE QUEUE. The document is explicit: on conversion the lead is
+        // removed from the Lead Work Queue and added to the Donor List. Hiding them by default is
+        // what makes that true on screen; the Converted Leads tab is how they are seen again.
+        if (filter.IsConverted is not null)
+        {
+            leads = filter.IsConverted == true
+                ? leads.Where(lead => lead.ConvertedDonorId != null)
+                : leads.Where(lead => lead.ConvertedDonorId == null);
+        }
+
         var total = await leads.CountAsync(cancellationToken);
 
         // Overdue work first, then whatever is due soonest. A lead with no due date sorts last
         // rather than first, which is why the null check is part of the ordering.
-        var items = await leads
-            .OrderBy(lead => lead.NextActionDueUtc == null)
-            .ThenBy(lead => lead.NextActionDueUtc)
-            .ThenByDescending(lead => lead.CreatedAtUtc)
+        // RECENTLY ADDED IS A DIFFERENT QUESTION FROM WHAT IS DUE. The default below is a work
+        // queue - overdue first, then soonest - and sorting that way would put a lead captured
+        // two minutes ago at the bottom, which is the opposite of what the tab is for.
+        var ordered = filter.NewestFirst == true
+            ? leads.OrderByDescending(lead => lead.CreatedAtUtc)
+            : leads
+                .OrderBy(lead => lead.NextActionDueUtc == null)
+                .ThenBy(lead => lead.NextActionDueUtc)
+                .ThenByDescending(lead => lead.CreatedAtUtc);
+
+        var items = await ordered
             .Skip(filter.Skip)
             .Take(filter.PageSize)
             .ToListAsync(cancellationToken);
@@ -103,6 +141,11 @@ public sealed class LeadRepository(DonDbContext context, PeopleDirectory people)
 
     public Task<Lead?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.Leads.Include(lead => lead.Campaign).FirstOrDefaultAsync(lead => lead.Id == id, cancellationToken);
+
+    public Task<Lead?> GetConvertedFromAsync(Guid donorId, CancellationToken cancellationToken = default) =>
+        context.Leads
+            .Include(lead => lead.Campaign)
+            .FirstOrDefaultAsync(lead => lead.ConvertedDonorId == donorId, cancellationToken);
 
     public Task<Lead?> GetWithAssignmentsAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.Leads
@@ -242,6 +285,33 @@ public sealed class LeadRepository(DonDbContext context, PeopleDirectory people)
             .ToListAsync(cancellationToken);
 
         return counts.ToDictionary(entry => entry.Status.ToString(), entry => entry.Count, StringComparer.Ordinal);
+    }
+
+    public async Task<LeadQueueSummaryResponse> GetQueueSummaryAsync(
+        Guid organisationId,
+        AccessScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        // Same scope filter and the same "not a draft" rule as the rows, so a card can never
+        // report work the caller is not allowed to open.
+        var leads = ApplyScope(context.Leads.Where(lead => lead.OrganisationId == organisationId), scope)
+            .Where(lead => !lead.IsDraft);
+
+        // ONE QUERY FOR ALL SIX. GroupBy(1) collapses to a single row of aggregates, so the six
+        // cards cost one round trip rather than six counts over the same table.
+        var summary = await leads
+            .GroupBy(_ => 1)
+            .Select(group => new LeadQueueSummaryResponse(
+                group.Count(),
+                group.Count(lead => lead.OwnerUserId == null),
+                group.Count(lead => lead.OwnerUserId != null),
+                group.Count(lead => lead.Temperature == LeadTemperature.Hot),
+                group.Count(lead => lead.Status == LeadStatus.Converted || lead.ConvertedDonorId != null),
+                group.Count(lead => lead.DonationPotential == DonationPotential.High)))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // An empty queue produces no group at all, and six zeroes is the honest answer.
+        return summary ?? new LeadQueueSummaryResponse(0, 0, 0, 0, 0, 0);
     }
 
     public void Add(Lead lead) => context.Leads.Add(lead);

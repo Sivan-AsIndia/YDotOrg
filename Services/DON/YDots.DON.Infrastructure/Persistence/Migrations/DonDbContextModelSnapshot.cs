@@ -1533,6 +1533,12 @@ namespace YDots.DON.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by_user_id");
 
+                    b.Property<string>("DonationPotential")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("donation_potential");
+
                     b.Property<string>("DuplicateCandidateSummary")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -1647,6 +1653,12 @@ namespace YDots.DON.Infrastructure.Persistence.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)")
                         .HasColumnName("team_code");
+
+                    b.Property<string>("Temperature")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("temperature");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone")

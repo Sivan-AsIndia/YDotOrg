@@ -20,9 +20,14 @@ namespace YDots.CAM.API.Controllers;
 /// WHAT MOVED OUT OF THIS CONTROLLER. It used to carry <c>readiness/request-approval</c> and
 /// <c>readiness/approve</c>, which moved a campaign through Submitted to Approved from inside
 /// the readiness feature. That was a second approval path with its own copy of the status rules
-/// and NO segregation-of-duties check - so a Campaign Manager who could not approve a campaign
-/// on the campaigns endpoint could approve the same campaign here. Campaign approval now
-/// happens in exactly one place.
+/// and NO segregation-of-duties check - so somebody refused on the campaigns endpoint could
+/// approve the same campaign here. Campaign approval now happens in exactly one place, and the
+/// readiness screen's "Approve launch" button posts to that one place.
+///
+/// WHAT THE SCREEN MAY DO IS ON THE READINESS RESPONSE, in its PermittedActions - AddCheck,
+/// RequestApproval, ApproveLaunch, ReturnToDraft. An Organisation administrator never gets
+/// RequestApproval, because they are the approver: asking them to raise a request means asking
+/// them to approve their own, which the platform then refuses.
 /// </summary>
 [Route("api/v1")]
 [Authorize(Policy = PolicyNames.TenantContextRequired)]
@@ -116,8 +121,17 @@ public sealed class CampaignReadinessController(
     /// verifying the thing, and auto-passing would make raise-then-clear a way of skipping the
     /// verification entirely.
     /// </summary>
+    /// <summary>
+    /// Declares a blocker cleared.
+    ///
+    /// GATED ON <c>cam.readiness.resolve-blockers</c>, NOT ON MANAGE-BLOCKERS. Raising an
+    /// obstacle and waving it away were one permission, so whoever could flag a problem could
+    /// also clear their own flag - which empties the mechanism, because an open blocker is
+    /// exactly what stops a check being passed. Raising stays with the maker; clearing is the
+    /// checker's call.
+    /// </summary>
     [HttpPost("readiness-blockers/{blockerId:guid}/resolve")]
-    [HasPermission(PermissionCodes.ReadinessManageBlockers)]
+    [HasPermission(PermissionCodes.ReadinessResolveBlockers)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveBlockerAsync(
         Guid blockerId,
@@ -127,6 +141,21 @@ public sealed class CampaignReadinessController(
             new ResolveReadinessBlockerCommand(blockerId, request), cancellationToken));
 
     /// <summary>Sends a campaign back to Draft. A reason is mandatory.</summary>
+    /// <summary>
+    /// Removes a Pending check from the checklist.
+    ///
+    /// A MAKER'S TIDY-UP, and Pending-only: a judged check holds somebody's verdict, and removing
+    /// it would destroy the record that a person looked.
+    /// </summary>
+    [HttpDelete("readiness-checks/{id:guid}")]
+    [HasPermission(PermissionCodes.ReadinessDelete)]
+    [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteCheckAsync(
+        Guid id, [FromBody] ReadinessVerdictRequest request, CancellationToken cancellationToken) =>
+        FromResult(await commands.HandleAsync(
+            new DeleteReadinessCheckCommand(id, request), cancellationToken));
+
     [HttpPost("campaigns/{campaignId:guid}/readiness/return-to-draft")]
     [HasPermission(PermissionCodes.ReadinessReturnToDraft)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]

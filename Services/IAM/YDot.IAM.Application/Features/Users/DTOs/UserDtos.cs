@@ -1,4 +1,4 @@
-using YDot.IAM.Domain.Enums;
+﻿using YDot.IAM.Domain.Enums;
 
 namespace YDot.IAM.Application.Features.Users.DTOs;
 
@@ -340,7 +340,20 @@ public sealed record UserLookupResponse(Guid Id, string Code, string DisplayName
 /// how to contact them or whether they are suspended - and this is readable by every member of
 /// the Organisation rather than by user administrators alone, so the less it carries the better.
 /// </summary>
-public sealed record PersonLookupResponse(Guid Id, string DisplayName, string? Code);
+/// <remarks>
+/// <c>RoleName</c> AND <c>UnitName</c> ARE HERE BECAUSE SCREENS WERE INVENTING THEM. Every picker
+/// wants a second line under the name - two colleagues called the same thing have to be told
+/// apart - and with nothing else in this record to put there, the clients had fallen back to
+/// printing the person's own code twice: once as "Reference" and again beside a label reading
+/// "Role &amp; region", which is neither. Both are nullable because neither is mandatory on a
+/// user, and a picker showing a blank second line is honest where a repeated code is not.
+/// </remarks>
+public sealed record PersonLookupResponse(
+    Guid Id,
+    string DisplayName,
+    string? Code,
+    string? RoleName = null,
+    string? UnitName = null);
 
 /// <summary>One role assignment, with why it counts and when it stops.</summary>
 public sealed record UserRoleAssignmentResponse(

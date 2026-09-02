@@ -1,0 +1,100 @@
+<main class="pr-shell">
+  <section class="pr-card" role="status" aria-live="polite">
+
+    <img class="pr-logo" src="assets/images/Outline ydot logo 2.svg" alt="YDot" />
+
+    @switch (state()) {
+
+      @case ('checking') {
+        <div class="pr-icon pr-icon-wait" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <h1 class="pr-title">Confirming your payment…</h1>
+        <p class="pr-lead">
+          We are checking with the payment provider. This usually takes a few seconds — please do
+          not close this page or pay again.
+        </p>
+      }
+
+      @case ('confirmed') {
+        <div class="pr-icon pr-icon-good" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>
+        </div>
+        <h1 class="pr-title">Thank you — your donation is confirmed.</h1>
+        <p class="pr-lead">
+          @if (amountLabel()) { We have received <strong>{{ amountLabel() }}</strong>. }
+          @if (receiptEligible()) {
+            Your receipt has been e-mailed to you.
+          } @else {
+            Your receipt will be e-mailed to you shortly.
+          }
+        </p>
+
+        <!-- THE ACCOUNT INVITATION, EXPLAINED BEFORE IT ARRIVES. An unexplained account e-mail
+             from a charity is one people report as phishing. -->
+        <p class="pr-note">
+          If this is your first gift to this organisation, you will also receive an invitation to
+          activate an account, where you can see your giving history and download your receipts.
+        </p>
+      }
+
+      @case ('pending') {
+        <div class="pr-icon pr-icon-wait" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <h1 class="pr-title">We are still confirming this payment.</h1>
+
+        <!-- DELIBERATELY NOT "FAILED". A donor told it failed pays again, and if the first
+             attempt succeeded they have now given twice. -->
+        <p class="pr-lead">
+          Your payment has not been confirmed yet. <strong>Please do not pay again.</strong> If
+          the money has left your account it will be matched automatically, and you will receive
+          your receipt by e-mail.
+        </p>
+        <button type="button" class="pr-btn pr-btn-outline" (click)="checkAgain()">Check again</button>
+      }
+
+      @case ('failed') {
+        <div class="pr-icon pr-icon-bad" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9 9 15M9 9l6 6"/></svg>
+        </div>
+        <h1 class="pr-title">Your payment did not go through.</h1>
+        <p class="pr-lead">
+          You have not been charged. You can try again, and nothing you entered has been lost.
+        </p>
+        <a class="pr-btn pr-btn-primary" href="/donate">Try again</a>
+      }
+
+      @case ('unknown') {
+        <div class="pr-icon pr-icon-wait" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16h.01M9.5 9.5a2.5 2.5 0 1 1 3 2.45V13"/></svg>
+        </div>
+        <h1 class="pr-title">There is no donation to show here.</h1>
+        <p class="pr-lead">
+          This page shows the result of a donation you have just made. If you were sent here by
+          mistake, you can start a new donation instead.
+        </p>
+        <a class="pr-btn pr-btn-primary" href="/donate">Make a donation</a>
+      }
+    }
+
+    @if (reference() && state() !== 'unknown') {
+      <dl class="pr-facts">
+        <div class="pr-fact">
+          <dt>Donation reference</dt>
+          <dd>{{ reference() }}</dd>
+        </div>
+        @if (verification()?.supportCorrelationReference) {
+          <div class="pr-fact">
+            <dt>Quote this to support</dt>
+            <dd>{{ verification()!.supportCorrelationReference }}</dd>
+          </div>
+        }
+      </dl>
+    }
+
+    @if (errorMessage()) {
+      <p class="pr-error">{{ errorMessage() }}</p>
+    }
+  </section>
+</main>

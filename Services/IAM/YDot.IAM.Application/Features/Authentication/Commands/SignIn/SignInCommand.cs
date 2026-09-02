@@ -6,6 +6,7 @@ using YDot.IAM.Application.Common.Constants;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.Common.Services;
 using YDot.IAM.Application.Common.Settings;
+using YDot.IAM.Application.Features.Authentication.Commands.MfaVerification;
 using YDot.IAM.Application.Features.Authentication.DTOs;
 using YDot.IAM.Application.Features.Authentication.Mappings;
 using YDot.IAM.Domain.Entities;
@@ -226,13 +227,28 @@ public sealed class SignInCommandHandler(
         // ---- 8. Second factor ----------------------------------------------------------------------
         var mfaRequired = user.IsMfaRequired(tenant?.DefaultMfaRequirement ?? MfaRequirement.Optional);
 
+        // Resolved ONCE, here, for every path below rather than only inside the MFA branch. Two
+        // things downstream need it: whether the second factor can be skipped, and whether the
+        // session row should be stamped as coming from a remembered device. That second one used
+        // to be passed as a bare `true` at step 10, so EVERY ordinary sign-in was recorded as
+        // having come from a trusted device whether one existed or not.
+        var knownDevice = await ResolveTrustedDeviceAsync(
+            user, request.TrustedDeviceToken, now, cancellationToken);
+
+        // A device the person previously marked trusted skips the prompt for ordinary sign-in.
+        // It is a convenience only: a sensitive action still triggers a step-up.
+        //
+        // AND ONLY IF IT WAS TRUSTED AFTER THE FACTOR EXISTED. Remembering a browser is offered
+        // on the password form too, where no second factor has been proved — so a device
+        // remembered before enrolment must not be able to walk past the factor enrolled
+        // afterwards. Re-enrolling clears MfaEnrolledAtUtc and sets it again, which correctly
+        // retires the older trust as well.
+        var maySkipMfa = knownDevice is not null
+            && (user.MfaEnrolledAtUtc is null || knownDevice.TrustedAtUtc >= user.MfaEnrolledAtUtc);
+
         if (mfaRequired && user.MfaEnabled)
         {
-            // A device the person previously marked trusted skips the prompt for ordinary
-            // sign-in. It is a convenience only: a sensitive action still triggers a step-up.
-            var trusted = await IsTrustedDeviceAsync(user, request.TrustedDeviceToken, now, cancellationToken);
-
-            if (!trusted)
+            if (!maySkipMfa)
             {
                 var challenge = await mfa.IssueAsync(
                     user, tenant, businessUnit, MfaChallengePurpose.SignIn, null, cancellationToken);
@@ -252,6 +268,20 @@ public sealed class SignInCommandHandler(
             }
         }
 
+        // ---- 8b. "Remember this device" ------------------------------------------------------------
+        //
+        // THE TICK-BOX ON THE SIGN-IN FORM NOW DOES SOMETHING. It set `RememberMe`, which only
+        // ever lengthened the refresh token, so somebody who ticked "Remember this device" and
+        // then opened their security page found Remembered Devices reading zero — the list was
+        // written by the MFA screen alone, and an account with no second factor never reaches it.
+        //
+        // Placed here rather than inside either branch below because both of them end a
+        // successful sign-in: a root user picking an Organisation is as signed in as anybody else.
+        if (request.RememberMe)
+        {
+            await RememberDeviceAsync(user, knownDevice, request, client, now, cancellationToken);
+        }
+
         // ---- 9. SuperAdmin has to pick an Organisation ------------------------------------------------
         //
         // A root user signing in at the platform host is authenticated but has no operating
@@ -267,7 +297,7 @@ public sealed class SignInCommandHandler(
                 user, null, businessUnit, AccessScopeType.Global, request.ClientType,
                 mfaCompleted: !mfaRequired || user.MfaEnabled, request.RememberMe,
                 tenantContext.HostName, request.DeviceIdentifier, request.DeviceName ?? client.DeviceName,
-                isTrustedDevice: false, cancellationToken);
+                isTrustedDevice: knownDevice is not null, cancellationToken);
 
             ApplyLoginCapture(user, client, request, now);
 
@@ -289,7 +319,7 @@ public sealed class SignInCommandHandler(
         // ---- 10. Issue the session --------------------------------------------------------------------
         return await CompleteSignInAsync(
             user, tenant, businessUnit, request, client, identifier, now,
-            usedTrustedDevice: true, cancellationToken);
+            usedTrustedDevice: knownDevice is not null, cancellationToken);
     }
 
     /// <summary>
@@ -501,27 +531,117 @@ public sealed class SignInCommandHandler(
     };
 
     /// <summary>
-    /// Whether this browser was previously marked trusted. Suppresses the MFA prompt for
-    /// ordinary sign-in and nothing else.
+    /// The remembered-device row this browser presented, if it still counts as one.
+    ///
+    /// Returns the ROW rather than a boolean because two callers need different things from it:
+    /// the MFA gate wants to know when the trust was established, and "remember this device"
+    /// wants to extend the existing row instead of adding a second one for the same browser.
     /// </summary>
-    private async Task<bool> IsTrustedDeviceAsync(
+    private async Task<TrustedDevice?> ResolveTrustedDeviceAsync(
         User user, string? trustedDeviceToken, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(trustedDeviceToken))
-        {
-            return false;
-        }
+        TrustedDevice? device = null;
 
-        var device = await security.FindTrustedDeviceAsync(
-            user.Id, tokenHasher.Hash(trustedDeviceToken), cancellationToken);
+        if (!string.IsNullOrWhiteSpace(trustedDeviceToken))
+        {
+            device = await security.FindTrustedDeviceAsync(
+                user.Id, tokenHasher.Hash(trustedDeviceToken), cancellationToken);
+        }
 
         if (device is null || !device.IsTrusted(now))
         {
-            return false;
+            return null;
         }
 
         device.LastSeenAtUtc = now;
-        return true;
+        device.IpAddress = currentUser.IpAddress ?? device.IpAddress;
+
+        return device;
+    }
+
+    /// <summary>
+    /// Remembers this browser, or renews the row that already stands for it.
+    ///
+    /// ONLY THE HASH OF THE TOKEN IS STORED; the plaintext goes out through
+    /// <see cref="TrustedDeviceTokenAccessor"/> so the API layer can put it in an HttpOnly
+    /// cookie, and it is never written to the database or the response body.
+    ///
+    /// THE EXISTING ROW IS RENEWED RATHER THAN DUPLICATED. Somebody who signs in every morning
+    /// with the box ticked would otherwise collect one "Remembered device" per morning, all of
+    /// them the same laptop, on the very list whose job is to make an unfamiliar device stand
+    /// out. A browser that presented no cookie is matched on its device identifier for the same
+    /// reason.
+    /// </summary>
+    private async Task RememberDeviceAsync(
+        User user,
+        TrustedDevice? existing,
+        SignInRequest request,
+        ClientInfo client,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var expiresAt = now.AddDays(_security.TrustedDeviceDays);
+
+        // No cookie, but this browser may already have a row from a session whose cookie has
+        // since been cleared. Matching on the identifier the client mints and keeps is what
+        // stops the same laptop appearing three times.
+        existing ??= await security.FindTrustedDeviceByIdentifierAsync(
+            user.Id, request.DeviceIdentifier, now, cancellationToken);
+
+        if (existing is not null)
+        {
+            existing.DeviceName = request.DeviceName ?? existing.DeviceName ?? client.DeviceName;
+            existing.DeviceIdentifier = request.DeviceIdentifier ?? existing.DeviceIdentifier;
+            existing.UserAgent = currentUser.UserAgent ?? existing.UserAgent;
+            existing.Browser = client.Browser ?? existing.Browser;
+            existing.OperatingSystem = client.OperatingSystem ?? existing.OperatingSystem;
+            existing.ExpiresAtUtc = expiresAt;
+            existing.LastSeenAtUtc = now;
+
+            // The browser still holds the plaintext when it presented one, so handing the SAME
+            // value back renews the cookie's lifetime rather than letting it lapse before the row
+            // it points at. When it presented none — the identifier match above — the row is
+            // re-keyed to a fresh token, because there is no plaintext left to hand back.
+            if (!string.IsNullOrWhiteSpace(request.TrustedDeviceToken))
+            {
+                TrustedDeviceTokenAccessor.Set(request.TrustedDeviceToken);
+                return;
+            }
+
+            var replacement = tokenHasher.GenerateToken();
+            existing.DeviceTokenHash = tokenHasher.Hash(replacement);
+            TrustedDeviceTokenAccessor.Set(replacement);
+            return;
+        }
+
+        var token = tokenHasher.GenerateToken();
+
+        var device = new TrustedDevice
+        {
+            TenantId = user.TenantId ?? Guid.Empty,
+            BusinessUnitId = user.BusinessUnitId,
+            UserId = user.Id,
+            DeviceTokenHash = tokenHasher.Hash(token),
+            DeviceName = request.DeviceName ?? client.DeviceName,
+            DeviceIdentifier = request.DeviceIdentifier,
+            ClientType = request.ClientType,
+            UserAgent = currentUser.UserAgent,
+            Browser = client.Browser,
+            OperatingSystem = client.OperatingSystem,
+            IpAddress = currentUser.IpAddress,
+            TrustedAtUtc = now,
+            ExpiresAtUtc = expiresAt,
+            LastSeenAtUtc = now
+        };
+
+        await security.AddTrustedDeviceAsync(device, cancellationToken);
+
+        await audit.WriteAsync(
+            AuditActionCodes.DeviceTrusted, nameof(TrustedDevice), null,
+            device.DeviceName, new { device.Browser, device.OperatingSystem },
+            cancellationToken: cancellationToken);
+
+        TrustedDeviceTokenAccessor.Set(token);
     }
 
     /// <summary>

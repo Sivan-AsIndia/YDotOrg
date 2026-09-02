@@ -3653,11 +3653,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.Api\\YDots.DON.Api.csproj",
+      "projectUniqueName": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.API\\YDots.DON.Api.csproj",
       "projectName": "YDots.DON.Api",
-      "projectPath": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.Api\\YDots.DON.Api.csproj",
+      "projectPath": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.API\\YDots.DON.Api.csproj",
       "packagesPath": "C:\\Users\\Sivan T\\.nuget\\packages\\",
-      "outputPath": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.Api\\obj\\",
+      "outputPath": "D:\\Permaspace\\Phase1\\YDots\\src\\Services\\DON\\YDots.DON.API\\obj\\",
       "projectStyle": "PackageReference",
       "centralPackageVersionsManagementEnabled": true,
       "CentralPackageTransitivePinningEnabled": true,

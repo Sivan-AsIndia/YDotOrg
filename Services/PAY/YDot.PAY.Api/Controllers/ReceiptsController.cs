@@ -39,6 +39,21 @@ public sealed class ReceiptsController(
         FromResult(await queries.HandleAsync(new SearchReceiptsQuery(filter), cancellationToken));
 
     /// <summary>
+    /// The Receipt Register - rows and the four totals, in one call.
+    ///
+    /// SEPARATE FROM THE PLAIN LIST ABOVE. This one includes failed payments, which have no
+    /// receipt, because the workflow document's register shows the outcome of every payment
+    /// rather than the set of tax documents that exist.
+    /// </summary>
+    [HttpGet("register")]
+    [HasPermission(PermissionCodes.ReceiptsView)]
+    [ProducesResponseType(typeof(ApiResponse<ReceiptRegisterResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetRegisterAsync(
+        [FromQuery] ReceiptRegisterFilter filter, CancellationToken cancellationToken) =>
+        FromResult(await queries.HandleAsync(new GetReceiptRegisterQuery(filter), cancellationToken));
+
+    /// <summary>
     /// The CSV export - the file a finance team files with the year's return.
     /// </summary>
     [HttpGet("export")]

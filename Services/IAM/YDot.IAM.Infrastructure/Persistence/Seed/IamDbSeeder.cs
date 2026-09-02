@@ -51,8 +51,8 @@ public sealed class IamDbSeeder(
     [
         // ---- ONE ORGANISATION, APPROVED AND ACTIVATED -------------------------------------
         //
-        // Its administrator account is already usable, and the thirteen role accounts below
-        // are seeded into it.
+        // Its administrator account is already usable and holds TENANT_ADMIN, and the two role
+        // accounts below - INITIATOR and APPROVER - are seeded into it.
         //
         // IT TAKES ITS ID FROM CONFIGURATION rather than generating one, and that is the single
         // place in this seeder where a fixed identifier is load-bearing. See the note on
@@ -85,39 +85,31 @@ public sealed class IamDbSeeder(
     /// One demonstration account per Tenant role, for the activated sample Organisation.
     ///
     /// WHY THESE ARE SEEDED RATHER THAN CREATED AFTERWARDS. The demonstration guide lists these
-    /// eleven accounts and the password they share. Creating them with a script meant a fresh
+    /// accounts and the password they share. Creating them with a script meant a fresh
     /// `docker compose up` produced an Organisation containing one administrator and nobody else,
     /// so the documented credentials were wrong on any machine that had not run that script -
     /// which is every machine except the one it was written on.
     ///
     /// They are seeded ACTIVE with a password, exactly like the sample administrator, because the
     /// point of them is to be signed into. The invitation flow is demonstrated by creating a
-    /// twelfth user through the product, which is stage 7 of the guide.
+    /// further user through the product rather than by leaving a documented account unusable.
     ///
-    /// The addresses are on example.com, which RFC 2606 reserves for documentation - so no
-    /// invitation can ever reach a real mailbox by accident, however the relay is configured.
+    /// TWO ACCOUNTS, NOT THIRTEEN, because there are now two roles below the administrator. The
+    /// third Organisation role, TENANT_ADMIN, is not listed here: it is held by the sample
+    /// Organisation's own administrator, created by SeedSampleTenantAsync with the address from
+    /// the SampleTenants table above, and seeding a second holder of it would put two
+    /// unrestricted accounts in a demonstration database for no reason.
+    ///
+    /// THESE ARE REAL ADDRESSES AND NOT example.com ONES, which the thirteen they replace were.
+    /// The nominated testers sign in as these two and need the invitation and password-reset mail
+    /// to actually arrive. That makes IAM_MAIL_REDIRECT_TO worth a thought before pointing this
+    /// environment at anything containing real supporters - see the note on it in .env.
     /// </summary>
     private static readonly (string RoleCode, string Username, string First, string Last,
         string Email)[] RoleAccounts =
     [
-        (RoleCodes.UserAdministrator, "useradmin", "Uma", "Sharma", "uma.sharma@example.com"),
-        (RoleCodes.AccessApprover, "approver", "Arun", "Pillai", "arun.pillai@example.com"),
-        (RoleCodes.Auditor, "auditor", "Anita", "Rao", "anita.rao@example.com"),
-        (RoleCodes.CampaignManager, "campmgr", "Kavita", "Menon", "kavita.menon@example.com"),
-        (RoleCodes.CampaignOwner, "campowner", "Rohit", "Nair", "rohit.nair@example.com"),
-        (RoleCodes.FundraisingOfficer, "fundraiser", "Priya", "Iyer", "priya.iyer@example.com"),
-        (RoleCodes.FinanceOfficer, "finance", "Suresh", "Kulkarni", "suresh.kulkarni@example.com"),
-        (RoleCodes.PaymentOperations, "payops", "Deepa", "Joshi", "deepa.joshi@example.com"),
-
-        // The two donor-module roles. Without a seeded account for each, the steward and care
-        // paths through the module can only be exercised as the organisation administrator -
-        // which is precisely the wrong way to test whether the permissions are right.
-        (RoleCodes.DataSteward, "steward", "Nikhil", "Verma", "nikhil.verma@example.com"),
-        (RoleCodes.DonorCare, "donorcare", "Fatima", "Khan", "fatima.khan@example.com"),
-
-        (RoleCodes.Volunteer, "volunteer", "Vikram", "Shetty", "vikram.shetty@example.com"),
-        (RoleCodes.StandardUser, "standard", "Sneha", "Bhat", "sneha.bhat@example.com"),
-        (RoleCodes.DonorPortalUser, "donorportal", "Meera", "Gupta", "meera.gupta@example.com"),
+        (RoleCodes.Initiator, "initiator", "Rajat", "Sivan", "rajat.sivan@outlook.com"),
+        (RoleCodes.Approver, "approver", "Gowri", "Saranya", "gowrisaranya6@gmail.com")
     ];
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -210,6 +202,14 @@ public sealed class IamDbSeeder(
             await context.SaveChangesAsync(cancellationToken);
 
             await ReconcileSystemRolePermissionsAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
+            // AFTER the grants, because what a role may SEE is computed from what it may DO.
+            await ReconcileRoleMenusAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
+            // LAST, because it reads the roles the three passes above have finished settling.
+            await RetireUnknownSystemRolesAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -345,38 +345,19 @@ public sealed class IamDbSeeder(
     /// </summary>
     private static Permission BuildPermission(string code, int displayOrder, bool isPlatformOnly)
     {
-        var segments = code.Split('.');
-
-        var moduleCode = segments.Length > 0
-            ? segments[0].ToUpperInvariant()
-            : "IAM";
-
-        // "IAM.View" is a section-level code with no group; "iam.users.create" groups as Users.
-        var groupCode = segments.Length >= 3
-            ? ToPascal(segments[1])
-            : "Section";
-
-        var actionSegment = segments.Length >= 3 ? segments[2] : segments.LastOrDefault() ?? "view";
-
-        var action = actionSegment.ToLowerInvariant() switch
-        {
-            "view" => PermissionAction.View,
-            "create" => PermissionAction.Create,
-            "edit" or "update" => PermissionAction.Edit,
-            "submit" => PermissionAction.Submit,
-            "approve" or "review" => PermissionAction.Approve,
-            "export" => PermissionAction.Export,
-            _ => PermissionAction.Operate
-        };
-
+        // THE DERIVATION MOVED OUT OF HERE, into PermissionCodeConventions, and it had to.
+        // RoleAccessProfiles decides whether INITIATOR or APPROVER holds a code by asking what
+        // action it is, and while this method was the only place that knew, the profile had to
+        // guess - so a code this method filed as Approve could land in the maker role, which is
+        // the one outcome the two roles exist to prevent. One derivation, two callers, no drift.
         return new Permission
         {
             Code = code,
-            Name = BuildPermissionName(segments),
+            Name = PermissionCodeConventions.DeriveName(code),
             Description = null,
-            ModuleCode = moduleCode,
-            GroupCode = groupCode,
-            Action = action,
+            ModuleCode = PermissionCodeConventions.DeriveModule(code),
+            GroupCode = PermissionCodeConventions.DeriveGroup(code),
+            Action = PermissionCodeConventions.DeriveAction(code),
             IsSensitive = PermissionCodes.IsSensitive(code),
             IsPlatformOnly = isPlatformOnly,
             Status = PermissionStatus.Active,
@@ -386,33 +367,6 @@ public sealed class IamDbSeeder(
         };
     }
 
-    private static string BuildPermissionName(string[] segments)
-    {
-        if (segments.Length < 3)
-        {
-            return string.Join(' ', segments.Select(ToPascal));
-        }
-
-        var action = ToSentence(segments[2]);
-        var subject = ToSentence(segments[1]);
-
-        return $"{action} {subject}";
-    }
-
-    private static string ToPascal(string value) =>
-        string.Join(string.Empty, value.Split('-')
-            .Select(part => part.Length == 0
-                ? part
-                : char.ToUpperInvariant(part[0]) + part[1..]));
-
-    private static string ToSentence(string value)
-    {
-        var words = value.Replace('-', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        return words.Length == 0
-            ? value
-            : char.ToUpperInvariant(words[0][0]) + string.Join(' ', words)[1..];
-    }
 
     /// <summary>The global navigation catalogue, reconciled from <c>MenuCatalogue</c>.</summary>
     private async Task SeedMenuDefinitionsAsync(CancellationToken cancellationToken)
@@ -737,12 +691,265 @@ public sealed class IamDbSeeder(
             }
         }
 
+        var removed = await WithdrawSupersededGrantsAsync(roles, cancellationToken);
+
+        if (added > 0 || removed > 0)
+        {
+            logger.LogInformation(
+                "Reconciled system role grants: {Added} permission row(s) added, {Removed} withdrawn, "
+                + "across {RoleCount} role(s).",
+                added, removed, roles.Count);
+        }
+    }
+
+    /// <summary>
+    /// Removes the grants a system role used to hold and must no longer.
+    ///
+    /// NARROWING A ROLE DOES NOT REACH AN EXISTING DATABASE ON ITS OWN. The reconciliation above
+    /// only adds what a definition is missing - on purpose, so that an administrator's extra
+    /// grant to a system role survives a restart - which means a permission removed from a
+    /// profile stays in the table, and the role goes on holding it. Every narrowing is therefore
+    /// stated explicitly in <see cref="RoleAccessProfiles.WithdrawnGrants"/> and applied here.
+    ///
+    /// IT IS NOT A DIFF AGAINST THE PROFILE, and must not become one: "delete every row the
+    /// profile does not list" would undo an administrator's deliberate customisation silently, on
+    /// every start-up, for every Organisation.
+    /// </summary>
+    private async Task<int> WithdrawSupersededGrantsAsync(
+        IReadOnlyCollection<Role> roles, CancellationToken cancellationToken)
+    {
+        if (RoleAccessProfiles.WithdrawnGrants.Count == 0)
+        {
+            return 0;
+        }
+
+        var removed = 0;
+
+        foreach (var role in roles)
+        {
+            if (!RoleAccessProfiles.WithdrawnGrants.TryGetValue(role.NormalizedCode, out var codes)
+                || codes.Count == 0)
+            {
+                continue;
+            }
+
+            var doomed = await context.RolePermissions
+                .IgnoreQueryFilters()
+                .Where(grant => grant.RoleId == role.Id && codes.Contains(grant.PermissionCode))
+                .ToListAsync(cancellationToken);
+
+            if (doomed.Count == 0)
+            {
+                continue;
+            }
+
+            context.RolePermissions.RemoveRange(doomed);
+            removed += doomed.Count;
+
+            logger.LogInformation(
+                "Withdrew {Count} superseded grant(s) from role {RoleCode}: {Codes}.",
+                doomed.Count, role.NormalizedCode,
+                string.Join(", ", doomed.Select(grant => grant.PermissionCode)));
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Writes the role-to-menu mapping rows the "Menu Mapping" screen edits.
+    ///
+    /// WHY THIS EXISTS AT ALL, given that permissions already decide what a sidebar shows. Two
+    /// reasons, and the second is the important one.
+    ///
+    /// The first is that the mapping screen opened empty. RoleMenu has always been optional -
+    /// "no rows means no restriction" - so nothing had ever written any, and an administrator who
+    /// opened Menu Mapping to see which role reached which screen was shown a blank grid and left
+    /// to infer the answer from the permission catalogue. The mapping was real but invisible.
+    ///
+    /// The second is that a blank grid is dangerous to edit. Tick one box in an empty grid and
+    /// the save writes exactly one row - and every other node for that role now has a row saying
+    /// nothing while one says yes, which reads to a person as "only this one is mapped". Seeding
+    /// the full grid means an administrator changes a decision that is already written down
+    /// rather than creating the first one by accident.
+    ///
+    /// IT CANNOT GRANT ANYTHING, and that is what makes it safe to write in bulk. RoleMenu is a
+    /// subtractive filter by construction - see the note on the entity - so the worst a wrong row
+    /// here can do is hide a screen. IsVisible is set from whether the role actually holds the
+    /// node's required permission, so what it writes is a faithful record of what was already
+    /// true, not a new decision.
+    ///
+    /// EXISTING ROWS ARE LEFT ALONE. An administrator who has hidden Payments from Initiator
+    /// meant it, and a reconcile that stamped over that on the next restart would be a bug wearing
+    /// the clothes of a feature. This adds what is missing and touches nothing else.
+    /// </summary>
+    private async Task ReconcileRoleMenusAsync(CancellationToken cancellationToken)
+    {
+        // The nodes an Organisation can map: everything the platform branch does not own, and
+        // nothing retired. Disabled-by-default nodes are excluded for the same reason
+        // ReconcileTenantMenusAsync excludes them - an Organisation does not hold them, so a row
+        // mapping a role to one would describe a screen that is not there.
+        var mappable = await context.MenuDefinitions
+            .Where(menu => !menu.IsPlatformOnly
+                           && menu.IsEnabledByDefault
+                           && menu.Status != MenuStatus.Retired)
+            .Select(menu => new { menu.Id, menu.Code, menu.RequiredPermissionCode })
+            .ToListAsync(cancellationToken);
+
+        if (mappable.Count == 0)
+        {
+            return;
+        }
+
+        var roles = await context.Roles
+            .IgnoreQueryFilters()
+            .Where(role => role.TenantId != null && role.IsSystemRole)
+            .Select(role => new
+            {
+                role.Id,
+                TenantId = role.TenantId!.Value,
+                role.BusinessUnitId,
+                role.NormalizedCode,
+                role.GrantsAllTenantPermissions
+            })
+            .ToListAsync(cancellationToken);
+
+        if (roles.Count == 0)
+        {
+            return;
+        }
+
+        var roleIds = roles.Select(role => role.Id).ToList();
+
+        // What each role may actually do. One query rather than one per role: this runs on every
+        // start, and there is a row here for every role in every Organisation.
+        var grants = (await context.RolePermissions
+                .IgnoreQueryFilters()
+                .Where(grant => roleIds.Contains(grant.RoleId) && !grant.IsDenied)
+                .Select(grant => new { grant.RoleId, grant.PermissionCode })
+                .ToListAsync(cancellationToken))
+            .GroupBy(grant => grant.RoleId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.PermissionCode).ToHashSet(StringComparer.Ordinal));
+
+        var mapped = (await context.RoleMenus
+                .IgnoreQueryFilters()
+                .Where(mapping => roleIds.Contains(mapping.RoleId))
+                .Select(mapping => new { mapping.RoleId, mapping.MenuDefinitionId })
+                .ToListAsync(cancellationToken))
+            .GroupBy(mapping => mapping.RoleId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.MenuDefinitionId).ToHashSet());
+
+        var now = DateTimeOffset.UtcNow;
+        var added = 0;
+
+        foreach (var role in roles)
+        {
+            var held = grants.TryGetValue(role.Id, out var codes)
+                ? codes
+                : new HashSet<string>(StringComparer.Ordinal);
+
+            var already = mapped.TryGetValue(role.Id, out var existing)
+                ? existing
+                : [];
+
+            foreach (var node in mappable.Where(node => !already.Contains(node.Id)))
+            {
+                // TENANT_ADMIN holds everything by flag and owns no RolePermission rows at all,
+                // so asking `held` about it would answer no to every node and hide the entire
+                // sidebar from the one role that is supposed to see all of it.
+                var isVisible = role.GrantsAllTenantPermissions
+                                || string.IsNullOrWhiteSpace(node.RequiredPermissionCode)
+                                || held.Contains(node.RequiredPermissionCode);
+
+                await context.RoleMenus.AddAsync(new RoleMenu
+                {
+                    TenantId = role.TenantId,
+                    BusinessUnitId = role.BusinessUnitId,
+                    RoleId = role.Id,
+                    MenuDefinitionId = node.Id,
+                    IsVisible = isVisible,
+
+                    // Everybody lands on the dashboard. It is the one node with no permission on
+                    // it that every role holds, so it is the only choice that cannot land
+                    // somebody on a screen they are then refused.
+                    IsLandingPage = node.Code == MenuCatalogue.Dashboard,
+
+                    MappedAtUtc = now,
+                    MappedByUserId = Guid.Empty,
+                    Notes = isVisible
+                        ? "Seeded: this role holds the permission this screen requires."
+                        : "Seeded: this role does not hold the permission this screen requires.",
+                    CreatedAtUtc = now,
+                    CreatedByUserId = Guid.Empty
+                }, cancellationToken);
+
+                added++;
+            }
+        }
+
         if (added > 0)
         {
             logger.LogInformation(
-                "Reconciled system role grants: {Added} permission row(s) added across {RoleCount} role(s).",
-                added, roles.Count);
+                "Reconciled role menu mapping: {Added} row(s) added across {RoleCount} role(s) "
+                + "and {NodeCount} navigable node(s).",
+                added, roles.Count, mappable.Count);
         }
+    }
+
+    /// <summary>
+    /// Deactivates system roles an Organisation still holds that the blueprint no longer defines.
+    ///
+    /// THIS IS AN UPGRADE PATH AND NOTHING ELSE. A database seeded before the role catalogue was
+    /// cut from fourteen roles to three still carries the other eleven - Campaign Manager, Finance
+    /// Officer, Data Steward and the rest - and each of them still grants what it always granted.
+    /// Leaving them would make the deliverable false on every database except a brand new one:
+    /// the Roles screen would list fourteen roles and the seeder would insist there were three.
+    ///
+    /// IT DEACTIVATES AND DOES NOT DELETE, deliberately. A role may still be assigned to somebody,
+    /// and deleting it would strip a person's access with no record of what they used to hold and
+    /// no way to put it back if the removal was a mistake. Inactive is reversible, it is visible
+    /// on the Roles screen, and the audit trail keeps the assignment - so an administrator can see
+    /// what happened and decide where those people should go.
+    ///
+    /// IT ONLY TOUCHES SYSTEM ROLES. A role an Organisation built for itself is theirs, is not in
+    /// the blueprint by definition, and must never be swept up by a reconcile that was aiming at
+    /// the platform's own leftovers.
+    /// </summary>
+    private async Task RetireUnknownSystemRolesAsync(CancellationToken cancellationToken)
+    {
+        var known = TenantRoleDefinitions.All
+            .Select(definition => definition.Code)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var stale = await context.Roles
+            .IgnoreQueryFilters()
+            .Where(role => role.TenantId != null
+                           && role.IsSystemRole
+                           && role.Status == RoleStatus.Active
+                           && !known.Contains(role.NormalizedCode))
+            .ToListAsync(cancellationToken);
+
+        if (stale.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var role in stale)
+        {
+            role.Status = RoleStatus.Inactive;
+            role.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            role.UpdatedByUserId = Guid.Empty;
+        }
+
+        logger.LogWarning(
+            "Deactivated {Count} system role(s) no longer in the catalogue: {Codes}. Anyone still "
+            + "assigned to one keeps the assignment but loses its grants; reassign them to "
+            + "INITIATOR or APPROVER.",
+            stale.Count,
+            string.Join(", ", stale.Select(role => role.NormalizedCode).Distinct(StringComparer.Ordinal)));
     }
 
     private async Task ReconcileTenantMenusAsync(CancellationToken cancellationToken)

@@ -20,9 +20,17 @@ namespace YDots.CAM.Infrastructure.Persistence.ReadServices;
 /// </summary>
 public sealed class TrackingAssetReadService(
     CampaignDbContext context,
+    IFinancialDirectory financial,
+    IGeographyDirectory geography,
     ICurrentUser currentUser,
+    ITenantContext tenantContext,
     IDateTimeProvider clock) : ITrackingAssetReadService
 {
+    private static readonly IReadOnlyDictionary<Guid, CampaignIncome> NoIncome =
+        new Dictionary<Guid, CampaignIncome>();
+
+    private static readonly IReadOnlyDictionary<Guid, string> NoNames = new Dictionary<Guid, string>();
+
     public async Task<PagedResponse<TrackingAssetListItemResponse>> SearchAsync(
         TrackingAssetSearchFilter filter, AccessScope scope, CancellationToken cancellationToken)
     {
@@ -66,10 +74,17 @@ public sealed class TrackingAssetReadService(
             })
             .ToListAsync(cancellationToken);
 
+        // ONE INCOME QUERY FOR THE WHOLE PAGE. The "Total usage" and collected-amount tiles on
+        // the manager read from the donations, and the alternative is a query per row on the
+        // screen people open the module with.
+        var income = await ResolveIncomeAsync(
+            [.. rows.Select(row => row.Asset.Id)], cancellationToken);
+
         var items = rows
             .Select(row => row.Asset.ToListItemResponse(
                 row.CampaignCode, row.CampaignName,
-                row.ChannelName, row.SourceName, row.MediumName, now))
+                row.ChannelName, row.SourceName, row.MediumName, now,
+                income.GetValueOrDefault(row.Asset.Id)))
             .ToList();
 
         return new PagedResponse<TrackingAssetListItemResponse>(
@@ -102,12 +117,62 @@ public sealed class TrackingAssetReadService(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return row?.Asset.ToDetailResponse(
+        if (row is null)
+        {
+            return null;
+        }
+
+        var income = await ResolveIncomeAsync([row.Asset.Id], cancellationToken);
+
+        // The placements carry city and state ids taken from the campaign. Naming them is what
+        // turns "Places: 3" on the asset popup into three lines somebody can read.
+        var cityIds = row.Asset.Places
+            .Where(place => place.CityId.HasValue)
+            .Select(place => place.CityId!.Value)
+            .ToArray();
+
+        var stateIds = row.Asset.Places
+            .Where(place => place.StateId.HasValue)
+            .Select(place => place.StateId!.Value)
+            .ToArray();
+
+        var cityNames = cityIds.Length == 0
+            ? NoNames
+            : await geography.GetCityNamesAsync(cityIds, cancellationToken);
+
+        var stateNames = stateIds.Length == 0
+            ? NoNames
+            : await geography.GetStateNamesAsync(stateIds, cancellationToken);
+
+        return row.Asset.ToDetailResponse(
             row.CampaignCode, row.CampaignName,
             row.ChannelName, row.SourceName, row.MediumName,
             clock.UtcNow,
             TrackingAssetMappingConfig.PermittedActionsFor(
-                row.Asset, currentUser.UserId, currentUser.HasPermission));
+                row.Asset, currentUser.UserId, currentUser.HasPermission),
+            income.GetValueOrDefault(row.Asset.Id),
+            cityNames,
+            stateNames);
+    }
+
+    /// <summary>
+    /// What a set of assets has raised, keyed by asset id.
+    ///
+    /// NEVER THROWS AND NEVER BLOCKS THE PAGE: with no Organisation resolved, or nothing to ask
+    /// about, it answers empty and every figure renders as zero. The financial directory itself
+    /// swallows a database failure for the same reason - a manager that will not open tells
+    /// nobody anything.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, CampaignIncome>> ResolveIncomeAsync(
+        IReadOnlyCollection<Guid> assetIds, CancellationToken cancellationToken)
+    {
+        if (assetIds.Count == 0 || !tenantContext.HasTenant)
+        {
+            return NoIncome;
+        }
+
+        return await financial.GetTrackingAssetIncomeAsync(
+            tenantContext.RequireTenantId(), assetIds, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TrackingAssetExportRow>> GetExportRowsAsync(
@@ -138,8 +203,12 @@ public sealed class TrackingAssetReadService(
             })
             .ToListAsync(cancellationToken);
 
+        var income = await ResolveIncomeAsync(
+            [.. rows.Select(row => row.Asset.Id)], cancellationToken);
+
         return [.. rows.Select(row => row.Asset.ToExportRow(
-            row.CampaignCode, row.ChannelName, row.SourceName, row.MediumName))];
+            row.CampaignCode, row.ChannelName, row.SourceName, row.MediumName,
+            income.GetValueOrDefault(row.Asset.Id)))];
     }
 
     /// <summary>

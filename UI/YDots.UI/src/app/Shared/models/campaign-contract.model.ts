@@ -63,7 +63,15 @@ export type LifecycleActivation = 'manual' | 'auto';
  */
 export type TrackingAssetType = 'qrCode' | 'shortLink' | 'utmLink' | 'landingPage';
 
-export type TrackingAssetStatus = 'draft' | 'submitted' | 'approved' | 'active' | 'inactive';
+export type TrackingAssetStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'active'
+
+  /** Active, with a maker's disable request on it waiting for an approver's decision. */
+  | 'disableRequested'
+  | 'inactive';
 
 export type ReadinessCheckStatus = 'pending' | 'passed' | 'failed';
 
@@ -108,6 +116,37 @@ export interface EnumOption {
 // Campaigns
 // =============================================================================================
 
+/**
+ * A person the campaign names, resolved to something printable.
+ *
+ * THE NAME COMES FROM THE SERVER NOW. The API used to return bare IAM user ids, so the register's
+ * owner column and the detail's owner card both read "Unassigned" on campaigns that had owners
+ * all along - the names survived only as long as the browser still held the record it had just
+ * created. Fall back to `userId` only when `displayName` is null.
+ */
+export interface CampaignPerson {
+  userId: string;
+  userCode: string | null;
+  displayName: string | null;
+  isPrimary: boolean;
+}
+
+/** One channel a campaign runs on, named rather than left as an id. */
+export interface CampaignChannel {
+  channelId: string;
+  code: string;
+  name: string;
+}
+
+/**
+ * Creating a campaign - all four wizard steps in one body.
+ *
+ * EVERY FIELD THE WIZARD MARKS WITH AN ASTERISK IS REQUIRED HERE. State, city, zip code, the
+ * channels, the reminder pair and both publication fields used to be optional on this contract
+ * while the screens presented them as mandatory, so a campaign could be posted with steps two and
+ * three effectively empty - and its detail screen then had nothing to show for either. The server
+ * refuses that now; a wizard that lets somebody skip those fields will get a 400 naming each one.
+ */
 export interface CreateCampaignRequest {
   name: string;
   code: string;
@@ -125,17 +164,23 @@ export interface CreateCampaignRequest {
   countryId: string;
   /** At least one. A campaign with no owner is one nobody is accountable for. */
   ownerIds: string[];
-  stateId?: string | null;
-  cityId?: string | null;
-  zipCode?: string | null;
-  lifecycleActivation?: LifecycleActivation;
-  daysBeforeStart?: number;
-  /** `HH:mm`. When the pre-launch reminder goes out. */
-  reminderTime?: string;
-  publicDescription?: string | null;
-  termsAndNotice?: string | null;
+  stateId: string;
+  cityId: string;
+  zipCode: string;
+  /** At least one. A campaign with no channel has no route to anybody. */
+  channelIds: string[];
+  lifecycleActivation: LifecycleActivation;
+  /**
+   * 0..365. NULLABLE ON THE WIRE ON PURPOSE: 0 is a legitimate answer - remind me on the day -
+   * and a field the client never sent would arrive as 0 too. Send the number the user chose, or
+   * the request is refused for not having asked them.
+   */
+  daysBeforeStart: number | null;
+  /** `HH:mm`. When the pre-launch reminder goes out. Nullable for the same reason as above. */
+  reminderTime: string | null;
+  publicDescription: string;
+  termsAndNotice: string;
   status?: CampaignStatus;
-  channelIds?: string[] | null;
 }
 
 /**
@@ -158,15 +203,16 @@ export interface UpdateCampaignRequest {
   currencyId: string;
   countryId: string;
   ownerIds: string[];
-  stateId?: string | null;
-  cityId?: string | null;
-  zipCode?: string | null;
-  lifecycleActivation?: LifecycleActivation;
-  daysBeforeStart?: number;
-  reminderTime?: string;
-  publicDescription?: string | null;
-  termsAndNotice?: string | null;
-  channelIds?: string[] | null;
+  /** The same mandatory set as create: an edit must not be a way to empty a campaign out. */
+  stateId: string;
+  cityId: string;
+  zipCode: string;
+  channelIds: string[];
+  lifecycleActivation: LifecycleActivation;
+  daysBeforeStart: number | null;
+  reminderTime: string | null;
+  publicDescription: string;
+  termsAndNotice: string;
 }
 
 /** The body of every lifecycle transition. Which fields matter depends on the transition. */
@@ -190,6 +236,8 @@ export interface CampaignListItem {
   targetAmount: number;
   budgetAmount: number | null;
   currencyId: string;
+  /** The ISO code, resolved server-side, so the grid can print a symbol beside the figure. */
+  currencyCode: string | null;
   status: CampaignStatus;
   statusDescription: string;
   /** How far through its own window the campaign is. Null before it starts. */
@@ -197,6 +245,8 @@ export interface CampaignListItem {
   ownerCount: number;
   /** The accountable owners, by IAM user id, so the register can name them rather than count them. */
   ownerIds: string[];
+  /** The same owners with their names attached. Primary first. Prefer this over `ownerIds`. */
+  owners: CampaignPerson[];
   trackingAssetCount: number;
   /** Readiness checks still outstanding. Non-zero is why a launch button is refused. */
   outstandingCheckCount: number;
@@ -232,10 +282,22 @@ export interface CampaignDetail {
   endDate: string;
   targetAmount: number;
   currencyId: string;
+  /**
+   * The names beside the ids.
+   *
+   * WITHOUT THESE THE DETAIL SCREEN DREW A DASH. Currency, Location and Channel were returned as
+   * Guids into master tables the client does not hold, so every one of those rows read "-" on a
+   * campaign that had all of them filled in. The ids are still here for re-selecting a dropdown;
+   * render from the names.
+   */
+  currencyCode: string | null;
   budgetAmount: number | null;
   countryId: string;
+  countryName: string | null;
   stateId: string | null;
+  stateName: string | null;
   cityId: string | null;
+  cityName: string | null;
   zipCode: string | null;
   lifecycleActivation: LifecycleActivation;
   daysBeforeStart: number;
@@ -245,7 +307,13 @@ export interface CampaignDetail {
   status: CampaignStatus;
   statusDescription: string;
   ownerIds: string[];
+  owners: CampaignPerson[];
   channelIds: string[];
+  channels: CampaignChannel[];
+  /** Tracking assets on this campaign, for the detail screen's tab badge. */
+  trackingAssetCount: number;
+  /** Required readiness checks not yet passed, for the readiness tab badge. */
+  outstandingCheckCount: number;
   /** Who submitted it. The server refuses to let the same person approve it. */
   submittedByUserId: string | null;
   submittedAtUtc: string | null;
@@ -317,6 +385,14 @@ export interface TrackingAssetCustomFieldRequest {
   id?: string | null;
 }
 
+/**
+ * One placement of an offline QR code.
+ *
+ * LEAVE `cityId` AND `stateId` OUT AND THE SERVER FILLS THEM FROM THE CAMPAIGN. The form shows
+ * both as "From campaign" and does not let anybody edit them, which is a promise the client
+ * cannot keep on its own - and a client that simply omitted them used to save a placement with no
+ * location at all. Send them only to override the campaign's own city and state.
+ */
 export interface TrackingAssetPlaceRequest {
   placeName: string;
   destination: string;
@@ -333,11 +409,17 @@ export interface CreateTrackingAssetRequest {
   destination: string;
   sourceId: string;
   mediumId: string;
+  /** Mandatory. Draft or Submitted only - everything past that has its own endpoint. */
+  status: TrackingAssetStatus;
   /** A full instant, unlike a campaign's dates. A poster goes live at a time of day. */
   activeFrom: string;
   activeTo: string;
   contentTag?: string | null;
-  status?: TrackingAssetStatus;
+  /**
+   * REQUIRED FOR A QR CODE ON THE OFFLINE CHANNEL, and rejected for every other combination.
+   * The rule used to key on the channel alone, so a short link on Offline was refused unless
+   * somebody invented a placement for it.
+   */
   places?: TrackingAssetPlaceRequest[] | null;
 }
 
@@ -384,8 +466,16 @@ export interface TrackingAssetListItem {
   activeTo: string;
   /** Approved AND inside its window. A poster whose run has ended is not live. */
   isLive: boolean;
+  /**
+   * Scans and clicks. A stored counter the PUBLIC DONATION FLOW owns and CAM never writes, so it
+   * reads 0 until that flow reports back. The three figures below are read from the donations and
+   * are real today.
+   */
   usageCount: number;
+  /** Confirmed income attributed to this asset, refunds already deducted. */
   totalReceived: number;
+  donationCount: number;
+  donorCount: number;
   placeCount: number;
   updatedAtUtc: string | null;
   version: number;
@@ -401,7 +491,9 @@ export interface TrackingAssetPlace {
   id: string;
   placeName: string;
   cityId: string | null;
+  cityName: string | null;
   stateId: string | null;
+  stateName: string | null;
   destination: string;
   customFields: TrackingAssetCustomField[];
 }
@@ -508,9 +600,18 @@ export interface ReturnCampaignToDraftRequest {
   reason: string;
 }
 
+/** One person on the readiness screen, resolved to something printable. */
+export interface ReadinessPerson {
+  userId: string;
+  userCode: string | null;
+  displayName: string | null;
+}
+
 export interface ReadinessBlocker {
   id: string;
   ownerUserId: string;
+  /** Who has to clear it, named. The popup that raises a blocker shows them. */
+  owner: ReadinessPerson | null;
   blockerNote: string;
   isResolved: boolean;
   resolvedByUserId: string | null;
@@ -528,6 +629,8 @@ export interface ReadinessCheckListItem {
   successCriteria: string;
   requiredForLaunch: boolean;
   ownerUserId: string | null;
+  /** The check's owner, named - what the click-through popup shows before offering a blocker. */
+  owner: ReadinessPerson | null;
   dueDate: string | null;
   isOverdue: boolean;
   notes: string | null;
@@ -551,6 +654,7 @@ export interface ReadinessCheckDetail {
   successCriteria: string;
   requiredForLaunch: boolean;
   ownerUserId: string | null;
+  owner: ReadinessPerson | null;
   dueDate: string | null;
   isOverdue: boolean;
   notes: string | null;
@@ -578,6 +682,9 @@ export interface CampaignReadiness {
   campaignCode: string;
   campaignName: string;
   campaignStatus: CampaignStatus;
+  campaignStatusDescription: string;
+  /** The campaign's owners, named, for the header and the blocker popup. Primary first. */
+  campaignOwners: ReadinessPerson[];
   totalItems: number;
   passed: number;
   failed: number;
@@ -586,6 +693,26 @@ export interface CampaignReadiness {
   openBlockers: number;
   readinessPercentage: number;
   canLaunch: boolean;
+  /**
+   * True when the campaign goes live on its start date whatever this checklist says: it is
+   * Scheduled and set to activate automatically. A red checklist beside one of these does NOT
+   * mean the launch is being held back, and the screen must not imply that it does.
+   */
+  willActivateAutomatically: boolean;
+  /** The date it goes live by itself, when `willActivateAutomatically`. */
+  automaticActivationDate: string | null;
+  /**
+   * The screen's Actions menu, decided by the server: `AddCheck`, `RequestApproval`,
+   * `ApproveLaunch`, `ReturnToDraft`.
+   *
+   * DRAW THE MENU FROM THIS AND NOTHING ELSE. Gating the buttons on permission codes in the
+   * browser is what produced an Organisation administrator being offered "Request approval" - a
+   * request they are themselves the approver for, which the platform then refuses - with the
+   * "Approve launch" they should have had greyed out beside it. The rule needs the role, the
+   * campaign status and the segregation-of-duties check together, and only one of those three is
+   * knowable here.
+   */
+  permittedActions: string[];
   items: ReadinessCheckListItem[];
 }
 

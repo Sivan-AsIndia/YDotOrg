@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("YDots.CAM.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+508fa01f145cb00c3cf7e7d5d7fcc328a5115106")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+248490ceb95824d0b7f77dbec97c59894d20cde2")]
 [assembly: System.Reflection.AssemblyProductAttribute("YDots.CAM.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("YDots.CAM.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

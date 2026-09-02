@@ -82,12 +82,25 @@ SELECT
     -- created: a merchant account cannot be paid out in a currency it does not settle.
     'INR',
 
+    -- NO PER-ACCOUNT RETURN URL, and none is needed. RazorpayGateway falls back to
+    -- ClientAppSettings BaseUrl + PaymentResultPath — http://localhost:6700/give/result on a
+    -- development box — so the donor is redirected back and that page calls verify.
+    --
+    -- Set this only when one organisation needs its own landing page, or when the client is
+    -- reached on a per-tenant host (http://ten1.localhost:6700/give/result) and you want the
+    -- donor returned to the same one they started on. A value here wins over the fallback.
     NULL,
 
     -- No webhook URL on a dev box: Razorpay cannot reach a machine that is not on the internet.
-    -- The donation screen still confirms the payment, because the verify poll asks Razorpay
-    -- directly rather than waiting to be told. Set this to
-    -- https://<public host>/pay-api/webhooks/Razorpay anywhere Razorpay can actually call.
+    -- NOTHING IS LOST BY THAT LOCALLY. The return trip above brings the donor's browser back and
+    -- the result page asks us to verify; verification is a PULL — our server calls Razorpay's
+    -- API — so the outcome is confirmed with no inbound connectivity at any point.
+    --
+    -- A WEBHOOK IS STILL WORTH REGISTERING IN PRODUCTION, because it is the only thing that
+    -- catches the donor who pays and then closes the tab before being redirected. Set this to
+    -- https://<public host>/pay-api/webhooks/Razorpay anywhere Razorpay can actually call, and
+    -- put the same secret in RAZORPAY_WEBHOOK_SECRET — without it the signature check fails and
+    -- the events are stored but never acted on.
     NULL,
 
     60,

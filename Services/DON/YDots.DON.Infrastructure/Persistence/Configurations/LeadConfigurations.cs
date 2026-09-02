@@ -54,6 +54,11 @@ public sealed class LeadConfiguration : IEntityTypeConfiguration<Lead>
         builder.Property(lead => lead.LastContactOutcome).HasConversion<string>().HasMaxLength(80).IsRequired();
         builder.Property(lead => lead.ClosureReason).HasMaxLength(2000);
 
+        // Stored as strings like every other enum here, so a value is readable in the database and
+        // a new member never renumbers an existing row.
+        builder.Property(lead => lead.Temperature).HasConversion<string>().HasMaxLength(40).IsRequired();
+        builder.Property(lead => lead.DonationPotential).HasConversion<string>().HasMaxLength(40).IsRequired();
+
         builder.HasIndex(lead => new { lead.OrganisationId, lead.LeadReference })
             .IsUnique()
             .HasDatabaseName("ix_don_leads_org_reference");

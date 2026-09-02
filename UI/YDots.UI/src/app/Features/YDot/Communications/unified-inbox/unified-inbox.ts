@@ -6,7 +6,7 @@ import { FormsModule } from '@angular/forms';
  *  SCR-COM-001 — Unified inbox
  *  Route: /engagement/unified-inbox
  *  Purpose: Work permitted conversations by queue, SLA and assignment.
- *  Primary users: Fundraiser / Donor Care
+ *  Primary users: INITIATOR (and TENANT_ADMIN, who holds everything)
  *  Primary action: Accept
  * ---------------------------------------------------------------------- */
 

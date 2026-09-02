@@ -7,12 +7,9 @@
       <div class="field-inline">
         <label class="field-label" for="effectiveRole">Effective role</label>
         <select id="effectiveRole" class="select select--sm" [(ngModel)]="effectiveRole" (change)="onScopeChange()">
-          <option value="Fundraiser">Fundraiser</option>
-          <option value="Donor Care">Donor Care</option>
-          <option value="Assigned agent">Assigned agent</option>
-          <option value="Supervisor">Supervisor</option>
-          <option value="Integration Operator">Integration Operator</option>
-          <option value="Authorised Administrator">Authorised Administrator</option>
+          <option value="TENANT_ADMIN">Tenant admin</option>
+          <option value="INITIATOR">Initiator</option>
+          <option value="APPROVER">Approver</option>
         </select>
       </div>
       <div class="scope-pills" role="group" aria-label="Effective data scope">

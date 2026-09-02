@@ -38,16 +38,12 @@ import { FinanceExceptionCaseComponent } from './Features/YDot/Finance/finance-e
 import { PeriodCampaignCloseComponent } from './Features/YDot/Finance/period-campaign-close/period-campaign-close';
 import { MakerCheckerReviewComponent } from './Features/YDot/Finance/maker-checker-review/maker-checker-review';
 import { FinancialCorrectionOrReversalComponent } from './Features/YDot/Finance/financial-correction-or-reversal/financial-correction-or-reversal';
-import { DonationIntentDetailComponent } from './Features/YDot/Donations and Payments/donation-intent-detail/donation-intent-detail';
 import { PaymentEventQueueComponent } from './Features/YDot/Donations and Payments/payment-event-queue/payment-event-queue';
-import { PaymentVerificationPageComponent } from './Features/YDot/Donations and Payments/payment-verification-page/payment-verification-page';
 import { PublicDonationInitiationComponent } from './Features/YDot/Donations and Payments/public-donation-initiation/public-donation-initiation';
 import { PaymentSupportAndSafeRetryComponent } from './Features/YDot/Donations and Payments/payment-support-and-safe-retry/payment-support-and-safe-retry';
-import { ReceiptCorrectionAndReissueComponent } from './Features/YDot/Donations and Payments/receipt-correction-and-reissue/receipt-correction-and-reissue';
 import { ReceiptRegisterComponent } from './Features/YDot/Donations and Payments/receipt-register/receipt-register';
-import { DonationRegisterComponent } from './Features/YDot/Donations and Payments/donation-register/donation-register';
-import { GatewayConfigurationComponent } from './Features/YDot/Donations and Payments/gateway-configuration/gateway-configuration';
-import { RefundAndChargebackCaseComponent } from './Features/YDot/Donations and Payments/refund-and-chargeback-case/refund-and-chargeback-case';
+import { ReceiptCorrectionComponent } from './Features/YDot/Donations and Payments/receipt-correction/receipt-correction';
+import { PaymentResultComponent } from './Features/YDot/Donations and Payments/payment-result/payment-result';
 import { UnifiedInboxComponent } from './Features/YDot/Communications/unified-inbox/unified-inbox';
 import { CommunicationExceptionQueueComponent } from './Features/YDot/Communications/communication-exception-queue/communication-exception-queue';
 import { ComplaintCaseComponent } from './Features/YDot/Communications/complaint-case/complaint-case';
@@ -106,12 +102,10 @@ import { OrganisationDetailComponent } from './Features/YDot/Organisation/organi
 import { OrganisationSetupWizardComponent } from './Features/YDot/Organisation/organisation-setup-wizard/organisation-setup-wizard';
 import { RegistrationVerificationComponent } from './Features/YDot/Organisation/registration-verification/registration-verification';
 import { CommunicationTimelineComponent } from './Features/YDot/Donors and Leads/communication-timeline/communication-timeline';
-import { DonationHistoryComponent } from './Features/YDot/Donors and Leads/donation-history/donation-history';
 import { DonorListComponent } from './Features/YDot/Donors and Leads/donor-list/donor-list';
 import { FollowUpExecutionComponent } from './Features/YDot/Donors and Leads/follow-up-execution/follow-up-execution';
 import { FollowUpQueueComponent } from './Features/YDot/Donors and Leads/follow-up-queue/follow-up-queue';
 import { MyLeadsComponent } from './Features/YDot/Donors and Leads/my-leads/my-leads';
-import { GlobalSearchComponent as DonorGlobalSearchComponent } from './Features/YDot/Donors and Leads/global-search/global-search';
 
 
 
@@ -307,8 +301,16 @@ export const routes: Routes = [
             { path: 'fundraising/relationships/communication-timeline', component: CommunicationTimelineComponent, canActivate: [requirePermission('don.donor-360.view')] },
             { path: 'fundraising/relationships/follow-up-queue', component: FollowUpQueueComponent, canActivate: [requirePermission('don.follow-up-planner.view')] },
             { path: 'fundraising/relationships/follow-up-execution', component: FollowUpExecutionComponent, canActivate: [requirePermission('don.follow-up-planner.view')] },
-            { path: 'global-search', component: DonorGlobalSearchComponent, canActivate: [requirePermission('don.donors.view')] },
-            { path: 'fundraising/relationships/donation-history', component: DonationHistoryComponent, canActivate: [requirePermission('don.donor-360.view')] },
+            // THE DONORS-AND-LEADS GLOBAL SEARCH IS REMOVED. It appears nowhere in the
+            // workflow document - not in its menu list, its screen walkthrough, or its
+            // Action-to-Destination matrix - and it was built entirely on the in-memory
+            // WorkflowStateService, searching leads, follow-ups and communications that only
+            // existed in the browser. The Workspace global search at /workspace/global-search
+            // is unaffected.
+            // DONATION HISTORY IS REMOVED. It rendered a refund/chargeback case list from an
+            // empty in-memory signal - so it was always blank - and neither refunds nor
+            // chargebacks appear in the workflow document's flow. A donor's giving history is
+            // on Donor 360, which the document does describe.
             { path: 'fundraising/relationships/donor-list', component: DonorListComponent, canActivate: [requirePermission('don.donors.view')] },
 
       // =========================================================================
@@ -437,77 +439,70 @@ export const routes: Routes = [
 
       // ===== Donations and Payments pages =====
       //
+      // FIVE SCREENS, AND THE DOCUMENT NAMES ALL FIVE. The YDot Donation Flow guide describes the
+      // whole module as: Public Donation Initiation (the entry form), Payment Queue (Fail and
+      // Pending only), Support & Retry (failed retries), Receipt Correction and Receipt Register -
+      // which is also, in that order, the menu its screenshots show under Donations & Payments.
+      // Donation-intent detail, the donation register, gateway configuration and the
+      // refund/chargeback case screen were all removed: none appears in the document flow, and
+      // each one carried its own mock JSON.
+      //
+      // RECEIPT CORRECTION WAS REMOVED WITH THEM AND SHOULD NOT HAVE BEEN. It is the fourth item
+      // in every one of the document's sidebar screenshots, it is section 7 of the guide - the
+      // gap between "Step 5 - Payment Receipt & Email" and the Quick Reference - and the
+      // document's own subtitle names it: "donor form -> payment -> receipt -> correction".
+      //
       // EVERY ONE OF THESE IS GUARDED except the public donation form, and the exception is the
       // point: a donor with a QR code has no account and no permissions. Requiring one would mean
       // asking somebody to register before they may give money. The API treats that route as
       // anonymous for the same reason, and resolves the organisation from the unguessable
       // reference the donor arrived with rather than from anything they can choose.
-      {
-        path: 'donations/donation-intent-detail',
-        component: DonationIntentDetailComponent,
-        canActivate: [requirePermission('pay.intents.view')],
-      },
-      {
-        path: 'donations/donation-intent-detail/:reference',
-        component: DonationIntentDetailComponent,
-        canActivate: [requirePermission('pay.intents.view')],
-      },
+
+      // THE ADMIN PANEL'S VIEW OF THE DONOR FORM - Fig 2 of the document, "for reference and
+      // support". This one is INSIDE /app and therefore behind authGuard, which is correct: it
+      // is the staff copy.
+      //
+      // THE DONOR'S COPY IS NOT HERE. It cannot be: every child of /app carries authGuard, so
+      // this route was never anonymous however the comment beside it read - a stranger with a QR
+      // code was redirected to /auth/sign-in before the component was ever constructed, which is
+      // the one outcome the whole public-donation flow exists to avoid. The genuinely anonymous
+      // route is declared at the top level, below, outside this children array.
+      { path: 'donations/public-donation-initiation', component: PublicDonationInitiationComponent },
+
+      // THE QUEUE HOLDS ONLY FAIL AND PENDING. A success never lands here - it goes straight to
+      // the receipt - so the queue is a work list, not a log.
       {
         path: 'donations/payment-event-queue',
         component: PaymentEventQueueComponent,
         canActivate: [requirePermission('pay.payments.view-events')],
       },
-      {
-        path: 'donations/payment-verification',
-        component: PaymentVerificationPageComponent,
-        canActivate: [requirePermission('pay.payments.verify')],
-      },
 
-      // ANONYMOUS ON PURPOSE. See the note above.
-      { path: 'donations/public-donation-initiation', component: PublicDonationInitiationComponent },
-
+      // WHERE A FAILED RETRY GOES. Safe retry is the permission because retrying an attempt whose
+      // outcome is unknown is what can charge a donor twice.
       {
         path: 'donations/payment-support-and-safe-retry',
         component: PaymentSupportAndSafeRetryComponent,
         canActivate: [requirePermission('pay.payments.safe-retry')],
       },
 
-      // Correction needs the CORRECT permission, not merely the view one: a correction issues a
-      // new tax document superseding one a donor may already have claimed on.
+      // CORRECTING AN ISSUED RECEIPT - a new version, never an edit of the original, because a
+      // donor who claimed tax relief on version 1 must still be able to produce version 1.
+      //
+      // THE GUARD IS THE VIEW PERMISSION, NOT THE CORRECT ONE, and the difference matters. The
+      // screen lists receipts before it changes any of them, and the write buttons are drawn
+      // from the server's own `permittedActions` per record - so somebody holding only
+      // pay.receipts.view reaches a working read-only queue instead of access-denied, and
+      // somebody without even that is stopped here.
       {
-        path: 'donations/receipt-correction-and-reissue',
-        component: ReceiptCorrectionAndReissueComponent,
-        canActivate: [requirePermission('pay.receipts.correct')],
+        path: 'donations/receipt-correction',
+        component: ReceiptCorrectionComponent,
+        canActivate: [requirePermission('pay.receipts.view', 'pay.receipts.correct')],
       },
+
       {
         path: 'donations/receipt-register',
         component: ReceiptRegisterComponent,
         canActivate: [requirePermission('pay.receipts.view')],
-      },
-
-      // The register of everything actually received. The menu carried this node with no
-      // component behind it, so following it reached a blank page.
-      {
-        path: 'donations/donation-register',
-        component: DonationRegisterComponent,
-        canActivate: [requirePermission('pay.donations.view')],
-      },
-
-      // WHERE THE MONEY GOES. Guarded on view; the screen itself checks pay.gateway.manage before
-      // drawing anything that can change the configuration, so somebody supporting donors can see
-      // which gateway is live without being able to switch it.
-      {
-        path: 'donations/gateway-configuration',
-        component: GatewayConfigurationComponent,
-        canActivate: [requirePermission('pay.gateway.view')],
-      },
-
-      // Either code opens the combined register. Refunds and chargebacks are separately
-      // permissioned, and the screen shows whichever half the caller may see.
-      {
-        path: 'donations/refund-and-chargeback-case',
-        component: RefundAndChargebackCaseComponent,
-        canActivate: [requirePermission('pay.refunds.view', 'pay.chargebacks.view')],
       },
 
       // ===== Communications pages =====
@@ -606,6 +601,42 @@ export const routes: Routes = [
   // Note the query-string forms: the e-mails now send /auth/invitation?token=… and
   // /auth/reset-password?token=…, which keeps the token out of the path segment. The older
   // /:token routes are kept so links already in somebody's inbox still open.
+  // =========================================================================
+  // THE PUBLIC DONATION FORM - genuinely anonymous, and the only route in this file that is.
+  //
+  // WHY IT IS DECLARED HERE RATHER THAN UNDER /app. A donor reaching this page has scanned a QR
+  // code on a poster or followed a link in an e-mail. They have no account, no token and no
+  // session, and requiring one would mean asking somebody to register before they are allowed to
+  // give money. Every child of /app carries authGuard, so a route placed there is authenticated
+  // no matter what the comment beside it says.
+  //
+  // NO LAYOUT COMPONENT, ON PURPOSE. ApplayoutComponent draws the sidebar, which loads the
+  // navigation menu from IAM - an authenticated call that would 401 for the very person this
+  // route exists to serve. The component renders its own donor-facing shell instead.
+  //
+  // WHAT PROTECTS IT: nothing here, and nothing needs to. The API treats the matching endpoints
+  // as anonymous for the same reason, resolves the organisation from the unguessable reference
+  // the donor arrived with rather than from anything they can choose, and returns masked donor
+  // detail to everybody including the donor - because there is no session to prove who is
+  // holding the link.
+  //
+  // /donate IS THE ONE THAT GOES ON A POSTER. Short enough to encode in a low-density QR that
+  // still scans from a distance. The long path is kept as an alias so a link already printed or
+  // already in somebody's inbox still opens.
+  { path: 'donate', component: PublicDonationInitiationComponent },
+  { path: 'donations/public-donation-initiation', component: PublicDonationInitiationComponent },
+
+  // WHERE THE DONOR COMES BACK TO after paying, and the other half of the loop above.
+  //
+  // THE PATH MATCHES ClientAppSettings.PaymentResultPath, which defaults to /give/result and is
+  // what RazorpayGateway now sends as the payment link's callback_url. That setting existed and
+  // was read by nothing; this route did not exist at all, so the callback was never sent and a
+  // donor who paid was left sitting on Razorpay's own page.
+  //
+  // ANONYMOUS, NECESSARILY. The donor still has no account - the invitation to create one is
+  // only e-mailed once this page's verification confirms the money arrived.
+  { path: 'give/result', component: PaymentResultComponent },
+
   {
     path: '',
     component: MainlayoutComponent,

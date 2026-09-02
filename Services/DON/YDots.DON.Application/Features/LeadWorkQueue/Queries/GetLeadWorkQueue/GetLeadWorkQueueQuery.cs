@@ -53,11 +53,12 @@ public sealed class LeadWorkQueueQueryHandler(
             lead.SlaState = LeadMappingConfig.CalculateSlaState(lead.NextActionDueUtc, now, _settings);
         }
 
-        var rows = page.Items.Select(lead => lead.ToListItemResponse(canSeeContact)).ToList();
+        var rows = page.Items.Select(lead => lead.ToListItemResponse(canSeeContact, now)).ToList();
 
         var campaigns = await campaignRepository.GetActiveAsync(currentUser.OrganisationId, cancellationToken);
         var owners = await leadRepository.GetKnownOwnersAsync(currentUser.OrganisationId, cancellationToken);
         var counts = await leadRepository.GetStatusCountsAsync(currentUser.OrganisationId, currentUser.Scope, cancellationToken);
+        var summary = await leadRepository.GetQueueSummaryAsync(currentUser.OrganisationId, currentUser.Scope, cancellationToken);
 
         var response = new LeadWorkQueueResponse(
             ScreenIds.LeadWorkQueue,
@@ -70,6 +71,9 @@ public sealed class LeadWorkQueueQueryHandler(
             SupportedLanguages.All,
             ToLookup<ContactOutcome>(),
             counts,
+            summary,
+            ToLookup<LeadTemperature>(),
+            ToLookup<DonationPotential>(),
             BuildPermittedActions(),
             DescribeFilter(filter),
             DescribeScope(),
@@ -103,9 +107,24 @@ public sealed class LeadWorkQueueQueryHandler(
             currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consents));
     }
 
+    /// <summary>
+    /// The verbs the queue screen may draw.
+    ///
+    /// "CREATE" IS A LEAD-CAPTURE RIGHT, NOT A QUEUE ONE, and it is listed here because the
+    /// Create Lead button lives on this screen while the form it opens belongs to SCR-DON-002.
+    /// Without it the screen had no honest way to ask the question and inferred the answer from
+    /// <c>Accept</c>/<c>Contact</c> - two queue verbs that say nothing about whether the caller
+    /// can save a lead, so a reader who could pick work up was offered a form the API would
+    /// refuse.
+    /// </summary>
     private IReadOnlyList<string> BuildPermittedActions()
     {
         var actions = new List<string> { "Filter", "Open" };
+
+        if (currentUser.HasPermission(PermissionCodes.LeadCaptureSave))
+        {
+            actions.Add("Create");
+        }
 
         if (currentUser.HasPermission(PermissionCodes.LeadWorkQueueAccept))
         {

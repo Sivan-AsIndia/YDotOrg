@@ -14,7 +14,10 @@ export type LifecycleState =
   | 'closed'
   | 'reopened';
 
-export type EffectiveRole = 'donor-care' | 'supervisor' | 'unauthorised';
+// 'donor-care' and 'supervisor' were job titles IAM no longer issues. A complaint is worked by
+// the maker and decided by the checker, so they map to INITIATOR and APPROVER; 'unauthorised'
+// stays because it previews the no-access state rather than naming a role.
+export type EffectiveRole = 'tenant-admin' | 'initiator' | 'approver' | 'unauthorised';
 
 export type PreviewScenario =
   | 'ready'
@@ -184,7 +187,7 @@ export class ComplaintCaseComponent {
 
   readonly previewOpen = signal(false);
   readonly scenario = signal<PreviewScenario>('ready');
-  readonly role = signal<EffectiveRole>('supervisor');
+  readonly role = signal<EffectiveRole>('approver');
   readonly restrictConfidential = signal(false);
 
   readonly scenarioOptions: { value: PreviewScenario; label: string }[] = [
@@ -200,8 +203,9 @@ export class ComplaintCaseComponent {
   ];
 
   readonly roleOptions: { value: EffectiveRole; label: string }[] = [
-    { value: 'donor-care', label: 'Donor Care' },
-    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'tenant-admin', label: 'Tenant admin' },
+    { value: 'initiator', label: 'Initiator' },
+    { value: 'approver', label: 'Approver' },
     { value: 'unauthorised', label: 'Unauthorised viewer' },
   ];
 
@@ -262,7 +266,7 @@ export class ComplaintCaseComponent {
   readonly can = computed(() => {
     const role = this.role();
     const state = this.caseData().state;
-    const eligibleRole = role === 'donor-care' || role === 'supervisor';
+    const eligibleRole = role === 'tenant-admin' || role === 'initiator' || role === 'approver';
     return {
       acknowledge: eligibleRole && (state === 'new' || state === 'reopened'),
       assign: eligibleRole && (state === 'new' || state === 'acknowledged'),
@@ -542,7 +546,7 @@ export class ComplaintCaseComponent {
           state: nextState,
           label: this.pastTenseFor[action],
           timestamp: 'Just now',
-          actor: this.role() === 'supervisor' ? 'You (Supervisor)' : 'You (Donor Care)',
+          actor: this.role() === 'approver' ? 'You (Approver)' : this.role() === 'tenant-admin' ? 'You (Tenant admin)' : 'You (Initiator)',
         },
       ],
       activity: [

@@ -17,10 +17,16 @@ namespace YDots.CAM.Application.Features.Campaigns.Commands.CampaignLifecycle;
 /// <summary>Draft to Submitted.</summary>
 public sealed record SubmitCampaignCommand(Guid CampaignId, CampaignLifecycleRequest Request);
 
-/// <summary>Submitted to Approved. Refused for the person who created or submitted it.</summary>
+/// <summary>
+/// Submitted to Scheduled, or to Approved where the start date has already passed. This is the
+/// readiness screen's "Approve launch". Refused for the person who created or submitted it.
+/// </summary>
 public sealed record ApproveCampaignCommand(Guid CampaignId, CampaignLifecycleRequest Request);
 
-/// <summary>Approved or Scheduled to Active. Refused while a required readiness check is outstanding.</summary>
+/// <summary>
+/// Approved or Scheduled to Active. An APPROVED campaign is refused while a required readiness
+/// check is outstanding; a SCHEDULED one is not, because its start date will take it live anyway.
+/// </summary>
 public sealed record ActivateCampaignCommand(Guid CampaignId, CampaignLifecycleRequest Request);
 
 /// <summary>Active to Paused.</summary>
@@ -46,10 +52,11 @@ public sealed record ApproveCloseCampaignCommand(Guid CampaignId, CampaignLifecy
 ///
 /// THE TWO RULES THAT MAKE THIS MORE THAN BOOKKEEPING:
 ///
-/// SEGREGATION OF DUTIES. Section 5.2 of the module brief: a Campaign Manager may not approve a
-/// campaign they personally created or submitted, and the person who raises a close request may
-/// not approve it. Both are enforced here rather than in the client, and both return a distinct
-/// error code so the screen can say WHY rather than just "forbidden".
+/// SEGREGATION OF DUTIES. Section 5.2 of the module brief: nobody may approve a campaign they
+/// personally created or submitted, and the person who raises a close request may not approve
+/// it. Both are enforced here rather than in the client, and both return a distinct error code
+/// so the screen can say WHY rather than just "forbidden". Neither rule looks at the caller's
+/// role - TENANT_ADMIN is refused on the same terms as anybody else.
 ///
 /// READINESS. A campaign cannot go Active while a required readiness check has not passed. The
 /// refusal names the outstanding checks as field errors, so the operator is told what to go and
@@ -71,12 +78,15 @@ public sealed class CampaignLifecycleCommandHandler(
     // =====================================================================================
 
     /// <summary>
-    /// Draft to Submitted.
+    /// Draft to Submitted - the readiness screen's "Request approval".
     ///
-    /// THE TIERED APPROVAL RULE LIVES HERE. Section 5.1: when a Super Admin submits, the
-    /// campaign can be approved and scheduled in the same step. It is a SETTING rather than a
-    /// hard-coded branch, because an Organisation that wants a second pair of eyes on
-    /// everything - root user included - is making a legitimate choice.
+    /// EVERY SUBMISSION WAITS FOR A SECOND PERSON, a platform administrator's included. Section
+    /// 5.1 once allowed a Super Admin's submission to be approved and scheduled in the same step,
+    /// behind a setting; both the branch and the setting are gone, for the reason set out in the
+    /// body below.
+    ///
+    /// WHO IT GOES TO: the Organisation's approval authority - TENANT_ADMIN, and anybody holding
+    /// APPROVER. Those two hold <c>cam.campaigns.approve</c>; INITIATOR does not, by definition.
     /// </summary>
     public async Task<Result<OutcomeResponse>> HandleAsync(
         SubmitCampaignCommand command, CancellationToken cancellationToken)
@@ -105,8 +115,15 @@ public sealed class CampaignLifecycleCommandHandler(
         campaign.SubmittedByUserId = currentUser.UserId;
         campaign.SubmittedAtUtc = now;
 
+        // RECORDED AS Submit, NOT AS Activate. It used to be written as Activate - the closest
+        // value the enum then had - so the history tab said a campaign had been activated when
+        // all that had happened was that somebody sent it for approval.
+        //
+        // COMPLETED, not Pending. The row records that the submission HAPPENED; whether a decision
+        // is still outstanding is the campaign's own Status, and duplicating it here would leave a
+        // Pending row that nothing ever closes.
         await RecordLifecycleAsync(
-            campaign, CampaignLifecycleActionType.Activate, CampaignLifecycleActionStatus.Completed,
+            campaign, CampaignLifecycleActionType.Submit, CampaignLifecycleActionStatus.Completed,
             command.Request, now, cancellationToken);
 
         await audit.WriteAsync(
@@ -130,7 +147,12 @@ public sealed class CampaignLifecycleCommandHandler(
         // themselves, exactly like everybody else. The CampaignSettings flag that switched this on
         // has been removed rather than defaulted to false, because a setting that can reinstate the
         // hole is itself the hole.
-        var message = "Campaign submitted for approval.";
+        //
+        // THE MESSAGE NAMES WHO IT WENT TO. A submission is routed at the Organisation's approval
+        // authority - TENANT_ADMIN, and anybody holding APPROVER - and the person who pressed
+        // Submit has no other way of knowing whose desk it is now on.
+        var message = "Campaign submitted. It is now with the organisation administrator "
+                      + "and the approvers for a launch decision.";
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -182,32 +204,35 @@ public sealed class CampaignLifecycleCommandHandler(
 
         // ---- Approved, or Scheduled ------------------------------------------------------------
         //
-        // SCHEDULED WAS UNREACHABLE. The state existed on the enum, the mapper described it
-        // ("Scheduled - goes live on its start date"), the read service counted it and Activate
-        // accepted it - but no handler anywhere ever assigned it, so no campaign was ever in it.
-        // The visible consequence was on the campaign detail: an Approved campaign offered a
-        // "Schedule" button which routed back to this very endpoint, and this endpoint refuses
-        // anything that is not Submitted. Pressing it answered
-        // 409 "Only a Submitted campaign can be approved. This one is Approved."
+        // APPROVING A CAMPAIGN SCHEDULES IT. That is what the module brief means by "Approve
+        // launch": the decision has been taken, and what remains is the start date arriving. The
+        // campaign register shows Scheduled from that moment, and the sweep in
+        // CampaignActivationService takes it live on the day.
         //
-        // A campaign set to activate AUTOMATICALLY is the one that has somewhere to wait: it goes
-        // live on its start date without anybody pressing anything, so between approval and that
-        // date it is Scheduled rather than merely Approved. One set to activate MANUALLY has
-        // nothing to wait for - somebody activates it - so it stays Approved.
+        // THIS NO LONGER TURNS ON LifecycleActivation, and that condition was the bug. Scheduled
+        // was reachable only for a campaign set to activate AUTOMATICALLY, so a manually-activated
+        // campaign went to Approved - where the detail screen offered a "Schedule" button that
+        // routed back to this very endpoint, which refuses anything that is not Submitted. Pressing
+        // it answered 409 "Only a Submitted campaign can be approved. This one is Approved." The
+        // activation MODE decides who moves it from Scheduled to Active - the sweep, or a person
+        // pressing Activate - and it has nothing to say about where approval leaves it.
         //
-        // ONLY WHILE THE START DATE IS STILL AHEAD. An auto-activate campaign approved on or
-        // after its own start date has no future trigger to wait for, so parking it in Scheduled
-        // would be parking it somewhere nothing will ever move it out of. It stays Approved, and
-        // Activate is offered.
-        var target =
-            campaign.LifecycleActivation == LifecycleActivation.Auto
-            && campaign.StartDate > DateOnly.FromDateTime(now.UtcDateTime)
-                ? CampaignStatus.Scheduled
-                : CampaignStatus.Approved;
+        // ONLY WHILE THE START DATE IS STILL AHEAD. A campaign approved on or after its own start
+        // date has no future trigger to wait for, so parking it in Scheduled would be parking it
+        // somewhere nothing will ever move it out of. It stays Approved, and Activate is offered.
+        var target = campaign.StartDate > DateOnly.FromDateTime(now.UtcDateTime)
+            ? CampaignStatus.Scheduled
+            : CampaignStatus.Approved;
 
         campaign.Status = target;
         campaign.ApprovedByUserId = currentUser.UserId;
         campaign.ApprovedAtUtc = now;
+
+        // The decision gets its own lifecycle row, so the history tab shows who approved it
+        // beside who submitted it rather than showing only the audit line.
+        await RecordLifecycleAsync(
+            campaign, CampaignLifecycleActionType.Approve, CampaignLifecycleActionStatus.Completed,
+            command.Request, now, cancellationToken, approvedByUserId: currentUser.UserId);
 
         await audit.WriteAsync(
             AuditActionCodes.CampaignApproved, nameof(Campaign), campaign.Id,
@@ -218,8 +243,8 @@ public sealed class CampaignLifecycleCommandHandler(
         return await BuildOutcomeAsync(
             campaign,
             target == CampaignStatus.Scheduled
-                ? "Campaign approved. It is scheduled to go live on its start date."
-                : "Campaign approved.",
+                ? $"Campaign approved. It is scheduled to go live on {campaign.StartDate:yyyy-MM-dd}."
+                : "Campaign approved. It can be activated now.",
             cancellationToken);
     }
 
@@ -259,11 +284,23 @@ public sealed class CampaignLifecycleCommandHandler(
                 $"This campaign ended on {campaign.EndDate:yyyy-MM-dd}. Extend its dates before activating it."));
         }
 
-        // THE READINESS GATE. The refusal names the outstanding checks so the operator is told
-        // what to go and fix, rather than simply being told no.
+        // THE READINESS GATE, AND THE ONE CASE IT DOES NOT APPLY TO.
+        //
+        // A SCHEDULED CAMPAIGN IS EXEMPT. The module brief is explicit: a campaign whose readiness
+        // check has failed still starts on its start date. The sweep in CampaignActivationService
+        // honours that, so refusing the same transition when a person presses Activate would mean
+        // the button answered 409 for a launch that was going to happen by itself on Tuesday - the
+        // gate would delay the launch by a few days and stop nothing.
+        //
+        // AN APPROVED CAMPAIGN IS NOT EXEMPT. It has no automatic trigger behind it, so here the
+        // checklist is the only thing standing between an unverified campaign and a live one, and
+        // the refusal NAMES the outstanding checks so the operator is told what to go and fix.
         var outstanding = await campaigns.GetOutstandingRequiredChecksAsync(campaign.Id, cancellationToken);
 
-        if (outstanding.Count > 0 && !_settings.AllowLaunchWithOutstandingChecks)
+        var readinessApplies =
+            campaign.Status == CampaignStatus.Approved && !_settings.AllowLaunchWithOutstandingChecks;
+
+        if (outstanding.Count > 0 && readinessApplies)
         {
             return Result.Failure<OutcomeResponse>(Error.ReadinessIncomplete(
                 $"{outstanding.Count} required readiness check(s) have not passed.",
@@ -545,7 +582,8 @@ public sealed class CampaignLifecycleCommandHandler(
         CampaignLifecycleActionStatus actionStatus,
         CampaignLifecycleRequest request,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? approvedByUserId = null)
     {
         await campaigns.AddLifecycleActionAsync(
             new CampaignLifecycleAction
@@ -558,7 +596,9 @@ public sealed class CampaignLifecycleCommandHandler(
                 DetailedReason = request.DetailedReason?.Trim(),
                 CommunicationImpact = request.CommunicationImpact?.Trim(),
                 ClosureSummary = request.ClosureSummary?.Trim(),
-                RequestedByUserId = currentUser.UserId
+                RequestedByUserId = currentUser.UserId,
+                ApprovedByUserId = approvedByUserId,
+                ApprovedAtUtc = approvedByUserId is null ? null : now
             },
             cancellationToken);
     }

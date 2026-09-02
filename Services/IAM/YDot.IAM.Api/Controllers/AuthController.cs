@@ -76,7 +76,21 @@ public sealed class AuthController(
             TrustedDeviceToken = request.TrustedDeviceToken ?? cookies.ReadTrustedDevice(Request)
         };
 
+        // Opened BEFORE the handler runs, in this frame, so the slot the handler writes into is
+        // one this method still holds a reference to. See TrustedDeviceTokenAccessor.
+        TrustedDeviceTokenAccessor.Begin();
+
         var result = await signIn.HandleAsync(new SignInCommand(withDeviceToken), cancellationToken);
+
+        // "Remember this device" on the sign-in form ends here: the row is written by the
+        // handler and the plaintext half of it becomes an HttpOnly cookie, which is the only
+        // thing that makes the next sign-in recognise this browser.
+        var deviceToken = TrustedDeviceTokenAccessor.Take();
+
+        if (result.IsSuccess && !string.IsNullOrWhiteSpace(deviceToken))
+        {
+            cookies.WriteTrustedDevice(Response, deviceToken, _security.TrustedDeviceDays);
+        }
 
         return IssueTokens(result);
     }
@@ -91,6 +105,8 @@ public sealed class AuthController(
     public async Task<IActionResult> VerifyMfaAsync(
         [FromBody] VerifyMfaRequest request, CancellationToken cancellationToken)
     {
+        TrustedDeviceTokenAccessor.Begin();
+
         var result = await mfaVerification.HandleAsync(new VerifyMfaCommand(request), cancellationToken);
 
         // A device the person asked to remember gets its token written as a second HttpOnly

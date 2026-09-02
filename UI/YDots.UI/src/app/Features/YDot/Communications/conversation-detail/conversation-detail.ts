@@ -6,7 +6,10 @@ import { FormsModule } from '@angular/forms';
 /* Types                                                                   */
 /* ---------------------------------------------------------------------- */
 
-type UserRole = 'agent' | 'supervisor' | 'unauthorized';
+// 'agent' and 'supervisor' were job titles IAM no longer issues. Working a conversation is the
+// maker's job and overriding a restriction is the checker's, so they map to INITIATOR and
+// APPROVER; 'unauthorized' stays because it previews the no-access state, not a role.
+type UserRole = 'tenant-admin' | 'initiator' | 'approver' | 'unauthorized';
 
 type RecordState =
   | 'new'
@@ -91,13 +94,14 @@ export class ConversationDetailComponent {
 
   /* ---------- Access simulator (role / record state / scenario) ------- */
 
-  role: UserRole = 'agent';
+  role: UserRole = 'initiator';
   recordState: RecordState = 'in_progress';
   scenario: ScenarioKey = 'default';
 
   readonly roleOptions: { id: UserRole; label: string }[] = [
-    { id: 'agent', label: 'Assigned agent' },
-    { id: 'supervisor', label: 'Supervisor' },
+    { id: 'tenant-admin', label: 'Tenant admin' },
+    { id: 'initiator', label: 'Initiator' },
+    { id: 'approver', label: 'Approver' },
     { id: 'unauthorized', label: 'No view permission' },
   ];
 
@@ -245,7 +249,7 @@ export class ConversationDetailComponent {
   }
 
   private get isAgentOrSupervisor(): boolean {
-    return this.role === 'agent' || this.role === 'supervisor';
+    return this.role === 'tenant-admin' || this.role === 'initiator' || this.role === 'approver';
   }
 
   private get isOpenLifecycleState(): boolean {
@@ -253,25 +257,25 @@ export class ConversationDetailComponent {
   }
 
   get canSend(): { allowed: boolean; reason?: string } {
-    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires assigned agent or supervisor role.' };
+    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires an Initiator, Approver or Tenant admin role.' };
     if (!this.isOpenLifecycleState) return { allowed: false, reason: `Not available in the ${this.stateLabel(this.recordState)} state.` };
     return { allowed: true };
   }
 
   get canCallLog(): { allowed: boolean; reason?: string } {
-    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires assigned agent or supervisor role.' };
+    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires an Initiator, Approver or Tenant admin role.' };
     if (!this.isOpenLifecycleState) return { allowed: false, reason: `Not available in the ${this.stateLabel(this.recordState)} state.` };
     return { allowed: true };
   }
 
   get canAddNote(): { allowed: boolean; reason?: string } {
-    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires assigned agent or supervisor role.' };
+    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires an Initiator, Approver or Tenant admin role.' };
     if (!this.isOpenLifecycleState) return { allowed: false, reason: `Not available in the ${this.stateLabel(this.recordState)} state.` };
     return { allowed: true };
   }
 
   get canCreateTask(): { allowed: boolean; reason?: string } {
-    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires assigned agent or supervisor role.' };
+    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires an Initiator, Approver or Tenant admin role.' };
     if (!['draft', 'new', 'assigned', 'in_progress', 'waiting', 'reopened'].includes(this.recordState)) {
       return { allowed: false, reason: `Not available in the ${this.stateLabel(this.recordState)} state.` };
     }
@@ -279,7 +283,7 @@ export class ConversationDetailComponent {
   }
 
   get canClose(): { allowed: boolean; reason?: string } {
-    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires assigned agent or supervisor role.' };
+    if (!this.isAgentOrSupervisor) return { allowed: false, reason: 'Requires an Initiator, Approver or Tenant admin role.' };
     if (this.recordState === 'closed') return { allowed: false, reason: 'Conversation is already closed.' };
     if (this.recordState === 'restricted') return { allowed: false, reason: 'Restricted records cannot be closed from this view.' };
     return { allowed: true };
@@ -294,7 +298,7 @@ export class ConversationDetailComponent {
 
   get participantMasked(): boolean {
     // Restricted field: masked unless the effective role/permission allows unmasking.
-    return this.participant.restricted && this.role !== 'supervisor';
+    return this.participant.restricted && this.role !== 'approver' && this.role !== 'tenant-admin';
   }
 
   get attachmentsVisible(): boolean {

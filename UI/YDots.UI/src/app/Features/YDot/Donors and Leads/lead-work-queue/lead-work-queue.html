@@ -6,7 +6,7 @@
       <header class="lq-header">
         <div class="lq-header-main">
           <!-- <nav class="lq-breadcrumb" aria-label="Breadcrumb">
-            @for (crumb of screen.breadcrumb; track crumb; let last = $last) {
+            @for (crumb of screen().breadcrumb; track crumb; let last = $last) {
               <span class="lq-crumb">{{ crumb }}</span>
               @if (!last) {
                 <span class="lq-crumb-sep" aria-hidden="true">></span>
@@ -15,12 +15,13 @@
           </nav> -->
           <div class="lq-title-row">
             <div>
-              <h1 class="lq-title">{{ screen.title }}</h1>
-              <p class="lq-subtitle">{{ screen.purpose }}</p>
+              <h1 class="lq-title" style="
+        font-size: 40px !important;font-family:Georgia !important ;">{{ screen().title }}</h1>
+              <p class="lq-subtitle">{{ screen().purpose }}</p>
               <!-- <p class="lq-meta">
-                <span>{{ activeScope() || '—' }}</span>
+                <span>{{ screen().scope }}</span>
                 <span class="lq-meta-sep">·</span>
-                <span>Data updated {{ lastRefresh() || '—' }}</span>
+                <span>Data updated {{ screen().lastRefresh }}</span>
               </p> -->
             </div>
             <div class="lq-header-actions">
@@ -68,7 +69,7 @@
       <!-- SAVED VIEWS + SEARCH + FILTERS -->
       <section class="lq-toolbar" aria-label="Views and filters">
         <div class="lq-saved-views">
-          @for (view of savedViews; track view) {
+          @for (view of savedViews(); track view) {
             <button
               type="button"
               class="lq-view-chip"
@@ -109,7 +110,7 @@
                 <label for="lq-stage">Stage</label>
                 <select id="lq-stage" class="lq-select" [ngModel]="stageFilter()" (ngModelChange)="stageFilter.set($event)">
                   <option value="">All stages</option>
-                  @for (s of filterOptions.stages; track s) {
+                  @for (s of filterOptions().stages; track s) {
                     <option [value]="s">{{ s }}</option>
                   }
                 </select>
@@ -118,7 +119,7 @@
                 <label for="lq-temp">Temperature</label>
                 <select id="lq-temp" class="lq-select" [ngModel]="temperatureFilter()" (ngModelChange)="temperatureFilter.set($event)">
                   <option value="">All</option>
-                  @for (t of filterOptions.temperatures; track t) {
+                  @for (t of filterOptions().temperatures; track t) {
                     <option [value]="t">{{ t }}</option>
                   }
                 </select>
@@ -127,7 +128,7 @@
                 <label for="lq-pot">Donation Potential</label>
                 <select id="lq-pot" class="lq-select" [ngModel]="potentialFilter()" (ngModelChange)="potentialFilter.set($event)">
                   <option value="">All</option>
-                  @for (p of filterOptions.potentials; track p) {
+                  @for (p of filterOptions().potentials; track p) {
                     <option [value]="p">{{ p }}</option>
                   }
                 </select>
@@ -136,7 +137,7 @@
                 <label for="lq-src">Lead Source</label>
                 <select id="lq-src" class="lq-select" [ngModel]="sourceFilter()" (ngModelChange)="sourceFilter.set($event)">
                   <option value="">All sources</option>
-                  @for (s of filterOptions.sources; track s) {
+                  @for (s of filterOptions().sources; track s) {
                     <option [value]="s">{{ s }}</option>
                   }
                 </select>
@@ -172,7 +173,7 @@
 
       <!-- PIPELINE SUMMARY -->
       <section class="lq-pipeline" aria-label="Lead pipeline">
-        @for (stage of pipeline; track stage.key) {
+        @for (stage of pipeline(); track stage.key) {
           <button
             type="button"
             class="lq-pipe-item"
@@ -191,27 +192,13 @@
           <span class="lq-bulk-count">{{ selectionCount() }} selected</span>
           <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkAssign()">Assign Selected</button>
           <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkExport()">Export Selected</button>
-          <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkUpdatePotential()">Update Donation Potential</button>
-          <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkUpdateTemperature()">Update Temperature</button>
         </div>
       }
 
       <!-- MAIN GRID + PREVIEW -->
       <div class="lq-content" [class.lq-content-preview]="selectedLead()">
         <div class="lq-grid-wrap">
-          <!-- LOAD FAILED — shown ahead of "No leads found", because the two used to be the
-               same thing on screen. The work queue reads from the API and a failed read leaves
-               the list empty, so "Try adjusting filters" was the advice given to somebody whose
-               request had actually failed. -->
-          @if (loadError()) {
-            <div class="lq-empty" role="alert">
-              <p class="lq-empty-title">The lead work queue could not be loaded.</p>
-              <p class="lq-empty-text">{{ loadError() }}</p>
-              <div class="lq-empty-actions">
-                <button type="button" class="btn btn-primary btn-sm" (click)="refresh()">Try again</button>
-              </div>
-            </div>
-          } @else if (!hasResults()) {
+          @if (!hasResults()) {
             <div class="lq-empty" role="status">
               <p class="lq-empty-title">No leads found.</p>
               <p class="lq-empty-text">Try adjusting filters or create a new lead.</p>
@@ -265,7 +252,7 @@
                         />
                       </td>
                       <!-- <td>
-                        <button type="button" class="lq-link" (click)="previewLead(lead)">{{ lead.id }}</button>
+                        <button type="button" class="lq-link" (click)="previewLead(lead)">{{ lead.reference }}</button>
                       </td> -->
                       <td>
                         <button type="button" class="lq-link lq-name-btn" (click)="previewLead(lead)">
@@ -295,7 +282,7 @@
                       </td> -->
                       <td class="lq-actions-cell">
                         <div class="lq-row-actions">
-                          @if (canAssign(lead)) {
+                          @if (lead.owner === 'Unassigned' && permissions().assign) {
                             <button type="button" class="lq-icon-btn" title="Assign" aria-label="Assign" (click)="onAssign(lead)">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -315,13 +302,6 @@
                             <button type="button" class="lq-icon-btn" title="Communicate" aria-label="Communicate" (click)="onCommunicate(lead)">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-                              </svg>
-                            </button>
-                          }
-                          @if (canConvert(lead)) {
-                            <button type="button" class="lq-icon-btn" title="Convert to donor" aria-label="Convert to donor" (click)="openConvert(lead)">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 6 9 17l-5-5"/>
                               </svg>
                             </button>
                           }
@@ -351,8 +331,8 @@
                   <div class="lq-dl-row">
                     <dt>Lead ID</dt>
                     <dd>
-                      {{ lead.id }}
-                      <button type="button" class="lq-copy-btn" (click)="copyValue('id', lead.id)">
+                      {{ lead.reference }}
+                      <button type="button" class="lq-copy-btn" (click)="copyValue('id', lead.reference)">
                         {{ copiedField() === 'id' ? 'Copied' : 'Copy' }}
                       </button>
                     </dd>
@@ -391,11 +371,17 @@
                     <dt>Owner</dt>
                     <dd>{{ displayValue(lead.owner) }}</dd>
                   </div>
+                  <!-- A LINK, NOT A PRINTED GUID. `convertedDonorId` is documented on the
+                       contract as being there "so the row can link straight to Donor 360" - it is
+                       the API's id and has no meaning to a reader. It was rendered as the value of
+                       a field labelled "Donor ID", which put 36 characters of hexadecimal in the
+                       lead panel. -->
                   @if (lead.converted && lead.donorId) {
                     <div class="lq-dl-row">
-                      <dt>Donor ID</dt>
+                      <dt>Donor record</dt>
                       <dd>
-                        {{ lead.donorId }}
+                        <a [routerLink]="['/app/fundraising/relationships/donor-360']"
+                           [queryParams]="{ donorId: lead.donorId }">Open Donor 360</a>
                         <span class="lq-badge lq-badge-good">Converted</span>
                       </dd>
                     </div>
@@ -419,13 +405,6 @@
                 <p class="lq-health-score" [class]="healthClass(lead.healthScore)">
                   {{ lead.healthScore }} / 100
                 </p>
-                @if (lead.healthReasons.length > 0) {
-                  <ul class="lq-health-list">
-                    @for (reason of lead.healthReasons; track reason) {
-                      <li>{{ reason }}</li>
-                    }
-                  </ul>
-                }
               </section>
 
               <!-- ENGAGEMENT -->
@@ -473,7 +452,7 @@
             </div>
 
             <div class="lq-drawer-footer">
-              @if (canAssign(lead)) {
+              @if (lead.owner === 'Unassigned' && permissions().assign) {
                 <button type="button" class="btn btn-primary btn-sm" (click)="onAssign(lead)">Assign</button>
               }
               @if (permissions().communicate) {
@@ -483,63 +462,11 @@
                 <button type="button" class="btn btn-outline-primary btn-sm" (click)="onSchedule(lead)">Schedule Follow-Up</button>
               }
               <button type="button" class="btn btn-outline-primary btn-sm" (click)="onTimeline(lead)">Open Timeline</button>
-              @if (canConvert(lead)) {
-                <button type="button" class="btn btn-primary btn-sm" (click)="openConvert(lead)">Convert to donor</button>
-              }
             </div>
           </aside>
         }
       </div>
 
-      <!-- CONVERT TO DONOR - step 5 of the guided flow.
-           A reason is required because the server requires it: the conversion is what ties the
-           donor record to the campaign that produced the lead, and the reason is what a later
-           review reads to understand why this lead became a supporter. -->
-      @if (convertTarget(); as target) {
-        <div class="lq-modal-backdrop" (click)="cancelConvert()"></div>
-        <div class="lq-modal" role="dialog" aria-modal="true" aria-labelledby="lq-convert-title">
-          <h2 id="lq-convert-title" class="lq-modal-title">Convert to donor</h2>
-          <p class="lq-modal-body">
-            {{ target.id }} &mdash; {{ target.name }} becomes a donor record. The lead keeps its
-            history, and its campaign attribution moves across so any future donation is credited
-            to {{ target.campaign || 'its campaign' }}.
-          </p>
-
-          <label class="lq-modal-label" for="lq-convert-reason">
-            Reason for conversion <span aria-hidden="true">*</span>
-          </label>
-          <textarea
-            id="lq-convert-reason"
-            class="lq-input"
-            rows="3"
-            maxlength="2000"
-            [value]="convertReason()"
-            (input)="convertReason.set($any($event.target).value)"
-            placeholder="Why this lead is ready to become a donor…"
-          ></textarea>
-          <p class="lq-modal-hint">
-            At least {{ convertReasonMin }} characters. {{ convertReason().trim().length }} entered.
-          </p>
-
-          @if (loadError()) {
-            <p class="lq-modal-error" role="alert">{{ loadError() }}</p>
-          }
-
-          <div class="lq-modal-actions">
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="cancelConvert()">
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary btn-sm"
-              [disabled]="!convertReasonValid() || convertBusy()"
-              (click)="confirmConvert()"
-            >
-              {{ convertBusy() ? 'Converting…' : 'Convert to donor' }}
-            </button>
-          </div>
-        </div>
-      }
 
     </div>
   </div>

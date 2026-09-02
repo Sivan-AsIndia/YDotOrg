@@ -19,6 +19,9 @@ public sealed record GetReceiptQuery(Guid ReceiptId);
 public sealed record ExportReceiptsQuery(ReceiptSearchFilter Filter);
 
 /// <summary>The read side of the Receipts slice.</summary>
+/// <summary>The Receipt Register - SCR-PAY-005 as the workflow document describes it.</summary>
+public sealed record GetReceiptRegisterQuery(ReceiptRegisterFilter Filter);
+
 public sealed class ReceiptQueryHandler(
     IReceiptReadService readService,
     ICsvExportService exports,
@@ -39,6 +42,22 @@ public sealed class ReceiptQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
 
         return Result.Success(await readService.SearchAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+    }
+
+    /// <summary>
+    /// The Receipt Register the workflow document describes - issued receipts AND failed payments.
+    ///
+    /// A DIFFERENT QUESTION FROM <see cref="SearchReceiptsQuery"/>, which lists receipts so one can
+    /// be corrected or voided. This lists what happened to every payment, which is what the
+    /// document's Fig 5 shows, and the two sets are deliberately different sizes.
+    /// </summary>
+    public async Task<Result<ReceiptRegisterResponse>> HandleAsync(
+        GetReceiptRegisterQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return Result.Success(await readService.GetRegisterAsync(
             query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
     }
 

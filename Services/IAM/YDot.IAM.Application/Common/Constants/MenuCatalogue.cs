@@ -1,4 +1,4 @@
-using YDot.IAM.Domain.Enums;
+﻿using YDot.IAM.Domain.Enums;
 
 namespace YDot.IAM.Application.Common.Constants;
 
@@ -241,14 +241,25 @@ public static class MenuCatalogue
         new("FR_CAMPAIGN_WIZARD", "Create Campaign", "FR_CAMPAIGNS", MenuLevel.ChildSubMenu, "CAM",
             "/app/fundraising/campaigns/campaign-wizard", "plus-circle", "cam.campaigns.create", 20),
 
-        new("FR_TRACKING_ASSETS", "Tracking Assets", "FR_CAMPAIGNS", MenuLevel.ChildSubMenu, "CAM",
-            "/app/fundraising/campaigns/tracking-asset-manager", "tag", "cam.tracking-assets.view", 30),
-
-        // NEW. The readiness checklist is a working screen in the campaign module - it is what
-        // stands between a campaign and going live - and it had no menu entry at all.
-        new("FR_CAMPAIGN_READINESS", "Readiness Checklist", "FR_CAMPAIGNS", MenuLevel.ChildSubMenu, "CAM",
-            "/app/fundraising/campaigns/campaign-readiness-checklist", "check-square",
-            "cam.readiness.view", 40),
+        // TRACKING ASSETS AND READINESS CHECKLIST HAVE COME OFF THE SIDEBAR.
+        //
+        // THE SAME TEST AS THE FOUR RELATIONSHIP SCREENS BELOW: "is there already a way in", not
+        // "is the screen wanted". Both are about ONE campaign and say nothing without one - a
+        // readiness checklist with no campaign in it is a list of checks against nothing, and the
+        // asset manager reached cold is every asset in the Organisation with no reason to be
+        // looking at any of them. Each now has a way in from the campaign it belongs to:
+        //
+        //   Readiness Checklist   Campaign Register row action ("Readiness"), carrying ?ref
+        //   Tracking Assets       Campaign detail header ("Tracking assets"), carrying ?campaign
+        //
+        // WITHDRAWN, NOT DELETED. The routes, the screens, their permissions and the CAM
+        // endpoints behind them are untouched, and the start-up reconciliation retires each
+        // definition and drops the row from every Organisation that already holds it - so this
+        // reaches databases that have already run, not only fresh ones. Restoring one is
+        // restoring its line.
+        //
+        // WHAT REMAINS UNDER CAMPAIGNS is the pair you arrive at cold: the register, and the way
+        // to add to it.
 
         // THESE TWO ARE NOW ENABLED, and each guards on its OWN permission.
         //
@@ -277,32 +288,59 @@ public static class MenuCatalogue
         new("FR_LEAD_QUEUE", "Lead Work Queue", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
             "/app/fundraising/relationships/lead-work-queue", "inbox", "don.lead-work-queue.view", 10),
 
-        new("FR_LEAD_CAPTURE", "Lead Capture", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/lead-capture", "user-plus", "don.lead-capture.view", 20),
+        // LEAD CAPTURE HAS COME OFF THE SIDEBAR, on the same test as the four screens below: the
+        // way in already exists. Lead Work Queue carries a "Create Lead" button on both its
+        // populated and its empty state, and that is the context the form belongs in - a capture
+        // form reached cold is one whose result nobody is waiting for.
+        //
+        // WITHDRAWN, NOT DELETED. The route, the screen, `don.lead-capture.view` and the DON
+        // endpoints are untouched; the start-up reconciliation retires the definition and drops
+        // the row from every Organisation that already holds it. Restoring it is restoring the
+        // one line.
 
-        new("FR_DONOR_360", "Donor 360", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/donor-360", "user", "don.donor-360.view", 30),
+        // DONOR 360 HAS NO MENU ENTRY, DELIBERATELY. It is not a screen anybody navigates to
+        // cold - it is what opens when a donor is clicked in the Donor List, and it needs a
+        // donor id to show anything at all. Offering it in the sidebar gave people a link to a
+        // Donor 360 with no donor in it.
+        //
+        // WITHDRAWN, NOT DELETED. The route, the screen, its permissions and the DON endpoints
+        // behind them are all untouched and still work; only the sidebar row is gone. The
+        // start-up reconciliation retires the definition and removes the row from every
+        // Organisation that already holds it, so this reaches existing databases rather than
+        // only fresh ones. Restoring it is restoring this one line.
 
         new("FR_DONOR_LIST", "Donor List", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
             "/app/fundraising/relationships/donor-list", "list", "don.donors.view", 40),
 
-        new("FR_CONSENT", "Consent Centre", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/consent-and-preference-centre", "check-circle",
-            "don.consent-and-preference-centre.view", 50),
-
-        new("FR_ASSIGNMENT", "Assignment Board", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/assignment-board", "shuffle", "don.assignment-board.view", 60),
-
-        new("FR_FOLLOW_UP", "Follow-up Planner", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/follow-up-planner", "calendar", "don.follow-up-planner.view", 70),
+        // FOUR RELATIONSHIP SCREENS HAVE COME OFF THE SIDEBAR: Consent Centre, Assignment Board,
+        // Follow-up Planner and Identity Verification.
+        //
+        // THE TEST WAS "IS THERE ALREADY A WAY IN", not "is the screen wanted". Each of the four
+        // is opened from the record it is about, which is the only context in which it says
+        // anything - a consent centre with no donor in it, or an assignment board reached cold
+        // rather than from the lead being assigned, is a screen a person has to re-establish
+        // their place in. The four have these ways in:
+        //
+        //   Consent Centre         Donor 360, Donor List, Identity Verification
+        //   Assignment Board       Lead Work Queue (assign, and reassign)
+        //   Follow-up Planner      Donor 360
+        //   Identity Verification  Donor 360
+        //
+        // WHAT REMAINS IS THE SET YOU ARRIVE AT COLD: the two lead screens, the donor register,
+        // and Duplicate Review.
+        //
+        // DUPLICATE REVIEW STAYS, and it is the exception worth reading. Nothing links to it -
+        // Donor 360's "Duplicate links" row opens its own Documents tab, not this screen - so
+        // removing the row would leave a working screen with no way to reach it at all. It comes
+        // off the sidebar the moment something opens it, and not before.
+        //
+        // WITHDRAWN, NOT DELETED, like the campaign nodes above: the routes, screens, permissions
+        // and DON endpoints are untouched. The start-up reconciliation retires each definition and
+        // drops the row from every Organisation that already holds it, so this reaches databases
+        // that have already run rather than fresh ones only. Restoring one is restoring its line.
 
         new("FR_DUPLICATE_REVIEW", "Duplicate Review", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
             "/app/fundraising/relationships/duplicate-review", "copy", "don.duplicate-review.view", 80),
-
-        new("FR_IDENTITY_VERIFICATION", "Identity Verification", "FR_RELATIONSHIPS",
-            MenuLevel.ChildSubMenu, "DON",
-            "/app/fundraising/relationships/donor-identity-verification", "shield",
-            "don.donor-identity-verification.view", 90),
 
         // ============ Money ==============================================================================
         new(Money, "Money", null, MenuLevel.Menu, "FIN", null, "credit-card", null, 70),
@@ -332,50 +370,59 @@ public static class MenuCatalogue
 
         // ---- Donations and payments (PAY) ---------------------------------------------------
         //
-        // EVERY NODE BELOW NOW CARRIES ITS PERMISSION. They were all null, which meant the whole
-        // Money branch appeared in every sidebar - including a Volunteer's - and every item in it
-        // led to a screen that answered 403. A menu that shows somebody a page they cannot open
-        // is worse than one that hides it: they raise a ticket about a broken screen rather than
-        // asking for access.
+        // FIVE CHILDREN, AND THE DONATION FLOW DOCUMENT NAMES ALL FIVE - in this order, with
+        // these words. Public Donation Initiation, Payment Queue, Support & Retry, Receipt
+        // Correction, Receipt Register. Nothing else belongs under this parent.
+        //
+        // WHAT WAS HERE BEFORE AND IS NOT ANY MORE. Donation Register, Donation Intents, Refunds
+        // and Chargebacks and Payment Gateway were all seeded as child nodes pointing at
+        // /app/donations/donation-register, /app/donations/donation-intent-detail,
+        // /app/donations/refund-and-chargeback-case and /app/donations/gateway-configuration -
+        // four routes the Angular router no longer declares. A seeded node whose route does not
+        // resolve is worse than a missing one: the item renders, someone clicks it, and the
+        // application shows page-not-found for a screen the sidebar promised. The seeder retires
+        // a code the catalogue drops rather than deleting it, so removing them here withdraws
+        // them from every existing Organisation on the next start without taking any override or
+        // role mapping with them.
+        //
+        // ALSO NOTE WHAT WAS MISSING. Public Donation Initiation - the entry form, the first
+        // screen in the document's flow and the only one a donor ever sees - had no menu node at
+        // all, so no amount of permission would put it in a sidebar.
+        //
+        // EVERY NODE CARRIES ITS PERMISSION. They were all null once, which meant the whole Money
+        // branch appeared in every sidebar and every item in it led to a screen that answered
+        // 403. A menu that shows somebody a page they cannot open is worse than one that hides
+        // it: they raise a ticket about a broken screen rather than asking for access.
         new("MN_DONATIONS", "Donations and Payments", Money, MenuLevel.SubMenu, "PAY",
             null, "dollar-sign", "PAY.View", 20),
 
-        new("MN_DONATION_REGISTER", "Donation Register", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/donation-register", "list", "pay.donations.view", 10),
+        // STEP 1 OF THE FLOW. The same component the donor reaches anonymously through the QR
+        // code; inside the panel it renders the internal reference view the document shows in
+        // Fig 2. The permission is CREATE rather than VIEW because the only thing this screen
+        // does is start a donation - which, on the role matrix, is TENANT_ADMIN and INITIATOR.
+        new("MN_PUBLIC_DONATION", "Public Donation Initiation", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
+            "/app/donations/public-donation-initiation", "heart", "pay.intents.create", 10),
 
-        new("MN_DONATION_INTENTS", "Donation Intents", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/donation-intent-detail", "clock", "pay.intents.view", 20),
+        // STEP 3. Fail and Pending only - a success goes straight to its receipt and never
+        // appears here, which is what makes this a work list rather than a log.
+        new("MN_PAYMENT_QUEUE", "Payment Queue", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
+            "/app/donations/payment-event-queue", "inbox", "pay.payments.view-events", 20),
 
+        // STEP 4. Where a retry that failed a second time goes. Safe-retry is the permission
+        // because retrying an attempt whose outcome nobody has confirmed is what charges a donor
+        // twice.
+        new("MN_PAYMENT_SUPPORT", "Support & Retry", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
+            "/app/donations/payment-support-and-safe-retry", "life-buoy", "pay.payments.safe-retry", 30),
+
+        // STEP 5a. Correcting an issued receipt - a new version, never an edit of the original,
+        // because a donor who claimed tax relief on version 1 must still be able to produce it.
+        new("MN_RECEIPT_CORRECTION", "Receipt Correction", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
+            "/app/donations/receipt-correction", "edit-3", "pay.receipts.correct", 40),
+
+        // STEP 5b. Every receipt this organisation has issued, with the running totals the
+        // document shows across the top of Fig 5.
         new("MN_RECEIPT_REGISTER", "Receipt Register", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/receipt-register", "file-text", "pay.receipts.view", 30),
-
-        // Section 23. Separate from the event queue because they answer different questions:
-        // this one is "which donors are stuck?", the queue is "what did the gateway tell us?".
-        new("MN_PAYMENT_SUPPORT", "Payment Support", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/payment-support-and-safe-retry", "life-buoy", "pay.payments.safe-retry", 40),
-
-        new("MN_PAYMENT_QUEUE", "Payment Event Queue", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/payment-event-queue", "inbox", "pay.payments.view-events", 50),
-
-        new("MN_REFUNDS", "Refunds and Chargebacks", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/refund-and-chargeback-case", "corner-up-left", "pay.refunds.view", 60),
-
-        // THE MOST CONSEQUENTIAL SCREEN IN THE MODULE: it decides which merchant account an
-        // organisation's donations settle into. It was additionally off by default; that second
-        // gate is gone because an Organisation administrator has to be able to configure their
-        // own gateway. The permission is the guard, and it is a real one, so a Volunteer or a
-        // Fundraising Officer never sees this screen.
-        //
-        // WHO ACTUALLY HOLDS pay.gateway.view: TENANT_ADMIN (via GrantsAllTenantPermissions)
-        // and AUDITOR, who needs to see which account the money settles into to audit it.
-        //
-        // NOT PAYMENT_OPERATIONS - the note on RoleCodes.PaymentOperations explains why:
-        // choosing the merchant account is a different kind of decision from processing the
-        // payments that reach it. An earlier version of this comment claimed the opposite and
-        // was wrong in both directions; it is corrected here because the sentence was being
-        // read as a statement of the seeded grant.
-        new("MN_GATEWAY_CONFIG", "Payment Gateway", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/gateway-configuration", "credit-card", "pay.gateway.view", 70),
+            "/app/donations/receipt-register", "file-text", "pay.receipts.view", 50),
 
         // ============ Communications =========================================================================
         new(Communications, "Communications", null, MenuLevel.Menu, "COM", null, "message-circle", null, 80, IsEnabledByDefault: false),

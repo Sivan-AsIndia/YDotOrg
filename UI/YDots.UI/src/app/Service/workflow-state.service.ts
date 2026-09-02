@@ -394,39 +394,42 @@ export class WorkflowStateService {
   /**
    * One API lead row as the screens read it.
    *
-   * SEVERAL FIELDS HAVE NO SERVER EQUIVALENT and are derived rather than invented. `temperature`
-   * and `donationPotential` are presentation groupings the screens use for their pipeline
-   * columns; they are computed from the lead's own status and SLA state, so two screens cannot
-   * disagree about which column a lead belongs in.
+   * TEMPERATURE, POTENTIAL AND HEALTH NOW COME FROM THE SERVER, and that is a correctness fix
+   * rather than a tidy-up. They used to be guessed here from status and SLA state - a lead was
+   * "Hot" because it was Qualified - so the Temperature column showed a derivation of the Stage
+   * column sitting next to it, and the fundraiser's own reading of the conversation was nowhere
+   * on screen. The module brief has temperature and potential REPLACING formal qualification, so
+   * deriving one from the other inverted the whole point. They are stored on the lead now.
    *
-   * `mobile` AND `email` ARE NOT ON THE LIST PROJECTION AT ALL - the server sends one masked
-   * preview instead, deliberately, so a page of a hundred rows carries no contact details. The
-   * preview goes into `name` and both contact fields stay empty until a lead is opened.
+   * NAME, MOBILE AND EMAIL ARE SEPARATE COLUMNS on the projection, masked server-side by the
+   * same permission that masks the combined preview. `masked` still says whether that happened,
+   * so a screen can show why a value is starred out rather than looking broken.
    */
   private toWorkflowLead(item: LeadListItem): WorkflowLead {
     return {
       id: item.leadReference,
-      name: item.nameAndContactPreview,
-      mobile: '',
-      email: '',
+      name: item.name || item.nameAndContactPreview,
+      mobile: item.mobileNumber ?? '',
+      email: item.emailAddress ?? '',
       source: item.source ?? '',
       campaign: item.campaignName ?? '',
       stage: item.status,
-      temperature: this.toTemperature(item.status, item.slaState),
-      donationPotential: this.toPotential(item.status),
+      temperature: item.temperature as WorkflowLead['temperature'],
+      donationPotential: item.donationPotential as WorkflowLead['donationPotential'],
       owner: item.ownerName ?? 'Unassigned',
       ownerUserId: item.ownerUserId,
       lastActivity: item.lastContactOutcome,
       nextFollowUp: item.nextActionDueUtc
         ? new Date(item.nextActionDueUtc).toLocaleDateString('en-IN')
         : 'Not scheduled',
-      healthScore: this.toHealthScore(item.status, item.slaState),
+      healthScore: item.healthScore,
       healthReasons: [item.slaState, item.lastContactOutcome].filter(Boolean),
       lastContactOutcome: item.lastContactOutcome,
       language: item.preferredLanguage,
       createdAt: item.updatedAtUtc,
       masked: item.isContactMasked,
-      converted: item.status === 'Converted',
+      donorId: item.convertedDonorId ?? undefined,
+      converted: item.isConverted,
       followUpStatus: item.nextActionDueUtc ? 'Upcoming' : 'None',
       qualificationReadiness: item.status === 'Qualified' ? 'Ready' : 'Not Ready',
       recommendedNextAction: item.nextAction ?? '',
@@ -434,56 +437,6 @@ export class WorkflowStateService {
     };
   }
 
-  /**
-   * The pipeline temperature.
-   *
-   * DERIVED FROM THE SLA STATE rather than stored: a lead nobody has touched inside its window
-   * is cold whatever anybody once labelled it, and a qualified one is warm by definition. A
-   * stored label drifts from the truth the moment the lead moves.
-   */
-  private toTemperature(status: string, slaState: string): WorkflowLead['temperature'] {
-    if (status === 'Qualified' || status === 'Converted') {
-      return 'Hot';
-    }
-
-    if (slaState === 'Breached' || status === 'New') {
-      return 'Cold';
-    }
-
-    return 'Warm';
-  }
-
-  private toPotential(status: string): WorkflowLead['donationPotential'] {
-    switch (status) {
-      case 'Qualified':
-      case 'Converted':
-        return 'High';
-      case 'Contacted':
-      case 'Accepted':
-        return 'Medium';
-      default:
-        return 'Low';
-    }
-  }
-
-  /**
-   * A crude health score for the queue's sort.
-   *
-   * CRUDE ON PURPOSE, and derived rather than stored. A number the browser invents should not
-   * look more authoritative than it is; it exists to order a queue, and it moves with the lead's
-   * actual state rather than sitting stale on a record.
-   */
-  private toHealthScore(status: string, slaState: string): number {
-    let score = 40;
-
-    if (status === 'Qualified') score += 40;
-    if (status === 'Contacted' || status === 'Accepted') score += 20;
-    if (status === 'Converted') score = 100;
-    if (slaState === 'Breached') score -= 30;
-    if (slaState === 'AtRisk') score -= 10;
-
-    return Math.max(0, Math.min(100, score));
-  }
 
   /**
    * One API donor row as the screens read it.

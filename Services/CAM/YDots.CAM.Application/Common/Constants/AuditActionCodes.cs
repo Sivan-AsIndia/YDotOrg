@@ -7,6 +7,16 @@ public static class AuditActionCodes
     public const string CampaignSubmitted = "CAMPAIGN_SUBMITTED";
     public const string CampaignApproved = "CAMPAIGN_APPROVED";
     public const string CampaignActivated = "CAMPAIGN_ACTIVATED";
+
+    /// <summary>
+    /// A scheduled campaign went live by itself when its start date arrived.
+    ///
+    /// ITS OWN CODE, not CampaignActivated with a note. "Somebody activated this" and "the date
+    /// arrived and the system activated this" are different events, and the first is the one an
+    /// investigation is usually looking for - folding the second into it would bury a handful of
+    /// human decisions under a nightly sweep.
+    /// </summary>
+    public const string CampaignAutoActivated = "CAMPAIGN_AUTO_ACTIVATED";
     public const string CampaignPaused = "CAMPAIGN_PAUSED";
     public const string CampaignResumed = "CAMPAIGN_RESUMED";
     public const string CampaignCloseRequested = "CAMPAIGN_CLOSE_REQUESTED";

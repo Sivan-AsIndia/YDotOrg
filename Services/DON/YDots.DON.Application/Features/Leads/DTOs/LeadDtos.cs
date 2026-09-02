@@ -118,21 +118,49 @@ public sealed class LeadConsentRequest
     public string? Purpose { get; set; }
 }
 
-/// <summary>One row of the lead work queue grid. Contact values arrive masked by default.</summary>
+/// <summary>
+/// One row of the lead work queue grid. Contact values arrive masked by default.
+///
+/// NAME, MOBILE AND EMAIL ARE SEPARATE FIELDS as well as combined into
+/// <see cref="NameAndContactPreview"/>, because the grid in the module brief gives each of them
+/// its own sortable column. The combined preview is kept for the callers that show one line, and
+/// both obey the same masking rule: without
+/// <c>don.donors.view-sensitive-contact</c> the contact halves come back masked, never raw.
+/// </summary>
 public sealed record LeadListItemResponse(
     Guid Id,
     string LeadReference,
     string NameAndContactPreview,
+    string Name,
+    string? MobileNumber,
+    string? EmailAddress,
     string? CampaignName,
     Guid? OwnerUserId,
     string? OwnerName,
     string Status,
     string? Source,
+
+    /// <summary>How engaged the lead is: Cold, Warm or Hot. A grid column and a filter.</summary>
+    string Temperature,
+
+    /// <summary>How much they might give: Low, Medium or High. A grid column and a filter.</summary>
+    string DonationPotential,
+
+    /// <summary>Lead health 0-100, recomputed on read so the recency component is never stale.</summary>
+    int HealthScore,
+
     string? NextAction,
     DateTimeOffset? NextActionDueUtc,
     string SlaState,
     string LastContactOutcome,
     string PreferredLanguage,
+
+    /// <summary>True once a donation has converted this lead. The queue hides these by default.</summary>
+    bool IsConverted,
+
+    /// <summary>The donor the lead became, so the row can link straight to Donor 360.</summary>
+    Guid? ConvertedDonorId,
+
     DateTimeOffset UpdatedAtUtc,
     long Version,
     bool IsContactMasked,

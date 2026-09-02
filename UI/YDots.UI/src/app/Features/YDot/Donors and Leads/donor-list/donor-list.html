@@ -5,7 +5,8 @@
       <!-- ============ PAGE HEADER ============ -->
       <header class="dl-header">
         <div class="dl-header__titles">
-          <h1 class="dl-title">Donor List</h1>
+          <h1 class="dl-title" style="
+        font-size: 40px !important;">Donor List</h1>
           <p class="dl-subtitle">View and manage all donors created from successful donations.</p>
          
         </div>
@@ -467,7 +468,10 @@
         <div class="dl-drawer__header">
           <div>
             <p class="dl-drawer__name">{{ donor.name }}</p>
-            <p class="dl-drawer__id">{{ donor.donorId }}</p>
+            <!-- THE DISPLAY CODE, NOT THE API ID. `donorId` is the row's Guid, which is what the
+                 checkbox and the row actions key off; `reference` is the DON-2026-000001 a person
+                 quotes. The drawer was showing the former under the donor's name. -->
+            <p class="dl-drawer__id">{{ donor.reference }}</p>
           </div>
           <button type="button" class="dl-icon-btn" (click)="closePreview()" aria-label="Close preview">
             <svg class="dl-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">

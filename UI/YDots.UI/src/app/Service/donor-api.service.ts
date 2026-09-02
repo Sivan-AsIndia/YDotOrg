@@ -11,9 +11,12 @@ import {
   AssignmentBoardResponse,
   AssignmentHistory,
   AssignmentRequest,
+  BulkLeadImportRequest,
+  BulkLeadImportResponse,
   BulkRouteRequest,
   BulkRouteResult,
   CampaignLookup,
+  CommunicationTimelineResponse,
   CompleteFollowUpRequest,
   ConsentCentreResponse,
   ConsentListItem,
@@ -393,6 +396,19 @@ export class DonorApiService {
    * the other person's name, e-mail or phone. Anything more would turn the check into a directory
    * lookup for whoever can reach the screen.
    */
+  /**
+   * Bulk upload - the document's "Bulk upload leads" area on Lead Capture.
+   *
+   * THE BROWSER PARSES THE FILE AND POSTS ROWS. Sending the file itself would put CSV encoding
+   * and delimiter guesswork on the server; parsing here means the person sees the row count and
+   * the obviously-broken rows before anything is created.
+   */
+  bulkImportLeads(request: BulkLeadImportRequest): Observable<BulkLeadImportResponse> {
+    return this.http
+      .post<ApiResponse<BulkLeadImportResponse>>(`${this.baseUrl}/lead-capture/bulk-import`, request)
+      .pipe(map((response) => response.data!));
+  }
+
   deduplicateLead(id: string): Observable<DeduplicateResult> {
     return this.http
       .post<ApiResponse<DeduplicateResult>>(`${this.baseUrl}/lead-capture/${id}/deduplicate`, {})
@@ -412,6 +428,28 @@ export class DonorApiService {
       `${this.baseUrl}/lead-capture/${id}`,
       { body: request },
     );
+  }
+
+  // =========================================================================================
+  // Communication timeline
+  // =========================================================================================
+
+  /**
+   * The conversation history for a lead, a donor, or a lead and the donor it became.
+   *
+   * PASS WHICHEVER ID YOU HOLD. The queue screens have a lead id and Donor 360 has a donor id;
+   * the server resolves one to the other and merges both halves, so a converted lead's earlier
+   * conversations do not disappear at the moment it becomes a donor.
+   */
+  getCommunicationTimeline(
+    leadId: string | null,
+    donorId: string | null,
+  ): Observable<CommunicationTimelineResponse> {
+    return this.http
+      .get<ApiResponse<CommunicationTimelineResponse>>(`${this.baseUrl}/communication-timeline`, {
+        params: this.toParams({ leadId, donorId }),
+      })
+      .pipe(map((response) => response.data!));
   }
 
   // =========================================================================================

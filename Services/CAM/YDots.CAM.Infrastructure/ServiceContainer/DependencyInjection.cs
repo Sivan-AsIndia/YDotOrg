@@ -107,6 +107,7 @@ public static class DependencyInjection
         // in progress, so a figure read here would not see writes the same request had just made.
         services.AddScoped<IFinancialDirectory, FinancialDirectory>();
         services.AddScoped<IPeopleDirectory, PeopleDirectory>();
+        services.AddScoped<IGeographyDirectory, GeographyDirectory>();
 
         // ---- Authorization -----------------------------------------------------------------------------------
         //
@@ -116,6 +117,15 @@ public static class DependencyInjection
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, TenantContextAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, SuperAdminAuthorizationHandler>();
+
+        // ---- Background work -----------------------------------------------------------------------------------
+        //
+        // THE THING THAT MAKES "STARTS ON ITS START DATE" TRUE. LifecycleActivation.Auto has been
+        // on the campaign and on the wizard since the module was written and nothing acted on it,
+        // so a scheduled campaign sat in Scheduled until somebody noticed. It takes its own scope
+        // per sweep - the DbContext is scoped, and a singleton holding one would accumulate every
+        // entity it ever tracked.
+        services.AddHostedService<CampaignActivationService>();
 
         // ---- Seeding -------------------------------------------------------------------------------------------
         services.AddScoped<CampaignDbSeeder>();

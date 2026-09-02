@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -27,8 +27,16 @@ public sealed record ApproveTrackingAssetCommand(Guid TrackingAssetId, TrackingA
 /// <summary>Approved to Active. This is where the tracking reference and URL are minted.</summary>
 public sealed record ActivateTrackingAssetCommand(Guid TrackingAssetId, TrackingAssetLifecycleRequest Request);
 
-/// <summary>Active to Inactive.</summary>
+/// <summary>Active to DisableRequested - the maker asking for a live asset to be taken down.</summary>
+public sealed record RequestDisableTrackingAssetCommand(
+    Guid TrackingAssetId, TrackingAssetLifecycleRequest Request);
+
+/// <summary>Active or DisableRequested to Inactive - the checker's decision.</summary>
 public sealed record DeactivateTrackingAssetCommand(Guid TrackingAssetId, TrackingAssetLifecycleRequest Request);
+
+/// <summary>Destroys an unused Draft asset. The one delete in the module.</summary>
+public sealed record DeleteDraftTrackingAssetCommand(
+    Guid TrackingAssetId, TrackingAssetLifecycleRequest Request);
 
 /// <summary>
 /// Tracking asset creation, editing and lifecycle.
@@ -90,7 +98,11 @@ public sealed class TrackingAssetCommandHandler(
             return Result.Failure<TrackingAssetDetailResponse>(context.Error!);
         }
 
-        var placementCheck = ValidatePlacements(context.Value!.ChannelCode, request.Places);
+        var places = WithCampaignGeography(campaign, request.Places);
+
+        var placementCheck = ValidatePlacements(
+            request.AssetType, context.Value!.ChannelCode, places);
+
         if (placementCheck.IsFailure)
         {
             return Result.Failure<TrackingAssetDetailResponse>(placementCheck.Error!);
@@ -106,7 +118,24 @@ public sealed class TrackingAssetCommandHandler(
 
         var code = await BuildCodeAsync(campaign, request.AssetType, cancellationToken);
 
-        var asset = request.ToEntity(campaign, code);
+        var asset = (request with { Places = places }).ToEntity(campaign, code);
+
+        // STAMP THE SUBMITTER WHEN THE FORM CREATES A SUBMITTED ASSET.
+        //
+        // The Generate form offers "Asset status: Draft or Submitted", and the validator allows
+        // both - but only the separate Submit endpoint was recording WHO submitted. A create with
+        // Status = Submitted therefore reached the database with submitted_by_user_id NULL, which
+        // is precisely what `ck_cam_tracking_assets_submitted` forbids, so every such create came
+        // back as a bare DbUpdateException with no usable message on the screen.
+        //
+        // The stamp belongs here rather than in the mapping because who is acting and what time
+        // it is are the handler's to know, and because a submission with no submitter is not a
+        // row worth writing: the segregation-of-duties check on approval reads this field.
+        if (asset.Status != TrackingAssetStatus.Draft)
+        {
+            asset.SubmittedByUserId = currentUser.UserId;
+            asset.SubmittedAtUtc = clock.UtcNow;
+        }
 
         await assets.AddAsync(asset, cancellationToken);
 
@@ -156,7 +185,15 @@ public sealed class TrackingAssetCommandHandler(
             return Result.Failure<OutcomeResponse>(context.Error!);
         }
 
-        var placementCheck = ValidatePlacements(context.Value!.ChannelCode, request.Places);
+        var owningCampaign = await campaigns.GetByIdAsync(asset.CampaignId, cancellationToken);
+
+        var places = owningCampaign is null
+            ? request.Places
+            : WithCampaignGeography(owningCampaign, request.Places);
+
+        var placementCheck = ValidatePlacements(
+            request.AssetType, context.Value!.ChannelCode, places);
+
         if (placementCheck.IsFailure)
         {
             return Result.Failure<OutcomeResponse>(placementCheck.Error!);
@@ -170,7 +207,7 @@ public sealed class TrackingAssetCommandHandler(
                     nameof(request.ActiveTo), "The end of the window must be after its start.")]));
         }
 
-        request.ApplyTo(asset);
+        (request with { Places = places }).ApplyTo(asset);
 
         await audit.WriteAsync(
             TrackingAssetAuditActionCodes.Updated, nameof(TrackingAsset), asset.Id,
@@ -337,8 +374,16 @@ public sealed class TrackingAssetCommandHandler(
         return BuildOutcome(asset, "Tracking asset activated.");
     }
 
+    /// <summary>
+    /// Asks for a live asset to be taken down: Active to DisableRequested.
+    ///
+    /// THE ASSET GOES ON RESOLVING. `IsLiveAt` tests for Active, so a pending request does not
+    /// stop a scan on its own - and it must not, because until somebody decides the request the
+    /// printed QR code in the world is still the campaign's. What changes is that the asset is
+    /// now visibly awaiting a decision, and an approver has something to decide.
+    /// </summary>
     public async Task<Result<OutcomeResponse>> HandleAsync(
-        DeactivateTrackingAssetCommand command, CancellationToken cancellationToken)
+        RequestDisableTrackingAssetCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -355,7 +400,47 @@ public sealed class TrackingAssetCommandHandler(
         if (asset.Status != TrackingAssetStatus.Active)
         {
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
-                $"Only an Active tracking asset can be deactivated. This one is {asset.Status}."));
+                $"Only an Active tracking asset can be requested for disable. This one is {asset.Status}."));
+        }
+
+        asset.Status = TrackingAssetStatus.DisableRequested;
+
+        await audit.WriteAsync(
+            TrackingAssetAuditActionCodes.DisableRequested, nameof(TrackingAsset), asset.Id,
+            command.Request.Reason, cancellationToken);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return BuildOutcome(asset, "Disable requested. An approver must decide it.");
+    }
+
+    /// <summary>
+    /// Takes an asset down: Active or DisableRequested to Inactive.
+    ///
+    /// BOTH SOURCE STATES ARE ACCEPTED. Deciding a maker's request is the ordinary path, and a
+    /// checker who can see the asset should not have to ask themselves for permission first when
+    /// something has to come down now.
+    /// </summary>
+    public async Task<Result<OutcomeResponse>> HandleAsync(
+        DeactivateTrackingAssetCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var loaded = await LoadAsync(
+            command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
+
+        if (loaded.IsFailure)
+        {
+            return Result.Failure<OutcomeResponse>(loaded.Error!);
+        }
+
+        var asset = loaded.Value!;
+
+        if (asset.Status is not (TrackingAssetStatus.Active or TrackingAssetStatus.DisableRequested))
+        {
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                "Only an Active tracking asset, or one with a disable request on it, can be "
+                + $"deactivated. This one is {asset.Status}."));
         }
 
         asset.Status = TrackingAssetStatus.Inactive;
@@ -367,6 +452,61 @@ public sealed class TrackingAssetCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return BuildOutcome(asset, "Tracking asset deactivated.");
+    }
+
+    /// <summary>
+    /// Destroys an unused Draft asset.
+    ///
+    /// DRAFT ONLY, AND ONLY WITH NOTHING POINTING AT IT. A draft has never been activated, so it
+    /// holds no tracking reference and no donation can have been attributed through it - which is
+    /// the whole reason this one delete is safe when no other is. `UsageCount` is checked as well
+    /// as the status, so an asset that has somehow taken traffic survives regardless.
+    ///
+    /// THE AUDIT ROW IS WRITTEN BEFORE THE ROW GOES, and it outlives it.
+    /// </summary>
+    public async Task<Result<OutcomeResponse>> HandleAsync(
+        DeleteDraftTrackingAssetCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var loaded = await LoadAsync(
+            command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
+
+        if (loaded.IsFailure)
+        {
+            return Result.Failure<OutcomeResponse>(loaded.Error!);
+        }
+
+        var asset = loaded.Value!;
+
+        if (asset.Status != TrackingAssetStatus.Draft)
+        {
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                $"Only a Draft tracking asset can be deleted. This one is {asset.Status}. "
+                + "An asset that has been approved is retired by deactivating it, so the "
+                + "donations attributed through it keep resolving."));
+        }
+
+        if (asset.UsageCount > 0)
+        {
+            return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
+                "This draft has recorded usage, so something already points at it. It cannot be "
+                + "deleted."));
+        }
+
+        await audit.WriteAsync(
+            TrackingAssetAuditActionCodes.DraftDeleted, nameof(TrackingAsset), asset.Id,
+            command.Request.Reason, cancellationToken);
+
+        // The outcome is built from the asset while it is still readable; the row goes on save.
+        var outcome = BuildOutcome(asset, "Draft tracking asset deleted.");
+
+        assets.Remove(asset);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Draft tracking asset {AssetId} deleted.", asset.Id);
+
+        return outcome;
     }
 
     // =====================================================================================
@@ -426,27 +566,71 @@ public sealed class TrackingAssetCommandHandler(
     /// placement cannot report where a gift came from, and a placement on an e-mail asset is a
     /// row that will never mean anything and will confuse whoever reads it next.
     /// </summary>
+    /// <summary>
+    /// Whether this asset is the kind that has physical placements: a QR code, on the OFFLINE
+    /// channel.
+    ///
+    /// BOTH HALVES MATTER, and only one of them used to. The rule keyed on the channel alone, so
+    /// a short link on the offline channel was REFUSED unless somebody invented placements for
+    /// it - and a placement describes where a printed thing was put, which a link does not have.
+    /// The Generate asset form draws it the way the module brief states it: the Places section
+    /// appears when asset type is QR Code and channel is Offline, and not otherwise.
+    /// </summary>
+    private static bool HasPlacements(TrackingAssetType assetType, string channelCode) =>
+        assetType == TrackingAssetType.QRCode
+        && string.Equals(channelCode, OfflineChannelCode, StringComparison.OrdinalIgnoreCase);
+
     private static Result ValidatePlacements(
-        string channelCode, IReadOnlyList<TrackingAssetPlaceRequest>? places)
+        TrackingAssetType assetType,
+        string channelCode,
+        IReadOnlyList<TrackingAssetPlaceRequest>? places)
     {
-        var isOffline = string.Equals(channelCode, OfflineChannelCode, StringComparison.OrdinalIgnoreCase);
+        var expectsPlacements = HasPlacements(assetType, channelCode);
         var count = places?.Count ?? 0;
 
-        if (isOffline && count == 0)
+        if (expectsPlacements && count == 0)
         {
             return Result.Failure(Error.Validation(
-                "An offline asset needs at least one placement.",
-                [new ValidationError("places", "Add the location where this asset will appear.")]));
+                "An offline QR code needs at least one place.",
+                [new ValidationError("places", "Add the place where this QR code will appear.")]));
         }
 
-        if (!isOffline && count > 0)
+        if (!expectsPlacements && count > 0)
         {
             return Result.Failure(Error.Validation(
-                "Placements apply to offline assets only.",
-                [new ValidationError("places", "Remove the placements, or change the channel to Offline.")]));
+                "Places apply to an offline QR code only.",
+                [new ValidationError(
+                    "places",
+                    "Remove the places, or set the asset type to QR Code and the channel to Offline.")]));
         }
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Fills a placement's city and state from the campaign where the caller left them blank.
+    ///
+    /// THE FORM PROMISES THIS. Both fields render as "From campaign" and are not editable, so
+    /// the client has nothing to send - and before this the server stored exactly what it was
+    /// sent, which was nothing. Every offline placement was saved with no location, and the
+    /// place-level reporting the QR codes exist to produce had nothing to group by.
+    ///
+    /// AN EXPLICIT VALUE IS RESPECTED. A campaign can legitimately run an event outside its own
+    /// city, and an importer that knows better should not have its answer overwritten.
+    /// </summary>
+    private static IReadOnlyList<TrackingAssetPlaceRequest>? WithCampaignGeography(
+        Campaign campaign, IReadOnlyList<TrackingAssetPlaceRequest>? places)
+    {
+        if (places is null || places.Count == 0)
+        {
+            return places;
+        }
+
+        return [.. places.Select(place => place with
+        {
+            CityId = place.CityId ?? campaign.CityId,
+            StateId = place.StateId ?? campaign.StateId
+        })];
     }
 
     /// <summary>

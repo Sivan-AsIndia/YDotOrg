@@ -14,6 +14,7 @@ import {
 } from '../Shared/models/iam-contract.model';
 import {
   ReasonRequest,
+  UpdateMyProfileRequest,
   UpdateUserRequest,
   UserDirectoryResponse,
   UserSearchFilter,
@@ -42,6 +43,10 @@ export interface PersonLookupResponse {
   id: string;
   displayName: string;
   code?: string | null;
+  /** The person's role, for the second line of a picker option. */
+  roleName?: string | null;
+  /** Their organisation unit or department, shown beside the role when both are known. */
+  unitName?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -155,6 +160,47 @@ export class UserDirectoryApiService {
   getUser(id: string): Observable<UserDetailResponse> {
     return this.http
       .get<ApiResponse<UserDetailResponse>>(`${this.usersUrl}/${id}`)
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * The signed-in person's OWN record.
+   *
+   * A DIFFERENT ENDPOINT FROM getUser AND getUserByReference, and that is the entire point.
+   * Those two are the administrative routes: they take an id, they are gated on
+   * `iam.users.view`, and they live on a controller that also demands a resolved Organisation.
+   * Reading your own profile through them meant two groups of people were refused their own
+   * profile with a flat "You do not have permission to perform this action":
+   *
+   *   - every role without `iam.users.view`, which is most of them; and
+   *   - a SuperAdmin who has not yet chosen an Organisation, because there was no Organisation
+   *     for the tenant-context policy to find.
+   *
+   * `/my-profile` carries no id at all, so the server answers for whoever holds the token and
+   * there is nothing to point at anybody else. No permission is required, because none is
+   * needed to look at yourself.
+   */
+  getMyProfile(): Observable<UserDetailResponse> {
+    return this.http
+      .get<ApiResponse<UserDetailResponse>>(`${environment.apiBaseUrl}/my-profile`)
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * Saves MY OWN profile.
+   *
+   * THE WRITE HALF OF THE ARGUMENT ABOVE. Edit profile on your own record called
+   * `PUT /users/{id}`, which needs `iam.users.edit` AND a resolved Organisation - so most roles,
+   * and every root user who had not yet picked an Organisation, were told they had no permission
+   * to change their own display name.
+   *
+   * The endpoint takes five fields and no more. Department, manager, account category, access
+   * window and MFA requirement are administrative decisions about a person's place in the
+   * organisation, and are not on the request at all.
+   */
+  updateMyProfile(request: UpdateMyProfileRequest): Observable<OutcomeResponse> {
+    return this.http
+      .put<ApiResponse<OutcomeResponse>>(`${environment.apiBaseUrl}/my-profile`, request)
       .pipe(map((response) => response.data!));
   }
 

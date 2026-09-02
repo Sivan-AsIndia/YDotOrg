@@ -88,6 +88,88 @@ public sealed class PeopleDirectory(
     }
 
     /// <summary>
+    /// The name and staff code behind a set of user ids.
+    ///
+    /// THIS ONE SWALLOWS ITS ERRORS, unlike the existence check above, and the asymmetry is the
+    /// same one <see cref="FinancialDirectory"/> draws. A name is decoration: a register that
+    /// cannot reach identity should print the campaigns with their owner column blank, not fail
+    /// to load. The existence check is a refusal, and a refusal that cannot run must not
+    /// silently pass.
+    ///
+    /// AN ID THAT RESOLVES TO NOTHING IS ABSENT FROM THE RESULT rather than present with a null
+    /// name - the caller can then tell "no such user" from "a user with no display name", and
+    /// only the first is worth showing differently.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, PersonSummary>> GetPeopleAsync(
+        Guid tenantId,
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(userIds);
+
+        var people = new Dictionary<Guid, PersonSummary>();
+
+        if (tenantId == Guid.Empty || userIds.Count == 0)
+        {
+            return people;
+        }
+
+        // TENANT FILTERED IN THE QUERY, for the same reason the existence check is: a name is
+        // still information, and resolving one across the organisation boundary would confirm
+        // that a stranger's id belongs to somebody.
+        //
+        // display_name falls back to the first and last name because it is set from them at
+        // creation and can be blank on a row imported another way - an owner column reading
+        // "Arun Pillai" is what the screen is for, and one reading nothing is the bug being fixed.
+        const string Sql = """
+            SELECT id,
+                   code,
+                   NULLIF(TRIM(COALESCE(NULLIF(TRIM(display_name), ''),
+                                        CONCAT_WS(' ', first_name, last_name))), '') AS name
+            FROM iam_users
+            WHERE tenant_id = @tenantId
+              AND id = ANY(@ids)
+            """;
+
+        try
+        {
+            await using var command = await CreateCommandAsync(Sql, cancellationToken);
+
+            command.Parameters.Add(new NpgsqlParameter("tenantId", NpgsqlDbType.Uuid)
+            {
+                Value = tenantId
+            });
+
+            command.Parameters.Add(new NpgsqlParameter("ids", NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+            {
+                Value = userIds.Distinct().ToArray()
+            });
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var id = reader.GetGuid(0);
+
+                people[id] = new PersonSummary(
+                    id,
+                    reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                    reader.IsDBNull(2) ? null : reader.GetString(2));
+            }
+        }
+        catch (NpgsqlException exception)
+        {
+            logger.LogError(
+                exception,
+                "Could not resolve display names for organisation {TenantId}. "
+                + "The affected rows will display without one.",
+                tenantId);
+        }
+
+        return people;
+    }
+
+    /// <summary>
     /// A command on the DbContext's own connection, inside its transaction when there is one, so
     /// this check sees writes the same request has already made.
     /// </summary>

@@ -22,6 +22,7 @@ using YDot.IAM.Application.Features.Governance.Commands.AccessReviews;
 using YDot.IAM.Application.Features.Governance.Queries.GovernanceQueries;
 using YDot.IAM.Application.Features.Menus.Commands.ManageMenu;
 using YDot.IAM.Application.Features.Menus.Queries.Navigation;
+using YDot.IAM.Application.Features.MyProfile;
 using YDot.IAM.Application.Features.MySecurity;
 using YDot.IAM.Application.Features.Organisations.Commands.ManageOrganisation;
 using YDot.IAM.Application.Features.Organisations.Queries.OrganisationQueries;
@@ -110,7 +111,8 @@ public static class DependencyInjection
         services.AddScoped<AccessReviewCommandHandler>();
         services.AddScoped<GovernanceQueryHandler>();
 
-        // ---- Self-service security -------------------------------------------------------------------------
+        // ---- Self-service profile and security ---------------------------------------------------------------
+        services.AddScoped<MyProfileFeatureHandler>();
         services.AddScoped<MySecurityFeatureHandler>();
 
         // ---- Reference data ----------------------------------------------------------------------------------

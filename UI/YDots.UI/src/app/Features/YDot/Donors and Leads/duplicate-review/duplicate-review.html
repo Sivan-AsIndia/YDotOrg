@@ -4,50 +4,17 @@
   <!-- Live region for status announcements -->
   <div class="sr-only" aria-live="polite">{{ liveMessage() }}</div>
 
-  <!-- ============================================================= -->
-  <!-- Simulator strip — compact, collapsible, demo-only               -->
-  <!-- ============================================================= -->
-  <!-- <section class="sim-strip" aria-label="Access and state simulator">
-    <button type="button" class="sim-toggle" (click)="toggleSimulator()" [attr.aria-expanded]="simulatorOpen()">
-      <svg class="chevron" [class.is-open]="simulatorOpen()" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Simulator controls
-    </button>
-
-    <div class="sim-body" *ngIf="simulatorOpen()">
-      <div class="sim-block">
-        <span class="sim-label">Role</span>
-        <select class="control select control-sm" [ngModel]="effectiveRoleId()" (ngModelChange)="setRole($event)">
-          <option *ngFor="let r of roles" [value]="r.id">{{ r.label }}</option>
-        </select>
-      </div>
-
-      <div class="sim-block">
-        <span class="sim-label">Scope</span>
-        <div class="pill-row">
-          <button type="button" *ngFor="let u of scopeUnits()" class="scope-pill"
-                  [class.is-active]="u.active" [class.is-disabled]="!u.assigned"
-                  [disabled]="!u.assigned" (click)="toggleScope(u)" [attr.aria-pressed]="u.active">
-            {{ u.label }}
-          </button>
-        </div>
-      </div>
-
-      <div class="sim-block">
-        <span class="sim-label">Preview state</span>
-        <div class="pill-row">
-          <button type="button" *ngFor="let s of previewStates" class="state-pill"
-                  [class.is-active]="previewState() === s.id" (click)="setPreviewState(s.id)">
-            {{ s.label }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </section> -->
+  <!--
+    THE SIMULATOR STRIP IS REMOVED. It let anybody pick one of four roles - "Data Steward",
+    "Support Analyst", "Campaign Manager" - and re-rendered the screen as though they held it,
+    including revealing the contact comparison between two donors. The roles no longer exist and
+    the permissions came from the bundle rather than the token.
+  -->
 
   <!-- ============================================================= -->
   <!-- No access — replaces the entire task surface                   -->
   <!-- ============================================================= -->
-  <section *ngIf="previewState() === 'no-access' || !effectiveRole().canView" class="card empty-card" role="alert">
+  <section *ngIf="previewState() === 'no-access' || !permissions()['view']" class="card empty-card" role="alert">
     <svg class="empty-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z" fill="currentColor"/></svg>
     <h2>You don't have access to Duplicate review</h2>
     <p>This task requires the Data Steward duplicate-review permission for your assigned scope. Ask a workspace admin
@@ -58,7 +25,7 @@
     </div>
   </section>
 
-  <ng-container *ngIf="previewState() !== 'no-access' && effectiveRole().canView">
+  <ng-container *ngIf="previewState() !== 'no-access' && permissions()['view']">
 
     <!-- ============================================================= -->
     <!-- Task header                                                    -->
@@ -253,7 +220,7 @@
                 <tr class="reveal-row" *ngIf="g === 'Contact' && !contactRevealed()">
                   <td colspan="3">
                     <span class="restricted-notice">This value cannot be displayed with your current access.</span>
-                    <button type="button" class="link-btn small" *ngIf="effectiveRole().canReveal" (click)="revealContact()">Reveal for this record</button>
+                    <button type="button" class="link-btn small" *ngIf="permissions()['view']" (click)="revealContact()">Reveal for this record</button>
                   </td>
                 </tr>
               </tbody>
@@ -327,14 +294,14 @@
             </ng-container>
 
             <div class="decision-actions">
-              <button type="button" class="btn btn-primary" [disabled]="!effectiveRole().canMerge && decision() === 'merge'"
+              <button type="button" class="btn btn-primary" [disabled]="!permissions()['merge'] && decision() === 'merge'"
                       (click)="saveDecision()">
                 {{ decision() === 'merge' ? 'Continue to merge' : 'Save decision' }}
               </button>
-              <button type="button" class="btn btn-danger-ghost" [disabled]="!effectiveRole().canReject" (click)="openRejectModal()">
+              <button type="button" class="btn btn-danger-ghost" [disabled]="!permissions()['reject']" (click)="openRejectModal()">
                 Reject candidate
               </button>
-              <span class="permission-hint" *ngIf="!effectiveRole().canMerge || !effectiveRole().canReject">
+              <span class="permission-hint" *ngIf="!permissions()['merge'] || !permissions()['reject']">
                 Read-only access to some actions with this role.
               </span>
             </div>

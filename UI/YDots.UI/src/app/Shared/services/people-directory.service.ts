@@ -16,7 +16,14 @@ export interface PersonOption {
   /** The human reference - USR-000184 - which is what somebody reads off a screen. */
   readonly code: string;
   readonly name: string;
-  /** Role and unit, for telling two people with the same name apart. */
+  /**
+   * Role and unit, for telling two people with the same name apart.
+   *
+   * IT IS NOT THE CODE. It used to be filled with `person.code`, so every screen that printed a
+   * "Role & region" line printed the same USR-000xx that the line above it already showed. The
+   * directory endpoint now returns the role and the unit, and when it knows neither this is an
+   * empty string - a blank second line rather than a duplicated reference.
+   */
   readonly context: string;
   readonly isActive: boolean;
   readonly email?: string;
@@ -113,7 +120,7 @@ export class PeopleDirectoryService {
               reference: person.id,
               code: person.code ?? '',
               name: person.displayName || person.code || person.id,
-              context: person.code ?? '',
+              context: contextOf(person.roleName, person.unitName),
 
               // The endpoint returns ACTIVE people only, so everyone it names can be given work.
               isActive: true,
@@ -175,6 +182,16 @@ export class PeopleDirectoryService {
   idOf(reference: string | null | undefined): string | undefined {
     return this.get(reference)?.reference;
   }
+}
+
+/**
+ * The second line of a picker option: role, unit, or both.
+ *
+ * EMPTY WHEN NEITHER IS KNOWN, deliberately. The caller renders nothing rather than falling back
+ * to the person's code, which is what made a "Role & region" row read "USR-00001".
+ */
+function contextOf(roleName?: string | null, unitName?: string | null): string {
+  return [roleName, unitName].filter((part) => !!part && part.trim()).join(' · ');
 }
 
 /** Two letters from a display name. '??' when there is nothing to take them from. */

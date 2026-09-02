@@ -1374,6 +1374,16 @@ export interface OrganisationDetailResponse {
   permittedActions?: string[] | null;
   outstandingProfileFields?: string[] | null;
   isProfileComplete?: boolean;
+
+  /**
+   * The profile fields the Organisation's current state still allows to be changed.
+   *
+   * Once SuperAdmin has approved it this narrows to contact e-mail, telephone and address —
+   * the identity fields were verified against the uploaded documents and the server discards
+   * them from a profile save afterwards. Absent means "an older API that has not been told to
+   * restrict anything", which the screen treats as the whole form.
+   */
+  editableProfileFields?: string[] | null;
 }
 
 export interface OrganisationDetailResponseApiResponse {

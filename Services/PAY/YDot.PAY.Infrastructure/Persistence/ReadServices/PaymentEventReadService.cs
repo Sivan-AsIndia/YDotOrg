@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using YDot.PAY.Application.Common.Abstractions.Persistence;
 using YDot.PAY.Application.Common.Abstractions.Security;
+using YDot.PAY.Application.Common.Abstractions.Services;
 using YDot.PAY.Application.Common.Constants;
 using YDot.PAY.Application.Common.Models;
 using YDot.PAY.Application.Features.Payments.DTOs;
@@ -23,7 +24,11 @@ namespace YDot.PAY.Infrastructure.Persistence.ReadServices;
 /// webhook has no session; these reads feed a screen, and a screen has a signed-in operator who
 /// must see only their own charity's events.
 /// </summary>
-public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUser currentUser)
+public sealed class PaymentEventReadService(
+    PaymentDbContext context,
+    ICurrentUser currentUser,
+    ICampaignDirectory campaigns,
+    ITenantContext tenantContext)
     : IPaymentEventReadService
 {
     public async Task<PagedResponse<PaymentEventListItemResponse>> SearchAsync(
@@ -45,7 +50,28 @@ public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUs
             .Take(filter.PageSize)
             .ToListAsync(cancellationToken);
 
-        var items = rows.Select(ToListItem).ToList();
+        // ONE LOOKUP FOR THE WHOLE PAGE, not one per row. Campaign names live in CAM, so naming
+        // them row by row would be a request per row on every page of the queue.
+        var campaignIds = rows
+            .Select(row => row.PaymentAttempt?.DonationIntent?.CampaignId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        // THE TENANT COMES FROM THE REQUEST'S OWN CONTEXT, not from a row. Reading it off the
+        // first result would mean an empty page had no tenant to ask about, and a mixed page -
+        // which the row filter already prevents - would silently name the wrong charity's
+        // campaigns.
+        var tenantId = tenantContext.TenantId;
+
+        var campaignNames = campaignIds.Count == 0 || tenantId is null
+            ? new Dictionary<Guid, string>()
+            : await campaigns.GetCampaignNamesAsync(tenantId.Value, campaignIds, cancellationToken);
+
+        var canSeeDonor = currentUser.HasPermission(PermissionCodes.DonationsViewSensitiveDonor);
+
+        var items = rows.Select(row => ToListItem(row, campaignNames, canSeeDonor)).ToList();
 
         return new PagedResponse<PaymentEventListItemResponse>(
             items, totalCount, filter.Page, filter.PageSize);
@@ -102,8 +128,20 @@ public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUs
     // Shaping
     // =====================================================================================
 
-    private static PaymentEventListItemResponse ToListItem(PaymentEvent paymentEvent) =>
-        new(paymentEvent.Id,
+    private static PaymentEventListItemResponse ToListItem(
+        PaymentEvent paymentEvent,
+        IReadOnlyDictionary<Guid, string> campaignNames,
+        bool canSeeDonor)
+    {
+        var intent = paymentEvent.PaymentAttempt?.DonationIntent;
+
+        var campaignName = intent?.CampaignId is Guid campaignId
+            && campaignNames.TryGetValue(campaignId, out var name)
+                ? name
+                : null;
+
+        return new PaymentEventListItemResponse(
+            paymentEvent.Id,
             paymentEvent.EventType,
             PaymentMappingConfig.Describe(paymentEvent.EventType),
             paymentEvent.Status,
@@ -111,7 +149,12 @@ public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUs
             paymentEvent.GatewayName,
             paymentEvent.GatewayEventId,
             paymentEvent.GatewayReference,
-            paymentEvent.Amount.ToResponseOrNull(),
+
+            // THE INTENT'S AMOUNT WHERE THE EVENT CARRIES NONE. A payment.failed webhook often
+            // omits it, and a queue row reading "-" for the amount is the one column an operator
+            // most needs to see.
+            paymentEvent.Amount.ToResponseOrNull() ?? intent?.Amount.ToResponse(),
+
             paymentEvent.OccurredAtUtc,
             paymentEvent.ReceivedAtUtc,
             paymentEvent.ProcessedAtUtc,
@@ -119,8 +162,30 @@ public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUs
             paymentEvent.ProcessingError,
             paymentEvent.ProcessingAttempts,
             paymentEvent.DonationIntentId ?? paymentEvent.PaymentAttempt?.DonationIntentId,
-            paymentEvent.PaymentAttempt?.DonationIntent?.IntentReference,
-            paymentEvent.Version);
+            intent?.IntentReference,
+            paymentEvent.Version,
+            intent?.DonorName,
+            intent is null ? null : PaymentMappingConfig.MaskEmail(intent.Email, canSeeDonor),
+            campaignName,
+            DescribeOutcome(intent?.Status));
+    }
+
+    /// <summary>
+    /// The donation's outcome in the document's own three words.
+    ///
+    /// EXPIRED AND CANCELLED ARE PENDING, NOT FAIL. The document says a donor who cancels part-way
+    /// appears in the queue as Pending, and an expired link is the same situation - nothing was
+    /// charged and nothing was refused, so the recovery is to send them a fresh link rather than
+    /// to retry a payment that never happened.
+    /// </summary>
+    private static string DescribeOutcome(DonationIntentStatus? status) =>
+        status switch
+        {
+            DonationIntentStatus.Paid => "Success",
+            DonationIntentStatus.Failed => "Fail",
+            null => "Pending",
+            _ => "Pending",
+        };
 
     /// <summary>
     /// What may be done to a queued event next.
@@ -200,14 +265,54 @@ public sealed class PaymentEventReadService(PaymentDbContext context, ICurrentUs
                 || paymentEvent.Status == PaymentEventStatus.Failed);
         }
 
+        // THE QUEUE IS FAIL AND PENDING, AND NOTHING ELSE. The document is explicit that a
+        // successful payment never appears here - it goes straight to the receipt - so an unset
+        // filter still excludes Success rather than returning everything.
+        query = filter.PaymentOutcome switch
+        {
+            PaymentOutcomeFilter.Fail => query.Where(paymentEvent =>
+                paymentEvent.PaymentAttempt != null
+                && paymentEvent.PaymentAttempt.DonationIntent != null
+                && paymentEvent.PaymentAttempt.DonationIntent.Status == DonationIntentStatus.Failed),
+
+            PaymentOutcomeFilter.Pending => query.Where(paymentEvent =>
+                paymentEvent.PaymentAttempt == null
+                || paymentEvent.PaymentAttempt.DonationIntent == null
+                || (paymentEvent.PaymentAttempt.DonationIntent.Status != DonationIntentStatus.Failed
+                    && paymentEvent.PaymentAttempt.DonationIntent.Status != DonationIntentStatus.Paid)),
+
+            PaymentOutcomeFilter.Success => query.Where(paymentEvent =>
+                paymentEvent.PaymentAttempt != null
+                && paymentEvent.PaymentAttempt.DonationIntent != null
+                && paymentEvent.PaymentAttempt.DonationIntent.Status == DonationIntentStatus.Paid),
+
+            _ => query.Where(paymentEvent =>
+                paymentEvent.PaymentAttempt == null
+                || paymentEvent.PaymentAttempt.DonationIntent == null
+                || paymentEvent.PaymentAttempt.DonationIntent.Status != DonationIntentStatus.Paid),
+        };
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var term = filter.Search.Trim().ToLowerInvariant();
 
-            query = query.Where(paymentEvent =>
-                paymentEvent.GatewayEventId.ToLower().Contains(term)
-                || (paymentEvent.GatewayReference != null
-                    && paymentEvent.GatewayReference.ToLower().Contains(term)));
+            // THE DONOR'S NAME IS THE SEARCH TERM PEOPLE ACTUALLY HAVE. Somebody triaging this
+            // queue is usually acting on a phone call, and the caller quotes their own name and
+            // e-mail - never a gateway event id.
+            query = filter.SearchIncludesDonor
+                ? query.Where(paymentEvent =>
+                    paymentEvent.GatewayEventId.ToLower().Contains(term)
+                    || (paymentEvent.GatewayReference != null
+                        && paymentEvent.GatewayReference.ToLower().Contains(term))
+                    || (paymentEvent.PaymentAttempt != null
+                        && paymentEvent.PaymentAttempt.DonationIntent != null
+                        && (paymentEvent.PaymentAttempt.DonationIntent.DonorName.ToLower().Contains(term)
+                            || paymentEvent.PaymentAttempt.DonationIntent.Email.ToLower().Contains(term)
+                            || paymentEvent.PaymentAttempt.DonationIntent.IntentReference.ToLower().Contains(term))))
+                : query.Where(paymentEvent =>
+                    paymentEvent.GatewayEventId.ToLower().Contains(term)
+                    || (paymentEvent.GatewayReference != null
+                        && paymentEvent.GatewayReference.ToLower().Contains(term)));
         }
 
         return query;

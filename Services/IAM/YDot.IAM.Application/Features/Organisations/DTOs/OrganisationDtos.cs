@@ -236,7 +236,17 @@ public sealed record OrganisationDetailResponse(
     /// <summary>Fields still needed before the profile can be submitted.</summary>
     IReadOnlyList<string> OutstandingProfileFields,
 
-    bool IsProfileComplete);
+    bool IsProfileComplete,
+
+    /// <summary>
+    /// The profile fields the current state still allows to be changed.
+    ///
+    /// Once the Organisation has been approved this narrows to contact e-mail, telephone and
+    /// address — the identity fields were verified against the documents and are no longer the
+    /// Organisation's to edit. Empty means the profile is closed to edits entirely, which is
+    /// the case while a submission is with a reviewer and after archival.
+    /// </summary>
+    IReadOnlyList<string> EditableProfileFields);
 
 /// <summary>A host name that reaches this Organisation.</summary>
 public sealed record OrganisationDomainResponse(

@@ -590,8 +590,12 @@ public sealed class AccessRequestCommandHandler(
 
         var tenant = await tenants.GetByIdAsync(accessRequest.TenantId, cancellationToken);
 
+        // APPROVER, not the ACCESS_APPROVER this used to name. That role was one of thirteen
+        // job-shaped roles the catalogue no longer seeds; the code below looks the role up by
+        // code and returns quietly when it finds nothing, so the rename would not have thrown -
+        // it would simply have stopped notifying anybody that a request was waiting.
         var approverRole = await roles.GetByCodeAsync(
-            RoleCodes.AccessApprover, accessRequest.TenantId, cancellationToken);
+            RoleCodes.Approver, accessRequest.TenantId, cancellationToken);
 
         if (approverRole is null)
         {

@@ -45,12 +45,22 @@ public sealed class CreateTrackingAssetRequestValidator : AbstractValidator<Crea
             .GreaterThan(request => request.ActiveFrom)
             .WithMessage("The end of the active window must be after its start.");
 
-        // Only Draft or Submitted on create, for the same reason campaigns are restricted:
-        // everything past that has its own endpoint, permission and rules.
+        // MANDATORY, AND ONLY DRAFT OR SUBMITTED. The Generate asset form asks for a status and
+        // the module brief lists it among the required fields, so it is no longer defaulted to
+        // Draft on the contract - a request that omits it now fails the enum check here rather
+        // than quietly producing a Draft nobody chose. Everything past Submitted has its own
+        // endpoint, permission and rules.
         RuleFor(request => request.Status)
+            .IsInEnum().WithMessage("Choose the asset status.")
             .Must(status => status is Domain.Enums.TrackingAssetStatus.Draft
                 or Domain.Enums.TrackingAssetStatus.Submitted)
             .WithMessage("A tracking asset can only be created as Draft or Submitted.");
+
+        RuleFor(request => request.ActiveFrom)
+            .NotEqual(default(DateTimeOffset)).WithMessage("Choose when this asset becomes active.");
+
+        RuleFor(request => request.ActiveTo)
+            .NotEqual(default(DateTimeOffset)).WithMessage("Choose when this asset stops being active.");
 
         RuleForEach(request => request.Places).SetValidator(new TrackingAssetPlaceRequestValidator());
     }

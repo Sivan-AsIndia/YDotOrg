@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using YDots.CAM.Application.Common.Constants;
 using YDots.CAM.Domain.Entities;
 
 namespace YDots.CAM.Infrastructure.Persistence.Configurations;
@@ -32,11 +33,18 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
 
         builder.Property(campaign => campaign.Code).HasMaxLength(20).IsRequired();
         builder.Property(campaign => campaign.Name).HasMaxLength(250).IsRequired();
-        builder.Property(campaign => campaign.Purpose).HasMaxLength(1000).IsRequired();
+        builder.Property(campaign => campaign.Purpose)
+            .HasMaxLength(CampaignFieldLimits.Purpose).IsRequired();
         builder.Property(campaign => campaign.FundOrProgramme).HasMaxLength(250).IsRequired();
         builder.Property(campaign => campaign.ZipCode).HasMaxLength(20);
-        builder.Property(campaign => campaign.PublicDescription).HasMaxLength(1000);
-        builder.Property(campaign => campaign.TermsAndNotice).HasMaxLength(20000);
+        // THE TWO RICH-TEXT COLUMNS HOLD MARKUP, so they are sized for the editor's HTML
+        // rather than for the number of characters the wizard's counter shows. See
+        // CampaignFieldLimits - a public description that read as 770 characters on screen
+        // arrived here as over a thousand characters of tags and would not save.
+        builder.Property(campaign => campaign.PublicDescription)
+            .HasMaxLength(CampaignFieldLimits.PublicDescription);
+        builder.Property(campaign => campaign.TermsAndNotice)
+            .HasMaxLength(CampaignFieldLimits.TermsAndNotice);
 
         // MONEY GETS EXPLICIT PRECISION. Without it Npgsql picks a default that silently
         // truncates, and a target of 1,234,567.89 becoming 1,234,568 is not something anybody

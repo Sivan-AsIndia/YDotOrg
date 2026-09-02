@@ -18,6 +18,16 @@ public sealed record LeadWorkQueueResponse(
     IReadOnlyList<LookupItem> LanguageOptions,
     IReadOnlyList<LookupItem> ContactOutcomeOptions,
     IReadOnlyDictionary<string, int> StatusCounts,
+
+    /// <summary>The six summary cards, counted across the whole scope rather than the page.</summary>
+    LeadQueueSummaryResponse Summary,
+
+    /// <summary>Cold / Warm / Hot, for the temperature column filter.</summary>
+    IReadOnlyList<LookupItem> TemperatureOptions,
+
+    /// <summary>Low / Medium / High, for the donation-potential column filter.</summary>
+    IReadOnlyList<LookupItem> DonationPotentialOptions,
+
     IReadOnlyList<string> PermittedActions,
     string ActiveFilterSummary,
     string ActiveScope,
@@ -102,3 +112,20 @@ public sealed class ConvertLeadRequest
 
     public long? ExpectedVersion { get; set; }
 }
+
+/// <summary>
+/// The summary cards across the top of the lead work queue.
+///
+/// COUNTED OVER THE WHOLE SCOPE, NOT THE CURRENT PAGE, which is the entire reason this is a
+/// server-side aggregate rather than arithmetic in the browser. The grid is paged, so a card
+/// computed from the rows in hand would read "Total Leads 10" against a queue of two hundred and
+/// change every time somebody turned a page. Each card carries the same scope filter as the rows,
+/// so a caller never sees a count that includes work they cannot open.
+/// </summary>
+public sealed record LeadQueueSummaryResponse(
+    int TotalLeads,
+    int UnassignedLeads,
+    int AssignedLeads,
+    int HotLeads,
+    int ConvertedLeads,
+    int HighDonationPotential);

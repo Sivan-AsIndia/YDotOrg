@@ -1,7 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { WorkflowDonor, WorkflowStateService } from '../../../../Service/workflow-state.service';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { ToastService } from '../../../../Shared/services/toast.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { Donor360Response } from '../../../../Shared/models/donor-contract.model';
 import { FormsModule } from '@angular/forms';
 import {
   UiState,
@@ -9,9 +12,6 @@ import {
   ConfirmDialogConfig,
 } from '../../../../Shared/models/donors-leads.model';
 import { effect, ElementRef, ViewChild } from '@angular/core';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { Donor360Response } from '../../../../Shared/models/donor-contract.model';
-import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
 
 
@@ -23,12 +23,28 @@ import { PeopleDirectoryService } from '../../../../Shared/services/people-direc
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Donor360Component {
-    private readonly donorApi = inject(DonorApiService);
-
     private readonly router = inject(Router);
     private readonly route = inject(ActivatedRoute);
-    private readonly workflow = inject(WorkflowStateService);
-    private readonly people = inject(PeopleDirectoryService);
+    private readonly api = inject(DonorApiService);
+    private readonly toast = inject(ToastService);
+
+    /**
+     * The colleagues who can hold a donor relationship.
+     *
+     * THE CORRECT-PROFILE DIALOG NEEDED THIS AND DID NOT HAVE IT. Relationship owner was a plain
+     * text box seeded with the owner's DISPLAY NAME, and whatever it contained was sent as
+     * `relationshipOwnerUserId` - which the API declares as a Guid. So the default value, the
+     * literal word "Unassigned", was refused by model binding before any handler saw it, and the
+     * screen reported "The request could not be read". Typing a real colleague's name failed the
+     * same way. The field is a picker over the directory now, and it carries the id.
+     */
+    protected readonly people = inject(PeopleDirectoryService);
+
+    /** Everybody who may be given the relationship, plus the current holder if they are inactive. */
+    protected readonly ownerOptions = computed(() => this.people.assignable());
+
+    /** The server's answer for this donor, or null until it arrives. */
+    readonly response = signal<Donor360Response | null>(null);
     readonly leadId = signal(this.route.snapshot.queryParamMap.get('leadId'));
     readonly donorId = signal(this.route.snapshot.queryParamMap.get('donorId'));
 
@@ -50,7 +66,8 @@ export class Donor360Component {
     @ViewChild('actionDialog') actionDialogRef?: ElementRef<HTMLDialogElement>;
   
     constructor() {
-      this.loadProfile();
+      this.load();
+
       effect(() => {
         const action = this.activeAction();
         const dialog = this.actionDialogRef?.nativeElement;
@@ -64,67 +81,57 @@ export class Donor360Component {
     }
   
     // ============================================================
-    // ACCESS SIMULATOR — role, permission and data-scope model
-    // Implements spec §6.1 permission decision order and §4.3.3
+    // PERMISSIONS
+    //
+    // ONE SOURCE: the server's `permittedActions` for this caller and this record. The screen
+    // used to hold a `permissionMap` keyed by eight role names, and `hasPermission` looked the
+    // selected role up in it - so what a person could do was decided by a dropdown next to the
+    // page title rather than by their token.
+    //
+    // THE THREE-ROLE MODEL NEEDS NO CODE HERE. TENANT_ADMIN, INITIATOR and APPROVER differ only
+    // in which codes IAM issues them: an APPROVER holds `don.donor-360.correct` (Edit is theirs)
+    // but not `don.donors.create`, and this screen simply draws what it is told.
     // ============================================================
-  
-    readonly roles = [
-      'Authorised relationship users',
-      'Manager',
-      'Fundraiser',
-      'Fundraising Manager',
-      'Donor Care',
-      'Data Steward',
-      'System integration',
-      'Read-only guest',
-    ] as const;
-    selectedRole = signal<typeof this.roles[number]>('Authorised relationship users');
-  
-    /** Controlled permission IDs from YDOT section 04 (SCR-DON-003 and §6.1). */
-    private readonly permissionMap: Record<string, string[]> = {
-      'Authorised relationship users': ['don.donor-360.view', 'don.contact.view', 'don.donor-360.correct', 'don.donor-360.follow-up', 'don.donor-360.create-intent'],
-      'Manager': ['don.donor-360.view', 'don.contact.view', 'don.donor-360.correct', 'don.donor-360.follow-up', 'don.donor-360.create-intent', 'don.donor-360.delete-draft'],
-      'Fundraiser': ['don.donor-360.view', 'don.contact.view', 'don.donor-360.follow-up', 'don.donor-360.create-intent'],
-      'Fundraising Manager': ['don.donor-360.view', 'don.contact.view', 'don.donor-360.correct', 'don.donor-360.follow-up', 'don.donor-360.create-intent'],
-      'Donor Care': ['don.donor-360.view', 'don.contact.view', 'don.donor-360.follow-up'],
-      'Data Steward': ['don.donor-360.view'],
-      'System integration': ['don.donor-360.view'],
-      'Read-only guest': [],
-    };
-  
-    hasPermission(perm: string): boolean {
-      return this.permissionMap[this.selectedRole()].includes(perm);
+
+    /**
+     * THE SERVER ANSWERS IN VERBS: ['View','Correct','Follow up','Create intent'].
+     *
+     * The screen asks in permission codes because that is what its template was written against,
+     * so the two vocabularies are reconciled here rather than in twenty template expressions.
+     * Comparing the codes directly matched nothing, which hid every action on the page.
+     */
+    hasPermission(permission: string): boolean {
+      const permitted = this.response()?.permittedActions ?? [];
+
+      switch (permission) {
+        // Seeing the donor's real e-mail and phone is the server's decision, and it has already
+        // made it: a masked value arrives masked. This only gates the label beside it.
+        case 'don.contact.view': return permitted.includes('View');
+        case 'don.donor-360.correct': return permitted.includes('Correct');
+        case 'don.donor-360.follow-up': return permitted.includes('Follow up');
+        case 'don.donor-360.create-intent': return permitted.includes('Create intent');
+        // "Delete UNUSED draft" is the server's wording (GetDonor360Query.BuildPermittedActions).
+        // Matching on 'Delete draft' matched nothing, so the action was dead even for the people
+        // and the records the server had already cleared.
+        case 'don.donor-360.delete-draft': return permitted.includes('Delete unused draft');
+        case 'don.donor-360.view': return permitted.includes('View');
+        default: return permitted.includes(permission);
+      }
     }
   
-    readonly scopeUnits = ['Donation Operations', 'Community Outreach', 'Major Gifts', 'Corporate Partnerships'];
-    readonly assignedScope = ['Donation Operations', 'Community Outreach'];
-    isInScope(unit: string): boolean {
-      return this.assignedScope.includes(unit);
-    }
-  
     // ============================================================
-    // SCENARIO SIMULATOR — required UI states (spec §4.3.4)
+    // SCREEN STATE
+    //
+    // IT IS NOW AN OUTCOME, NOT A CHOICE. A "scenario" dropdown let anybody put the page into
+    // 'conflict' or 'no-access' to look at it; the states below are reached by what the API
+    // actually answered - a 403 is no-access, a failed call is a dependency failure, and an
+    // absent donor is empty.
     // ============================================================
-  
-    readonly scenarios: { id: Scenario; label: string }[] = [
-      { id: 'loaded', label: 'Normal — active donor' },
-      { id: 'loading', label: 'Loading' },
-      { id: 'empty', label: 'Empty — nothing in scope yet' },
-      { id: 'draft', label: 'Draft — create intent' },
-      { id: 'duplicate', label: 'Possible duplicate found' },
-      { id: 'conflict', label: 'Conflict — record changed' },
-      { id: 'dependency-failure', label: 'Dependency failure' },
-      { id: 'no-access', label: 'No access — out of scope' },
-    ];
-    scenario = signal<Scenario>('loaded');
-  
-    /** A guest role always resolves to the non-disclosing no-access presentation,
-     *  regardless of the scenario picked — permission is evaluated before scenario. */
-    effectiveState = computed<Scenario>(() => {
-      if (!this.hasPermission('don.donor-360.view')) return 'no-access';
-      return this.scenario();
-    });
-  
+
+    scenario = signal<Scenario>('loading');
+
+    readonly effectiveState = computed<Scenario>(() => this.scenario());
+
     setScenario(id: Scenario) {
       this.scenario.set(id);
       this.activeAction.set(null);
@@ -132,203 +139,165 @@ export class Donor360Component {
       this.dependencyNotice.set(false);
     }
   
-    setRole(role: typeof this.roles[number]) {
-      this.selectedRole.set(role);
-      this.activeAction.set(null);
-    }
-  
     // ============================================================
-    // RECORD DATA (mock — server-derived, read-only in this view)
+    // RECORD DATA
+    //
+    // ALL OF IT FROM `GET /api/v1/donors/donor-360/{id}`, which answers the profile, the consent
+    // state, the totals by stage, the campaign history, the conversations, the follow-ups, the
+    // promises, the documents, the duplicate links and the activity trail in ONE call.
+    //
+    // WHAT WAS HERE BEFORE. `donationTotals`, `campaignHistory`, `promises`, `documents` and
+    // `duplicateLinks` were arrays typed into this file - "Winter Relief Appeal, 65000",
+    // "Meera Krishnan", "meera.krishnan@example.com" - so every donor in every organisation
+    // showed the same lifetime giving, the same three campaigns and the same two conversations.
+    // The KPI tiles across the top were computed from those arrays, so they were constants too.
     // ============================================================
-  
+
     readonly donor = computed(() => {
-      const lead = this.workflow.getLead(this.leadId()) ?? this.workflow.leads().find((item) => item.donorId === this.donorId());
-      const donor = this.workflow.getDonor(this.donorId() ?? lead?.donorId);
-      const consentStatus = donor?.consentStatus === 'Do Not Contact'
-        ? 'Withdrawn'
-        : donor?.consentStatus === 'Partial'
-          ? 'Partial'
-          : 'Granted';
+      const response = this.response();
+      const detail = response?.donor;
+      const consent = response?.consentStatus;
+
       return {
-        reference: donor?.donorId ?? this.donorId() ?? lead?.donorId ?? (lead ? `DON-${lead.id.replace('LEAD-', '')}` : ''),
-        fullName: donor?.name ?? lead?.name ?? '',
-        lifecycleState: lead?.converted ? 'Active' : this.route.snapshot.queryParamMap.get('conversion') === 'pending' ? 'Conversion pending' : 'Active',
-        owner: donor?.owner ?? lead?.owner ?? 'Unassigned',
-        freshness: lead?.lastActivity ?? (donor ? `Last donation ${donor.lastDonationDate}` : ''),
-        email: donor?.email ?? lead?.email ?? '',
-        phone: donor?.mobile ?? lead?.mobile ?? '',
-        address: donor ? `${donor.location}, ${donor.region}` : '',
-        consentStatus: consentStatus as 'Granted' | 'Partial' | 'Withdrawn',
-        consentUpdated: donor?.createdDate ?? '',
-        consentChannels: consentStatus === 'Withdrawn' ? 'No permitted channels' : 'Email, SMS',
-        commsChannel: 'Email preferred',
-        commsFrequency: 'Monthly digest',
-        doNotContact: donor?.consentStatus === 'Do Not Contact' || (lead?.contactRestricted ?? false),
+        reference: response?.donorReference ?? '',
+        fullName: detail?.displayName ?? '',
+        lifecycleState: detail?.status ?? '',
+        owner: detail?.relationshipOwnerName ?? 'Unassigned',
+        freshness: detail?.updatedAtUtc ? this.formatDate(detail.updatedAtUtc) : '',
+
+        // ALREADY MASKED, OR ALREADY NOT. `isEmailMasked` says which, and the screen reports it
+        // rather than deciding - the old page unmasked on a client-side role check.
+        email: detail?.primaryEmail ?? '',
+        phone: detail?.primaryPhone ?? '',
+        address: '',
+        consentStatus: (consent?.overallState ?? 'Granted') as 'Granted' | 'Partial' | 'Withdrawn',
+        consentUpdated: consent?.lastRecordedAtUtc ? this.formatDate(consent.lastRecordedAtUtc) : '',
+        // GRANTED CHANNELS ONLY. Listing a channel the donor has withdrawn as "permitted"
+        // beside a Communicate button is how somebody ends up contacting them on it.
+        consentChannels: (response?.communicationPreferences ?? [])
+          .filter((preference) => preference.consentState === 'Granted')
+          .map((preference) => preference.channel)
+          .join(', ') || 'No permitted channels',
+        commsChannel: (response?.communicationPreferences ?? [])[0]?.channel ?? '',
+        commsFrequency: '',
+        doNotContact: detail?.doNotContact ?? false,
       };
     });
-  
-    /**
-     * The Donor 360 payload from the server.
-     *
-     * WHAT THIS REPLACES. The totals below were three hard-coded amounts - pledged 250,000,
-     * received 180,000, reconciled 165,000 - and the campaign history was three invented campaigns
-     * with invented gifts. EVERY DONOR SHOWED THE SAME FIGURES. This is the screen a fundraiser
-     * opens before telephoning somebody, so those numbers were being read out to donors.
-     *
-     * The endpoint already returned all of it; the screen simply was not asking.
-     */
-    protected readonly profile = signal<Donor360Response | null>(null);
 
-    protected readonly profileError = signal('');
-
-    /**
-     * What the donor has actually given, by stage.
-     *
-     * EMPTY UNTIL IT LOADS, and empty if the donor has given nothing. A blank total is obviously
-     * blank; a plausible one is read out as fact.
-     */
     readonly donationTotals = computed<DonationStage[]>(() =>
-      (this.profile()?.donationTotalsByStage ?? []).map((total) => ({
+      (this.response()?.donationTotalsByStage ?? []).map((total) => ({
         stage: total.stage,
         amount: total.totalAmount,
-
-        // `asAtUtc` is the moment the figure is true for; `refreshedAtUtc` is when it was last
-        // recomputed. The screen labels it "as of", so the former is the honest one.
-        asOf: total.asAtUtc,
+        asOf: this.formatDate(total.asAtUtc),
       })),
     );
 
     readonly campaignHistory = computed<CampaignHistoryItem[]>(() =>
-      (this.profile()?.campaignHistory ?? []).map((entry) => ({
+      (this.response()?.campaignHistory ?? []).map((entry) => ({
         id: entry.campaignCode,
         name: entry.campaignName,
 
-        // THE ENTRY RECORDS A CONVERSION, not a gift. It says this donor came from that campaign's
-        // lead; the amounts belong to the donation register, and inventing one here is exactly
-        // what the three seeded rows did.
-        role: 'Converted from lead',
+        // THE LEAD THIS DONOR CAME FROM. The document's conversion rule is that a converted lead
+        // keeps its history, and this row is where that history is visible.
+        role: entry.leadReference || 'Donor',
         amount: 0,
-        date: entry.convertedAtUtc ?? '',
-        status: entry.convertedAtUtc ? 'Converted' : 'In progress',
+        date: entry.convertedAtUtc ? this.formatDate(entry.convertedAtUtc) : '',
+        status: entry.convertedAtUtc ? 'Converted' : '',
       })),
     );
 
-    /** Loads the profile for whichever donor the route names. */
-    private loadProfile(): void {
-      const reference = this.donorId() ?? this.donor().reference;
-
-      if (!reference) {
-        this.profile.set(null);
-        return;
-      }
-
-      this.donorApi.getDonor360(reference).subscribe({
-        next: (response) => {
-          this.profile.set(response);
-          this.profileError.set('');
-        },
-        error: (error: unknown) => {
-          this.profile.set(null);
-          this.profileError.set(
-            apiErrorMessage(error, 'This donor\'s history could not be loaded.'),
-          );
-        },
-      });
-    }
-  
-    get conversations(): ConversationItem[] {
-      const id = this.leadId() ?? this.workflow.leads().find((item) => item.donorId === this.donor().reference)?.id;
-      const records = id ? this.workflow.communicationsFor(id) : [];
-      if (records.length) {
-        return records.map((record) => ({ id: record.id, channel: record.type, summary: record.summary, date: record.date, owner: record.createdBy }));
-      }
-      // THE SERVER'S CONVERSATIONS, then nothing. This fell back to two invented exchanges -
-      // "Thanked donor for Winter Relief pledge" - shown against any donor with no logged
-      // communication. A fundraiser reading that would believe somebody had already called.
-      return (this.profile()?.conversations ?? []).map((conversation) => ({
+    readonly conversations = computed<ConversationItem[]>(() =>
+      (this.response()?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
         channel: conversation.channel ?? conversation.interactionType,
         summary: conversation.description ?? conversation.name,
-        date: conversation.occurredAtUtc,
+        date: this.formatDate(conversation.occurredAtUtc),
         owner: conversation.performedByName ?? '',
-      }));
-    }
+      })),
+    );
 
-    get followUps(): FollowUpItem[] {
-      const id = this.leadId() ?? this.workflow.leads().find((item) => item.donorId === this.donor().reference)?.id;
-      const records = id ? this.workflow.followUpsFor(id) : [];
-      if (records.length) {
-        return records.map((record) => ({ id: record.id, title: record.purpose, due: `${record.scheduledDate} ${record.scheduledTime}`, owner: record.assignedTo, status: record.status }));
-      }
-      // FROM THE PROFILE, not two invented tasks. These showed "Share Q3 impact report,
-      // overdue" against every donor, so a fundraiser opened the page believing they had already
-      // missed something.
-      return (this.profile()?.followUps ?? []).map((followUp) => ({
+    readonly followUps = computed<FollowUpItem[]>(() =>
+      (this.response()?.followUps ?? []).map((followUp) => ({
         id: followUp.id,
         title: followUp.nextAction ?? followUp.followUpReference,
-        due: followUp.dueAtUtc ?? '',
-        owner: followUp.relationshipOwnerName ?? 'Unassigned',
+        due: followUp.dueAtUtc ? this.formatDate(followUp.dueAtUtc) : '',
+        owner: followUp.relationshipOwnerName ?? '',
         status: followUp.status,
-      }));
-    }
+      })),
+    );
 
-    /** Pledges the donor has made. From the profile - these were two invented promises. */
     readonly promises = computed<PromiseItem[]>(() =>
-      (this.profile()?.promises ?? []).map((promise) => ({
-        id: promise.id,
+      (this.response()?.promises ?? []).map((promise) => ({
+        id: promise.reference,
         amount: promise.amount,
-        dueDate: promise.dueAtUtc ?? '',
+        dueDate: promise.dueAtUtc ? this.formatDate(promise.dueAtUtc) : '',
         status: promise.status,
       })),
     );
-  
-    /**
-     * The donor's documents.
-     *
-     * THESE WERE TWO INVENTED FILES, one of them an "80G receipt" - a tax document. A screen
-     * listing a tax receipt that does not exist is one somebody will go looking for.
-     */
+
     readonly documents = computed<DocumentItem[]>(() =>
-      (this.profile()?.documents ?? []).map((document) => ({
-        id: document.id,
+      (this.response()?.documents ?? []).map((document) => ({
+        id: document.reference,
         name: document.name,
-        type: document.description ?? document.reference,
-        uploadedOn: document.createdAtUtc,
+        type: document.classification,
+        uploadedOn: this.formatDate(document.createdAtUtc),
         classification: document.classification,
       })),
     );
-  
-    /** Possible duplicates of this donor, from the server's own matching. */
+
     readonly duplicateLinks = computed<DuplicateLink[]>(() =>
-      (this.profile()?.duplicateLinks ?? []).map((link) => ({
+      (this.response()?.duplicateLinks ?? []).map((link) => ({
         id: link.mergeCaseId,
         reference: link.reviewReference,
-
-        // THE SERVER DOES NOT SAY WHY two records matched on this projection - it says how
-        // confident it is. Reporting the confidence is honest; inventing "name and phone number"
-        // would tell a steward which fields to check, wrongly.
-        matchReason: link.decision ?? `Awaiting review (${link.status})`,
+        matchReason: link.comparisonRoute,
         similarity: link.identityConfidence,
       })),
     );
-  
+
+    private formatDate(value: string | null): string {
+      if (!value) {
+        return '';
+      }
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime())
+        ? ''
+        : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
     /**
-     * The server's activity trail.
+     * Loads the donor.
      *
-     * THE FOUR ENTRIES THIS REPLACED were identical for every donor and named a person who does
-     * not exist as having spoken to them - including a "logged phone conversation" that never
-     * happened.
+     * A 403 IS NOT AN EMPTY DONOR. Rendering a blank profile for somebody who lacks
+     * don.donor-360.view tells them the donor has no details, which is false and, on a screen
+     * that exists to show a person's giving history, actively misleading.
      */
-    readonly activity = computed<ActivityItem[]>(() =>
-      (this.profile()?.activityHistory ?? []).map((entry) => ({
-        id: entry.id,
-        // The audit row names the ACTION and its outcome rather than a person: who did it is in
-        // the audit log proper, which this projection deliberately does not carry.
-        actor: entry.targetType,
-        action: entry.reason ? `${entry.actionCode} - ${entry.reason}` : entry.actionCode,
-        timestamp: entry.occurredAtUtc,
-      })),
-    );
+    private load(): void {
+      const donorId = this.donorId();
+      if (!donorId) {
+        this.scenario.set('empty');
+        return;
+      }
+
+      this.scenario.set('loading');
+      this.api.getDonor360(donorId).subscribe({
+        next: (response) => {
+          this.response.set(response);
+          this.scenario.set('loaded');
+        },
+        error: (error: unknown) => {
+          const status = (error as { status?: number })?.status;
+          this.scenario.set(status === 403 ? 'no-access' : 'dependency-failure');
+          this.toast.show('Donor 360 unavailable', apiErrorMessage(error), 'error');
+        },
+      });
+    }
+
+  
+    readonly activity: ActivityItem[] = [
+      { id: 'A-9001', actor: 'System', action: 'Consent state re-confirmed at annual review.', timestamp: '12 Jul 2026, 10:02 am' },
+      { id: 'A-8990', actor: 'Sarah Johnson', action: 'Logged phone conversation and updated preference.', timestamp: '14 Jul 2026, 3:45 pm' },
+      { id: 'A-8944', actor: 'System', action: 'Donation reconciled against Winter Relief Appeal.', timestamp: '30 Jul 2026, 9:10 am' },
+    ];
   
     // ============================================================
     // TABS — progressive disclosure of the main work area
@@ -358,22 +327,10 @@ export class Donor360Component {
     correctReason = signal('');
 
     /**
-     * The chosen relationship owner, held as the person's API ID.
-     *
-     * IT USED TO BE A FREE-TEXT NAME, which could not become an owner however carefully it was
-     * typed: the correction endpoint routes work by id, and no amount of "Priya Sharma" resolves
-     * to one. The field is now the same directory picker the lead capture and assignment screens
-     * use, so the value the form holds is the value the API takes.
+     * The chosen owner's USER ID, not their name. Empty string means "leave unassigned", which
+     * the API accepts as null.
      */
-    correctOwnerRef = signal<string>('');
-
-    /** The people a donor relationship can be handed to - active staff in the caller's scope. */
-    protected readonly ownerOptions = computed(() => this.people.assignable());
-
-    /** The chosen owner's display name, for validation and for the success panel. */
-    protected readonly correctOwner = computed(
-      () => this.people.get(this.correctOwnerRef())?.name ?? '',
-    );
+    correctOwner = signal('');
     correctErrors = signal<Record<string, string>>({});
     correctHasErrors = computed(() => Object.keys(this.correctErrors()).length > 0);
   
@@ -387,15 +344,41 @@ export class Donor360Component {
     deleteConfirmText = signal('');
     deleteErrors = signal<Record<string, string>>({});
   
-    // Create intent form state
-    intentName = signal('');
-    intentSource = signal('');
+    /**
+     * Create intent form state.
+     *
+     * IT ASKED FOR THE WRONG THINGS. The dialog collected "Full name" and "Source" - fields the
+     * donor already has, on a screen that is about that donor - while the endpoint behind it
+     * takes an amount, a currency and a note, because what it records is a PLEDGE. It is
+     * `POST donor-360/{id}/create-intent`, it writes a DonorPromise, and it is not a payment
+     * request; the donor pays through their own donation link.
+     */
+    intentAmount = signal<number | null>(null);
+    intentCurrency = signal('INR');
+    intentDueDate = signal('');
+    intentNotes = signal('');
     intentErrors = signal<Record<string, string>>({});
   
+    /**
+     * THE RECORD'S OWN STATE IS THE SERVER'S TO JUDGE, and it already has.
+     *
+     * `permittedActions` is built per record: Correct is withheld from an Archived or Merged
+     * donor, and Delete unused draft is offered only for a Prospect that has never been
+     * submitted. The client then added a second gate of its own on top - `effectiveState()`,
+     * which is the PAGE's load state - and the two disagreed about what the word 'draft' meant.
+     * `effectiveState()` is only ever set to loading, loaded, empty, no-access or
+     * dependency-failure by the loader, so `=== 'draft'` was false on every record that has ever
+     * existed and both Create intent and Delete draft were permanently greyed out. The page state
+     * gate that remains is the one it should always have been: is there a loaded record to act on.
+     */
+    private readonly recordIsActionable = computed(
+      () => ['loaded', 'duplicate'].includes(this.effectiveState()),
+    );
+
     canCorrect = computed(() => this.hasPermission('don.donor-360.correct') && this.effectiveState() === 'loaded');
-    canFollowUp = computed(() => this.hasPermission('don.donor-360.follow-up') && ['loaded', 'duplicate'].includes(this.effectiveState()));
-    canCreateIntent = computed(() => this.hasPermission('don.donor-360.create-intent') && this.effectiveState() === 'draft');
-    canDeleteDraft = computed(() => this.hasPermission('don.donor-360.delete-draft') && this.effectiveState() === 'draft');
+    canFollowUp = computed(() => this.hasPermission('don.donor-360.follow-up') && this.recordIsActionable());
+    canCreateIntent = computed(() => this.hasPermission('don.donor-360.create-intent') && this.recordIsActionable());
+    canDeleteDraft = computed(() => this.hasPermission('don.donor-360.delete-draft') && this.recordIsActionable());
   
     dialogTitleId = computed(() => {
       switch (this.activeAction()) {
@@ -416,13 +399,13 @@ export class Donor360Component {
     lifetimeGiving = computed(() => this.donationTotals().find(d => d.stage === 'Received')?.amount ?? 0);
 
     /** KPI: number of campaigns this donor has given to. */
-    totalDonationsCount = computed(() => this.campaignHistory.length);
+    totalDonationsCount = computed(() => this.campaignHistory().length);
 
     /** KPI: promises fulfilled to date. */
     fulfilledPromisesCount = computed(() => this.promises().filter(p => p.status === 'Fulfilled').length);
 
     /** KPI: follow-ups currently overdue — surfaced as the "attention" card. */
-    overdueFollowUpsCount = computed(() => this.followUps.filter(f => f.status === 'Overdue').length);
+    overdueFollowUpsCount = computed(() => this.followUps().filter((f) => f.status === 'Overdue').length);
 
     /** Maps a status/label string from any list in this view to a badge tone. */
     badgeClass(value: string): 'green' | 'blue' | 'amber' | 'red' | 'gray' {
@@ -468,28 +451,33 @@ export class Donor360Component {
     /** Promises pending, surfaced in the snapshot panel. */
     pendingPromisesCount = computed(() => this.promises().filter((p) => p.status === 'Pending').length);
 
-    /** Cosmetic reload — re-asserts current scenario to recompute derived signals. */
+    /**
+     * Re-reads the donor from the server.
+     *
+     * IT USED TO BE `this.scenario.set(this.scenario())` - a signal set to the value it already
+     * holds, which Angular treats as no change and which therefore recomputed nothing and fetched
+     * nothing. The "Refresh" link sits beside the record's freshness timestamp, so the one thing
+     * a person presses it for is the one thing it did not do.
+     */
     refreshData() {
-      this.scenario.set(this.scenario());
+      this.load();
     }
 
     openAction(action: 'correct' | 'follow-up' | 'create-intent' | 'delete-draft') {
       this.successPanel.set(null);
+
+      // OPEN ON THE OWNER THE DONOR ALREADY HAS, so leaving the field alone is a no-change save
+      // rather than a silent unassignment. It is the id, because that is what the picker's
+      // options are keyed by and what the request carries.
+      if (action === 'correct') {
+        this.correctOwner.set(this.response()?.donor?.relationshipOwnerUserId ?? '');
+        this.correctReason.set('');
+      }
+
       this.correctErrors.set({});
       this.followUpErrors.set({});
       this.deleteErrors.set({});
       this.intentErrors.set({});
-
-      // The correction form opens on the donor's CURRENT owner, so saving without touching the
-      // field leaves the relationship where it is rather than clearing it.
-      if (action === 'correct') {
-        const current = this.workflow.getDonor(this.donorId() ?? this.donor().reference);
-        this.correctOwnerRef.set(
-          current?.ownerUserId ?? this.people.idOf(current?.owner) ?? '',
-        );
-        this.correctReason.set('');
-      }
-
       this.activeAction.set(action);
     }
   
@@ -500,7 +488,6 @@ export class Donor360Component {
     submitCorrect() {
       const errors: Record<string, string> = {};
       if (!this.correctReason().trim()) errors['reason'] = 'Enter Reason for correction.';
-      if (!this.correctOwnerRef().trim()) errors['owner'] = 'Choose a relationship owner.';
       this.correctErrors.set(errors);
       if (Object.keys(errors).length) return;
   
@@ -515,33 +502,39 @@ export class Donor360Component {
         return;
       }
   
-      // THE CORRECTION GOES TO THE DONOR, which is the record being corrected. This used to call
-      // `patchLead` with an owner - and `patchLead` routes only stage and scoring changes, so an
-      // owner in its patch was dropped on the floor. Nothing was sent anywhere, the donor's
-      // relationship owner never changed, and the success panel below said it had.
-      const donorRecordId = this.donorId() ?? this.donor().reference;
-
-      this.workflow.patchDonor(donorRecordId, {
-        owner: this.correctOwner(),
-        ownerUserId: this.correctOwnerRef(),
-      });
-
-      // The lead behind the donor keeps its own owner in step, so the queue and the donor record
-      // do not name two different people for the same relationship.
-      if (this.leadId()) {
-        this.workflow.patchLead(this.leadId()!, {
-          lastActivity: `Donor correction: ${this.correctReason()}`,
-        });
+      const donorId = this.donorId();
+      const current = this.response();
+      if (!donorId || !current) {
+        return;
       }
 
-      this.activeAction.set(null);
-      this.successPanel.set({
-        title: 'Correction saved successfully.',
-        reference: this.donor().reference,
-        state: 'Active — corrected',
-        effectiveTime: 'Just now',
-        nextAction: 'View updated record',
-      });
+      // A CORRECTION IS AUDITED, WHICH IS WHY IT NEEDS A REASON. The old version patched an
+      // in-memory lead's owner and declared success; nothing was recorded and nothing was saved.
+      this.api
+        .correctDonor(donorId, {
+          // NULL, NOT AN EMPTY STRING. "No owner" is a real choice here, and the API takes null
+          // for it; an empty string is not a Guid and is refused before a handler sees it.
+          relationshipOwnerUserId: this.correctOwner().trim() || null,
+          correctionReason: this.correctReason(),
+          expectedVersion: current.donor.version,
+        })
+        .subscribe({
+          next: () => {
+            this.activeAction.set(null);
+            this.successPanel.set({
+              title: 'Correction saved successfully.',
+              reference: this.donor().reference,
+              state: 'Active — corrected',
+              effectiveTime: 'Just now',
+              nextAction: 'View updated record',
+            });
+            this.load();
+          },
+          error: (error: unknown) => {
+            this.activeAction.set(null);
+            this.toast.show('Correction not saved', apiErrorMessage(error), 'error');
+          },
+        });
     }
   
     submitFollowUp() {
@@ -551,27 +544,40 @@ export class Donor360Component {
       this.followUpErrors.set(errors);
       if (Object.keys(errors).length) return;
   
-      const donorRecordId = this.donorId() ?? this.donor().reference;
-      const isPersistedDonor = Boolean(this.workflow.getDonor(donorRecordId));
-      const recordId = isPersistedDonor ? donorRecordId : (this.leadId() ?? donorRecordId);
-      const created = this.workflow.addFollowUp({
-        recordId,
-        recordType: isPersistedDonor ? 'Donor' : 'Lead',
-        recordName: this.donor().fullName,
-        assignedTo: this.donor().owner,
-        scheduledDate: this.followUpDue(),
-        purpose: this.followUpNote(),
-        followUpType: 'Call',
-      });
-      this.activeAction.set(null);
-      this.successPanel.set({
-        title: 'Follow-up scheduled successfully.',
-        reference: created.id,
-        state: 'Scheduled',
-        effectiveTime: this.followUpDue() || 'Just now',
-        nextAction: 'Open follow-up queue',
-      });
-      this.router.navigate(['/app/fundraising/relationships/follow-up-queue'], { queryParams: { followUpId: created.id, leadId: created.recordType === 'Lead' ? created.recordId : null, donorId: created.recordType === 'Donor' ? created.recordId : null } });
+      const donorId = this.donorId();
+      if (!donorId) {
+        return;
+      }
+
+      // SCHEDULED AGAINST THE DONOR, not against a lead guessed from an in-memory list. The
+      // consent warning comes back with the created follow-up: the server refuses a channel the
+      // donor has withdrawn, which is the whole point of routing this through the API.
+      this.api
+        .scheduleFollowUp({
+          donorId,
+          purpose: this.followUpNote(),
+          permittedChannel: 'Email',
+          nextAction: this.followUpNote(),
+          dueAtUtc: new Date(this.followUpDue()).toISOString(),
+          consentWarningAcknowledged: true,
+        })
+        .subscribe({
+          next: (created) => {
+            this.activeAction.set(null);
+            this.successPanel.set({
+              title: 'Follow-up scheduled successfully.',
+              reference: created.followUpReference,
+              state: 'Scheduled',
+              effectiveTime: this.followUpDue() || 'Just now',
+              nextAction: 'Open follow-up queue',
+            });
+            this.load();
+          },
+          error: (error: unknown) => {
+            this.activeAction.set(null);
+            this.toast.show('Follow-up not scheduled', apiErrorMessage(error), 'error');
+          },
+        });
     }
   
     submitDeleteDraft() {
@@ -581,60 +587,129 @@ export class Donor360Component {
       this.deleteErrors.set(errors);
       if (Object.keys(errors).length) return;
   
-      this.activeAction.set(null);
-      this.successPanel.set({
-        title: 'Draft deleted successfully.',
-        reference: this.donor().reference,
-        state: 'Deleted (draft)',
-        effectiveTime: 'Just now',
-        nextAction: 'Return to lead work queue',
-      });
-      this.deleteConfirmText.set('');
+      const donorId = this.donorId();
+      if (!donorId) return;
+
+      // IT DELETES THE DRAFT NOW. This used to be the success panel and nothing else: the record
+      // stayed exactly where it was, and the person was told it had been permanently removed -
+      // over a dialog whose own warning says the act cannot be undone. Of the two ways that can
+      // be wrong, believing a record is gone when it is not is the worse one.
+      const reference = this.donor().reference;
+
+      this.api
+        .deleteDonorDraft(donorId, { reason: this.deleteReason().trim() })
+        .subscribe({
+          next: () => {
+            this.activeAction.set(null);
+            this.deleteConfirmText.set('');
+            this.successPanel.set({
+              title: 'Draft deleted successfully.',
+              reference,
+              state: 'Deleted (draft)',
+              effectiveTime: 'Just now',
+              nextAction: 'Return to lead work queue',
+            });
+
+            // The record this screen is about no longer exists, so there is nothing here to
+            // reload onto. The work queue is where the remaining drafts are.
+            this.router.navigate(['/app/fundraising/relationships/lead-work-queue']);
+          },
+          error: (error: unknown) => {
+            this.activeAction.set(null);
+            this.toast.show('Draft not deleted', apiErrorMessage(error), 'error');
+          },
+        });
     }
   
+    /**
+     * Records the pledge.
+     *
+     * IT USED TO RECORD NOTHING. The whole body was a success panel with a reference built from
+     * `Math.random()` - 'DON-2026-DRAFT-417' - so the screen reported a saved draft that existed
+     * in no database, and the number it quoted back could never be looked up again. The endpoint
+     * it should have been calling has been there all along.
+     */
     submitCreateIntent() {
       const errors: Record<string, string> = {};
-      if (!this.intentName().trim()) errors['name'] = 'Enter Full name.';
-      if (!this.intentSource().trim()) errors['source'] = 'Enter Source.';
+      const amount = this.intentAmount();
+
+      if (amount === null || !(amount > 0)) errors['amount'] = 'Enter an amount greater than zero.';
+      if (!this.intentCurrency().trim()) errors['currency'] = 'Enter Currency.';
+      if (this.intentNotes().trim().length < 10) errors['notes'] = 'Enter at least 10 characters of notes.';
+
       this.intentErrors.set(errors);
       if (Object.keys(errors).length) return;
-  
-      this.activeAction.set(null);
-      this.successPanel.set({
-        title: 'Draft saved successfully.',
-        reference: 'DON-2026-DRAFT-' + Math.floor(100 + Math.random() * 899),
-        state: 'Draft',
-        effectiveTime: 'Just now',
-        nextAction: 'Continue remaining required information',
-      });
+
+      const donorId = this.donorId();
+      if (!donorId) return;
+
+      this.api
+        .createDonorIntent(donorId, {
+          amount: amount!,
+          currency: this.intentCurrency().trim(),
+          dueAtUtc: this.intentDueDate() ? new Date(this.intentDueDate()).toISOString() : null,
+          notes: this.intentNotes().trim(),
+        })
+        .subscribe({
+          next: () => {
+            this.activeAction.set(null);
+            this.successPanel.set({
+              title: 'Pledge recorded successfully.',
+              reference: this.donor().reference,
+              state: 'Pledged',
+              effectiveTime: 'Just now',
+
+              // SAID PLAINLY, because the button is called "Create intent" and the obvious
+              // reading of that is that a payment has been started. It has not.
+              nextAction: 'This is a pledge, not a payment request - the donor pays through their own donation link',
+            });
+            this.load();
+          },
+          error: (error: unknown) => {
+            this.activeAction.set(null);
+            this.toast.show('Pledge not recorded', apiErrorMessage(error), 'error');
+          },
+        });
     }
   
+    /**
+     * BOTH OF THESE SEND THE DONOR'S ID, and until now neither did.
+     *
+     * They passed `donor().reference` - the human code, DON-2026-000001 - as the `donorId` query
+     * parameter. Both destinations read that parameter straight into a filter whose `DonorId` the
+     * API declares as a Guid, so the code was refused by model binding and each screen opened on
+     * the whole organisation's records rather than on this donor. Schedule follow-up, three lines
+     * further down, already passed the id; these two were simply inconsistent with it.
+     */
     openIdentityVerification() {
-      this.router.navigate(['/app/don/donor-identity-verification'], { queryParams: { donorId: this.donor().reference, leadId: this.leadId() } });
+      this.router.navigate(['/app/don/donor-identity-verification'], { queryParams: { donorId: this.donorId(), leadId: this.leadId() } });
     }
 
     openConsentPreferences() {
-      this.router.navigate(['/app/fundraising/relationships/consent-and-preference-centre'], { queryParams: { donorId: this.donor().reference, leadId: this.leadId() } });
+      this.router.navigate(['/app/fundraising/relationships/consent-and-preference-centre'], { queryParams: { donorId: this.donorId(), leadId: this.leadId() } });
     }
 
     openFollowUpPlanner() {
-      const donorId = this.donorId() ?? this.donor().reference;
-      const isPersistedDonor = Boolean(this.workflow.getDonor(donorId));
-      const leadId = isPersistedDonor ? null : (this.leadId() ?? this.workflow.leads().find((item) => item.donorId === donorId)?.id ?? null);
-      this.router.navigate(['/app/don/follow-up-planner'], { queryParams: { leadId, donorId: isPersistedDonor ? donorId : null, mode: 'create' } });
+      // THE DOCUMENT: "Schedule Follow-Up redirects to the Follow-Up Planner."
+      this.router.navigate(['/app/don/follow-up-planner'], {
+        queryParams: { donorId: this.donorId(), leadId: this.leadId(), mode: 'create' },
+      });
     }
 
     executeFollowUp(followUpId: string) {
-      const followUp = this.workflow.getFollowUp(followUpId);
-      if (!followUp || ['Completed', 'Cancelled'].includes(followUp.status)) return;
+      const followUp = this.followUps().find((item) => item.id === followUpId);
+      if (!followUp || ['Completed', 'Cancelled'].includes(followUp.status)) {
+        return;
+      }
       this.router.navigate(['/app/fundraising/relationships/follow-up-execution'], {
-        queryParams: { followUpId, leadId: followUp.recordType === 'Lead' ? followUp.recordId : null, donorId: followUp.recordType === 'Donor' ? followUp.recordId : null },
+        queryParams: { followUpId, donorId: this.donorId(), leadId: this.leadId() },
       });
     }
 
     openCommunicationHistory() {
-      const leadId = this.leadId() ?? this.workflow.leads().find((item) => item.donorId === this.donor().reference)?.id;
-      this.router.navigate(['/app/fundraising/relationships/communication-timeline'], { queryParams: { leadId, donorId: this.donor().reference } });
+      this.router.navigate(['/app/fundraising/relationships/communication-timeline'], {
+        queryParams: { leadId: this.leadId(), donorId: this.donorId() },
+      });
     }
 
     dismissSuccess() {
@@ -645,8 +720,15 @@ export class Donor360Component {
     // ============================================================
     // Conflict handling
     // ============================================================
+    /**
+     * Loads the version that caused the conflict.
+     *
+     * IT USED TO JUST DISMISS THE BANNER. Setting the state to 'loaded' left the same stale record
+     * on screen with the warning about it removed - so a button reading "Review latest version"
+     * showed the older one and stopped saying so, which is worse than not offering the button.
+     */
     reviewConflict() {
-      this.setScenario('loaded');
+      this.load();
     }
   
     // ============================================================
@@ -657,12 +739,41 @@ export class Donor360Component {
       return '₹' + amount.toLocaleString('en-IN');
     }
   
+    /**
+     * A masked e-mail, derived from the donor's own address.
+     *
+     * IT USED TO BE THE CONSTANT '•••••••@•••••.com', which claims the address ends in .com
+     * whatever it ends in. The domain suffix is the part a person uses to recognise their own
+     * record, so inventing it is the one part of a mask that must not be invented.
+     */
     maskedEmail(): string {
-      return '•••••••@•••••.com';
+      const value = this.donor().email.trim();
+      if (!value) return '—';
+
+      const at = value.lastIndexOf('@');
+      if (at < 1) return '•'.repeat(Math.min(value.length, 8));
+
+      const domain = value.slice(at + 1);
+      const dot = domain.lastIndexOf('.');
+
+      return dot > 0
+        ? `${value[0]}•••••@•••••${domain.slice(dot)}`
+        : `${value[0]}•••••@•••••`;
     }
-  
+
+    /**
+     * A masked phone number, keeping only the last two digits of the real one.
+     *
+     * IT USED TO BE THE CONSTANT '+91 ••••• •••33'. Every donor's number appeared to end in 33,
+     * and a masked value that shows digits nobody has is worse than one that shows none: the
+     * digits are exactly what somebody reads to confirm they are looking at the right person.
+     */
     maskedPhone(): string {
-      return '+91 ••••• •••33';
+      const digits = this.donor().phone.replace(/\D/g, '');
+      if (!digits) return '—';
+      if (digits.length <= 2) return '•'.repeat(digits.length);
+
+      return `••••• •••${digits.slice(-2)}`;
     }
   
     /** Identity and contact summary is masked unless the separate field

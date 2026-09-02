@@ -3,14 +3,15 @@
     <div class="container-fluid px-4 py-3 fup-page">
       <header class="fup-header" aria-labelledby="follow-up-title">
         <div>
-          <h1 id="follow-up-title" class="fup-title">{{ screen.title }}</h1>
-          <p class="fup-subtitle">{{ screen.purpose }}</p>
+          <h1 id="follow-up-title" class="fup-title"  style="
+        font-size: 40px !important;font-family:Georgia !important ;">Follow-up planner</h1>
+          <p class="fup-subtitle">Schedule the next contact with a lead or donor on a channel they have consented to.</p>
         </div>
 
         <dl class="fup-reference-group" aria-label="Record references">
           <div class="fup-reference-card">
             <dt>Reference</dt>
-            <dd>{{ followUpId() || '—' }}</dd>
+            <dd>{{ existing()?.followUpReference || 'New follow-up' }}</dd>
           </div>
           <div class="fup-reference-card">
             <dt>Lead</dt>
@@ -56,14 +57,14 @@
         </article>
         <article class="fup-summary-card fup-summary-wide">
           <span class="fup-summary-label">Updated</span>
-          <strong>{{ lastRefresh() || '—' }}</strong>
+          <strong>{{ lastRefresh() }}</strong>
         </article>
       </section>
 
       <section class="fup-filterbar" aria-label="Queue scope and saved view">
         <div class="fup-scope-chip">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-4.3 6-11a6 6 0 1 0-12 0c0 6.7 6 11 6 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg>
-          <span>{{ assignedScope() || '—' }}</span>
+          <span>{{ activeScope() }}</span>
         </div>
 
         <div class="fup-view-control">
@@ -75,7 +76,7 @@
             (ngModelChange)="savedFilter.set($event)"
             aria-label="Saved view"
           >
-            @for (filter of savedFilters; track filter) {
+            @for (filter of savedFilters(); track filter) {
               <option [value]="filter">{{ filter }}</option>
             }
           </select>
@@ -117,7 +118,7 @@
                 <span class="fup-due-badge">Due {{ scheduledDate() || '—' }} {{ scheduledTime() }}</span>
               </div>
               <div class="fup-divider"></div>
-              <p class="fup-next-action-title">{{ purpose() || '—' }}</p>
+              <p class="fup-next-action-title">{{ purpose() || 'No purpose recorded yet' }}</p>
               <div class="fup-badge-row">
                 <span class="fup-badge" [class]="priorityClass(priority())">
                   <span class="fup-badge-dot" aria-hidden="true"></span>{{ priority() }} priority
@@ -153,7 +154,7 @@
                   <dd>
                     <select class="form-select form-select-sm fup-select" [ngModel]="owner()" (ngModelChange)="owner.set($event)" aria-label="Assigned user">
                       @for (option of ownerOptions(); track option.value) {
-                        <option [value]="option.label">{{ option.label }}</option>
+                        <option [value]="option.value">{{ option.label }}</option>
                       }
                     </select>
                   </dd>
@@ -197,11 +198,11 @@
                 </div>
                 <div class="fup-detail-item">
                   <dt>Preferred contact time</dt>
-                  <dd>{{ preferredContactTime() || '—' }}</dd>
+                  <dd>{{ existing()?.preferredContactTimeUtc || '—' }}</dd>
                 </div>
                 <div class="fup-detail-item fup-detail-item-full">
                   <dt>Consent</dt>
-                  <dd><span class="fup-consent-status">{{ consentWarning() || 'No consent warning on this record.' }}</span></dd>
+                  <dd><span class="fup-consent-status">{{ consentWarning() || 'No consent restriction on this channel.' }}</span></dd>
                 </div>
               </dl>
             </section>

@@ -8,13 +8,13 @@
       <header class="ab-header">
         <div class="ab-header-main">
           <h1 class="ab-title">
-            {{ screen.title }}
+            {{ screen().title }}
             <span
               class="ab-info-icon"
               tabindex="0"
               role="img"
-              [attr.aria-label]="screen.purpose"
-              [title]="screen.purpose"
+              [attr.aria-label]="screen().purpose"
+              [title]="screen().purpose"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
@@ -23,7 +23,7 @@
               </svg>
             </span>
           </h1>
-          <p class="ab-subtitle">{{ screen.purpose }}</p>
+          <p class="ab-subtitle">{{ screen().purpose }}</p>
        
         </div>
 
@@ -195,9 +195,9 @@
             <select
               id="ab-filter-saved"
               [ngModel]="savedFilter()"
-              (ngModelChange)="savedFilter.set($event)"
+              (ngModelChange)="savedFilter.set($event); onFilterChanged()"
             >
-              @for (option of savedFilters; track option) {
+              @for (option of savedFilters(); track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -208,9 +208,9 @@
             <select
               id="ab-filter-campaign"
               [ngModel]="campaignFilter()"
-              (ngModelChange)="campaignFilter.set($event)"
+              (ngModelChange)="campaignFilter.set($event); onFilterChanged()"
             >
-              @for (option of campaignOptions(); track option) {
+              @for (option of filters().campaigns; track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -221,9 +221,9 @@
             <select
               id="ab-filter-team"
               [ngModel]="teamFilter()"
-              (ngModelChange)="teamFilter.set($event)"
+              (ngModelChange)="teamFilter.set($event); onFilterChanged()"
             >
-              @for (option of teamOptions(); track option) {
+              @for (option of filters().teams; track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -234,9 +234,9 @@
             <select
               id="ab-filter-language"
               [ngModel]="languageFilter()"
-              (ngModelChange)="languageFilter.set($event)"
+              (ngModelChange)="languageFilter.set($event); onFilterChanged()"
             >
-              @for (option of languageOptions(); track option) {
+              @for (option of filters().languages; track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -247,9 +247,9 @@
             <select
               id="ab-filter-workload"
               [ngModel]="workloadFilter()"
-              (ngModelChange)="workloadFilter.set($event)"
+              (ngModelChange)="workloadFilter.set($event); onFilterChanged()"
             >
-              @for (option of workloadBandOptions(); track option) {
+              @for (option of filters().workloadBands; track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -260,9 +260,9 @@
             <select
               id="ab-filter-sla"
               [ngModel]="slaFilter()"
-              (ngModelChange)="slaFilter.set($event)"
+              (ngModelChange)="slaFilter.set($event); onFilterChanged()"
             >
-              @for (option of slaStateOptions(); track option) {
+              @for (option of filters().slaStates; track option) {
                 <option [ngValue]="option">{{ option }}</option>
               }
             </select>
@@ -322,7 +322,7 @@
           <div class="ab-panel-head">
             <h2>Assignment queue</h2>
             <p class="ab-panel-meta">
-              {{ filteredRows().length }} in scope · refreshed {{ lastRefresh() || '—' }}
+              {{ filteredRows().length }} in scope · refreshed {{ screen().lastRefresh }}
             </p>
           </div>
 
@@ -396,7 +396,7 @@
                     <button type="button" class="btn btn-outline-primary btn-sm" (click)="selectPreview(row)">
                       Preview
                     </button>
-                    @if (permissions()['inspectHistory']) {
+                    @if (permissions()['view']) {
                       <button type="button" class="btn btn-outline-primary btn-sm" (click)="openHistoryPanel(row)">
                         Inspect history
                       </button>
@@ -528,7 +528,10 @@
                     <span class="ab-avatar avatar-tone-0" aria-hidden="true">{{ owner.initials }}</span>
                     <div class="ab-owner-chip-text">
                       <p class="ab-owner-chip-name">{{ owner.label }}</p>
-                      <p class="ab-owner-chip-context">{{ owner.context }} · {{ owner.reference }}</p>
+                      <!-- `owner.reference` is the API's user Guid, and it was being printed
+                           after the team and workload as though it were something a person reads.
+                           The context line already identifies them. -->
+                      <p class="ab-owner-chip-context">{{ owner.context }}</p>
                     </div>
                     <button type="button" class="btn btn-outline-primary btn-sm" (click)="toggleOwnerPicker()">
                       Change
@@ -568,7 +571,7 @@
                             <span class="ab-avatar avatar-tone-2" aria-hidden="true">{{ owner.initials }}</span>
                             <span class="ab-owner-option-text">
                               <span class="ab-owner-option-name">{{ owner.label }}</span>
-                              <span class="ab-owner-option-context">{{ owner.context }} · {{ owner.reference }}</span>
+                              <span class="ab-owner-option-context">{{ owner.context }}</span>
                             </span>
                           </button>
                         </li>
@@ -853,7 +856,7 @@
                 } @else {
                   <p class="ab-field-hint">You don't have permission to {{ primaryActionLabel(row).toLowerCase() }} this record.</p>
                 }
-                @if (permissions()['inspectHistory']) {
+                @if (permissions()['view']) {
                   <button type="button" class="btn btn-outline-primary btn-sm" (click)="openHistoryPanel(row)">
                     Inspect history
                   </button>

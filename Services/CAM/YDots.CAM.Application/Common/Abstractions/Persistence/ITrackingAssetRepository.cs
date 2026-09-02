@@ -40,4 +40,14 @@ public interface ITrackingAssetRepository
     /// would not see that collision at all.
     /// </summary>
     Task<bool> TrackingReferenceExistsAsync(string reference, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes an asset outright.
+    ///
+    /// THE ONLY DELETE IN THIS INTERFACE, and the handler restricts it to an unused DRAFT. An
+    /// asset that has ever been activated holds a tracking reference that donations are
+    /// attributed through, so removing one would orphan every gift it produced - which is why
+    /// retirement everywhere else is a deactivation.
+    /// </summary>
+    void Remove(TrackingAsset trackingAsset);
 }

@@ -88,13 +88,23 @@ export class DataService {
    */
   getPublicDonationInitiationData(): Observable<PublicDonationFormConfig> {
     return of({
-      pageTitle: 'Make a donation',
-      pageSubtitle: 'Your gift is recorded against the campaign you followed.',
-      operatingTimeZone: 'IST',
+      // THE DOCUMENT'S OWN WORDING, and it has to be, because this overwrites the component's
+      // signals on load. Fig 1 and Fig 2 of the YDot Donation Flow guide both head this screen
+      // "Public donation initiation" with the subtitle below - the component's defaults already
+      // said exactly that, and these three values were quietly replacing them at runtime with a
+      // different title, a truncated time zone and a consent version that names no policy.
+      pageTitle: 'Public donation initiation',
+      pageSubtitle: 'Collect minimum identity, amount and consent before creating a unique intent.',
+
+      // THE FULL ZONE, as both figures print it. "IST" alone does not say which offset applies,
+      // and this line sits directly above a form that records a legally significant consent
+      // timestamp.
+      operatingTimeZone: 'Asia/Kolkata · IST (UTC+05:30)',
 
       // The consent wording's version, recorded on the intent so a consent given today can be
-      // told apart from one given under different wording last year.
-      consentPolicyVersion: 'v1',
+      // told apart from one given under different wording last year. It is rendered verbatim
+      // into "I acknowledge the …", so it names the documents rather than carrying a bare 'v1'.
+      consentPolicyVersion: 'Privacy Notice v3.2 · Consent Terms v1.4',
 
       campaigns: [],
 

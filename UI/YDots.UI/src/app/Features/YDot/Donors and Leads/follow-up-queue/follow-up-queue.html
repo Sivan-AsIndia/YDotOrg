@@ -202,7 +202,7 @@
                   <label class="filter-group-label" for="fq-owner">Owner</label>
                   <select id="fq-owner" class="field-select" [value]="draftFilters().owner ?? ''" (change)="setDraftOwner($any($event.target).value)">
                     <option value="">All owners</option>
-                    @for (o of owners; track trackByString($index, o)) {
+                    @for (o of owners(); track trackByString($index, o)) {
                       <option [value]="o">{{ o }}</option>
                     }
                   </select>
@@ -647,7 +647,7 @@
               <label for="reassign-owner">New owner</label>
               <select id="reassign-owner" class="field-select" [value]="reassignOwner()" (change)="reassignOwner.set($any($event.target).value)">
                 <option value="" disabled>Select an owner</option>
-                @for (o of owners; track trackByString($index, o)) {
+                @for (o of owners(); track trackByString($index, o)) {
                   <option [value]="o">{{ o }}</option>
                 }
               </select>
@@ -699,7 +699,7 @@
               <label for="escalate-to">Escalate to</label>
               <select id="escalate-to" class="field-select" [value]="escalateTo()" (change)="escalateTo.set($any($event.target).value)">
                 <option value="" disabled>Select a manager</option>
-                @for (o of owners; track trackByString($index, o)) {
+                @for (o of owners(); track trackByString($index, o)) {
                   <option [value]="o">{{ o }}</option>
                 }
               </select>

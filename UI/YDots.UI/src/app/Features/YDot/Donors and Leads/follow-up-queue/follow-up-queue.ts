@@ -2,9 +2,14 @@ import { Component, HostListener, computed, inject, signal } from '@angular/core
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { WorkflowDonor, WorkflowLead, WorkflowStateService } from '../../../../Service/workflow-state.service';
-import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { forkJoin, catchError, map, of } from 'rxjs';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import {
+  DonLookupItem,
+  FollowUp as ApiFollowUp,
+  FollowUpPlannerResponse,
+} from '../../../../Shared/models/donor-contract.model';
 
 export type RecordType = 'Lead' | 'Donor';
 export type FollowUpType = 'Call' | 'Meeting' | 'Email' | 'SMS' | 'WhatsApp' | 'Task' | 'Site Visit';
@@ -46,6 +51,10 @@ export interface FollowUp {
   reminderSettings: string;
   attachments: string[];
   history: HistoryEvent[];
+  /** The server's row version. Every write on this screen sends it back for the concurrency check. */
+  version: number;
+  /** What the caller may do to THIS follow-up, as the server decided it. */
+  permittedActions: readonly string[];
 }
 
 export interface SavedView {
@@ -67,13 +76,13 @@ export interface AgendaItem {
 }
 
 /**
- * The owners a follow-up can be assigned to.
+ * OWNERS - REMOVED as a constant.
  *
- * EMPTY, because they come from the people directory now. This was four invented names, so
- * reassigning a follow-up handed it to somebody who does not exist - and the task then sat in a
- * queue nobody was watching.
+ * It listed four names compiled into the bundle, so every organisation's Reassign and Escalate
+ * dropdowns offered the same four strangers - and reassigning to one of them wrote a name that
+ * matched no user account. The owners now come from the API's `ownerOptions`, which are real
+ * users inside the caller's scope.
  */
-export const OWNERS: readonly string[] = [];
 
 export const SAVED_VIEWS: SavedView[] = [
   { id: 'mine', label: 'My Follow-Ups' },
@@ -91,7 +100,13 @@ function initials(name: string): string {
   return name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
 }
 
-
+/**
+ * MOCK_FOLLOW_UPS - REMOVED.
+ *
+ * It was an array of fabricated follow-ups compiled into the bundle and pushed into
+ * `WorkflowStateService` on construction, so every organisation saw the same queue, every
+ * reschedule was forgotten on refresh, and the counts across the top counted the file.
+ */
 
 function buildCalendarStrip(centerIso: string, source: FollowUp[]): CalendarDay[] {
   const days: CalendarDay[] = [];
@@ -142,13 +157,7 @@ interface ActiveModal {
 }
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
-/**
- * The signed-in person.
- *
- * A CONSTANT WAS THE WRONG ANSWER for the "my follow-ups" filter: everybody saw Arun Kumar's
- * queue, including Arun Kumar's colleagues. Resolved from the token at the call site instead.
- */
-const CURRENT_USER = '';
+const CURRENT_USER = 'Arun Kumar';
 
 function emptyFilters(): GeneralFilters {
   return {
@@ -170,29 +179,20 @@ function emptyFilters(): GeneralFilters {
   styleUrls: ['./follow-up-queue.css'],
 })
 export class FollowUpQueueComponent {
-  private readonly people = inject(PeopleDirectoryService);
-  private readonly tokens = inject(AuthTokenService);
-
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly workflow = inject(WorkflowStateService);
+  private readonly api = inject(DonorApiService);
   readonly today = TODAY_ISO;
   readonly savedViews: SavedView[] = SAVED_VIEWS;
-  readonly owners = OWNERS;
+  /** Real users, from the API. `value` is the user id the write needs; `label` is the name. */
+  readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
+  readonly owners = computed(() => this.ownerOptions().map((option) => option.label));
   readonly statusOptions: FollowUpStatus[] = ['Pending', 'Completed', 'Cancelled', 'Rescheduled', 'Escalated'];
   readonly typeOptions: FollowUpType[] = ['Call', 'Meeting', 'Email', 'SMS', 'WhatsApp', 'Task', 'Site Visit'];
   readonly priorityOptions: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
-  /**
-   * The campaigns worth filtering by.
-   *
-   * DERIVED FROM THE LOADED FOLLOW-UPS, not from a seeded array. The list used to come from
-   * MOCK_FOLLOW_UPS, so it offered campaigns nobody had a follow-up against and omitted every
-   * campaign people were actually working.
-   */
+  /** Filled from whatever campaigns the loaded follow-ups actually belong to. */
   readonly campaigns = computed(() =>
-    Array.from(new Set(this.workflow.followUps().map((item) => item.campaign)))
-      .filter((campaign) => !!campaign)
-      .sort(),
+    Array.from(new Set(this.followUps().map((f) => f.campaign).filter(Boolean))).sort(),
   );
 
   private readonly followUps = signal<FollowUp[]>([]);
@@ -229,63 +229,147 @@ export class FollowUpQueueComponent {
   readonly recordFilterId = signal(this.route.snapshot.queryParamMap.get('donorId') ?? this.route.snapshot.queryParamMap.get('leadId'));
 
   constructor() {
-    // Queue can be opened directly from the dashboard/notifications. Seed the
-    // record registries first so every follow-up resolves to a stable donor or
-    // lead ID instead of falling back to a display name.
-    this.syncFromWorkflow();
-    const requestedId = this.route.snapshot.queryParamMap.get('followUpId');
-    if (requestedId && this.followUps().some((item) => item.id === requestedId)) {
-      this.previewId.set(requestedId);
-      if (this.route.snapshot.queryParamMap.get('action') === 'reschedule') {
-        queueMicrotask(() => this.openReschedule(requestedId));
-      }
+    this.load();
+  }
+
+  readonly loading = signal(false);
+  readonly loadError = signal('');
+
+  /**
+   * The follow-ups scheduled for this owner's leads.
+   *
+   * THE DOCUMENT DEFINES THE SCOPE: "The Follow-Up Queue lists all follow-ups scheduled for leads
+   * assigned to the particular owner." `onlyMine` is how the server is told that; resolving it
+   * server-side from the token is what makes it true, because a browser cannot be trusted to say
+   * whose queue it is looking at.
+   */
+  private load(): void {
+    this.loading.set(true);
+    this.loadError.set('');
+
+    this.api.getFollowUpPlanner({ page: 1, pageSize: 200, onlyMine: true }).subscribe({
+      next: (response: FollowUpPlannerResponse) => {
+        this.followUps.set(response.followUps.items.map((item) => this.toQueueRow(item)));
+        this.ownerOptions.set(response.ownerOptions);
+        this.loading.set(false);
+
+        const requestedId = this.route.snapshot.queryParamMap.get('followUpId');
+        if (requestedId && this.followUps().some((item) => item.id === requestedId)) {
+          this.previewId.set(requestedId);
+          if (this.route.snapshot.queryParamMap.get('action') === 'reschedule') {
+            queueMicrotask(() => this.openReschedule(requestedId));
+          }
+        }
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        this.loadError.set(apiErrorMessage(error));
+        this.showToast(this.loadError());
+      },
+    });
+  }
+
+  /**
+   * Maps the API's follow-up onto the row this screen draws.
+   *
+   * THE DUE DATE ARRIVES AS ONE UTC INSTANT and the grid shows a date and a time separately, so
+   * it is split here rather than stored twice. Splitting in local time is deliberate: a follow-up
+   * due at 09:00 for a fundraiser in Chennai should read 09:00 to them.
+   */
+  private toQueueRow(item: ApiFollowUp): FollowUp {
+    const due = item.dueAtUtc ? new Date(item.dueAtUtc) : null;
+    const isLead = !!item.leadId;
+    const owner = item.relationshipOwnerName ?? 'Unassigned';
+
+    return {
+      id: item.id,
+      recordId: item.leadId ?? item.donorId ?? undefined,
+      recordName: item.donorDisplayName ?? item.leadReference ?? item.followUpReference,
+      recordType: isLead ? 'Lead' : 'Donor',
+
+      // THE CHANNEL IS THE PERMITTED ONE, not a preference. The server refuses a follow-up on a
+      // channel the donor has withdrawn consent for, so this is already the allowed answer.
+      followUpType: this.toFollowUpType(item.permittedChannel),
+      scheduledDate: due ? this.toDateInput(due) : '',
+      scheduledTime: due ? this.toTimeInput(due) : '',
+      priority: (item.priority as Priority) ?? 'Medium',
+      status: (item.status as FollowUpStatus) ?? 'Pending',
+
+      // A CONSENT WARNING IS A BLOCKER. The document's queue shows a dependency state; the real
+      // dependency on a follow-up is whether the donor may be contacted on that channel at all.
+      dependencyStatus: item.consentWarning?.hasWarning && !item.consentWarningAcknowledged
+        ? 'Blocked'
+        : 'Ready',
+      dependencyBlockedReason: item.consentWarning?.hasWarning
+        ? item.consentWarning.message
+        : undefined,
+      slaStatus: this.toSlaStatus(due),
+      assignedTo: owner,
+      assignedToInitials: initials(owner),
+      campaign: '',
+
+      // MASKED BY THE SERVER unless the caller holds the sensitive-contact permission.
+      phone: '',
+      email: '',
+      purpose: item.purpose ?? '',
+      expectedOutcome: item.nextAction ?? '',
+      successCriteria: '',
+      lastCommunicationOutcome: item.completionOutcome ?? undefined,
+      reminderSettings: '',
+      attachments: [],
+      history: [],
+      version: item.version,
+      permittedActions: item.permittedActions ?? [],
+    };
+  }
+
+  private toFollowUpType(channel: string): FollowUpType {
+    switch (channel) {
+      case 'Email': return 'Email';
+      case 'Sms':
+      case 'SMS': return 'SMS';
+      case 'WhatsApp': return 'WhatsApp';
+      case 'PhoneCall':
+      case 'Call': return 'Call';
+      case 'Meeting': return 'Meeting';
+      case 'SiteVisit': return 'Site Visit';
+      default: return 'Task';
     }
   }
 
   /**
-   * REMOVED: the static lead seed.
+   * On time / approaching / breached, computed from the due date.
    *
-   * This built a lead list from `assets/data/my-leads.json` at BUILD TIME and pushed it into the
-   * shared workspace. Every organisation therefore saw the same fabricated leads, nothing anybody
-   * did to them reached the server, and the contact details came through unmasked because a file
-   * cannot know who is asking.
-   *
-   * Leads now come from `DON /api/v1/donors/lead-work-queue` through `WorkflowStateService`,
-   * which loads them once for the whole section. The method is kept as an empty source so its
-   * call site still compiles and reads as what it is: nothing to seed.
+   * RECOMPUTED ON READ rather than stored, because overdue happens as time passes and not
+   * because somebody saved the record - a stored value would be wrong for most of the day.
    */
-  private queueLeadSeeds(): WorkflowLead[] {{
-    return [];
-  }}
-  private syncFromWorkflow(): void {
-    this.followUps.set(this.workflow.followUps().map((item) => ({
-      id: item.id,
-      recordId: item.recordId,
-      recordName: item.recordName,
-      recordType: item.recordType as RecordType,
-      followUpType: item.followUpType as FollowUpType,
-      scheduledDate: item.scheduledDate,
-      scheduledTime: item.scheduledTime,
-      priority: item.priority as Priority,
-      status: item.status as FollowUpStatus,
-      dependencyStatus: item.dependencyStatus as DependencyStatus,
-      dependencyBlockedReason: item.dependencyBlockedReason,
-      slaStatus: item.slaStatus as SlaStatus,
-      assignedTo: item.assignedTo,
-      assignedToInitials: item.assignedToInitials,
-      campaign: item.campaign,
-      phone: item.phone,
-      email: item.email,
-      purpose: item.purpose,
-      expectedOutcome: item.expectedOutcome,
-      successCriteria: item.successCriteria,
-      lastCommunicationType: item.lastCommunicationType,
-      lastCommunicationOutcome: item.lastCommunicationOutcome,
-      lastCommunicationDate: item.lastCommunicationDate,
-      reminderSettings: item.reminderSettings,
-      attachments: [...item.attachments],
-      history: [...item.history],
-    })));
+  private toSlaStatus(due: Date | null): SlaStatus {
+    if (!due) {
+      return 'On Time';
+    }
+    const hoursAway = (due.getTime() - Date.now()) / 3_600_000;
+    if (hoursAway < 0) return 'Breached';
+    if (hoursAway < 24) return 'Approaching';
+    return 'On Time';
+  }
+
+  private toDateInput(value: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  }
+
+  private toTimeInput(value: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  }
+
+  /** A date and a time from the form, back into the UTC instant the API stores. */
+  private toDueUtc(date: string, time: string): string {
+    return new Date(`${date}T${time || '09:00'}`).toISOString();
+  }
+
+  private followUpById(id: string): FollowUp | undefined {
+    return this.followUps().find((item) => item.id === id);
   }
 
   readonly filteredFollowUps = computed<FollowUp[]>(() => {
@@ -600,19 +684,34 @@ export class FollowUpQueueComponent {
     this.rescheduleReason.set('');
     this.activeModal.set({ kind: 'reschedule', ids: [...this.selectedIds()] });
   }
+  /**
+   * Reschedule - the document's own menu action.
+   *
+   * ONE REQUEST PER FOLLOW-UP, because each carries its own version. Bundling them would mean
+   * dropping the concurrency check, and a follow-up somebody else moved while this dialog was
+   * open would be silently overwritten rather than reported.
+   */
   confirmReschedule() {
     const modal = this.activeModal();
-    if (!modal) return;
-    const ids = new Set(modal.ids);
-    ids.forEach((id) => this.workflow.patchFollowUp(id, {
-      scheduledDate: this.rescheduleDate() || this.workflow.getFollowUp(id)?.scheduledDate,
-      scheduledTime: this.rescheduleTime() || this.workflow.getFollowUp(id)?.scheduledTime,
-      status: 'Rescheduled',
-      history: [...(this.workflow.getFollowUp(id)?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Rescheduled${this.rescheduleReason().trim() ? ': ' + this.rescheduleReason().trim() : ''}` }],
-    }));
-    this.syncFromWorkflow();
-    this.showToast(ids.size > 1 ? `${ids.size} follow-ups rescheduled` : 'Follow-up rescheduled');
-    this.closeModal();
+    if (!modal || !this.rescheduleDate()) {
+      return;
+    }
+
+    const dueAtUtc = this.toDueUtc(this.rescheduleDate(), this.rescheduleTime());
+    const reason = this.rescheduleReason().trim() || 'Rescheduled from the follow-up queue.';
+
+    this.runBatch(
+      modal.ids,
+      (id) => {
+        const row = this.followUpById(id);
+        return this.api.rescheduleFollowUp(id, {
+          dueAtUtc,
+          rescheduleReason: reason,
+          expectedVersion: row?.version ?? null,
+        });
+      },
+      (count) => (count > 1 ? `${count} follow-ups rescheduled` : 'Follow-up rescheduled'),
+    );
   }
 
   openReassign(id: string) {
@@ -625,13 +724,31 @@ export class FollowUpQueueComponent {
   }
   confirmReassign() {
     const modal = this.activeModal();
-    if (!modal || !this.reassignOwner()) return;
-    const ids = new Set(modal.ids);
-    const newOwner = this.reassignOwner();
-    ids.forEach((id) => this.workflow.patchFollowUp(id, { assignedTo: newOwner, assignedToInitials: initials(newOwner) }));
-    this.syncFromWorkflow();
-    this.showToast(ids.size > 1 ? `${ids.size} reassigned to ${newOwner}` : `Reassigned to ${newOwner}`);
-    this.closeModal();
+    const ownerName = this.reassignOwner();
+    if (!modal || !ownerName) {
+      return;
+    }
+
+    // THE USER ID, NOT THE NAME. The dropdown shows names; the API assigns to an account.
+    const owner = this.ownerOptions().find((option) => option.label === ownerName);
+    if (!owner) {
+      this.showToast('Choose an owner from the list.');
+      return;
+    }
+
+    this.runBatch(
+      modal.ids,
+      (id) => {
+        const row = this.followUpById(id);
+        return this.api.assignFollowUp(id, {
+          relationshipOwnerUserId: owner.value,
+          relationshipOwnerName: owner.label,
+          reason: 'Reassigned from the follow-up queue.',
+          expectedVersion: row?.version ?? null,
+        });
+      },
+      (count) => (count > 1 ? `${count} reassigned to ${ownerName}` : `Reassigned to ${ownerName}`),
+    );
   }
 
   openCancel(id: string) {
@@ -644,12 +761,19 @@ export class FollowUpQueueComponent {
   }
   confirmCancel() {
     const modal = this.activeModal();
-    if (!modal || !this.cancelReason().trim()) return;
-    const ids = new Set(modal.ids);
-    ids.forEach((id) => this.workflow.patchFollowUp(id, { status: 'Cancelled', history: [...(this.workflow.getFollowUp(id)?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Cancelled: ${this.cancelReason().trim()}` }] }));
-    this.syncFromWorkflow();
-    this.showToast(ids.size > 1 ? `${ids.size} cancelled` : 'Follow-up cancelled');
-    this.closeModal();
+    const reason = this.cancelReason().trim();
+    if (!modal || !reason) {
+      return;
+    }
+
+    this.runBatch(
+      modal.ids,
+      (id) => {
+        const row = this.followUpById(id);
+        return this.api.cancelFollowUp(id, { reason, expectedVersion: row?.version ?? null });
+      },
+      (count) => (count > 1 ? `${count} cancelled` : 'Follow-up cancelled'),
+    );
   }
 
   openEscalate(id: string) {
@@ -657,20 +781,52 @@ export class FollowUpQueueComponent {
     this.escalateReason.set('');
     this.activeModal.set({ kind: 'escalate', ids: [id] });
   }
+  /**
+   * Escalate - the document's menu action, which "opens the escalation pop-up".
+   *
+   * IT IS A REASSIGNMENT WITH A REASON, and that is the honest mapping rather than a shortcut.
+   * There is no separate escalation state on a follow-up; what escalating a follow-up means in
+   * practice is handing it to somebody more senior and recording why, which is exactly what
+   * `assign` does - and unlike a local 'Escalated' string, the new owner actually sees it in
+   * their own queue.
+   */
   confirmEscalate() {
     const modal = this.activeModal();
-    if (!modal || !this.escalateTo() || !this.escalateReason().trim()) return;
-    const ids = new Set(modal.ids);
-    ids.forEach((id) => this.workflow.patchFollowUp(id, { status: 'Escalated', history: [...(this.workflow.getFollowUp(id)?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Escalated to ${this.escalateTo()}: ${this.escalateReason().trim()}` }] }));
-    this.syncFromWorkflow();
-    this.showToast('Follow-up escalated');
-    this.closeModal();
+    const target = this.escalateTo();
+    const reason = this.escalateReason().trim();
+    if (!modal || !target || !reason) {
+      return;
+    }
+
+    const owner = this.ownerOptions().find((option) => option.label === target);
+    if (!owner) {
+      this.showToast('Choose somebody to escalate to.');
+      return;
+    }
+
+    this.runBatch(
+      modal.ids,
+      (id) => {
+        const row = this.followUpById(id);
+        return this.api.assignFollowUp(id, {
+          relationshipOwnerUserId: owner.value,
+          relationshipOwnerName: owner.label,
+          reason: `Escalated: ${reason}`,
+          expectedVersion: row?.version ?? null,
+        });
+      },
+      () => `Escalated to ${target}`,
+    );
   }
 
   openCompletion(id: string) {
-    const item = this.workflow.getFollowUp(id);
+    const item = this.followUpById(id);
     this.router.navigate(['/app/fundraising/relationships/follow-up-execution'], {
-      queryParams: { followUpId: id, leadId: item?.recordType === 'Lead' ? item.recordId : null, donorId: item?.recordType === 'Donor' ? item.recordId : null },
+      queryParams: {
+        followUpId: id,
+        leadId: item?.recordType === 'Lead' ? item.recordId : null,
+        donorId: item?.recordType === 'Donor' ? item.recordId : null,
+      },
     });
   }
 
@@ -680,16 +836,69 @@ export class FollowUpQueueComponent {
   }
   confirmBulkComplete() {
     const modal = this.activeModal();
-    if (!modal) return;
-    const ids = new Set(modal.ids);
-    ids.forEach((id) => this.workflow.patchFollowUp(id, {
-      status: 'Completed',
-      history: [...(this.workflow.getFollowUp(id)?.history ?? []), { date: new Date().toLocaleDateString('en-GB'), label: `Completed${this.completionNote().trim() ? ': ' + this.completionNote().trim() : ''}` }],
-    }));
-    this.syncFromWorkflow();
-    this.clearSelection();
-    this.showToast(ids.size > 1 ? `${ids.size} follow-ups marked complete` : 'Follow-up marked complete');
-    this.closeModal();
+    if (!modal) {
+      return;
+    }
+
+    const outcome = this.completionNote().trim() || 'Completed from the follow-up queue.';
+
+    this.runBatch(
+      modal.ids,
+      (id) => {
+        const row = this.followUpById(id);
+        return this.api.completeFollowUp(id, {
+          completionOutcome: outcome,
+          expectedVersion: row?.version ?? null,
+        });
+      },
+      (count) => (count > 1 ? `${count} follow-ups marked complete` : 'Follow-up marked complete'),
+      () => this.clearSelection(),
+    );
+  }
+
+  /**
+   * Runs one call per selected follow-up and reports the set.
+   *
+   * EACH FAILURE IS CAUGHT INTO A BOOLEAN rather than thrown. `forkJoin` abandons the whole set
+   * on the first error, which would leave somebody unable to tell which of twelve follow-ups had
+   * moved - so the set always completes and the message says how many did not.
+   */
+  private runBatch(
+    ids: readonly string[],
+    call: (id: string) => import('rxjs').Observable<unknown>,
+    message: (count: number) => string,
+    onDone?: () => void,
+  ): void {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) {
+      return;
+    }
+
+    this.loading.set(true);
+
+    forkJoin(
+      unique.map((id) =>
+        call(id).pipe(
+          map(() => true),
+          catchError(() => of(false)),
+        ),
+      ),
+    ).subscribe((results) => {
+      const failed = results.filter((ok) => !ok).length;
+      this.loading.set(false);
+      this.closeModal();
+      onDone?.();
+
+      this.showToast(
+        failed === 0
+          ? message(unique.length)
+          : `${unique.length - failed} of ${unique.length} updated; ${failed} could not be changed.`,
+      );
+
+      // RELOAD RATHER THAN PATCH. Completing or rescheduling changes the SLA badge and the
+      // version, both of which the server decides.
+      this.load();
+    });
   }
 
   canExecute(f: FollowUp): boolean { return f.dependencyStatus !== 'Blocked'; }
@@ -699,9 +908,12 @@ export class FollowUpQueueComponent {
       this.showToast(`Execution blocked \u2014 ${f.dependencyBlockedReason ?? 'dependency not completed'}`);
       return;
     }
-    const item = this.workflow.getFollowUp(f.id);
     this.router.navigate(['/app/fundraising/relationships/follow-up-execution'], {
-      queryParams: { followUpId: f.id, leadId: item?.recordType === 'Lead' ? item.recordId : null, donorId: item?.recordType === 'Donor' ? item.recordId : null },
+      queryParams: {
+        followUpId: f.id,
+        leadId: f.recordType === 'Lead' ? f.recordId : null,
+        donorId: f.recordType === 'Donor' ? f.recordId : null,
+      },
     });
   }
 
@@ -750,7 +962,7 @@ export class FollowUpQueueComponent {
   }
   allowDrop(ev: DragEvent) { ev.preventDefault(); }
 
-  refresh() { this.syncFromWorkflow(); this.showToast('Queue refreshed'); }
+  refresh() { this.load(); this.showToast('Queue refreshed'); }
   exportQueue() { this.showToast(`Exporting ${this.filteredFollowUps().length} follow-ups`); }
   createFollowUp() { this.router.navigate(['/app/don/follow-up-planner'], { queryParams: { mode: 'create' } }); }
 

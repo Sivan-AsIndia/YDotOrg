@@ -339,12 +339,29 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     this.viewState.set(state);
   }
 
+  /** Why the last transition was refused — the server's own message, shown by the 'error' state. */
+  protected readonly failureMessage = signal('');
+  protected dismissFailure(): void {
+    this.failureMessage.set('');
+    this.viewState.set(this.campaign() ? 'ready' : 'empty');
+  }
+
   /* ---------------- concurrency snapshot ---------------- */
 
   private readonly loadedStatus = signal<CampaignStatus | null>(null);
   private readonly loadedRequestVersion = signal<number | null>(null);
-  private syncSnapshot(): void {
-    this.loadedStatus.set(this.currentState());
+  /**
+   * Re-baselines the concurrency snapshot.
+   *
+   * `landedOn` EXISTS BECAUSE THE STORE IS NOW ASYNCHRONOUS. After a committed transition the
+   * campaign's new status arrives with the list refresh behind it, so reading `currentState()`
+   * here would capture the state the campaign was in BEFORE the change - and the moment the
+   * refresh landed, `isStale()` would compare that against the new one and report a conflict on
+   * the change this panel had just made. Pass the state the transition landed on; omit it
+   * everywhere the snapshot is genuinely being taken from the record.
+   */
+  private syncSnapshot(landedOn?: CampaignStatus | null): void {
+    this.loadedStatus.set(landedOn ?? this.currentState());
     this.loadedRequestVersion.set(this.closeRequest()?.version ?? null);
   }
   private isStale(): boolean {
@@ -540,33 +557,46 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     const actorName = this.currentUserName();
     const effectiveTime = this.nowLabel();
 
-    this.campaignStore.update(this.campaignRef, { status: 'Active' });
-    this.closeStore.addHistory(this.campaignRef, {
-      id: 'EVT-' + Date.now(),
-      actorRef,
-      actorName,
-      action: 'Resume campaign',
-      from: previousState ?? '—',
-      to: 'Active',
-      hasConfidentialReason: false,
-      timestamp: effectiveTime,
-    });
+    // THE HISTORY AND THE OUTCOME WAIT FOR THE SERVER, like every other transition on this panel.
+    // Written before the answer came back, they recorded a resume that the API may well have
+    // refused - and an accountable history that records moves which did not happen is worse than
+    // one that records none.
+    this.campaignStore.setStatus(this.campaignRef, 'Active', (result) => {
+      if (!result.applied) {
+        this.failureMessage.set(
+          result.error ?? 'Resume was refused. The campaign has not been changed.',
+        );
+        this.viewState.set('error');
+        return;
+      }
 
-    this.outcome.set({
-      reference: this.campaignRef,
-      state: 'Active',
-      effectiveTime,
-      nextAction: 'Campaign is live and accepting new activity.',
-      accountableOwner: this.ownerName(this.campaign()?.ownerReference ?? ''),
-      remainingDependency: this.settlementUnavailable()
-        ? 'Open donation intents: settlement check unavailable'
-        : `Open donation intents: ${this.openDonationIntentsCount()}; Active tracking assets: ${this.activeTrackingAssetsCount()}`,
-    });
+      this.closeStore.addHistory(this.campaignRef, {
+        id: 'EVT-' + Date.now(),
+        actorRef,
+        actorName,
+        action: 'Resume campaign',
+        from: previousState ?? '—',
+        to: 'Active',
+        hasConfidentialReason: false,
+        timestamp: effectiveTime,
+      });
 
-    this.activeAction.set(null);
-    this.syncSnapshot();
-    this.viewState.set('success');
-    this.toast(`Campaign resumed. Reference ${this.campaignRef}; state Active.`);
+      this.outcome.set({
+        reference: this.campaignRef,
+        state: 'Active',
+        effectiveTime,
+        nextAction: 'Campaign is live and accepting new activity.',
+        accountableOwner: this.ownerName(this.campaign()?.ownerReference ?? ''),
+        remainingDependency: this.settlementUnavailable()
+          ? 'Open donation intents: settlement check unavailable'
+          : `Open donation intents: ${this.openDonationIntentsCount()}; Active tracking assets: ${this.activeTrackingAssetsCount()}`,
+      });
+
+      this.activeAction.set(null);
+      this.syncSnapshot('Active');
+      this.viewState.set('success');
+      this.toast(`Campaign resumed. Reference ${this.campaignRef}; state Active.`);
+    });
   }
 
   protected readonly effectiveDateTimeLabel = computed(() => {
@@ -700,72 +730,43 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     const actorRef = this.currentUserRef();
     const actorName = this.currentUserName();
 
-    setTimeout(() => {
-      this.submitting.set(false);
-      let resultingState = previousState as CampaignStatus;
-      let nextAction = '';
-      let accountableOwner = this.ownerName(this.campaign()?.ownerReference ?? '');
+    let resultingState = previousState as CampaignStatus;
+    let nextAction = '';
+    let accountableOwner = this.ownerName(this.campaign()?.ownerReference ?? '');
 
-      switch (action.id) {
-        case 'activate':
-          resultingState = 'Active';
-          this.campaignStore.update(this.campaignRef, { status: 'Active' });
-          nextAction = 'Campaign is live and accepting new activity.';
-          break;
-        case 'pause':
-          resultingState = 'Paused';
-          this.campaignStore.update(this.campaignRef, { status: 'Paused' });
-          nextAction = 'Campaign is paused. Resume when ready.';
-          break;
-        case 'resume':
-          resultingState = 'Active';
-          this.campaignStore.update(this.campaignRef, { status: 'Active' });
-          nextAction = 'Campaign is live and accepting new activity.';
-          break;
-        case 'request_close':
-          // Creates a close-request record ONLY — the campaign lifecycle state is unchanged.
-          this.closeStore.update(this.campaignRef, {
-            requestState: 'Requested',
-            requestedByRef: actorRef,
-            requestedByName: actorName,
-            requestedAt: this.effectiveDateTimeLabel(),
-            reasonCategory: this.reasonCategory().trim(),
-            detailedReason: this.detailedReason().trim(),
-            communicationImpact: this.communicationImpact().trim(),
-            closureSummary: this.closureSummary().trim(),
-          });
-          resultingState = previousState as CampaignStatus;
-          nextAction = 'An independent approver must Approve close.';
-          accountableOwner = 'Awaiting independent closure approval';
-          break;
-        case 'approve_close': {
-          const depsRemain = (this.openDonationIntentsCount() ?? 0) > 0 || this.activeTrackingAssetsCount() > 0;
-          resultingState = depsRemain ? 'Closing' : 'Closed';
-          this.campaignStore.update(this.campaignRef, { status: resultingState });
-          this.closeStore.update(this.campaignRef, {
-            requestState: 'Approved',
-            approvedByRef: actorRef,
-            approvedByName: actorName,
-            approvedAt: this.effectiveDateTimeLabel(),
-            decisionReason: this.reasonCategory().trim(),
-          });
-          nextAction =
-            resultingState === 'Closing'
-              ? 'Closure in progress. Remaining dependencies must settle before Closed.'
-              : 'Closure complete. Historical record available in Related and history.';
-          accountableOwner = `Approved by ${actorName}`;
-          break;
-        }
-        case 'cancel_draft':
-          resultingState = 'Cancelled';
-          // Lifecycle Cancel, NOT a permanent delete — the record and history are preserved.
-          this.campaignStore.update(this.campaignRef, { status: 'Cancelled' });
-          this.closeStore.update(this.campaignRef, { requestState: 'Cancelled' });
-          nextAction = 'Draft cancelled. The record is preserved for audit.';
-          break;
+    // ==========================================================================================
+    // TWO THINGS CHANGED HERE, AND THE SECOND IS WHY THE FIRST WAS NOT ENOUGH.
+    //
+    // 1. EVERY STATE TRANSITION NOW GOES THROUGH `setStatus`, WHICH ROUTES TO THE CAMPAIGN'S OWN
+    //    LIFECYCLE ENDPOINT. They all called `campaignStore.update(ref, { status })`, and that is
+    //    the generic content PUT: it wrote the status into the local record, sent a body that
+    //    carries no status at all, and then refreshed - so the server's state never moved and
+    //    the refresh put the old one straight back. Activate, Pause, Resume and Approve close
+    //    were all reported as done and none of them had happened.
+    //
+    // 2. THE OUTCOME IS THE SERVER'S ANSWER, NOT A TIMER. This whole block ran inside a 700 ms
+    //    `setTimeout` that then set the success panel unconditionally - so even once the calls
+    //    were real, a refused transition (a 409 from a campaign somebody else had already moved,
+    //    a 403, an expectedVersion conflict) would still have painted "Saved successfully. state
+    //    Active" over a campaign that had not moved. A refusal now shows the server's message.
+    //
+    // THE CLOSE-REQUEST RECORD IS DELIBERATELY STILL LOCAL. `request_close` writes only to the
+    // close-request store - the campaign's own state does not change on a request - so it has no
+    // transition to wait for and commits directly.
+    // ==========================================================================================
+    const settle = (result: { readonly applied: boolean; readonly error?: string }): void => {
+      this.submitting.set(false);
+
+      if (!result.applied) {
+        this.showConfirmDialog.set(false);
+        this.failureMessage.set(
+          result.error ?? `${action.label} was refused. The campaign has not been changed.`,
+        );
+        this.viewState.set('error');
+        return;
       }
 
-      // Append accountable history — with NO confidential reason text (only an in-scope flag).
+      // Append accountable history - with NO confidential reason text (only an in-scope flag).
       this.closeStore.addHistory(this.campaignRef, {
         id: 'EVT-' + Date.now(),
         actorRef,
@@ -792,7 +793,11 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
 
       this.showConfirmDialog.set(false);
       this.activeAction.set(null);
-      this.syncSnapshot();
+
+      // THE STATE WE LANDED ON, not a re-read of the store. The list refresh behind the
+      // transition has not necessarily arrived yet, so re-reading here would snapshot the OLD
+      // status and every following action in this panel would then report a false conflict.
+      this.syncSnapshot(resultingState);
 
       // A failed dependent settlement step is separated from the confirmed local result.
       if (this.settlementUnavailable() && (action.id === 'request_close' || action.id === 'approve_close')) {
@@ -801,7 +806,82 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
         this.viewState.set('success');
       }
       this.toast(`Saved successfully. Reference ${this.campaignRef}; state ${resultingState}.`);
-    }, 700);
+    };
+
+    switch (action.id) {
+      case 'activate':
+        resultingState = 'Active';
+        nextAction = 'Campaign is live and accepting new activity.';
+        this.campaignStore.setStatus(this.campaignRef, 'Active', settle);
+        break;
+      case 'pause':
+        resultingState = 'Paused';
+        nextAction = 'Campaign is paused. Resume when ready.';
+        this.campaignStore.setStatus(this.campaignRef, 'Paused', settle);
+        break;
+      case 'resume':
+        resultingState = 'Active';
+        nextAction = 'Campaign is live and accepting new activity.';
+        this.campaignStore.setStatus(this.campaignRef, 'Active', settle);
+        break;
+      case 'request_close':
+        // Creates a close-request record ONLY - the campaign lifecycle state is unchanged.
+        this.closeStore.update(this.campaignRef, {
+          requestState: 'Requested',
+          requestedByRef: actorRef,
+          requestedByName: actorName,
+          requestedAt: this.effectiveDateTimeLabel(),
+          reasonCategory: this.reasonCategory().trim(),
+          detailedReason: this.detailedReason().trim(),
+          communicationImpact: this.communicationImpact().trim(),
+          closureSummary: this.closureSummary().trim(),
+        });
+        resultingState = previousState as CampaignStatus;
+        nextAction = 'An independent approver must Approve close.';
+        accountableOwner = 'Awaiting independent closure approval';
+        settle({ applied: true });
+        break;
+      case 'approve_close': {
+        const depsRemain = (this.openDonationIntentsCount() ?? 0) > 0 || this.activeTrackingAssetsCount() > 0;
+        resultingState = depsRemain ? 'Closing' : 'Closed';
+        nextAction =
+          resultingState === 'Closing'
+            ? 'Closure in progress. Remaining dependencies must settle before Closed.'
+            : 'Closure complete. Historical record available in Related and history.';
+        accountableOwner = `Approved by ${actorName}`;
+
+        this.campaignStore.setStatus(this.campaignRef, resultingState, (result) => {
+          // THE CLOSE REQUEST IS ONLY MARKED APPROVED IF THE CLOSURE WAS. Marking it first would
+          // leave a campaign whose request says "approved by" somebody while the campaign itself
+          // is still running - and with Approve close no longer offered to anybody.
+          if (result.applied) {
+            this.closeStore.update(this.campaignRef, {
+              requestState: 'Approved',
+              approvedByRef: actorRef,
+              approvedByName: actorName,
+              approvedAt: this.effectiveDateTimeLabel(),
+              decisionReason: this.reasonCategory().trim(),
+            });
+          }
+
+          settle(result);
+        });
+        break;
+      }
+      case 'cancel_draft':
+        resultingState = 'Cancelled';
+        nextAction = 'Draft cancelled. The record is preserved for audit.';
+
+        // Lifecycle Cancel, NOT a permanent delete - the record and history are preserved.
+        this.campaignStore.setStatus(this.campaignRef, 'Cancelled', (result) => {
+          if (result.applied) {
+            this.closeStore.update(this.campaignRef, { requestState: 'Cancelled' });
+          }
+
+          settle(result);
+        });
+        break;
+    }
   }
 
   protected dismissOutcome(): void {

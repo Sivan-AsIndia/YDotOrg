@@ -416,13 +416,26 @@ public sealed class FollowUpRepository(DonDbContext context) : IFollowUpReposito
 /// <summary>EF Core implementation of the Donor 360 read-only panels.</summary>
 public sealed class Donor360Repository(DonDbContext context) : IDonor360Repository
 {
+    /// <summary>
+    /// The "Donation totals by stage" rows, in the order money moves through the stages.
+    ///
+    /// SORTED IN MEMORY, ON PURPOSE. <c>OrderBy(summary =&gt; summary.Stage)</c> looked like it
+    /// ordered by the lifecycle and did not: the stage is persisted as a string, so the database
+    /// sorted it alphabetically - Committed, Outstanding, Pledged, Received, Reconciled, Refunded -
+    /// and the panel showed "Outstanding" above "Pledged". Ordering by the enum instead needs a
+    /// CASE expression in SQL, and this is at most a handful of rows for one donor, so the sort is
+    /// done after materialising rather than pushed into a query nobody can read.
+    /// </summary>
     public async Task<IReadOnlyList<DonorDonationSummary>> GetDonationSummariesAsync(
         Guid donorId,
-        CancellationToken cancellationToken = default) =>
-        await context.DonorDonationSummaries
+        CancellationToken cancellationToken = default)
+    {
+        var summaries = await context.DonorDonationSummaries
             .Where(summary => summary.DonorId == donorId)
-            .OrderBy(summary => summary.Stage)
             .ToListAsync(cancellationToken);
+
+        return [.. summaries.OrderBy(summary => summary.Stage.LifecycleOrder())];
+    }
 
     public async Task<IReadOnlyList<DonorPromise>> GetPromisesAsync(
         Guid donorId,

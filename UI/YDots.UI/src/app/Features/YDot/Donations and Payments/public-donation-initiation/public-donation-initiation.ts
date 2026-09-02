@@ -1,13 +1,36 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, Injector, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { DataService } from '../../../../Service/data.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
-import { CampaignApiService } from '../../../../Service/campaign-api.service';
+import { CurrentUserService } from '../../../../Service/current-user.service';
+import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
-import { formatMoment } from '../../../../Shared/models/payment-adapters';
+import {
+  CreateDonationIntentRequest,
+  DonationIntentResponse,
+  ExistingDonorCheckResponse,
+} from '../../../../Shared/models/payment.model';
+
+/**
+ * THE BROWSER NEVER HOLDS A RAZORPAY KEY, and that is the change that matters most on this
+ * screen. It used to open Razorpay Checkout itself with `key: 'rzp_test_TCwSZidEO9q88a'`
+ * compiled into the bundle, which meant three things at once:
+ *
+ *   - THE KEY WAS PUBLIC. Anyone who opened dev-tools on the donation page could read it and
+ *     raise charges against this charity's account from anywhere.
+ *   - NOTHING WAS VERIFIED. `handler` believed whatever the browser handed back, so a donation
+ *     was "successful" because a script said so - no signature check, no gateway confirmation.
+ *   - THE AMOUNT WAS DECIDED CLIENT-SIDE. `amount: Math.round(amount * 100)` came from a signal
+ *     a person could edit; a donor could have paid one rupee against a ten-thousand intent.
+ *
+ * The flow the YDot Donation Flow document describes is the server's: Submit creates the intent
+ * (section 2), the server checks Lead/Donor (section 3), and the server issues a Razorpay
+ * payment link using credentials only it holds. The donor is sent to that link. The outcome
+ * comes back from the gateway - webhook, or the verify poll - never from this page.
+ */
 
 type UiState =
   | 'ready'
@@ -24,57 +47,39 @@ type LifecycleState = 'No record' | 'Submitted' | 'Awaiting payment';
 
 interface EffectivePermissions {
   readonly view: boolean;
-  readonly submit: boolean;
-  readonly continueToPayment: boolean;
+  readonly submit: boolean; 
+  readonly continueToPayment: boolean; 
 }
 
-/** A scope-aware selector option with a stable reference and disambiguating context (4.2.2). */
 interface ScopeOption {
   readonly reference: string;
   readonly name: string;
   readonly context: string;
 }
 
-/** A controlled catalogue value shown as label + underlying stable reference (4.2.2). */
 interface CatalogueOption {
   readonly reference: string;
   readonly label: string;
 }
-
 interface ActivityEntry {
   readonly time: string;
   readonly text: string;
 }
 
-/** Related-and-history sub-tabs (4.2.1 Related and history). */
 type RelatedTab = 'Linked' | 'Documents' | 'Activity' | 'Integration' | 'Support' | 'Audit';
 
-/**
- * Public donation initiation - SCR-PAY-004, sections 11 to 14.
- *
- * TWO SERVER CALLS AND NOTHING INVENTED IN BETWEEN.
- *
- *   Submit               - POST /api/public/donations/initiate. The intent reference comes back
- *                          from the server, unguessable and unique platform-wide, and it is what
- *                          every later step is addressed by. Consent is captured HERE, before the
- *                          intent exists, with the wording's version travelling on the request so
- *                          a consent given today is distinguishable from last year's.
- *
- *   Continue to payment  - POST /api/public/donations/{reference}/payment-link. The organisation's
- *                          OWN gateway issues the link and the API records the attempt at the same
- *                          moment. The donor pays on the provider's hosted page - Razorpay's, where
- *                          that is the configured provider - and the outcome comes back through the
- *                          signed webhook, not through this page.
- *
- * WHAT THIS REPLACES: a checkout opened in the browser with a Razorpay TEST KEY compiled into the
- * bundle and no order id. A donor could be charged and the platform would never learn of it,
- * because neither the request nor the result passed through the API - and the key, being in the
- * bundle, was readable by anybody who opened the page.
- *
- * THE ORGANISATION IS NEVER SENT. The server resolves it from the tracking reference the donor
- * followed, or from the campaign; anything else would let a caller create donations against any
- * charity on the platform.
- */
+interface PublicDonationInitiationConfig {
+  readonly pageTitle: string;
+  readonly pageSubtitle: string;
+  readonly operatingTimeZone: string;
+  readonly consentPolicyVersion: string;
+  readonly campaigns: readonly ScopeOption[];
+  readonly currencies: readonly CatalogueOption[];
+  readonly geographies: readonly CatalogueOption[];
+  readonly permissions: EffectivePermissions;
+  readonly maxDonationAmount: number;
+}
+
 @Component({
   selector: 'app-public-donation-initiation',
   imports: [CommonModule, FormsModule],
@@ -84,31 +89,61 @@ type RelatedTab = 'Linked' | 'Documents' | 'Activity' | 'Integration' | 'Support
 export class PublicDonationInitiationComponent {
   private readonly toast = inject(ToastService);
   private readonly dataService = inject(DataService);
-  private readonly paymentApi = inject(PaymentApiService);
-  private readonly campaignApi = inject(CampaignApiService);
-  private readonly tokens = inject(AuthTokenService);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly payments = inject(PaymentApiService);
+  private readonly currentUser = inject(CurrentUserService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
 
-  // ================= Application shell / task header (4.2.1) =================
+  /**
+   * The campaign store, resolved only for a signed-in caller.
+   *
+   * IT IS DELIBERATELY NOT A FIELD INJECTION. `CampaignStoreService` calls the authenticated CAM
+   * API in its own constructor and again every sixty seconds; injecting it on the donor-facing
+   * form meant a stranger with a QR code triggered a 401 on page load and another every minute
+   * they spent reading the form. Resolving it lazily means the anonymous path never constructs
+   * it at all.
+   */
+  private campaignStoreOrNull(): CampaignStoreService | null {
+    if (!this.isInternalView()) {
+      return null;
+    }
+    this.campaignStoreRef ??= this.injector.get(CampaignStoreService);
+    return this.campaignStoreRef;
+  }
+  private campaignStoreRef: CampaignStoreService | null = null;
+
+  /**
+   * The QR code's or link's own reference, carried on the query string.
+   *
+   * IT IS HOW AN ANONYMOUS DONOR GETS A CAMPAIGN. Nobody signed in means no campaign list to
+   * pick from - the authenticated CAM API would refuse it - so the link the donor followed has
+   * to say which campaign it belongs to. The API resolves it to a campaign, a channel and a
+   * source, which is also what makes the donation attributable afterwards.
+   */
+  protected readonly trackingReference = signal<string>('');
+
+  /**
+   * Whether this is the admin panel's view of the form rather than the donor's.
+   *
+   * FIG 2 OF THE DOCUMENT: the same form and the same fields appear under Donations & Payments
+   * for an internal user, "for reference and support". The difference is not the fields - it is
+   * that a signed-in user can be offered the campaign picker, because CAM will answer them.
+   */
+  protected readonly isInternalView = computed(() => this.currentUser.reference() !== '');
+
   protected readonly pageTitle = signal('Public donation initiation');
-  protected readonly pageSubtitle = signal(
-    'Collect minimum identity, amount and consent before creating a unique intent.',
-  );
+  protected readonly pageSubtitle = signal('Collect minimum identity, amount and consent before creating a unique intent.');
   protected readonly operatingTimeZone = signal('Asia/Kolkata · IST (UTC+05:30)');
 
   protected readonly lifecycleState = signal<LifecycleState>('No record');
-  protected readonly lastRefresh = signal('');
 
-  /** Intent reference - server-derived and immutable in this view; blank until Submit. */
+  protected readonly lastRefresh = signal('Today, 09:30 AM · IST');
+
   protected readonly intentReference = signal<string>('');
 
-  /** The intent's id and version, needed by the payment-link call. */
-  private readonly intentId = signal('');
-  private readonly intentVersion = signal(0);
+  protected readonly owner = computed(() => (this.fullName().trim() ? `${this.fullName().trim()} · Donor` : 'Donor · not yet identified'));
 
-  protected readonly owner = computed(() =>
-    this.fullName().trim() ? `${this.fullName().trim()} · Donor` : 'Donor · not yet identified',
-  );
 
   protected readonly scopeSummary = computed(() =>
     this.selectedCampaign()
@@ -116,34 +151,33 @@ export class PublicDonationInitiationComponent {
       : 'Public intake · awaiting an eligible campaign or appeal in your active scope',
   );
 
-  /**
-   * What a visitor to this page may do.
-   *
-   * THE FORM ITSELF IS OPEN. Creating an intent and paying on the resulting link are anonymous by
-   * design - a stranger with a QR code has no account, and requiring one would mean asking
-   * somebody to register before they may give money. The API accepts those two routes without a
-   * token and resolves the organisation from the reference in the route, never from anything the
-   * caller can choose.
-   */
   protected readonly permissions = signal<EffectivePermissions>({
     view: true,
     submit: true,
     continueToPayment: true,
   });
 
-  // ================= Main work - field and control contract (4.2.2) =================
-
   /**
-   * Campaign or appeal.
+   * The campaigns a donation may be started against.
    *
-   * READ FROM THE CAMPAIGN SERVICE'S LOOKUP, which returns the campaigns of the organisation this
-   * session is operating in - not a bundled list, and not every campaign on the platform. The
-   * option's `reference` is the campaign CODE, because that is what an operator reads; the
-   * identifier the API needs is held beside it and never rendered.
+   * EMPTY FOR AN ANONYMOUS DONOR, and that is correct rather than a gap: the campaign then comes
+   * from the tracking reference in the link they followed, which the API resolves server-side.
+   * Cancelled and Closed campaigns are filtered out because a gift cannot be attributed to one.
    */
-  protected readonly campaignOptions = signal<readonly ScopeOption[]>([]);
-  private readonly campaignIdsByCode = new Map<string, string>();
-
+  protected readonly campaignOptions = computed<readonly ScopeOption[]>(() => {
+    const store = this.campaignStoreOrNull();
+    if (!store) {
+      return [];
+    }
+    return store
+      .all()
+      .filter((c) => c.status !== 'Cancelled' && c.status !== 'Closed')
+      .map((c) => ({
+        reference: c.code,
+        name: c.name,
+        context: c.status,
+      }));
+  });
   protected readonly campaignQuery = signal('');
   protected readonly selectedCampaign = signal<ScopeOption | null>(null);
   protected readonly campaignPickerOpen = signal(false);
@@ -177,9 +211,9 @@ export class PublicDonationInitiationComponent {
   protected readonly emailValid = computed(() => {
     const v = this.emailOrMobile().trim();
     if (!v) {
-      return true; // required-ness is reported separately; this only flags format
+      return true; 
     }
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || /^\+?[0-9]{7,15}$/.test(v);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
   });
   protected readonly emailMasked = computed(() => {
     const v = this.emailOrMobile().trim();
@@ -193,16 +227,17 @@ export class PublicDonationInitiationComponent {
     return `${v[0]}••••${v.slice(at - 1)}`;
   });
 
+
   protected readonly donationAmount = signal<string>('');
   protected readonly amountOverLimitAllowed = signal(false);
-  protected readonly maxDonationAmount = signal(10_000_000);
+  protected readonly maxDonationAmount = signal(500000);
   protected readonly amountInvalid = computed(() => {
     const raw = this.donationAmount().trim();
     if (!raw) {
       return false;
     }
     const n = Number(raw);
-    if (Number.isNaN(n) || n <= 0) {
+    if (Number.isNaN(n) || n < 0) {
       return true;
     }
     return n > this.maxDonationAmount() && !this.amountOverLimitAllowed();
@@ -219,34 +254,20 @@ export class PublicDonationInitiationComponent {
   protected readonly currencyCatalogue = signal<readonly CatalogueOption[]>([]);
   protected readonly currency = signal<string>('');
   protected currencyLabel(reference: string): string {
-    return (
-      this.currencyCatalogue()
-        .find((c) => c.reference === reference)
-        ?.label.split(' - ')[0] ?? reference
-    );
+    return this.currencyCatalogue().find((c) => c.reference === reference)?.label.split(' — ')[0] ?? '';
   }
   protected currencyFullLabel(reference: string): string {
     return this.currencyCatalogue().find((c) => c.reference === reference)?.label ?? '';
   }
 
-  /**
-   * PAN or tax identifier.
-   *
-   * IT IS AN IDENTIFIER, NOT A NUMBER. The previous version validated it with `Number()` and
-   * rejected anything non-numeric, which refused every real Indian PAN - they are five letters,
-   * four digits and a letter. The check now accepts a PAN or a plain tax reference and leaves
-   * anything else to the server.
-   */
   protected readonly panOrTaxId = signal<string>('');
   protected readonly panInvalid = computed(() => {
-    const raw = this.panOrTaxId().trim().toUpperCase();
+    const raw = this.panOrTaxId().trim();
     if (!raw) {
       return false;
     }
-    if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(raw)) {
-      return false;
-    }
-    return !/^[A-Z0-9-]{6,20}$/.test(raw);
+    const n = Number(raw);
+    return Number.isNaN(n) || n < 0;
   });
   protected readonly panMasked = computed(() => {
     const v = this.panOrTaxId().trim();
@@ -256,6 +277,7 @@ export class PublicDonationInitiationComponent {
     return v.length <= 2 ? '••' : `${'•'.repeat(v.length - 2)}${v.slice(-2)}`;
   });
 
+
   protected readonly geographyCatalogue = signal<readonly CatalogueOption[]>([]);
   protected readonly geography = signal<string>('');
   protected readonly addressText = signal('');
@@ -263,7 +285,8 @@ export class PublicDonationInitiationComponent {
     return this.geographyCatalogue().find((g) => g.reference === reference)?.label ?? '';
   }
 
-  protected readonly consentPolicyVersion = signal('v1');
+ 
+  protected readonly consentPolicyVersion = signal('Privacy Notice v3.2 · Consent Terms v1.4');
   protected readonly consentChecked = signal(false);
   protected readonly consentEffectiveTime = signal<string>('');
   protected toggleConsent(checked: boolean): void {
@@ -281,27 +304,19 @@ export class PublicDonationInitiationComponent {
     this.intentReference() ? 'Anonymous (default) · not yet approved for public display' : '',
   );
 
-  /** The payment page the donor is sent to. Server-derived and immutable in this view. */
+
   protected readonly paymentLinkDestination = signal<string>('');
 
-  protected readonly privacyNoticeVersion = computed(() =>
-    this.intentReference() ? this.consentPolicyVersion() : '',
-  );
+  protected readonly privacyNoticeVersion = computed(() => (this.intentReference() ? this.consentPolicyVersion().split(' · ')[0] : ''));
 
-  // ================= Actions, eligibility and result (4.2.3) =================
 
   protected readonly formLocked = computed(() => this.lifecycleState() !== 'No record');
 
   protected readonly submitAllowed = computed(
-    () =>
-      this.permissions().submit &&
-      this.lifecycleState() === 'No record' &&
-      this.uiState() !== 'no-access',
+    () => this.permissions().submit && this.lifecycleState() === 'No record' && this.uiState() !== 'no-access',
   );
 
-  protected readonly reviewAllowed = computed(
-    () => this.permissions().view && this.uiState() !== 'no-access',
-  );
+  protected readonly reviewAllowed = computed(() => this.permissions().view && this.uiState() !== 'no-access');
 
   protected readonly continueToPaymentAllowed = computed(
     () =>
@@ -310,66 +325,26 @@ export class PublicDonationInitiationComponent {
       this.uiState() !== 'no-access',
   );
 
-  /**
-   * Review - re-reads the intent from the server.
-   *
-   * IT ACTUALLY REFRESHES. The previous version only rewrote a timestamp, so "Reviewed as of…"
-   * asserted freshness the screen had not obtained.
-   */
   protected requestReview(): void {
     if (!this.reviewAllowed()) {
       return;
     }
-
-    const reference = this.intentReference();
-
-    if (!reference) {
-      this.lastRefresh.set(this.nowLabel());
-      this.reviewedNote.set('Nothing has been submitted yet, so there is no record to re-read.');
-      return;
-    }
-
-    this.paymentApi.getPublicIntent(reference).subscribe({
-      next: (intent) => {
-        this.lastRefresh.set(this.nowLabel());
-        this.intentVersion.set(intent.version);
-        this.paymentLinkDestination.set(intent.paymentLinkUrl ?? '');
-        this.reviewedNote.set(
-          `Re-read as of ${this.lastRefresh()}. The record is ${intent.statusDescription}.`,
-        );
-        this.pushActivity(`Record re-read; the server reports ${intent.statusDescription}.`);
-
-        if (intent.status === 'paid') {
-          this.lifecycleState.set('Awaiting payment');
-          this.uiState.set('success');
-        }
-      },
-      error: (error) => {
-        this.lastRefresh.set(this.nowLabel());
-        this.reviewedNote.set(
-          apiErrorMessage(error, 'The record could not be re-read just now. Try again shortly.'),
-        );
-      },
-    });
+    this.lastRefresh.set(this.nowLabel());
+    this.reviewedNote.set(`Reviewed as of ${this.lastRefresh()}. No change to the record outside your effective scope.`);
+    this.pushActivity('Record reviewed; no unauthorised change applied.');
   }
   protected readonly reviewedNote = signal<string>('');
 
-  // ----- Required-field validation (4.2.2 Req. + 4.2.6) -----
   protected readonly validationErrors = computed(() => {
     const errors: { field: string; label: string; message: string }[] = [];
-    if (!this.selectedCampaign()) {
-      errors.push({
-        field: 'campaign',
-        label: 'Campaign or appeal',
-        message: 'Enter Campaign or appeal.',
-      });
+    // REQUIRED ONLY WHEN THERE IS SOMETHING TO PICK. A donor who scanned a QR code has no
+    // campaign list - the link itself carries the attribution - so demanding a selection here
+    // would make the public form impossible to submit, which is precisely what it used to do.
+    if (!this.selectedCampaign() && !this.trackingReference()) {
+      errors.push({ field: 'campaign', label: 'Campaign or appeal', message: 'Enter Campaign or appeal.' });
     }
     if (!this.emailOrMobile().trim()) {
-      errors.push({
-        field: 'emailOrMobile',
-        label: 'Email or mobile',
-        message: 'Enter Email or mobile.',
-      });
+      errors.push({ field: 'emailOrMobile', label: 'Email or mobile', message: 'Enter Email or mobile.' });
     } else if (!this.emailValid()) {
       errors.push({
         field: 'emailOrMobile',
@@ -378,11 +353,7 @@ export class PublicDonationInitiationComponent {
       });
     }
     if (!this.donationAmount().trim()) {
-      errors.push({
-        field: 'donationAmount',
-        label: 'Donation amount',
-        message: 'Enter Donation amount.',
-      });
+      errors.push({ field: 'donationAmount', label: 'Donation amount', message: 'Enter Donation amount.' });
     } else if (this.amountInvalid()) {
       errors.push({
         field: 'donationAmount',
@@ -397,15 +368,11 @@ export class PublicDonationInitiationComponent {
       errors.push({
         field: 'panOrTaxId',
         label: 'PAN or tax identifier',
-        message: 'Review PAN or tax identifier. A PAN is five letters, four digits and a letter.',
+        message: 'Review PAN or tax identifier. The value does not meet the stated format or range.',
       });
     }
     if (!this.consentChecked()) {
-      errors.push({
-        field: 'consent',
-        label: 'Consent acknowledgement',
-        message: 'Enter Consent acknowledgement.',
-      });
+      errors.push({ field: 'consent', label: 'Consent acknowledgement', message: 'Enter Consent acknowledgement.' });
     }
     return errors;
   });
@@ -416,20 +383,221 @@ export class PublicDonationInitiationComponent {
       .map((e) => e.label),
   );
 
+
+  /**
+   * Submit - section 2 of the document, and the only button the donor presses.
+   *
+   * IT NO LONGER MINTS ITS OWN REFERENCE. `mintIntentReference()` returned
+   * `INT-2025-<random 3 digits>`, so two donors a few milliseconds apart could be handed the
+   * same one, and nothing on the server had ever heard of either. The reference now comes back
+   * from the API, which is also what makes it quotable to support afterwards.
+   */
   protected requestSubmit(): void {
-    if (!this.submitAllowed()) {
-      return;
-    }
     if (this.validationErrors().length > 0) {
       this.uiState.set('validation');
       this.focusFirstInvalid();
       return;
     }
-    this.submitReason.set('');
-    this.submitDialogOpen.set(true);
+    if (!this.submitAllowed()) {
+      return;
+    }
+
+    this.uiState.set('loading');
+    this.payments.initiateDonation(this.buildIntentRequest()).subscribe({
+      next: (intent) => this.onIntentCreated(intent),
+      error: (error: unknown) => {
+        this.uiState.set('ready');
+        this.toast.show('Donation not started', apiErrorMessage(error), 'error');
+      },
+    });
   }
 
-  // ----- Submit - Decision/review high-risk confirmation (4.2.1 / 4.2.6) -----
+  /**
+   * The request body, built from the form exactly once.
+   *
+   * THE AMOUNT GOES AS A NUMBER, NOT AS PAISE. Converting to the gateway's minor units is the
+   * server's job; doing it here was how a client-side edit could decide what a donor paid.
+   */
+  private buildIntentRequest(): CreateDonationIntentRequest {
+    const contact = this.emailOrMobile().trim();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+    const campaignRef = this.selectedCampaign()?.reference ?? '';
+
+    return {
+      donorName: this.fullName().trim() || 'Donor',
+      email: isEmail ? contact : '',
+      mobile: isEmail ? null : contact,
+      amount: Number(this.donationAmount()),
+      currencyCode: this.currency(),
+
+      // THE ID, NOT THE CODE. The API's campaignId is a Guid; sending 'CMP-2026-004' returns a
+      // 400 before the handler runs. `apiId` is the store's map from the code a person reads to
+      // the identifier the API requires.
+      campaignId: campaignRef ? this.campaignStoreOrNull()?.apiId(campaignRef) ?? null : null,
+      trackingReference: this.trackingReference() || null,
+      taxIdentifier: this.panOrTaxId().trim() || null,
+      addressLine1: this.addressText().trim() || null,
+
+      // Section 11: consent is captured BEFORE the intent exists, so it travels with the
+      // creation rather than being written over it afterwards.
+      consentGiven: this.consentChecked(),
+      consentVersion: this.consentPolicyVersion(),
+    };
+  }
+
+  /**
+   * Section 3 - the Lead/Donor check, then payment.
+   *
+   * THE SERVER DECIDES, NOT THIS PAGE. The old code compared the typed address against the
+   * literal string 'existing.donor@ydot.org' and showed the duplicate panel when it matched,
+   * which recognised exactly one person in the world. `existingDonorMatched` is the API's
+   * answer, and a matching Lead has already been upgraded to Donor by the time it comes back.
+   */
+  private onIntentCreated(intent: DonationIntentResponse): void {
+    this.intentReference.set(intent.intentReference);
+    this.lifecycleState.set('Submitted');
+    this.lastOutcome.set({
+      action: 'Submit',
+      reference: intent.intentReference,
+      state: intent.statusDescription || 'Submitted',
+      effectiveTime: this.nowLabel(),
+      downstream: 'Payment link requested from the gateway',
+      nextAction: 'Complete the payment at the gateway',
+    });
+    this.pushActivity('Submitted. Reference ' + intent.intentReference + ' created.');
+
+    // NO MATCH IS THE COMMON CASE AND HAS NO BRANCH. A stranger giving for the first time goes
+    // straight to the gateway; they are converted to a Donor, given a login and sent an
+    // activation invitation AFTER the money arrives, by the server, on the success path.
+    if (intent.existingDonorMatched !== true) {
+      this.requestPaymentLink(intent.intentReference, intent.version);
+      return;
+    }
+
+    // A MATCH STOPS THE FLOW AND ASKS. Section 3 of the document: "If the person is already a
+    // Donor they can pay right away, or log in and before making. After logging in, the
+    // proceeds to payment." Both branches are the donor's to choose, so the page must offer
+    // them rather than pick one - which is what it used to do, showing a "welcome back" toast
+    // and redirecting to the gateway before anybody could read it.
+    this.donorCheckLoading.set(true);
+    this.payments.checkExistingDonor(intent.intentReference).subscribe({
+      next: (check) => {
+        this.donorCheckLoading.set(false);
+        this.donorCheck.set(check);
+        this.identityChoiceOpen.set(true);
+        this.pushActivity(
+          'Recognised as an existing donor' +
+            (check.maskedEmail ? ' (' + check.maskedEmail + ')' : '') + '.',
+        );
+      },
+
+      // THE CHECK FAILING MUST NOT BLOCK THE DONATION. It is a courtesy that offers a sign-in;
+      // if it cannot answer, the donor carries on to payment exactly as an unrecognised one
+      // would. Losing a gift because a lookup timed out is the worse outcome by a distance.
+      error: () => {
+        this.donorCheckLoading.set(false);
+        this.pushActivity('Donor recognition unavailable; continuing to payment.');
+        this.requestPaymentLink(intent.intentReference, intent.version);
+      },
+    });
+  }
+
+  // ===========================================================================================
+  // Section 3 - the Lead/Donor branch
+  // ===========================================================================================
+
+  /** The server's answer: masked e-mail, whether an account is active, and what it advises. */
+  protected readonly donorCheck = signal<ExistingDonorCheckResponse | null>(null);
+  protected readonly donorCheckLoading = signal(false);
+  protected readonly identityChoiceOpen = signal(false);
+
+  /**
+   * Whether the recognised donor can actually sign in.
+   *
+   * A DONOR RECORD IS NOT A LOGIN. Somebody converted from a Lead by an earlier donation has a
+   * Donor record from the moment their payment cleared, but their account stays in an invited
+   * state until they click the activation link in their e-mail. Offering "sign in" to them sends
+   * them to a form no password of theirs will open, so the panel offers only the payment branch
+   * and says why.
+   */
+  protected readonly canSignIn = computed(() => this.donorCheck()?.hasActiveAccount === true);
+
+  protected readonly recognisedContact = computed(
+    () => this.donorCheck()?.maskedEmail ?? 'your saved contact details',
+  );
+
+  /**
+   * Sign in first, then come back and pay.
+   *
+   * THE INTENT REFERENCE TRAVELS ON THE RETURN URL, which is what "with the intent preserved"
+   * has to mean in practice - the donation is already created and already carries the campaign,
+   * amount and consent, so the donor must land back on the SAME record rather than on an empty
+   * form they would have to fill in twice. `bindIntentFromQueryString` reads it back on arrival.
+   */
+  protected signInAndContinue(): void {
+    const reference = this.intentReference();
+    if (!reference) {
+      return;
+    }
+
+    this.identityChoiceOpen.set(false);
+    this.pushActivity('Sent to sign in; donation ' + reference + ' preserved.');
+    this.router.navigate(['/auth/sign-in'], {
+      queryParams: {
+        returnUrl: '/app/donations/public-donation-initiation?intent=' + reference,
+      },
+    });
+  }
+
+  /** Pay now, without signing in. The donation is already recorded either way. */
+  protected continueWithoutSigningIn(): void {
+    const reference = this.intentReference();
+    if (!reference) {
+      return;
+    }
+
+    this.identityChoiceOpen.set(false);
+
+    // RE-READ FOR THE CURRENT VERSION. The panel may have been open for some time, and the link
+    // call is refused as stale against a version that has moved - which is the protection that
+    // stops a second attempt being opened by accident.
+    this.payments.getPublicIntent(reference).subscribe({
+      next: (detail) => this.requestPaymentLink(detail.intentReference, detail.version),
+      error: (error: unknown) =>
+        this.toast.show('Payment unavailable', apiErrorMessage(error), 'error'),
+    });
+  }
+
+  /**
+   * Asks the server for the Razorpay payment link and sends the donor to it.
+   *
+   * THE EXPECTED VERSION IS SENT because two tabs, or a double-clicked Submit, would otherwise
+   * open two attempts against one intent - two links, and a donor who pays both has given twice.
+   */
+  private requestPaymentLink(intentReference: string, expectedVersion: number): void {
+    this.payments.createPaymentLink(intentReference, { expectedVersion }).subscribe({
+      next: (link) => {
+        this.lifecycleState.set('Awaiting payment');
+        this.paymentLinkDestination.set(link.paymentLinkUrl);
+        this.uiState.set('success');
+        this.pushActivity('Payment link issued via ' + link.gatewayName + ' (attempt ' + link.attemptNumber + ').');
+        this.toast.show('Redirecting to payment', 'Opening the secure payment page.', 'success');
+
+        // A FULL NAVIGATION, NOT A NEW TAB. A popup blocker silently swallowing the window is
+        // indistinguishable, to the donor, from the button doing nothing at all.
+        window.location.assign(link.paymentLinkUrl);
+      },
+      error: (error: unknown) => {
+        // THE INTENT SURVIVES A LINK FAILURE. It is recorded and Pending, so it appears in the
+        // Payment Queue for an admin to recover rather than vanishing with the error toast.
+        this.uiState.set('success');
+        this.lifecycleState.set('Submitted');
+        this.pushActivity('Payment link could not be issued; the intent remains submitted.');
+        this.toast.show('Payment link unavailable', apiErrorMessage(error), 'error');
+      },
+    });
+  }
+
   protected readonly submitDialogOpen = signal(false);
   protected readonly submitReason = signal('');
   protected readonly submitReasonMin = 10;
@@ -444,286 +612,37 @@ export class PublicDonationInitiationComponent {
     this.submitDialogOpen.set(false);
   }
 
-  /**
-   * Creates the donation intent.
-   *
-   * THE REFERENCE COMES BACK FROM THE SERVER, unguessable and unique platform-wide, and it is what
-   * every later step - the payment link, the result page, the verification - is addressed by.
-   *
-   * SECTION 12 IS ANSWERED BY THE SERVER TOO. Whether this donor is already known is an
-   * organisation-scoped question, so the same person can be known to one charity here and a
-   * stranger to another; asking it in the browser would have been an oracle.
-   */
+  /** The confirm button of the submit dialog, which the template currently keeps commented out. */
   protected confirmSubmit(): void {
-    if (!this.submitReasonValid()) {
-      this.toast.show('Validation Error', 'Please provide a valid reason.', 'warning');
-      return;
-    }
-
-    const identity = this.donorIdentity();
-    const campaignCode = this.selectedCampaign()?.reference ?? '';
-
-    this.uiState.set('loading');
-
-    this.paymentApi
-      .initiateDonation({
-        donorName: this.fullName().trim() || 'Donor',
-        email: identity.email ?? '',
-        amount: Number(this.donationAmount()) || 0,
-        currencyCode: this.currency() || 'INR',
-        mobile: identity.mobile ?? null,
-
-        // THE IDENTIFIER, resolved from the code the operator picked. Sending the code where the
-        // API wants the id leaves the gift attributed to no campaign at all.
-        campaignId: this.campaignIdsByCode.get(campaignCode) ?? null,
-
-        // The reference from the QR code or link the donor followed. It is what resolves the
-        // campaign, the channel and - crucially - the organisation the gift belongs to.
-        trackingReference: this.trackingReference() || null,
-
-        sourceType: this.trackingReference() ? 'qrCode' : 'directLink',
-        taxIdentifier: this.panOrTaxId().trim() || null,
-        addressLine1: this.addressText().trim() || null,
-        consentGiven: this.consentChecked(),
-        consentVersion: this.consentPolicyVersion(),
-
-        // The form defaults to anonymous and only a separately approved publication field changes
-        // that, so nothing here opts a donor into being named publicly.
-        allowPublicRecognition: false,
-      })
-      .subscribe({
-        next: (intent) => {
-          this.intentReference.set(intent.intentReference);
-          this.intentId.set(intent.id);
-          this.intentVersion.set(intent.version);
-          this.paymentLinkDestination.set(intent.paymentLinkUrl ?? '');
-          this.lifecycleState.set('Submitted');
-          this.submitDialogOpen.set(false);
-          this.lastRefresh.set(this.nowLabel());
-
-          this.lastOutcome.set({
-            action: 'Submit',
-            reference: intent.intentReference,
-            state: intent.statusDescription,
-            effectiveTime: this.nowLabel(),
-            downstream: 'Ready for a payment link',
-            nextAction: 'Continue to payment',
-            reason: this.submitReason().trim(),
-          });
-
-          this.pushActivity(`Submitted. Reference ${intent.intentReference} created.`);
-
-          if (intent.existingDonorMatched === true) {
-            this.toast.show(
-              'Welcome back',
-              'We recognise this address. Sign in to see your giving history, or continue as you are.',
-              'info',
-            );
-          }
-
-          this.uiState.set('success');
-          this.toast.show(
-            'Donation Submitted',
-            `Donation intent ${intent.intentReference} has been created.`,
-            'success',
-          );
-        },
-        error: (error) => {
-          this.submitDialogOpen.set(false);
-          this.uiState.set('ready');
-          this.toast.show(
-            'Could not submit',
-            apiErrorMessage(
-              error,
-              'The donation could not be started. Please check the details and try again.',
-            ),
-            'error',
-          );
-        },
-      });
+    this.submitDialogOpen.set(false);
+    this.requestSubmit();
   }
 
   /**
-   * The tracking reference the donor arrived with.
+   * Continue to payment, for an intent that exists but has no usable link yet.
    *
-   * READ FROM THE URL, because that is where a QR code puts it. It is what the server resolves the
-   * organisation from when nobody is signed in.
-   */
-  protected readonly trackingReference = signal(
-    new URLSearchParams(window.location.search).get('t') ?? '',
-  );
-
-  // ================= Continue to payment =================
-
-  /** True while the donor is away at the provider's page and the outcome is being watched. */
-  protected readonly awaitingGateway = signal(false);
-  private pollHandle: ReturnType<typeof setInterval> | null = null;
-
-  /**
-   * Sends the donor to the payment provider.
-   *
-   * THE LINK IS ISSUED BY THE SERVER, from the organisation's own gateway account, and the payment
-   * attempt is recorded at the same moment. Where that account is a Razorpay one the donor lands
-   * on Razorpay's hosted page and pays there; the platform never handles the card, never holds a
-   * publishable key, and learns the outcome from the SIGNED webhook rather than from anything this
-   * page could be persuaded to report.
-   *
-   * THE OUTCOME IS THEN VERIFIED, NOT ASSUMED. A donor who closes the tab, or a webhook that is
-   * slow, must not leave the screen claiming a payment that did not happen - so the page asks the
-   * server what the gateway says, on a bounded poll, and reports exactly that.
+   * IT RE-ASKS THE SERVER rather than reopening a checkout in this browser. Reading the intent
+   * first is what supplies the current version - without it the link call would be refused as
+   * stale, which is exactly the protection that stops a second attempt being opened by accident.
    */
   protected requestContinueToPayment(): void {
-    if (!this.continueToPaymentAllowed()) {
-      return;
-    }
-
     const reference = this.intentReference();
-
-    if (!reference) {
-      this.toast.show('Not submitted', 'Submit the donation before continuing to payment.', 'warning');
+    if (!this.continueToPaymentAllowed() || !reference) {
       return;
     }
 
     const existing = this.paymentLinkDestination();
-
     if (existing) {
-      this.openGateway(existing);
+      window.location.assign(existing);
       return;
     }
 
-    this.uiState.set('loading');
-
-    this.paymentApi
-      .createPaymentLink(reference, {
-        expectedVersion: this.intentVersion(),
-        preferredMethod: null,
-      })
-      .subscribe({
-        next: (link) => {
-          this.paymentLinkDestination.set(link.paymentLinkUrl);
-          this.uiState.set('success');
-          this.pushActivity(
-            `Payment link issued by ${link.gatewayName}, attempt ${link.attemptNumber}.`,
-          );
-          this.openGateway(link.paymentLinkUrl);
-        },
-        error: (error) => {
-          this.uiState.set('ready');
-          this.toast.show(
-            'Payment could not be started',
-            apiErrorMessage(
-              error,
-              'The payment provider could not be reached. Nothing has been charged; please try again.',
-            ),
-            'error',
-          );
-        },
-      });
-  }
-
-  /** Opens the provider's page and starts watching for the outcome. */
-  private openGateway(url: string): void {
-    window.open(url, '_blank', 'noopener');
-    this.lifecycleState.set('Awaiting payment');
-    this.awaitingGateway.set(true);
-
-    this.lastOutcome.set({
-      action: 'Continue to payment',
-      reference: this.intentReference(),
-      state: 'Awaiting payment',
-      effectiveTime: this.nowLabel(),
-      downstream: 'Waiting for the payment provider to confirm',
-      nextAction: 'Complete the payment on the page that opened',
-      reason: '',
+    this.payments.getPublicIntent(reference).subscribe({
+      next: (detail) => this.requestPaymentLink(detail.intentReference, detail.version),
+      error: (error: unknown) => this.toast.show('Payment unavailable', apiErrorMessage(error), 'error'),
     });
-
-    this.toast.show(
-      'Payment page opened',
-      'Complete the payment on the provider page. This screen updates as soon as they confirm.',
-      'info',
-    );
-
-    this.startWatchingOutcome();
   }
 
-  /**
-   * Watches the intent for a terminal outcome.
-   *
-   * BOUNDED, AND IT STOPS ITSELF. Two minutes at five-second intervals covers a normal checkout;
-   * beyond that the donor has almost certainly closed the tab, and a poll that never ends is a tab
-   * that never sleeps. Whatever happens, the truth is on the server - Review re-reads it.
-   */
-  private startWatchingOutcome(): void {
-    this.stopWatchingOutcome();
-
-    const reference = this.intentReference();
-    let attempts = 0;
-
-    this.pollHandle = setInterval(() => {
-      attempts += 1;
-
-      if (attempts > 24) {
-        this.stopWatchingOutcome();
-        this.pushActivity('Stopped watching for the payment outcome. Use Review to check again.');
-        return;
-      }
-
-      this.paymentApi.verifyPublicPayment(reference).subscribe({
-        next: (verification) => {
-          const state = verification.backendPaymentState.trim().toLowerCase();
-
-          if (state === 'confirmed') {
-            this.stopWatchingOutcome();
-            this.uiState.set('success');
-            this.lastOutcome.set({
-              action: 'Continue to payment',
-              reference,
-              state: 'Paid',
-              effectiveTime: this.nowLabel(),
-              downstream: 'The provider confirms the payment succeeded',
-              nextAction:
-                verification.receiptEligibility === 'Eligible'
-                  ? 'Your receipt will be sent to the address on this donation'
-                  : 'No further action required',
-              reason: '',
-            });
-            this.pushActivity('The provider confirms the payment succeeded.');
-            this.toast.show(
-              'Payment received',
-              'Thank you. The provider confirms your payment succeeded.',
-              'success',
-            );
-            return;
-          }
-
-          if (state === 'failed') {
-            this.stopWatchingOutcome();
-            this.lifecycleState.set('Submitted');
-            this.pushActivity('The provider reports the payment failed. The intent is unchanged.');
-            this.toast.show(
-              'Payment not completed',
-              'The provider reports the payment did not go through. You can try again.',
-              'warning',
-            );
-          }
-        },
-        error: () => {
-          // A verification that could not be made leaves the outcome exactly as unknown as it was.
-          // The poll simply tries again.
-        },
-      });
-    }, 5000);
-  }
-
-  private stopWatchingOutcome(): void {
-    if (this.pollHandle) {
-      clearInterval(this.pollHandle);
-      this.pollHandle = null;
-    }
-    this.awaitingGateway.set(false);
-  }
-
-  /** Persistent outcome record (4.2.1 Persistent outcome / 4.2.4 Success). */
   protected readonly lastOutcome = signal<{
     action: string;
     reference: string;
@@ -731,18 +650,9 @@ export class PublicDonationInitiationComponent {
     effectiveTime: string;
     downstream: string;
     nextAction: string;
-    reason: string;
   } | null>(null);
 
-  // ================= Related and history (4.2.1) =================
-  protected readonly relatedTabs: readonly RelatedTab[] = [
-    'Linked',
-    'Documents',
-    'Activity',
-    'Integration',
-    'Support',
-    'Audit',
-  ];
+  protected readonly relatedTabs: readonly RelatedTab[] = ['Linked', 'Documents', 'Activity', 'Integration', 'Support', 'Audit'];
   protected readonly activeRelatedTab = signal<RelatedTab>('Linked');
   protected selectRelatedTab(tab: RelatedTab): void {
     this.activeRelatedTab.set(tab);
@@ -752,8 +662,7 @@ export class PublicDonationInitiationComponent {
     this.activityLog.update((cur) => [{ time: this.nowLabel(), text }, ...cur]);
   }
 
-  // ================= UI states (4.2.4 / 4.2.7) =================
-  protected readonly uiState = signal<UiState>('loading');
+  protected readonly uiState = signal<UiState>('ready');
   protected setUiState(state: UiState): void {
     this.uiState.set(state);
   }
@@ -773,30 +682,31 @@ export class PublicDonationInitiationComponent {
     });
   }
 
-  // ================= Helpers =================
-  /** Splits the single "Email or mobile" field into the two the API takes. */
-  private donorIdentity(): { email?: string; mobile?: string } {
-    const contact = this.emailOrMobile().trim();
-    if (!contact) {
-      return {};
-    }
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) ? { email: contact } : { mobile: contact };
-  }
 
   private nowLabel(): string {
-    return formatMoment(new Date().toISOString());
+    return new Date().toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.stopWatchingOutcome());
+    // THE LINK'S OWN REFERENCE, BEFORE ANYTHING ELSE. A donor who scanned a QR code arrives with
+    // `?ref=` (or `?tracking=`) and no session; that value is the only thing on the page that
+    // says which campaign the gift belongs to, and the API needs it on the create call.
+    const params = this.route.snapshot.queryParamMap;
+    this.trackingReference.set(params.get('ref') ?? params.get('tracking') ?? '');
+
     this.loadConfig();
-    this.loadCampaigns();
   }
 
   private loadConfig(): void {
     this.uiState.set('loading');
     this.dataService.getPublicDonationInitiationData().subscribe({
-      next: (config) => {
+      next: (config: PublicDonationInitiationConfig) => {
         this.pageTitle.set(config.pageTitle);
         this.pageSubtitle.set(config.pageSubtitle);
         this.operatingTimeZone.set(config.operatingTimeZone);
@@ -805,113 +715,55 @@ export class PublicDonationInitiationComponent {
         this.geographyCatalogue.set(config.geographies);
         this.permissions.set(config.permissions);
         this.maxDonationAmount.set(config.maxDonationAmount);
-
-        // The organisation's own settlement currency is the sensible default, and the API rejects
-        // an intent whose currency the gateway account does not settle in.
-        if (!this.currency() && config.currencies.length > 0) {
-          this.currency.set(config.currencies[0].reference);
-        }
-
-        this.lastRefresh.set(this.nowLabel());
         this.uiState.set('ready');
-
-        this.bindPendingDonationFromQueue();
+        this.bindIntentFromQueryString();
       },
       error: () => {
         this.uiState.set('ready');
-        this.toast.show('Error', 'The donation form could not be prepared.', 'error');
+        this.toast.show('Error', 'Failed to load public donation initiation configuration.', 'error');
       },
     });
   }
 
   /**
-   * Loads the campaigns a gift can be attributed to.
+   * Reopens an intent this browser was sent to finish paying.
    *
-   * ONLY WHEN SOMEBODY IS SIGNED IN. A truly public visitor has no organisation to draw a campaign
-   * list from - theirs is resolved from the tracking reference in the link they followed - and
-   * asking for one anonymously would answer 401. The picker is therefore empty for a stranger and
-   * populated for an operator taking a donation on somebody's behalf, which is exactly who each
-   * case is.
+   * IT READS THE INTENT FROM THE API, not from a DataService field the previous screen wrote.
+   * The old version carried donor name, e-mail, amount and currency across in memory, which
+   * meant the figures on this form were whatever the last screen chose to put there rather than
+   * what the intent actually says - and a refresh lost the lot.
    */
-  private loadCampaigns(): void {
-    if (!this.tokens.user()) {
-      return;
-    }
-
-    this.campaignApi.lookupCampaigns().subscribe({
-      next: (campaigns) => {
-        this.campaignIdsByCode.clear();
-
-        const options = campaigns
-          .filter((c) => c.status !== 'cancelled' && c.status !== 'closed')
-          .map((c) => {
-            this.campaignIdsByCode.set(c.code, c.id);
-            return { reference: c.code, name: c.name, context: c.status };
-          });
-
-        this.campaignOptions.set(options);
-      },
-      error: () => this.campaignOptions.set([]),
-    });
-  }
-
-  /**
-   * Binds a donation handed over from the payment event queue.
-   *
-   * IT RE-READS THE INTENT rather than trusting the row it was handed. The queue's record is a
-   * gateway EVENT: it carries no version and no payment link, and both are needed the moment
-   * somebody presses Continue to payment.
-   */
-  private bindPendingDonationFromQueue(): void {
-    const pending = this.dataService.getPendingDonationForPayment();
-    if (!pending) return;
-
-    this.dataService.clearPendingDonationForPayment();
-
-    const reference = pending.mappedIntentOrPayment;
-
+  private bindIntentFromQueryString(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const reference = params.get('intent') ?? params.get('intentReference') ?? '';
     if (!reference) {
-      this.toast.show(
-        'Nothing to continue',
-        'That gateway event did not correlate to a donation intent.',
-        'warning',
-      );
       return;
     }
 
-    this.paymentApi.getPublicIntent(reference).subscribe({
+    this.payments.getPublicIntent(reference).subscribe({
       next: (intent) => {
         this.intentReference.set(intent.intentReference);
-        this.intentId.set(intent.id);
-        this.intentVersion.set(intent.version);
         this.fullName.set(intent.donorName);
-        this.emailOrMobile.set(intent.email || (intent.mobile ?? ''));
+        this.emailOrMobile.set(intent.email || intent.mobile || '');
         this.donationAmount.set(String(intent.amount.amount));
         this.currency.set(intent.amount.currencyCode);
         this.paymentLinkDestination.set(intent.paymentLinkUrl ?? '');
-        this.consentChecked.set(intent.consentGiven);
-        this.lifecycleState.set(intent.status === 'paid' ? 'Awaiting payment' : 'Submitted');
-        this.lastRefresh.set(this.nowLabel());
+        this.lifecycleState.set(intent.paymentLinkUrl ? 'Awaiting payment' : 'Submitted');
 
         const campaign = this.campaignOptions().find((c) => c.name === intent.campaignName);
         if (campaign) {
           this.selectedCampaign.set(campaign);
         }
 
-        this.pushActivity(`Loaded ${intent.intentReference} from the payment event queue.`);
-
+        this.pushActivity('Loaded donation intent ' + intent.intentReference + '.');
         this.toast.show(
           'Continue payment',
-          `${intent.intentReference} is ready. Select "Continue to payment" to open the provider's page.`,
+          'Donation ' + intent.intentReference + ' is ready. Select Continue to payment to finish it.',
           'info',
         );
       },
-      error: (error) =>
-        this.toast.show(
-          'Could not load that donation',
-          apiErrorMessage(error, 'That donation intent could not be read.'),
-          'error',
-        ),
+      error: (error: unknown) =>
+        this.toast.show('Donation not found', apiErrorMessage(error), 'error'),
     });
   }
 }

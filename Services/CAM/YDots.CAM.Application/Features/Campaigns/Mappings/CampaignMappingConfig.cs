@@ -1,4 +1,5 @@
 using System.Globalization;
+using YDots.CAM.Application.Common.Abstractions.Services;
 using YDots.CAM.Application.Common.Constants;
 using YDots.CAM.Application.Features.Campaigns.DTOs;
 using YDots.CAM.Domain.Entities;
@@ -47,12 +48,20 @@ public static class CampaignMappingConfig
             BudgetAmount = null,
             CurrencyId = request.CurrencyId,
             CountryId = request.CountryId,
-            StateId = request.StateId,
-            CityId = request.CityId,
+
+            // The COLUMNS stay nullable while the REQUEST does not, which is what lets campaigns
+            // created before step 2 became mandatory keep loading. Guid.Empty is normalised to
+            // null so a row never carries an id that resolves to nothing.
+            StateId = NullIfEmpty(request.StateId),
+            CityId = NullIfEmpty(request.CityId),
             ZipCode = Clean(request.ZipCode),
             LifecycleActivation = request.LifecycleActivation,
-            DaysBeforeStart = request.DaysBeforeStart,
-            ReminderTime = request.ReminderTime,
+
+            // Non-null by the time the handler runs: the validator refuses a request that leaves
+            // either unanswered, which is the only way to tell "the user chose 0" from "the
+            // client omitted the field".
+            DaysBeforeStart = request.DaysBeforeStart ?? 0,
+            ReminderTime = request.ReminderTime ?? default,
             PublicDescription = Clean(request.PublicDescription),
             TermsAndNotice = Clean(request.TermsAndNotice),
 
@@ -87,12 +96,12 @@ public static class CampaignMappingConfig
         // is what silently zeroed a stored target on every edit.
         campaign.CurrencyId = request.CurrencyId;
         campaign.CountryId = request.CountryId;
-        campaign.StateId = request.StateId;
-        campaign.CityId = request.CityId;
+        campaign.StateId = NullIfEmpty(request.StateId);
+        campaign.CityId = NullIfEmpty(request.CityId);
         campaign.ZipCode = Clean(request.ZipCode);
         campaign.LifecycleActivation = request.LifecycleActivation;
-        campaign.DaysBeforeStart = request.DaysBeforeStart;
-        campaign.ReminderTime = request.ReminderTime;
+        campaign.DaysBeforeStart = request.DaysBeforeStart ?? campaign.DaysBeforeStart;
+        campaign.ReminderTime = request.ReminderTime ?? campaign.ReminderTime;
         campaign.PublicDescription = Clean(request.PublicDescription);
         campaign.TermsAndNotice = Clean(request.TermsAndNotice);
 
@@ -165,15 +174,22 @@ public static class CampaignMappingConfig
     /// count this used to read from it was 0 on every row of every register, for every campaign,
     /// however many owners it actually had.
     /// </param>
+    /// <param name="people">
+    /// Display names for those owners, resolved once for the whole page. An id absent from the
+    /// dictionary simply renders without a name.
+    /// </param>
     public static CampaignListItemResponse ToListItemResponse(
         this Campaign campaign,
         DateOnly today,
         IReadOnlyList<Guid> ownerIds,
+        IReadOnlyDictionary<Guid, PersonSummary> people,
+        string? currencyCode,
         int trackingAssetCount,
         int outstandingCheckCount)
     {
         ArgumentNullException.ThrowIfNull(campaign);
         ArgumentNullException.ThrowIfNull(ownerIds);
+        ArgumentNullException.ThrowIfNull(people);
 
         return new CampaignListItemResponse(
             campaign.Id,
@@ -186,24 +202,44 @@ public static class CampaignMappingConfig
             campaign.TargetAmount,
             campaign.BudgetAmount,
             campaign.CurrencyId,
+            currencyCode,
             campaign.Status,
             DescribeStatus(campaign.Status),
             ElapsedPercent(campaign, today),
             ownerIds.Count,
             ownerIds,
+            [.. ownerIds.Select((id, index) => ToOwnerResponse(id, index == 0, people))],
             trackingAssetCount,
             outstandingCheckCount,
             campaign.UpdatedAtUtc,
             campaign.Version);
     }
 
-    /// <summary>The detail screen.</summary>
+    /// <summary>
+    /// The detail screen.
+    ///
+    /// IT TAKES THE RESOLVED NAMES rather than looking them up, because the lookups cross a
+    /// service boundary - people live in IAM, geography in the master catalogue, currency in the
+    /// payments reference - and a mapper that reached across one would be a mapper that needs a
+    /// database. The read service resolves them and hands them in.
+    /// </summary>
     public static CampaignDetailResponse ToDetailResponse(
         this Campaign campaign,
         CampaignLifecycleAction? pendingCloseRequest,
-        IReadOnlyList<string> permittedActions)
+        IReadOnlyList<string> permittedActions,
+        IReadOnlyDictionary<Guid, PersonSummary>? people = null,
+        PlaceNames? place = null,
+        string? currencyCode = null,
+        int trackingAssetCount = 0,
+        int outstandingCheckCount = 0)
     {
         ArgumentNullException.ThrowIfNull(campaign);
+
+        var resolved = people ?? new Dictionary<Guid, PersonSummary>();
+
+        var owners = campaign.Owners
+            .OrderByDescending(owner => owner.IsPrimary)
+            .ToList();
 
         return new CampaignDetailResponse(
             campaign.Id,
@@ -217,10 +253,14 @@ public static class CampaignMappingConfig
             campaign.EndDate,
             campaign.TargetAmount,
             campaign.CurrencyId,
+            currencyCode,
             campaign.BudgetAmount,
             campaign.CountryId,
+            place?.CountryName,
             campaign.StateId,
+            place?.StateName,
             campaign.CityId,
+            place?.CityName,
             campaign.ZipCode,
             campaign.LifecycleActivation,
             campaign.DaysBeforeStart,
@@ -229,8 +269,19 @@ public static class CampaignMappingConfig
             campaign.TermsAndNotice,
             campaign.Status,
             DescribeStatus(campaign.Status),
-            [.. campaign.Owners.Select(owner => owner.OwnerId)],
+            [.. owners.Select(owner => owner.OwnerId)],
+            [.. owners.Select(owner => ToOwnerResponse(owner.OwnerId, owner.IsPrimary, resolved))],
             [.. campaign.Channels.Select(channel => channel.ChannelId)],
+
+            // The channel NAVIGATION may or may not be loaded. The detail read service includes
+            // it; a handler returning the record it has just written has not, and falls back to
+            // the id rather than inventing a name.
+            [.. campaign.Channels.Select(channel => new CampaignChannelResponse(
+                channel.ChannelId,
+                channel.Channel?.Code ?? string.Empty,
+                channel.Channel?.Name ?? string.Empty))],
+            trackingAssetCount,
+            outstandingCheckCount,
             campaign.SubmittedByUserId,
             campaign.SubmittedAtUtc,
             campaign.ApprovedByUserId,
@@ -315,6 +366,9 @@ public static class CampaignMappingConfig
 
     public static string DescribeAction(CampaignLifecycleActionType actionType) => actionType switch
     {
+        CampaignLifecycleActionType.Submit => "Submitted for approval",
+        CampaignLifecycleActionType.Approve => "Launch approved",
+        CampaignLifecycleActionType.ReturnToDraft => "Returned to draft",
         CampaignLifecycleActionType.RequestClose => "Close requested",
         CampaignLifecycleActionType.ApproveClose => "Close approved",
         CampaignLifecycleActionType.CancelDraft => "Draft cancelled",
@@ -331,7 +385,9 @@ public static class CampaignMappingConfig
     ///
     /// <paramref name="hasOutstandingChecks"/> removes Activate while a required readiness
     /// check has not passed, which is the checklist doing its job rather than the launch
-    /// failing at the last step.
+    /// failing at the last step. It does NOT remove Activate for a Scheduled campaign: a
+    /// scheduled campaign goes live on its start date whatever the checklist says, so hiding the
+    /// button would only stop somebody bringing forward a launch that is going to happen anyway.
     /// </summary>
     public static IReadOnlyList<string> PermittedActionsFor(
         Campaign campaign,
@@ -388,9 +444,14 @@ public static class CampaignMappingConfig
             actions.Add("Approve");
         }
 
-        if (campaign.Status is CampaignStatus.Approved or CampaignStatus.Scheduled
-            && hasPermission(PermissionCodes.CampaignsActivate)
-            && !hasOutstandingChecks)
+        // A SCHEDULED CAMPAIGN OFFERS ACTIVATE EVEN WITH CHECKS OUTSTANDING, and an Approved one
+        // does not. The difference is that a scheduled campaign has an automatic trigger waiting
+        // for it - the sweep will take it live on its start date regardless of the checklist - so
+        // the button only lets somebody do by hand what is about to happen anyway. An Approved
+        // campaign has no such trigger, and there the checklist is the gate.
+        if ((campaign.Status == CampaignStatus.Scheduled
+             || (campaign.Status == CampaignStatus.Approved && !hasOutstandingChecks))
+            && hasPermission(PermissionCodes.CampaignsActivate))
         {
             actions.Add("Activate");
         }
@@ -446,6 +507,14 @@ public static class CampaignMappingConfig
         // A same-day campaign has no span to divide by, and on its one day it is fully elapsed.
         return total <= 0 ? 100 : (int)Math.Round((today.DayNumber - campaign.StartDate.DayNumber) * 100.0 / total);
     }
+
+    private static CampaignOwnerResponse ToOwnerResponse(
+        Guid ownerId, bool isPrimary, IReadOnlyDictionary<Guid, PersonSummary> people) =>
+        people.TryGetValue(ownerId, out var person)
+            ? new CampaignOwnerResponse(ownerId, person.UserCode, person.DisplayName, isPrimary)
+            : new CampaignOwnerResponse(ownerId, null, null, isPrimary);
+
+    private static Guid? NullIfEmpty(Guid value) => value == Guid.Empty ? null : value;
 
     private static string? Clean(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

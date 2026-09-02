@@ -196,6 +196,11 @@ export class NavigationService {
     database: 'ri-database-2-line',
     'dollar-sign': 'ri-money-dollar-circle-line',
     edit: 'ri-edit-line',
+
+    // Receipt Correction. Absent until now, so that node fell through to the ri-circle-line
+    // default and sat in the sidebar as an unlabelled dot.
+    'edit-3': 'ri-edit-2-line',
+
     eye: 'ri-eye-line',
     file: 'ri-file-line',
     'file-text': 'ri-file-text-line',
@@ -210,6 +215,11 @@ export class NavigationService {
     key: 'ri-key-2-line',
     layers: 'ri-stack-line',
     layout: 'ri-layout-line',
+
+    // Support & Retry. Named in the menu catalogue since that node was written and never
+    // present here, so it rendered as the same default dot.
+    'life-buoy': 'ri-lifebuoy-line',
+
     list: 'ri-list-check',
     lock: 'ri-lock-line',
     map: 'ri-map-2-line',

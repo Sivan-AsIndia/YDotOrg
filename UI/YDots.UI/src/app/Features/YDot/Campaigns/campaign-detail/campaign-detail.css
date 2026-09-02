@@ -189,6 +189,12 @@ textarea:focus-visible,
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+
+  /* Up to four actions stand here on a Draft (Submit, Manage lifecycle, Tracking assets, Export,
+     then Edit and Delete draft), so the row wraps to the right rather than pushing the title
+     column out of the header on a narrow viewport. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---------- Status badge (colour never carries meaning alone: text + icon) ---------- */

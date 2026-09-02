@@ -28,10 +28,18 @@ public sealed class PaymentSettings
     /// How many attempts one intent may make before it stops offering a retry and goes to
     /// Payment Support and Safe Retry instead.
     ///
-    /// Section 23. The cap exists because a donor whose card keeps failing needs a person, not
-    /// another identical button.
+    /// TWO, AND THE DOCUMENT FIXES THE NUMBER. Section 4: "For a row with status Fail, the eye
+    /// icon view also shows a Retry button... If the retry ALSO fails, the payment record moves
+    /// to the Payment Support and Safe Retry page for the admin to handle." That is the original
+    /// attempt plus one retry - two - and the record leaves the queue.
+    ///
+    /// IT WAS THREE, WHICH SILENTLY BROKE THAT HANDOVER. A donor who failed, was retried and
+    /// failed again sat at two attempts, below the threshold, so the record never reached the
+    /// support queue: the Payment Queue kept offering a third identical Retry and nobody was
+    /// ever asked to look at it. The cap exists because a donor whose card keeps failing needs a
+    /// person, not another identical button - and one retry is where that point arrives.
     /// </summary>
-    public int MaximumAttemptsBeforeSupport { get; set; } = 3;
+    public int MaximumAttemptsBeforeSupport { get; set; } = 2;
 
     /// <summary>
     /// How long to wait for a gateway answer before treating the outcome as UNKNOWN.

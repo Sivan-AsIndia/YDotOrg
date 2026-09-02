@@ -292,6 +292,36 @@ export class CampaignApiService {
   }
 
   /**
+   * Asks for a live asset to be taken down. Active to DisableRequested.
+   *
+   * THE MAKER'S HALF of the disable pair. Disabling an asset stops a printed QR code resolving,
+   * so the person who made it asks and somebody else decides - which is why an Initiator holds
+   * this and not `deactivateTrackingAsset`.
+   */
+  requestDisableTrackingAsset(
+    id: string,
+    request: TrackingAssetLifecycleRequest,
+  ): Observable<OutcomeResponse> {
+    return this.assetLifecycle(id, 'request-disable', request);
+  }
+
+  /**
+   * Destroys an unused Draft asset.
+   *
+   * THE ONE DELETE IN THE MODULE, and safe only because a Draft has never been activated: it
+   * holds no tracking reference, so no donation can have been attributed through it. Anything
+   * past Draft is retired with `deactivateTrackingAsset` instead.
+   */
+  deleteDraftTrackingAsset(
+    id: string,
+    request: TrackingAssetLifecycleRequest,
+  ): Observable<OutcomeResponse> {
+    return this.http
+      .delete<ApiResponse<OutcomeResponse>>(`${this.trackingAssetsUrl}/${id}`, { body: request })
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
    * Retires a tracking asset.
    *
    * THE ASSET IS NOT DELETED and its reference keeps resolving for reporting - donations already
@@ -356,6 +386,18 @@ export class CampaignApiService {
   passReadinessCheck(id: string, request: ReadinessVerdictRequest): Observable<ReadinessCheckDetail> {
     return this.http
       .post<ApiResponse<ReadinessCheckDetail>>(`${this.rootUrl}/readiness-checks/${id}/pass`, request)
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * Removes a Pending check from the checklist.
+   *
+   * PENDING ONLY - CAM refuses anything further along, because a judged check holds somebody's
+   * verdict and deleting it would destroy the record that a person looked.
+   */
+  deleteReadinessCheck(id: string, request: ReadinessVerdictRequest): Observable<OutcomeResponse> {
+    return this.http
+      .delete<ApiResponse<OutcomeResponse>>(`${this.rootUrl}/readiness-checks/${id}`, { body: request })
       .pipe(map((response) => response.data!));
   }
 

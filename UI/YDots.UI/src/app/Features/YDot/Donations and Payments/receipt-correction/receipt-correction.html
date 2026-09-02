@@ -1,0 +1,379 @@
+<main class="app-wrapper">
+<div class="rc-page" [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER ============ -->
+  <header class="rc-task-header" aria-labelledby="rc-title">
+    <div class="rc-header-text">
+      <div class="rc-title-row">
+        <h1 class="rc-title" id="rc-title">Receipt correction</h1>
+      </div>
+      <p class="rc-subtitle">
+        Reissue or void a receipt that was issued with the wrong donor details. A correction
+        creates a new version — the original is never edited.
+      </p>
+    </div>
+
+    <div class="rc-header-actions">
+      <button type="button" class="btn btn-outline-secondary btn-sm rc-filters-toggle"
+              (click)="toggleFilters()" [attr.aria-expanded]="filtersOpen()">
+        <svg class="rc-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        {{ filtersOpen() ? 'Hide Filters' : 'Filters' }}
+        @if (activeFilterSummary().length) { <span class="rc-count">{{ activeFilterSummary().length }}</span> }
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ FILTERS ============ -->
+  @if (filtersOpen()) {
+    <section class="rc-filters-card" aria-label="Search and filters">
+      <div class="rc-filter-grid">
+        <label class="rc-field rc-field-search">
+          <span class="rc-field-label">Receipt or donation reference</span>
+          <span class="rc-input-wrap">
+            <input type="search" class="rc-input" placeholder="Search by receipt or donation reference…"
+                   [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); currentPage.set(1)"
+                   name="rcSearch" aria-label="Search by receipt or donation reference" />
+            <svg class="rc-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </span>
+        </label>
+
+        <label class="rc-field">
+          <span class="rc-field-label">Issue state</span>
+          <span class="rc-select-wrap">
+            <select class="rc-select" [ngModel]="issueStateFilter()"
+                    (ngModelChange)="issueStateFilter.set($event); currentPage.set(1)"
+                    name="rcIssueState" aria-label="Issue state">
+              <option value="">All issue states</option>
+              @for (s of issueStateCatalogue; track s.value) { <option [value]="s.value">{{ s.label }}</option> }
+            </select>
+            <svg class="rc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </label>
+
+        <label class="rc-field">
+          <span class="rc-field-label">Financial year</span>
+          <span class="rc-input-wrap">
+            <input type="text" class="rc-input" placeholder="e.g. 2025-26"
+                   [ngModel]="financialYearFilter()" (ngModelChange)="financialYearFilter.set($event); currentPage.set(1)"
+                   name="rcFinancialYear" aria-label="Financial year" />
+          </span>
+        </label>
+      </div>
+
+      <div class="rc-active-row">
+        <div class="rc-active-left">
+          <span class="rc-active-label">Active Filters:</span>
+          @for (chip of activeFilterSummary(); track chip.key) {
+            <span class="rc-chip">
+              {{ chip.label }}
+              <button type="button" class="rc-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              </button>
+            </span>
+          } @empty {
+            <span class="rc-active-none">None applied</span>
+          }
+          <button type="button" class="rc-link" (click)="clearFilters()">Clear All</button>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" (click)="applyFilters()">Apply</button>
+      </div>
+    </section>
+  }
+
+  <!-- ============ NO ACCESS ============ -->
+  @if (uiState() === 'no-access') {
+    <section class="rc-card rc-state-card" aria-live="polite">
+      <h2 class="rc-card-title">This value cannot be displayed with your current access.</h2>
+      <p class="rc-hint">
+        Correcting a receipt needs <code>pay.receipts.correct</code>, and viewing them needs
+        <code>pay.receipts.view</code>. Ask an administrator to grant the one you are missing.
+      </p>
+    </section>
+  } @else {
+
+  <!-- ============ MAIN WORK ============ -->
+  <div class="rc-layout" [class.rc-layout-full]="!detailOpen()">
+
+    <!-- ---------- WORK LIST ---------- -->
+    <section class="rc-register" aria-labelledby="rc-records-heading">
+      <h2 id="rc-records-heading" class="rc-visually-hidden">Receipts eligible for correction</h2>
+      <div class="rc-table-scroll">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th scope="col">Receipt No.</th>
+              <th scope="col">Version</th>
+              <th scope="col">Issued</th>
+              <th scope="col">Donor (as printed)</th>
+              <th scope="col" class="rc-col-num text-end">Amount</th>
+              <th scope="col" class="text-end">State</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (loading()) {
+              <tr><td colspan="6" class="rc-table-empty">Loading receipts…</td></tr>
+            } @else {
+              @for (r of pagedRecords(); track r.key) {
+                <tr [class.rc-row-selected]="selectedKey() === r.key" (click)="selectRecord(r.key)">
+                  <td data-label="Receipt No.">{{ r.receiptNumber }}</td>
+                  <td data-label="Version">v{{ r.versionNumber }}</td>
+                  <td data-label="Issued">{{ r.issuedTime ?? '—' }}</td>
+                  <td data-label="Donor">{{ r.donorSnapshot }}</td>
+                  <td class="rc-col-num" data-label="Amount">{{ formatAmount(r.amount, r.currency) }}</td>
+                  <td data-label="State" class="text-end"><span class="rc-badge" [class]="statusClass(r.status)">{{ r.statusLabel }}</span></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="rc-table-empty">No receipts match this scope and filter.</td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="rc-table-footer">
+        <span class="rc-showing">Showing {{ pageStart() }} to {{ pageEnd() }} of {{ totalCount() }} receipts</span>
+        <nav class="rc-pagination" aria-label="Pagination">
+          <button type="button" class="rc-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
+          @for (p of pageNumbers(); track p) {
+            <button type="button" class="rc-page-btn" [class.is-current]="currentPage() === p" [attr.aria-current]="currentPage() === p ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+          }
+          <button type="button" class="rc-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
+        </nav>
+      </div>
+    </section>
+
+    <!-- ---------- CORRECTION DETAIL ---------- -->
+    @if (detailOpen()) {
+      <aside class="rc-side" aria-label="Receipt detail">
+        <section class="rc-card">
+          <div class="rc-card-head">
+            <h2 class="rc-card-title">Receipt detail</h2>
+            <button type="button" class="rc-close-panel" title="Close panel" (click)="closeDetailPanel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+
+          @if (detailLoading()) {
+            <p class="rc-hint">Loading the full receipt…</p>
+          } @else if (detail(); as d) {
+            <dl class="rc-facts">
+              <div class="rc-fact"><dt>Receipt number</dt>
+                <dd>
+                  {{ d.receiptNumber ?? '—' }}
+                  @if (d.receiptNumber) {
+                    <button type="button" class="rc-copy-icon" (click)="copyToClipboard('receipt', d.receiptNumber!)"
+                            aria-label="Copy receipt number" [title]="copiedField() === 'receipt' ? 'Copied' : 'Copy receipt number'">
+                      @if (copiedField() === 'receipt') {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      } @else {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                      }
+                    </button>
+                  }
+                </dd>
+              </div>
+              <div class="rc-fact"><dt>Version</dt><dd>v{{ d.versionNumber }}</dd></div>
+              <div class="rc-fact"><dt>State</dt><dd><span class="rc-badge rc-inline-badge" [class]="statusClass(d.status)">{{ statusLabel(d.status) }}</span></dd></div>
+              <div class="rc-fact"><dt>Donation reference</dt><dd>{{ d.donationReference }}</dd></div>
+              <div class="rc-fact"><dt>Donor name (as printed)</dt><dd>{{ d.donorName }}</dd></div>
+              <div class="rc-fact"><dt>Donor e-mail</dt><dd>{{ d.donorEmail }}</dd></div>
+              <div class="rc-fact"><dt>Donor address</dt><dd>{{ d.donorAddress || '—' }}</dd></div>
+              <div class="rc-fact"><dt>PAN or tax identifier</dt><dd>{{ d.donorTaxIdentifier || '—' }}</dd></div>
+              <div class="rc-fact"><dt>Amount</dt><dd class="rc-amount">{{ formatAmount(d.amount.amount, d.amount.currencyCode) }}</dd></div>
+              <div class="rc-fact"><dt>Campaign or fund</dt><dd>{{ d.campaignOrFundName || '—' }}</dd></div>
+              <div class="rc-fact"><dt>Financial year</dt><dd>{{ d.financialYear }}</dd></div>
+
+              @if (d.supersedesReceiptNumber) {
+                <div class="rc-fact"><dt>Supersedes</dt><dd>{{ d.supersedesReceiptNumber }}</dd></div>
+              }
+              @if (d.correctionReason) {
+                <div class="rc-fact"><dt>Correction reason</dt><dd>{{ d.correctionReason }}</dd></div>
+              }
+              @if (d.voidReason) {
+                <div class="rc-fact"><dt>Void reason</dt><dd>{{ d.voidReason }}</dd></div>
+              }
+            </dl>
+
+            <!-- Delivery history: read-only -->
+            @if (d.deliveries.length) {
+              <div class="rc-delivery-history">
+                <span class="rc-field-label">Delivery history</span>
+                <ul class="rc-list">
+                  @for (a of d.deliveries; track a.id) {
+                    <li class="rc-list-row rc-list-stack">
+                      <span class="rc-list-primary">{{ a.channel }} · {{ a.destination }}</span>
+                      <span class="rc-list-secondary">{{ a.statusDescription }}</span>
+                      <span class="rc-list-meta">{{ a.attemptedAtUtc }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+
+            <div class="rc-detail-actions">
+              @if (correctAllowed()) {
+                <button type="button" class="btn btn-primary btn-sm" (click)="openCorrectDialog()">Correct and reissue</button>
+              }
+              @if (resendAllowed()) {
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openResendDialog()">Resend</button>
+              }
+              @if (voidAllowed()) {
+                <button type="button" class="btn btn-danger btn-sm" (click)="openVoidDialog()">Void</button>
+              }
+              @if (noActionsAvailable()) {
+                <span class="rc-hint">
+                  No action is available for this record. A voided receipt cannot be corrected,
+                  and correcting one needs <code>pay.receipts.correct</code>.
+                </span>
+              }
+            </div>
+          } @else {
+            <p class="rc-hint">This receipt could not be loaded.</p>
+          }
+        </section>
+      </aside>
+    }
+  </div>
+  }
+
+  <!-- ============ CORRECT AND REISSUE ============ -->
+  @if (correctDialogOpen() && detail(); as d) {
+    <div class="rc-modal-backdrop" (click)="cancelCorrect()">
+      <div class="rc-modal" role="dialog" aria-modal="true" aria-labelledby="rc-correct-title" (click)="$event.stopPropagation()">
+        <h2 class="rc-modal-title" id="rc-correct-title">Correct and reissue</h2>
+        <p class="rc-modal-lead">
+          This does not edit {{ d.receiptNumber ?? 'the receipt' }}. It issues a NEW version and
+          marks this one as corrected, so the document the donor already holds stays valid and
+          retrievable.
+        </p>
+
+        <dl class="rc-facts rc-modal-facts">
+          <div class="rc-fact"><dt>Affected record</dt><dd>{{ d.receiptNumber ?? d.donationReference }} · v{{ d.versionNumber }}</dd></div>
+          <div class="rc-fact"><dt>Amount (unchanged)</dt><dd>{{ formatAmount(d.amount.amount, d.amount.currencyCode) }}</dd></div>
+          <div class="rc-fact"><dt>Effective time</dt><dd>{{ effectiveTime() }}</dd></div>
+        </dl>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">Donor name (as it should print) <span class="rc-req">*</span></span>
+          <input type="text" class="rc-input" [ngModel]="correctDonorName()" (ngModelChange)="correctDonorName.set($event)"
+                 name="rcCorrectName" placeholder="Enter the donor name for the reissued receipt" />
+          @if (correctTouched() && !correctDonorName().trim()) {
+            <span class="rc-field-error" role="alert">A receipt must carry a donor name.</span>
+          }
+        </label>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">Donor address</span>
+          <textarea class="rc-textarea" rows="2" [ngModel]="correctDonorAddress()" (ngModelChange)="correctDonorAddress.set($event)"
+                    name="rcCorrectAddress" placeholder="Enter the postal address for the reissued receipt"></textarea>
+        </label>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">PAN or tax identifier</span>
+          <input type="text" class="rc-input" [ngModel]="correctTaxIdentifier()" (ngModelChange)="correctTaxIdentifier.set($event)"
+                 name="rcCorrectPan" placeholder="ABCDE1234F" />
+          @if (correctTaxIdentifierInvalid()) {
+            <span class="rc-field-error" role="alert">Enter a valid PAN — five letters, four digits, one letter.</span>
+          }
+        </label>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">Reason for the correction <span class="rc-req">*</span></span>
+          <textarea class="rc-textarea" rows="3" [ngModel]="correctReason()" (ngModelChange)="correctReason.set($event)"
+                    (blur)="correctTouched.set(true)" name="rcCorrectReason"
+                    placeholder="State what was wrong on the original and why it is being reissued…"
+                    [attr.aria-invalid]="correctTouched() && !correctReasonValid()"></textarea>
+          @if (correctTouched() && !correctReasonValid()) {
+            <span class="rc-field-error" role="alert">Provide between {{ reasonMin }} and {{ reasonMax }} characters.</span>
+          }
+        </label>
+
+        <label class="rc-modal-check">
+          <input type="checkbox" [ngModel]="correctDeliver()" (ngModelChange)="correctDeliver.set($event)" name="rcCorrectDeliver" />
+          <span>E-mail the corrected receipt to the donor straight away</span>
+        </label>
+
+        @if (correctTouched() && !correctHasChanges()) {
+          <p class="rc-field-error" role="alert">
+            Nothing has changed. A correction that reissues an identical document burns a receipt
+            number and e-mails the donor a duplicate — change a field, or cancel.
+          </p>
+        }
+
+        <div class="rc-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelCorrect()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmCorrect()" [disabled]="!correctSubmittable()">Correct and reissue</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ VOID ============ -->
+  @if (voidDialogOpen() && detail(); as d) {
+    <div class="rc-modal-backdrop" (click)="cancelVoid()">
+      <div class="rc-modal" role="dialog" aria-modal="true" aria-labelledby="rc-void-title" (click)="$event.stopPropagation()">
+        <h2 class="rc-modal-title" id="rc-void-title">Void this receipt</h2>
+        <p class="rc-modal-lead">
+          Voiding cancels the tax document outright. The record is kept and marked voided — it is
+          never deleted — but the donor can no longer claim relief on it. Use a correction instead
+          when only the printed details are wrong.
+        </p>
+
+        <dl class="rc-facts rc-modal-facts">
+          <div class="rc-fact"><dt>Affected record</dt><dd>{{ d.receiptNumber ?? d.donationReference }} · v{{ d.versionNumber }}</dd></div>
+          <div class="rc-fact"><dt>Consequence</dt><dd>{{ statusLabel(d.status) }} → Voided</dd></div>
+          <div class="rc-fact"><dt>Effective time</dt><dd>{{ effectiveTime() }}</dd></div>
+        </dl>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">Reason <span class="rc-req">*</span></span>
+          <textarea class="rc-textarea" rows="3" [ngModel]="voidReason()" (ngModelChange)="voidReason.set($event)"
+                    (blur)="voidTouched.set(true)" name="rcVoidReason"
+                    placeholder="State why this receipt is being voided…"
+                    [attr.aria-invalid]="voidTouched() && !voidReasonValid()"></textarea>
+          @if (voidTouched() && !voidReasonValid()) {
+            <span class="rc-field-error" role="alert">Provide between {{ reasonMin }} and {{ reasonMax }} characters.</span>
+          }
+        </label>
+
+        <div class="rc-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelVoid()">Cancel</button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmVoid()" [disabled]="!voidReasonValid()">Void receipt</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ RESEND ============ -->
+  @if (resendDialogOpen() && detail(); as d) {
+    <div class="rc-modal-backdrop" (click)="cancelResend()">
+      <div class="rc-modal" role="dialog" aria-modal="true" aria-labelledby="rc-resend-title" (click)="$event.stopPropagation()">
+        <h2 class="rc-modal-title" id="rc-resend-title">Resend this receipt</h2>
+        <p class="rc-modal-lead">Sends another copy of the receipt as it currently stands.</p>
+
+        <dl class="rc-facts rc-modal-facts">
+          <div class="rc-fact"><dt>Affected record</dt><dd>{{ d.receiptNumber ?? d.donationReference }}</dd></div>
+          <div class="rc-fact"><dt>Address on the receipt</dt><dd>{{ d.donorEmail }}</dd></div>
+          <div class="rc-fact"><dt>Effective time</dt><dd>{{ effectiveTime() }}</dd></div>
+        </dl>
+
+        <label class="rc-modal-field">
+          <span class="rc-field-label">Send to a different address instead</span>
+          <input type="email" class="rc-input" [ngModel]="resendDestination()" (ngModelChange)="resendDestination.set($event)"
+                 name="rcResendTo" placeholder="Leave blank to use the address on the receipt" />
+          @if (resendDestinationInvalid()) {
+            <span class="rc-field-error" role="alert">Enter a valid e-mail address, or leave it blank.</span>
+          }
+          <span class="rc-hint">An override is recorded in the audit trail against this resend.</span>
+        </label>
+
+        <div class="rc-modal-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelResend()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="confirmResend()" [disabled]="resendDestinationInvalid()">Resend</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>
+</main>

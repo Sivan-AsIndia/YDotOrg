@@ -67,6 +67,11 @@ public sealed record CampaignReadinessResponse(
     string CampaignCode,
     string CampaignName,
     CampaignStatus CampaignStatus,
+    string CampaignStatusDescription,
+
+    /// <summary>The campaign's owners, named, for the header and the blocker popup.</summary>
+    IReadOnlyList<ReadinessPersonResponse> CampaignOwners,
+
     int TotalItems,
     int Passed,
     int Failed,
@@ -75,7 +80,36 @@ public sealed record CampaignReadinessResponse(
     int OpenBlockers,
     decimal ReadinessPercentage,
     bool CanLaunch,
+
+    /// <summary>
+    /// Whether the campaign will go live by itself on its start date whatever the checklist says.
+    ///
+    /// TRUE FOR A SCHEDULED CAMPAIGN, and the screen has to say so. A failed readiness check does
+    /// NOT hold back a scheduled launch - the sweep takes it live on the day - so a checklist
+    /// showing red beside a campaign that is going out regardless would be telling the operator
+    /// the opposite of what is about to happen.
+    /// </summary>
+    bool WillActivateAutomatically,
+
+    /// <summary>The date it goes live by itself, when <see cref="WillActivateAutomatically"/>.</summary>
+    DateOnly? AutomaticActivationDate,
+
+    /// <summary>
+    /// The campaign-level actions in this screen's Actions menu, for THIS caller: AddCheck,
+    /// RequestApproval, ApproveLaunch, ReturnToDraft.
+    ///
+    /// DECIDED BY THE SERVER, which is the fix for a menu that offered an Organisation
+    /// administrator "Request approval" - a request they would then have to approve themselves -
+    /// while greying out the "Approve launch" that is the only one of the two they should ever
+    /// see. The rule needs the caller's role, the campaign's status and the segregation-of-duties
+    /// check together, and only one of those three is knowable in the browser.
+    /// </summary>
+    IReadOnlyList<string> PermittedActions,
+
     IReadOnlyList<ReadinessCheckListItemResponse> Items);
+
+/// <summary>One person, named, as the checklist and its popups show them.</summary>
+public sealed record ReadinessPersonResponse(Guid UserId, string? UserCode, string? DisplayName);
 
 /// <summary>One row of the checklist.</summary>
 public sealed record ReadinessCheckListItemResponse(
@@ -87,6 +121,16 @@ public sealed record ReadinessCheckListItemResponse(
     string SuccessCriteria,
     bool RequiredForLaunch,
     Guid? OwnerUserId,
+
+    /// <summary>
+    /// The owner, named.
+    ///
+    /// ON THE ROW, because clicking a check opens a popup that shows who owns it before offering
+    /// to assign a blocker - and the row carried only a Guid, so the popup had a user id where a
+    /// person's name belongs.
+    /// </summary>
+    ReadinessPersonResponse? Owner,
+
     DateOnly? DueDate,
 
     /// <summary>True when the due date has passed and the check has not been signed off.</summary>
@@ -126,6 +170,7 @@ public sealed record ReadinessCheckDetailResponse(
     string SuccessCriteria,
     bool RequiredForLaunch,
     Guid? OwnerUserId,
+    ReadinessPersonResponse? Owner,
     DateOnly? DueDate,
     bool IsOverdue,
     string? Notes,
@@ -140,10 +185,14 @@ public sealed record ReadinessCheckDetailResponse(
     IReadOnlyList<ReadinessBlockerResponse> Blockers,
     IReadOnlyList<string> PermittedActions);
 
-/// <summary>One blocker raised against a check.</summary>
+/// <summary>One blocker raised against a check, with the person expected to clear it.</summary>
 public sealed record ReadinessBlockerResponse(
     Guid Id,
     Guid OwnerUserId,
+
+    /// <summary>Who has to clear it, named. The popup that raises a blocker also shows them.</summary>
+    ReadinessPersonResponse? Owner,
+
     string BlockerNote,
     bool IsResolved,
     Guid? ResolvedByUserId,

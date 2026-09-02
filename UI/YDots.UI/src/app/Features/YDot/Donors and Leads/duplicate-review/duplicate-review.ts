@@ -1,12 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
+import { inject } from '@angular/core';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { ToastService } from '../../../../Shared/services/toast.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { DuplicateReviewListItem } from '../../../../Shared/models/donor-contract.model';
 import { FormsModule } from '@angular/forms';
 import { ConfirmModalComponent } from '../../../../Shared/components/confirm-modal/confirm-modal';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
-import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
-import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
-import { DuplicateReviewListItem } from '../../../../Shared/models/donor-contract.model';
 import {
   UiState,
   DuplicateReviewData,
@@ -84,6 +84,8 @@ interface DuplicatePair {
   candidateBConsent: string;
   fields: FieldConflict[];
   evidence: string[];
+  /** The server's row version. Every decision sends it back for the concurrency check. */
+  version: number;
 }
 
 /** A single row of the unified compare table. */
@@ -124,221 +126,151 @@ interface Outcome {
   styleUrl: './duplicate-review.css',
 })
 export class DuplicateReviewComponent {
-   private readonly people = inject(PeopleDirectoryService);
-   private readonly tokens = inject(AuthTokenService);
-
-   private readonly donorApi = inject(DonorApiService);
-
   /* ---------------- Reference data ---------------- */
  
-   readonly roles: Role[] = [
-     { id: 'steward-full', label: 'Data Steward', canView: true, canReveal: true, canMerge: true, canReject: true, permissions: ['don.duplicate-review.view', 'don.duplicate-review.merge', 'don.duplicate-review.reject-candidate'] },
-     { id: 'steward-readonly', label: 'Data Steward — Read only', canView: true, canReveal: false, canMerge: false, canReject: false, permissions: ['don.duplicate-review.view'] },
-     { id: 'support-analyst', label: 'Support Analyst', canView: true, canReveal: false, canMerge: false, canReject: false, permissions: ['don.duplicate-review.view'] },
-     { id: 'campaign-manager', label: 'Campaign Manager', canView: false, canReveal: false, canMerge: false, canReject: false, permissions: [] },
-   ];
- 
-   readonly previewStates: { id: PreviewState; label: string }[] = [
-     { id: 'default', label: 'Default' },
-     { id: 'loading', label: 'Loading' },
-     { id: 'empty', label: 'Empty' },
-     { id: 'validation', label: 'Validation' },
-     { id: 'duplicate', label: 'Duplicate' },
-     { id: 'no-access', label: 'No access' },
-     { id: 'conflict', label: 'Conflict' },
-     { id: 'dependency-failure', label: 'Dependency failure' },
-     { id: 'success', label: 'Success' },
-   ];
- 
-   /* ---------------- Simulator state ---------------- */
- 
-   readonly simulatorOpen = signal(true);
-   toggleSimulator() {
-     this.simulatorOpen.update((v) => !v);
-   }
- 
-   readonly effectiveRoleId = signal<RoleId>('steward-full');
+   /* ---------------- Access ----------------
+   *
+   * THE SIMULATORS ARE GONE. This screen carried three: a role picker offering eight roles that
+   * no longer exist, a scope picker whose four business units were typed into the file, and a
+   * preview-state picker that let anybody put the page into any UI state. All three decided what
+   * the screen showed from values in the bundle rather than from the caller's token.
+   *
+   * WHAT REPLACES THEM: the server's `permittedActions` for this caller. An APPROVER holds no
+   * `don.duplicate-review.merge` - a merge is destructive, and the role matrix withholds
+   * destructive operations from them - so no Merge button is drawn.
+   */
 
-   /**
-    * What this caller may actually do.
-    *
-    * IT READS THE TOKEN, not the role simulator beside it. `effectiveRole` used to return one of
-    * four hard-coded rows whose capabilities were literal `true`s, defaulting to the one that
-    * could do everything - so the screen drew Merge and Reject for every visitor regardless of
-    * their permissions, and a support analyst discovered they were not a data steward by pressing
-    * the button that folds two donor records together.
-    *
-    * The server enforces these codes whatever this object says. Reading them here is what stops
-    * the screen offering an action the API will refuse.
-    */
-   readonly effectiveRole = computed<Role>(() => ({
-     id: this.effectiveRoleId(),
-     label: this.tokens.displayName() || 'Current user',
-     canView: this.tokens.hasAnyPermission('don.duplicate-review.view'),
+  private readonly api = inject(DonorApiService);
+  private readonly toast = inject(ToastService);
 
-     // Revealing an unmasked contact is its own permission. Comparing two records without it is
-     // possible - the masked forms still differ - so this narrows the screen rather than closing it.
-     canReveal: this.tokens.hasAnyPermission('don.donors.view-sensitive-contact'),
-     canMerge: this.tokens.hasAnyPermission('don.duplicate-review.merge'),
-     canReject: this.tokens.hasAnyPermission('don.duplicate-review.reject-candidate'),
-     permissions: [],
-   }));
- 
-   readonly scopeUnits = signal<ScopeUnit[]>([
-     { id: 'donation-ops', label: 'Donation Operations', assigned: true, active: true },
-     { id: 'community-outreach', label: 'Community Outreach', assigned: true, active: true },
-     { id: 'major-gifts', label: 'Major Gifts', assigned: false, active: false },
-     { id: 'corporate-partnerships', label: 'Corporate Partnerships', assigned: false, active: false },
-   ]);
- 
-   readonly previewState = signal<PreviewState>('default');
- 
-   toggleScope(unit: ScopeUnit) {
-     if (!unit.assigned) return;
-     this.scopeUnits.update((units) =>
-       units.map((u) => (u.id === unit.id ? { ...u, active: !u.active } : u))
-     );
-     this.currentPage.set(1);
-   }
- 
-   setRole(id: RoleId) {
-     this.effectiveRoleId.set(id);
-     this.selectedId.set(this.queue()[0]?.id ?? null);
-     this.outcome.set(null);
-     this.errors.set({});
-   }
- 
-   setPreviewState(id: PreviewState) {
-     this.previewState.set(id);
-     this.outcome.set(null);
-     this.errors.set({});
-     this.showConfirmModal.set(false);
-     this.showRejectModal.set(false);
-   }
- 
-   /* ---------------- Freshness / refresh ---------------- */
- 
-   readonly lastRefreshed = signal<string>(this.formatNow());
-   readonly refreshing = signal(false);
- 
-   refresh() {
-     this.refreshing.set(true);
-     this.loadQueue();
-     this.refreshing.set(false);
-   }
- 
-   private formatNow(): string {
-     const d = new Date();
-     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
-       ', ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-   }
- 
-   /* ---------------- Queue data ---------------- */
- 
-   /**
-    * The review queue.
-    *
-    * FROM THE API. It was `this.buildQueue()` - twenty-four pairs invented from two arrays of
-    * first and last names, with ids of the form `pair-1`. Those ids were then posted to the merge
-    * endpoint, which of course has no such review, so every decision a steward recorded came back
-    * 404 and the screen showed the outcome panel anyway. The queue showed work that did not exist
-    * and hid the work that did.
-    */
-   readonly queue = signal<DuplicatePair[]>([]);
-   readonly queueLoading = signal(false);
-   readonly queueError = signal<string | null>(null);
+  readonly permissions = signal<Record<string, boolean>>({
+    view: false,
+    merge: false,
+    reject: false,
+  });
 
-   constructor() {
-     this.loadQueue();
-   }
+  readonly simulatorOpen = signal(false);
+  toggleSimulator() {
+    this.simulatorOpen.update((v) => !v);
+  }
 
-   /** Loads the open duplicate reviews in the caller's scope. */
-   loadQueue(): void {
-     this.queueLoading.set(true);
-     this.queueError.set(null);
+  readonly activeScope = signal('');
 
-     this.donorApi.getDuplicateReviews({ pageSize: 200 }).subscribe({
-       next: (response) => {
-         this.queue.set((response.reviews.items ?? []).map((item) => this.toPair(item)));
-         this.queueLoading.set(false);
-         this.lastRefreshed.set(this.formatNow());
+  /**
+   * The screen's state.
+   *
+   * IT IS AN OUTCOME NOW, NOT A CHOICE. The simulator let anybody set it to any value to look at
+   * the page; these are reached by what the API actually answered - a 403 is 'no-access', a
+   * failed call is 'dependency-failure', and an empty queue is 'empty'.
+   */
+  readonly previewState = signal<PreviewState>('loading');
 
-         if (!this.selectedId()) {
-           this.selectedId.set(this.queue()[0]?.id ?? null);
-         }
-       },
-       error: (error: unknown) => {
-         this.queue.set([]);
-         this.queueLoading.set(false);
-         this.queueError.set(
-           apiErrorMessage(error, 'The duplicate review queue could not be loaded.'),
-         );
-       },
-     });
-   }
+  readonly lastRefreshed = signal<string>('');
 
-   /**
-    * One API review as this screen's pair.
-    *
-    * THE LIST PROJECTION IS DELIBERATELY THIN - two names, a confidence and a status - so the
-    * comparison fields stay empty until the row is opened and the detail is fetched. Empty is
-    * correct here: inventing a phone number to fill the compare table is exactly what this screen
-    * used to do.
-    */
-   private toPair(item: DuplicateReviewListItem): DuplicatePair {
-     const confidence = (['High', 'Medium', 'Low'].includes(item.identityConfidence)
-       ? item.identityConfidence
-       : 'Low') as Confidence;
+  private formatNow(): string {
+    return new Date().toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+  readonly refreshing = signal(false);
 
-     return {
-       id: item.id,
-       reference: item.reviewReference,
-       scopeUnitId: '',
-       confidence,
-       confidenceScore: confidence === 'High' ? 92 : confidence === 'Medium' ? 68 : 41,
-       status: this.toPairStatus(item.status),
-       owner: '',
-       lastActivity: item.decidedAtUtc ?? item.createdAtUtc,
-       candidateAId: '',
-       candidateAName: item.candidateAName,
-       candidateAEmail: '',
-       candidateAPhone: '',
-       candidateAGifts: 0,
-       candidateATotal: '',
-       candidateAConsent: '',
-       candidateBId: '',
-       candidateBName: item.candidateBName,
-       candidateBEmail: '',
-       candidateBPhone: '',
-       candidateBGifts: 0,
-       candidateBTotal: '',
-       candidateBConsent: '',
-       fields: [],
-       evidence: [],
-     };
-   }
+  /** Re-reads the queue from the server. */
+  refresh(): void {
+    this.refreshing.set(true);
+    this.load();
+  }
+  readonly loadError = signal('');
 
-   private toPairStatus(status: string): PairStatus {
-     switch (status) {
-       case 'Open':
-       case 'Pending':
-         return 'Pending';
-       case 'InReview':
-       case 'In review':
-         return 'In review';
-       case 'Escalated':
-         return 'Escalated';
-       case 'OnHold':
-       case 'On hold':
-         return 'On hold';
-       case 'Rejected':
-         return 'Rejected';
-       case 'Merged':
-         return 'Merged';
-       default:
-         return 'Pending';
-     }
-   }
+ 
+  /**
+   * The review queue.
+   *
+   * IT WAS GENERATED. `buildQueue()` combined arrays of first and last names into twelve
+   * fabricated duplicate pairs with invented confidences, so every organisation reviewed the same
+   * imaginary people - and merging one of them merged nothing.
+   */
+  readonly queue = signal<DuplicatePair[]>([]);
+
+  constructor() {
+    this.load();
+  }
+
+  /**
+   * Loads the review queue.
+   *
+   * ONE CALL FOR THE LIST AND THE CALLER'S RIGHTS. `permittedActions` is where the three-role
+   * model reaches this screen: merging is destructive, so an APPROVER does not hold
+   * `don.duplicate-review.merge` and no Merge button is drawn for them.
+   */
+  private load(): void {
+    this.previewState.set('loading');
+    this.loadError.set('');
+
+    this.api.getDuplicateReviews({ page: 1, pageSize: 100 }).subscribe({
+      next: (response) => {
+        this.queue.set(response.reviews.items.map((row) => this.toPair(row)));
+        this.activeScope.set(response.activeScope);
+
+        // VERBS: ['Review evidence','Merge','Reject candidate']. Merge is destructive, so an
+        // APPROVER does not hold it and no Merge button is drawn for them.
+        const permitted = response.permittedActions ?? [];
+        this.permissions.set({
+          view: permitted.includes('Review evidence') || permitted.length > 0,
+          merge: permitted.includes('Merge'),
+          reject: permitted.includes('Reject candidate'),
+        });
+
+        this.selectedId.set(this.queue()[0]?.id ?? null);
+        this.lastRefreshed.set(this.formatNow());
+        this.refreshing.set(false);
+        this.previewState.set(this.queue().length === 0 ? 'empty' : 'default');
+      },
+      error: (error: unknown) => {
+        const status = (error as { status?: number })?.status;
+        this.loadError.set(apiErrorMessage(error));
+        this.refreshing.set(false);
+        this.previewState.set(status === 403 ? 'no-access' : 'dependency-failure');
+      },
+    });
+  }
+
+  /**
+   * Maps one review onto the pair this screen compares.
+   *
+   * THE CANDIDATE DETAIL IS DELIBERATELY SPARSE. The list endpoint returns a safe summary rather
+   * than both donors' contact details - showing one person's address beside another's, to decide
+   * whether they are the same person, is exactly the disclosure the masking rules exist to
+   * prevent. The detail call fills the comparison in once a reviewer opens a pair.
+   */
+  private toPair(row: DuplicateReviewListItem): DuplicatePair {
+    return {
+      id: row.id,
+      reference: row.reviewReference,
+      scopeUnitId: '',
+      confidence: row.identityConfidence as Confidence,
+      confidenceScore: 0,
+      status: row.status as PairStatus,
+      owner: row.decision ?? 'Undecided',
+      lastActivity: row.decidedAtUtc ?? row.createdAtUtc,
+      candidateAId: '',
+      candidateAName: row.candidateAName,
+      candidateAEmail: '',
+      candidateAPhone: '',
+      candidateAGifts: 0,
+      candidateATotal: '',
+      candidateAConsent: '',
+      candidateBId: '',
+      candidateBName: row.candidateBName,
+      candidateBEmail: '',
+      candidateBPhone: '',
+      candidateBGifts: 0,
+      candidateBTotal: '',
+      candidateBConsent: '',
+      fields: [],
+      evidence: [],
+      version: row.version,
+    };
+  }
  
    readonly searchTerm = signal('');
    readonly statusFilter = signal<'all' | PairStatus>('all');
@@ -347,7 +279,7 @@ export class DuplicateReviewComponent {
    readonly pageSize = 10;
  
    readonly activeScopeIds = computed(() =>
-     this.scopeUnits().filter((u) => u.active).map((u) => u.id)
+    []
    );
  
    readonly filtersActive = computed(
@@ -358,12 +290,11 @@ export class DuplicateReviewComponent {
      const term = this.searchTerm().trim().toLowerCase();
      const status = this.statusFilter();
      const saved = this.savedFilter();
-     const scopeIds = this.activeScopeIds();
  
      return this.queue().filter((p) => {
-       if (!scopeIds.includes(p.scopeUnitId)) return false;
+       // NO SCOPE FILTER HERE. The server returns only what this caller may see.
        if (status !== 'all' && p.status !== status) return false;
-       if (saved === 'mine' && p.owner !== (this.tokens.displayName() || '')) return false;
+       if (saved === 'mine' && p.owner === 'Undecided') return false;
        if (saved === 'high-confidence' && p.confidence !== 'High') return false;
        if (term) {
          const hay = `${p.reference} ${p.candidateAName} ${p.candidateBName}`.toLowerCase();
@@ -440,7 +371,9 @@ export class DuplicateReviewComponent {
    }
  
    revealContact() {
-     if (!this.effectiveRole().canReveal) return;
+    // REVEALING A CONTACT COMPARISON IS A PERMISSION, and it is the server's: the detail comes
+    // back with `isContactComparisonMasked` set, and nothing here can undo that.
+    if (!this.permissions()['view']) return;
      this.contactRevealed.set(true);
    }
  
@@ -623,87 +556,63 @@ export class DuplicateReviewComponent {
      }
    }
  
-   /**
-    * Commits the decision.
-    *
-    * A MERGE IS IRREVERSIBLE, AND THIS DID NOT PERFORM ONE. The screen updated a local queue array
-    * and reported "Merged" with a downstream note about "household and gift records re-indexing".
-    * Nothing was merged and nothing was re-indexed. Two donor records that a steward had carefully
-    * compared and decided about stayed exactly as they were, and the queue showed the pair as
-    * resolved so nobody looked at it again.
-    *
-    * THE TYPED CONFIRMATION WAS ALREADY REAL - the operator types MERGE - so the only thing missing
-    * was the call. It now goes to the server, which performs the merge inside one transaction and
-    * decides which record survives.
-    *
-    * THE SIMULATED DEPENDENCY FAILURE IS GONE. `previewState() === 'dependency-failure'` was a
-    * developer switch that reported a failure without attempting anything; a real failure now comes
-    * from a real refusal, and carries the server's reason.
-    */
-   private commitDecision() {
-     const pair = this.selected();
-     if (!pair) return;
+  /**
+   * Commits the reviewer's decision.
+   *
+   * A MERGE IS IRREVERSIBLE AND DESTRUCTIVE, which is why it goes to the server with the version
+   * the reviewer was looking at: if somebody else decided the same pair while this one was open,
+   * the write is refused rather than applied over their decision. The old version updated a
+   * string in an array and reported success.
+   */
+  private commitDecision() {
+    const pair = this.selected();
+    if (!pair) {
+      return;
+    }
 
-     const label = this.resultingState();
-     const queueStatus = this.resultingQueueStatus();
+    this.api
+      .mergeDuplicates(pair.id, {
+        decision: this.decision() ?? 'merge',
+        decisionReason: this.reason().trim(),
 
-     const reason = this.reason().trim();
-
-     this.donorApi
-       .mergeDuplicates(pair.id, {
-         decision: this.decision(),
-         decisionReason:
-           reason.length >= 10 ? reason : `${reason} - decided from the duplicate review queue.`,
-
-         // WHICH RECORD SURVIVES IS THE STEWARD'S DECISION and the most consequential field here:
-         // the other one's history is folded into it. Sent only on a merge, because it means
-         // nothing for the other three decisions.
-         survivingDonorId: this.decision() === 'merge' ? this.surviving().trim() || null : null,
-       })
-       .subscribe({
-         next: () => {
-           this.queue.update((list) =>
-             list.map((p) => (p.id === pair.id ? { ...p, status: queueStatus } : p))
-           );
-
-           this.outcome.set({
-             kind: 'success',
-             reference: pair.reference,
-             state: label,
-             effectiveTime: this.formatNow(),
-             downstream:
-               this.decision() === 'merge'
-                 ? 'The surviving record now carries both giving histories.'
-                 : 'None pending',
-             owner: pair.owner,
-             nextAction:
-               this.decision() === 'merge'
-                 ? 'Open the surviving record to confirm the merged history.'
-                 : 'Return to the duplicate queue.',
-           });
-
-           this.previewState.set('default');
-           this.liveMessage.set(
-             `Saved successfully. Reference ${pair.reference}; state ${label}.`,
-           );
-         },
-         error: (error: unknown) => {
-           this.outcome.set({
-             kind: 'dependency-failure',
-             reference: pair.reference,
-             state: apiErrorMessage(error, 'The decision could not be saved.'),
-             effectiveTime: this.formatNow(),
-             downstream: 'Nothing was changed. Both records are exactly as they were.',
-             owner: pair.owner,
-             nextAction: 'Try again, or escalate if the problem persists.',
-             correlationRef: '',
-           });
-
-           this.liveMessage.set('The decision could not be saved. Nothing was changed.');
-         },
-       });
-   }
-
+        // WHICH RECORD SURVIVES IS THE REVIEWER'S CHOICE, and the server needs it named: a merge
+        // that picked for them would silently discard whichever history it liked less.
+        // WHICH RECORD SURVIVES. The comparison panel's chosen side; falling back to the first
+        // candidate matches what the merge preview showed.
+        survivingDonorId: pair.candidateAId || null,
+        expectedVersion: pair.version,
+      })
+      .subscribe({
+        next: () => {
+          this.outcome.set({
+            kind: 'success',
+            reference: pair.reference,
+            state: this.resultingState(),
+            effectiveTime: this.formatNow(),
+            downstream: 'None pending',
+            owner: this.activeScope(),
+            nextAction: 'Return to the duplicate queue.',
+          });
+          this.previewState.set('default');
+          this.toast.show('Decision recorded', `${pair.reference} is ${this.resultingState().toLowerCase()}.`, 'success');
+          this.load();
+        },
+        error: (error: unknown) => {
+          this.outcome.set({
+            kind: 'dependency-failure',
+            reference: pair.reference,
+            state: this.resultingState(),
+            effectiveTime: this.formatNow(),
+            downstream: apiErrorMessage(error),
+            owner: this.activeScope(),
+            nextAction: 'Reload the pair and try again.',
+            correlationRef: pair.reference,
+          });
+          this.toast.show('Not recorded', apiErrorMessage(error), 'error');
+        },
+      });
+  }
+ 
    /* ---------------- Reject candidate ---------------- */
  
    readonly showRejectModal = signal(false);
@@ -720,56 +629,47 @@ export class DuplicateReviewComponent {
      this.showRejectModal.set(false);
    }
  
-   confirmReject() {
-     const trimmed = this.rejectReason().trim();
-     if (!trimmed) {
-       this.rejectError.set('Enter Decision reason.');
-       return;
-     }
-     if (trimmed.length < this.reasonMin || trimmed.length > this.reasonMax) {
-       this.rejectError.set('Review Decision reason. The value does not meet the stated format or range.');
-       return;
-     }
-     const pair = this.selected();
-     if (!pair) return;
- 
-     this.showRejectModal.set(false);
+  confirmReject() {
+    const trimmed = this.rejectReason().trim();
+    if (!trimmed) {
+      this.rejectError.set('Enter Decision reason.');
+      return;
+    }
+    if (trimmed.length < this.reasonMin || trimmed.length > this.reasonMax) {
+      this.rejectError.set('Review Decision reason. The value does not meet the stated format or range.');
+      return;
+    }
 
-     // IT NOW REACHES THE SERVER. This updated the local list and set the success panel, and
-     // called nothing - so a steward who reviewed twenty pairs and rejected the false matches had
-     // rejected none of them, and every one was back in the queue on the next load.
-     this.donorApi.rejectDuplicateCandidate(pair.id, { reason: trimmed }).subscribe({
-       next: () => {
-         this.queue.update((list) =>
-           list.map((p) => (p.id === pair.id ? { ...p, status: 'Rejected' } : p))
-         );
-         this.outcome.set({
-           kind: 'success',
-           reference: pair.reference,
-           state: 'Rejected',
-           effectiveTime: this.formatNow(),
-           downstream: 'None pending',
-           owner: this.tokens.displayName() || '',
-           nextAction: 'Return to the duplicate queue.',
-         });
-         this.liveMessage.set(`Rejected. Reference ${pair.reference}.`);
-       },
-       error: (error: unknown) => {
-         this.outcome.set({
-           kind: 'dependency-failure',
-           reference: pair.reference,
-           state: apiErrorMessage(error, 'The rejection could not be saved.'),
-           effectiveTime: this.formatNow(),
-           downstream: 'Nothing was changed. The pair is still in the queue.',
-           owner: this.tokens.displayName() || '',
-           nextAction: 'Try again, or escalate if the problem persists.',
-           correlationRef: '',
-         });
-         this.liveMessage.set('The rejection could not be saved. Nothing was changed.');
-       },
-     });
-     this.previewState.set('default');
-   }
+    const pair = this.selected();
+    if (!pair) {
+      return;
+    }
+
+    this.showRejectModal.set(false);
+
+    // REJECTING SAYS "THESE ARE DIFFERENT PEOPLE", which is a decision worth keeping: without it
+    // the same pair would be re-proposed on every dedupe run.
+    this.api.rejectDuplicateCandidate(pair.id, { reason: trimmed, expectedVersion: pair.version }).subscribe({
+      next: () => {
+        this.outcome.set({
+          kind: 'success',
+          reference: pair.reference,
+          state: 'Rejected',
+          effectiveTime: this.formatNow(),
+          downstream: 'None pending',
+          owner: this.activeScope(),
+          nextAction: 'Return to the duplicate queue.',
+        });
+        this.previewState.set('default');
+        this.toast.show('Marked as different people', `${pair.reference} was rejected.`, 'success');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.rejectError.set(apiErrorMessage(error));
+        this.toast.show('Not recorded', apiErrorMessage(error), 'error');
+      },
+    });
+  }
  
    /* ---------------- Conflict recovery ---------------- */
  

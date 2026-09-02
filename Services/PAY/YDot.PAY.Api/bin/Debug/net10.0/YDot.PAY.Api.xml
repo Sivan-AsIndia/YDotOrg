@@ -547,6 +547,15 @@
         <member name="M:YDot.PAY.Api.Controllers.ReceiptsController.SearchAsync(YDot.PAY.Application.Features.Receipts.DTOs.ReceiptSearchFilter,System.Threading.CancellationToken)">
             <summary>The receipt register.</summary>
         </member>
+        <member name="M:YDot.PAY.Api.Controllers.ReceiptsController.GetRegisterAsync(YDot.PAY.Application.Features.Receipts.DTOs.ReceiptRegisterFilter,System.Threading.CancellationToken)">
+             <summary>
+             The Receipt Register - rows and the four totals, in one call.
+            
+             SEPARATE FROM THE PLAIN LIST ABOVE. This one includes failed payments, which have no
+             receipt, because the workflow document's register shows the outcome of every payment
+             rather than the set of tax documents that exist.
+             </summary>
+        </member>
         <member name="M:YDot.PAY.Api.Controllers.ReceiptsController.ExportAsync(YDot.PAY.Application.Features.Receipts.DTOs.ReceiptSearchFilter,System.Threading.CancellationToken)">
             <summary>
             The CSV export - the file a finance team files with the year's return.
@@ -867,6 +876,71 @@
         </member>
         <member name="M:YDot.PAY.Api.ServiceContainer.DependencyInjection.WriteEnvelopeAsync(Microsoft.AspNetCore.Http.HttpContext,YDot.PAY.Application.Common.Results.Error)">
             <summary>Writes an error envelope directly, for the two JWT events that bypass MVC.</summary>
+        </member>
+        <member name="T:YDot.PAY.Api.ServiceContainer.ForwardedHeadersConfiguration">
+             <summary>
+             Builds the <see cref="T:Microsoft.AspNetCore.Builder.ForwardedHeadersOptions"/> that recover the real caller address from
+             behind nginx.
+            
+             WHY THIS IS A CLASS RATHER THAN AN OBJECT INITIALISER IN Program.cs, and it is not a matter
+             of taste. The options used to be written like this:
+            
+             <code>
+             new ForwardedHeadersOptions
+             {
+                 KnownNetworks = { },   // intended: "trust every proxy"
+                 KnownProxies  = { }
+             }
+             </code>
+            
+             <c>KnownNetworks = { }</c> inside an object initialiser is a COLLECTION initialiser, not an
+             assignment. It calls <c>Add</c> once per element listed, and nothing is listed — so it adds
+             nothing and LEAVES THE DEFAULTS IN PLACE. The defaults are IPv6 loopback and
+             <c>::ffff:127.0.0.0/104</c>, so the middleware still trusted loopback and only loopback.
+             nginx reaches this service from the compose bridge network (172.20.0.0/16), which is not
+             loopback, so <c>ForwardedHeadersMiddleware</c> stopped at the first unknown proxy and applied
+             nothing at all. The header was set correctly by nginx, forwarded correctly, and then ignored.
+            
+             The symptom: every row this service writes recorded <c>::ffff:172.20.0.9</c> — the address of
+             the nginx CONTAINER — instead of the caller's own. So every audit row names the proxy, and
+             "where did this come from" has one answer for every event ever recorded, which is the same as
+             having no answer. IAM had the same defect, where it also flattened the per-IP sign-in rate
+             limit into a single global bucket.
+            
+             Clearing the lists has to be done with <c>Clear()</c>, and that is what happens below.
+            
+             TRUSTING EVERY PROXY IS STILL NOT WHAT WE WANT. X-Forwarded-For is caller-controlled, so an
+             empty known-proxy list lets anybody who can open a socket to this service write whatever
+             address they like into the audit trail and step around the per-IP limit. In this compose file
+             the container's port IS published to the host (6708), so "only nginx can reach it" is not
+             true. The trusted set is therefore explicit: loopback plus the private ranges a container
+             network uses, overridable per environment with
+            
+             <code>ForwardedHeaders__KnownNetworks__0=10.42.0.0/16</code>
+            
+             so a real deployment can narrow it to the one proxy in front of it.
+             </summary>
+        </member>
+        <member name="F:YDot.PAY.Api.ServiceContainer.ForwardedHeadersConfiguration.SectionName">
+            <summary>Configuration section holding the CIDR list, when one is supplied.</summary>
+        </member>
+        <member name="F:YDot.PAY.Api.ServiceContainer.ForwardedHeadersConfiguration.DefaultKnownNetworks">
+             <summary>
+             Loopback plus the three RFC 1918 ranges and the IPv4-mapped forms of them.
+            
+             These are the addresses a reverse proxy on the same private network arrives from. They
+             are never routable from the internet, so a forged header still cannot come from outside;
+             what it does cover is every container network Docker, Compose and Kubernetes hand out by
+             default, which is the whole point.
+             </summary>
+        </member>
+        <member name="M:YDot.PAY.Api.ServiceContainer.ForwardedHeadersConfiguration.TryParseNetwork(System.String,Microsoft.AspNetCore.HttpOverrides.IPNetwork@)">
+             <summary>
+             Parses one CIDR entry.
+            
+             A malformed entry is skipped rather than thrown on. A typo in an environment variable
+             should narrow what is trusted — the safe direction — not stop the service booting.
+             </summary>
         </member>
         <member name="T:Program">
             <summary>
