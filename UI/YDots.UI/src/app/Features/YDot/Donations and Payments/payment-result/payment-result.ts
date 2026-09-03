@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { CurrentUserService } from '../../../../Service/current-user.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { PaymentVerification } from '../../../../Shared/models/payment.model';
@@ -39,6 +40,13 @@ type ResultState = 'checking' | 'confirmed' | 'pending' | 'failed' | 'unknown';
  * and a donor told "failed" tries again — if the first attempt actually succeeded, they have now
  * given twice. So a pending answer is retried a few times before this settles on "still
  * confirming", which is the honest word for it.
+ *
+ * A CONFIRMED DONATION DOES NOT END HERE ANY MORE. This page used to render "Thank you" and stop,
+ * with no link and no navigation of any kind on the confirmed branch — so whoever had just paid
+ * was left on a dead end with the browser's Back button as their only way out, and Back leads to
+ * the checkout they have already completed. Confirmation now returns them to the donation screen
+ * on a short countdown; only the confirmed branch redirects, because "pending" and "failed" are
+ * states somebody has to be able to sit with and read.
  */
 @Component({
   selector: 'app-payment-result',
@@ -48,7 +56,19 @@ type ResultState = 'checking' | 'confirmed' | 'pending' | 'failed' | 'unknown';
 })
 export class PaymentResultComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly payments = inject(PaymentApiService);
+
+  /**
+   * Only used to tell the two audiences of this page apart on the way out.
+   *
+   * THE SAME SCREEN LIVES AT TWO ADDRESSES and the difference is the shell around it. A member of
+   * staff who took the donation came from /app/donations/public-donation-initiation, which draws
+   * the sidebar; a donor who scanned a QR code came from /donate, which deliberately does not —
+   * and sending them to the /app copy would put them through authGuard and land them on a sign-in
+   * form, which is not a thing to show somebody who has just given money.
+   */
+  private readonly currentUser = inject(CurrentUserService);
 
   protected readonly state = signal<ResultState>('checking');
   protected readonly verification = signal<PaymentVerification | null>(null);
@@ -65,8 +85,25 @@ export class PaymentResultComponent implements OnDestroy {
   private static readonly MaximumAttempts = 4;
   private static readonly RetryDelayMs = 3000;
 
+  /**
+   * How long the confirmation is left on screen before this navigates away.
+   *
+   * FIVE SECONDS, AND IT IS COUNTED DOWN IN FRONT OF THEM. Long enough to read the amount, the
+   * receipt line and the donation reference — which is the one value support will ask for — and
+   * short enough that nobody is left wondering whether the page has finished. A redirect that
+   * fires with no warning reads as the page being yanked away mid-sentence, so the remaining
+   * seconds are shown and a button skips the wait.
+   */
+  private static readonly RedirectSeconds = 5;
+
   private attempts = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Ticks the countdown below. Separate from `timer`, which is the verify retry. */
+  private countdownTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Seconds left before the redirect; 0 means no countdown is running. */
+  protected readonly redirectIn = signal(0);
 
   protected readonly checking = computed(() => this.state() === 'checking');
 
@@ -114,6 +151,7 @@ export class PaymentResultComponent implements OnDestroy {
     if (this.timer !== null) {
       clearTimeout(this.timer);
     }
+    this.stopCountdown();
   }
 
   protected verify(): void {
@@ -128,6 +166,7 @@ export class PaymentResultComponent implements OnDestroy {
         switch (result.backendPaymentState) {
           case 'Confirmed':
             this.state.set('confirmed');
+            this.startCountdown();
             return;
 
           case 'Failed':
@@ -162,5 +201,65 @@ export class PaymentResultComponent implements OnDestroy {
   protected checkAgain(): void {
     this.attempts = 0;
     this.verify();
+  }
+
+  // =============================================================================================
+  // Leaving the page — the confirmed branch only
+  // =============================================================================================
+
+  /**
+   * Starts the visible countdown that ends in the redirect.
+   *
+   * GUARDED AGAINST RUNNING TWICE. `verify()` can reach the confirmed branch more than once — the
+   * retry poll may already have a pass in flight when Check again is pressed — and a second
+   * interval over the same signal would count down at double speed and navigate early.
+   */
+  private startCountdown(): void {
+    if (this.countdownTimer !== null) {
+      return;
+    }
+
+    this.redirectIn.set(PaymentResultComponent.RedirectSeconds);
+
+    this.countdownTimer = setInterval(() => {
+      const remaining = this.redirectIn() - 1;
+      this.redirectIn.set(remaining);
+
+      if (remaining <= 0) {
+        this.leave();
+      }
+    }, 1000);
+  }
+
+  private stopCountdown(): void {
+    if (this.countdownTimer !== null) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = null;
+    }
+  }
+
+  /** The button beside the countdown, for somebody who has read enough and wants to move on. */
+  protected continueNow(): void {
+    this.leave();
+  }
+
+  /**
+   * Back to the donation screen.
+   *
+   * NO `intent` ON THE WAY BACK, deliberately. The donation form reads that parameter on load and
+   * reopens the intent it names, offering Continue to payment — which, for an intent that has just
+   * been confirmed, is an invitation to pay for the same gift a second time. Arriving clean gives
+   * an empty form, which is the only correct next state after a completed donation.
+   */
+  private leave(): void {
+    this.stopCountdown();
+
+    // The /app copy is behind authGuard; the anonymous donor gets the public one. See the comment
+    // on `currentUser` above for why this is not a cosmetic difference.
+    const destination = this.currentUser.reference()
+      ? '/app/donations/public-donation-initiation'
+      : '/donate';
+
+    this.router.navigate([destination]);
   }
 }

@@ -157,6 +157,16 @@
   outline-offset: 2px;
 }
 
+/* The countdown that precedes the redirect. Quiet on purpose — it is a note about what the page
+   is about to do, not part of the message the donor came here to read. */
+.pr-redirect {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--pr-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- The reference, which is what support will ask for ---------- */
 .pr-facts {
   margin: 28px 0 0;

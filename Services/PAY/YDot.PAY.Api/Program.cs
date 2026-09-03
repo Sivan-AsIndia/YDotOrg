@@ -198,6 +198,11 @@ internal static class StartupExtensions
             var seeder = scope.ServiceProvider.GetRequiredService<PaymentDbSeeder>();
 
             await seeder.MigrateAsync();
+
+            // GATEWAY ACCOUNTS ARE NOT SEEDED HERE. They were, and it did not work: this runs
+            // while IAM is still starting, so iam_tenants does not exist yet and the seed found
+            // nothing to do - permanently, because it only ran once. GatewayAccountSeedingService
+            // keeps looking until the organisations appear.
         }
         catch (Exception exception)
         {

@@ -176,6 +176,12 @@ public static class DependencyInjection
         // ---- Seeding -------------------------------------------------------------------------------------------
         services.AddScoped<PaymentDbSeeder>();
 
+        // GATEWAY ACCOUNTS ARE SEEDED IN THE BACKGROUND, NOT AT STARTUP. PAY starts alongside IAM,
+        // so a one-shot seed on a first `docker compose up` reads iam_tenants before that table
+        // exists and gives up - leaving a stack that refuses every donation with
+        // PAYMENT_GATEWAY_NOT_CONFIGURED. See GatewayAccountSeedingService.
+        services.AddHostedService<GatewayAccountSeedingService>();
+
         return services;
     }
 }
