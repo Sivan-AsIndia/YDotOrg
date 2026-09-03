@@ -253,7 +253,7 @@
                     <!-- Campaign name — free-text input -->
                     <div class="field">
                       <label class="field-label" for="f-name"
-                        >Campaign name <span class="req" aria-hidden="true">*</span></label
+                        >Campaign name12354 <span class="req" aria-hidden="true">*</span></label
                       >
                       <input
                         id="f-name"
@@ -1075,7 +1075,7 @@
                           role="textbox"
                           aria-multiline="true"
                           aria-labelledby="f-public"
-                          [attr.aria-invalid]="!publicDescriptionValid()"
+                          [attr.aria-invalid]="showDescError() ? 'true' : null"
                           [style.lineHeight]="descLineHeight()"
                           [innerHTML]="descSeed()"
                           (input)="syncDescription(descBody)"
@@ -1084,7 +1084,7 @@
                         ></div>
                       </div>
                       <div class="counter-row">
-                        @if (!publicDescriptionValid()) {
+                        @if (showDescError()) {
                           <span class="field-error"
                             >Review Public description. Enter {{ purposeMin }}–{{
                               publicDescriptionMax
@@ -1258,7 +1258,7 @@
                           role="textbox"
                           aria-multiline="true"
                           aria-labelledby="f-terms"
-                          [attr.aria-invalid]="!termsNoticeValid()"
+                          [attr.aria-invalid]="showTermsError() ? 'true' : null"
                           [style.lineHeight]="termsLineHeight()"
                           [innerHTML]="termsSeed()"
                           (input)="syncEditor(termsBody)"
@@ -1267,7 +1267,7 @@
                         ></div>
                       </div>
                       <div class="counter-row">
-                        @if (!termsNoticeValid()) {
+                        @if (showTermsError()) {
                           <span class="field-error"
                             >Review Terms and notice. Enter {{ purposeMin }}–{{
                               termsNoticeMax | number

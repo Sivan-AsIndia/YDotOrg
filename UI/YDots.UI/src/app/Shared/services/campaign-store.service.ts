@@ -567,6 +567,67 @@ export class CampaignStoreService {
    * state had changed anywhere at all, so a transition the rules would have refused still
    * announced itself to every subscriber.
    */
+  /**
+   * Re-reads a campaign after a transition.
+   *
+   * THE DETAIL IS RE-READ TOO, not just the list. `permittedActions` - the only thing every
+   * lifecycle button on the campaign detail and readiness screens is drawn from - lives on the
+   * DETAIL response, and `refresh()` reloads the list projection, which does not carry it.
+   * Chained on the list load rather than fired beside it, so the detail merge lands on the row
+   * the refresh has already replaced instead of racing it.
+   */
+  private reloadAfterTransition(ref: string): void {
+    this.refresh(() => {
+      if (this.get(ref)?.detailLoaded) {
+        this.loadDetail(ref);
+      }
+    });
+  }
+
+  /**
+   * Sends a campaign back to Draft from the readiness screen, with a reason.
+   *
+   * IT GOES TO THE SERVER, which is the whole point of adding it. The readiness screen's
+   * "Return to draft" used to call `update(ref, { status: 'Draft' })` - and `update` is the
+   * CONTENT edit, a PUT whose body carries no status at all. So the row flipped to Draft in the
+   * browser, the PUT saved the campaign's fields unchanged, the refresh that followed replaced
+   * the row with the server's - still Submitted - and the person watching saw the status revert
+   * on its own a moment after they had changed it. `POST /campaigns/{id}/readiness/return-to-draft`
+   * is the endpoint that actually moves it, and it has existed on both sides all along with
+   * nothing in the client calling it.
+   */
+  returnToDraft(ref: string, reason: string, onDone?: LifecycleOutcome): void {
+    const record = this.get(ref);
+    const id = this.idsByCode.get(ref);
+
+    if (!record || !id) {
+      this.refuse(
+        'That campaign is not loaded yet, so the change was not sent. Refresh and try again.',
+        onDone,
+      );
+      return;
+    }
+
+    this.api
+      .returnCampaignToDraft(id, {
+        expectedVersion: this.versionsByCode.get(ref) ?? 0,
+        reason,
+      })
+      .subscribe({
+        next: () => {
+          this.reloadAfterTransition(ref);
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The campaign could not be returned to draft.');
+
+          this.loadError.set(message);
+          this.reloadAfterTransition(ref);
+          onDone?.({ applied: false, error: message });
+        },
+      });
+  }
+
   private lifecycle(
     ref: string,
     call: (
@@ -602,12 +663,7 @@ export class CampaignStoreService {
     // screen after the approval that had just consumed it, and answered 409 on the second press.
     // Chained on the list load rather than fired beside it, so the detail merge lands on the row
     // the refresh has already replaced instead of racing it.
-    const reloadDetail = () =>
-      this.refresh(() => {
-        if (this.get(ref)?.detailLoaded) {
-          this.loadDetail(ref);
-        }
-      });
+    const reloadDetail = () => this.reloadAfterTransition(ref);
 
     call(id, { expectedVersion: this.versionsByCode.get(ref) ?? 0 }).subscribe({
       next: () => {

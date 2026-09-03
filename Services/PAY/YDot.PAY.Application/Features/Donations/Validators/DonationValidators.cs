@@ -77,6 +77,56 @@ public sealed class CreateDonationIntentRequestValidator : AbstractValidator<Cre
     }
 }
 
+/// <summary>
+/// Validator for opening a checkout session.
+///
+/// THE VERSION IS THE ONLY FIELD AND IT IS THE ONLY ONE NEEDED. Everything else about the payment
+/// - amount, currency, donor, campaign - is already on the intent, which is the point: a request
+/// that could restate them is a request that could disagree with them.
+/// </summary>
+public sealed class CreateCheckoutSessionRequestValidator
+    : AbstractValidator<CreateCheckoutSessionRequest>
+{
+    public CreateCheckoutSessionRequestValidator()
+    {
+        RuleFor(request => request.ExpectedVersion)
+            .GreaterThan(0).WithMessage("The record version is missing. Reload the page and try again.");
+    }
+}
+
+/// <summary>
+/// Validator for the result a finished checkout hands back.
+///
+/// SHAPE ONLY, NEVER AUTHENTICITY. These rules stop a malformed body reaching the handler; what
+/// makes the body BELIEVABLE is the signature check against the merchant secret, which happens in
+/// the handler because only there is the organisation - and therefore the secret - known.
+///
+/// THE LENGTH CAPS ARE DELIBERATELY GENEROUS. Providers change their reference formats without
+/// notice, and a validator that encodes today's prefix is a validator that rejects real payments
+/// after somebody else's release.
+/// </summary>
+public sealed class ConfirmCheckoutRequestValidator : AbstractValidator<ConfirmCheckoutRequest>
+{
+    public ConfirmCheckoutRequestValidator()
+    {
+        RuleFor(request => request.PaymentReference)
+            .NotEmpty().WithMessage("The payment reference is missing.")
+            .MaximumLength(100);
+
+        RuleFor(request => request.OrderReference)
+            .NotEmpty().WithMessage("The order reference is missing.")
+            .MaximumLength(100);
+
+        // Hexadecimal because that is what an HMAC-SHA256 signature is encoded as; a value that
+        // is not even hex cannot verify, and saying so here keeps it out of the crypto path.
+        RuleFor(request => request.Signature)
+            .NotEmpty().WithMessage("The payment signature is missing.")
+            .MaximumLength(256)
+            .Matches("^[0-9a-fA-F]+$")
+            .WithMessage("That payment signature is not in a form we can check.");
+    }
+}
+
 /// <summary>Validator for asking for a payment link.</summary>
 public sealed class CreatePaymentLinkRequestValidator : AbstractValidator<CreatePaymentLinkRequest>
 {

@@ -502,6 +502,14 @@ services:
   # and does not exist before then. It is idempotent, so re-running the stack changes nothing, and
   # it exits 0 either way rather than holding the stack up.
   #
+  # IT ALSO WAITS FOR AN ORGANISATION TO EXIST, which is the part that is easy to miss. The script
+  # is an INSERT ... SELECT FROM iam_tenants: with no tenant rows it inserts nothing, reports
+  # success and exits, and - being a one-shot container - it never tries again, so a fresh stack
+  # ends up permanently unable to take a payment. ydot-pay can pass its health check well before
+  # IAM has finished seeding, so depending on health alone loses that race; the poll below is what
+  # actually closes it. After two minutes it gives up and still exits 0, because a stack that seeds
+  # no sample organisation at all is a legitimate setup and must not be held up by this.
+  #
   # DEVELOPMENT ONLY. It is absent from docker-compose.deploy.yml on purpose: on a real deployment
   # an operator configures the gateway on the Payment Gateway screen, against their own merchant
   # account. The row it writes names a configuration section, never a credential, and the keys it
@@ -514,12 +522,20 @@ services:
     depends_on:
       ydot-pay:
         condition: service_healthy
+      ydot-iam:
+        condition: service_healthy
     environment:
       PGPASSWORD: user
     volumes:
       - ./docker/sql:/sql:ro
     entrypoint: >
-      sh -c "psql -h ydot-postgres -U postgres -d ydotphaseupdated -v ON_ERROR_STOP=1
+      sh -c "i=0;
+      until n=$$(psql -h ydot-postgres -U postgres -d ydotphaseupdated -tAc 'select count(*) from iam_tenants' 2>/dev/null | tr -dc 0-9); [ $${n:-0} -gt 0 ]; do
+      i=$$((i+1));
+      if [ $$i -ge 60 ]; then echo 'No organisation reached iam_tenants within 120s; gateway seed skipped - configure it on the Payment Gateway screen.'; exit 0; fi;
+      sleep 2;
+      done;
+      psql -h ydot-postgres -U postgres -d ydotphaseupdated -v ON_ERROR_STOP=1
       -f /sql/razorpay-test-gateway.sql || echo 'Gateway seed skipped; configure it on the Payment Gateway screen.'"
     restart: "no"
     networks:

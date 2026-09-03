@@ -51,6 +51,29 @@ public sealed record MoneyValue
     public static MoneyValue Zero(string currencyCode) => Create(0m, currencyCode);
 
     /// <summary>
+    /// The same amount, as a SEPARATE INSTANCE, for a different owner.
+    ///
+    /// WHY THIS IS NOT POINTLESS ON A RECORD. This is an EF OWNED TYPE, and an owned entity's
+    /// identity is its owner - so one CLR instance assigned to two owners is one object that EF
+    /// tracks as two different entity types at once. It warns about exactly that:
+    ///
+    ///     The same entity is being tracked as different entity types 'Receipt.Amount#MoneyValue'
+    ///     and 'Donation.Amount#MoneyValue' with defining navigations. If a property value
+    ///     changes, it will result in two store changes, which might not be the desired outcome.
+    ///
+    /// AND IT IS NOT MERELY UNTIDY. Recording a captured donation passed ONE instance into
+    /// PaymentEvent.Amount, PaymentAttempt.CapturedAmount, Donation.Amount and then Receipt.Amount.
+    /// The save that followed emitted an update for every one of those owners from that single
+    /// object, and the ones whose rows did not match answered "expected to affect 1 row(s), but
+    /// actually affected 0" - a DbUpdateConcurrencyException that rolled the whole transaction
+    /// back and unwound a donation whose money had already been taken.
+    ///
+    /// So: assign a copy whenever an amount moves to a second owner. Reading one is free; it is
+    /// only STORING the same instance twice that is the error.
+    /// </summary>
+    public MoneyValue Copy() => new(Amount, CurrencyCode);
+
+    /// <summary>
     /// Adds two amounts.
     ///
     /// REFUSES A CURRENCY MISMATCH rather than converting. There is no exchange rate in scope

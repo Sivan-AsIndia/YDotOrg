@@ -1,0 +1,30 @@
+{
+  "//": "Development-only reverse proxy for `ng serve`. It is the local stand-in for nginx.conf.",
+  "//1": "WHY IT EXISTS. Without it the bundle calls http://localhost:6702 directly, so IAM sees",
+  "//2": "Host: localhost - the PLATFORM host, where only the SuperAdmin account is visible. An",
+  "//3": "organisation user then fails sign-in with 'The sign-in details are incorrect.' even though",
+  "//4": "the password is right. Proxying keeps every call same-origin, so a browser on",
+  "//5": "ten1.localhost:6701 reaches the API as ten1.localhost and the Organisation resolves.",
+  "//6": "changeOrigin is deliberately left off (false): that is what preserves the tenant Host.",
+  "//7": "The three rewrites mirror the location blocks in nginx.conf exactly.",
+
+  "/api": {
+    "target": "http://localhost:6702",
+    "secure": false
+  },
+  "/cam-api": {
+    "target": "http://localhost:6704",
+    "secure": false,
+    "pathRewrite": { "^/cam-api": "/api" }
+  },
+  "/don-api": {
+    "target": "http://localhost:6706",
+    "secure": false,
+    "pathRewrite": { "^/don-api": "/api" }
+  },
+  "/pay-api": {
+    "target": "http://localhost:6708",
+    "secure": false,
+    "pathRewrite": { "^/pay-api": "/api" }
+  }
+}

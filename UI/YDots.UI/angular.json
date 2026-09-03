@@ -82,7 +82,11 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "port": 6505
+            // 6701, not 6505: every API's CORS allow-list names http://localhost:6701, and the
+            // proxy below is what keeps a tenant host such as ten1.localhost:6701 intact all the
+            // way to the API. Plain `ng serve` therefore works with no flags to remember.
+            "port": 6701,
+            "proxyConfig": "proxy.conf.json"
           },
           "configurations": {
             "production": {

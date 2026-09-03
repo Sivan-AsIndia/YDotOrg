@@ -105,6 +105,17 @@ public sealed class DocumentSubmissionCommandHandler(
             return Result.Failure<DocumentSubmissionResponse>(Error.TenantNotFound());
         }
 
+        // THE DOCUMENT SET CLOSES ON APPROVAL. Nothing enforced this: an Organisation that
+        // SuperAdmin had already accepted could open a new submission and upload registration
+        // evidence to it indefinitely, which changes what the approval was granted against with
+        // nobody reviewing the new file. See Tenant.AcceptsDocumentSubmissions.
+        if (!tenant.AcceptsDocumentSubmissions)
+        {
+            return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
+                "This Organisation's registration has already been decided, so its documents are "
+                + "settled. A new submission cannot be started."));
+        }
+
         var submission = new TenantDocumentSubmission
         {
             TenantId = tenantId,
@@ -176,6 +187,16 @@ public sealed class DocumentSubmissionCommandHandler(
         if (tenant is null)
         {
             return Result.Failure<DocumentSubmissionResponse>(Error.TenantNotFound());
+        }
+
+        // The same close-on-approval rule as the create above, applied to the file rather than
+        // the submission: a draft left open from before the decision must not become a way to
+        // add evidence after it.
+        if (!tenant.AcceptsDocumentSubmissions)
+        {
+            return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
+                "This Organisation's registration has already been decided, so its documents are "
+                + "settled. No further files can be added."));
         }
 
         var documentId = Guid.NewGuid();

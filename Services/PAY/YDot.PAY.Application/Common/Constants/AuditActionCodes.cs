@@ -18,6 +18,12 @@ public static class AuditActionCodes
     public const string IntentExistingDonorMatched = "pay.intent.existing-donor-matched";
     public const string IntentPaymentLinkCreated = "pay.intent.payment-link-created";
     public const string IntentPaymentLinkResent = "pay.intent.payment-link-resent";
+
+    /// <summary>An in-page checkout session was opened against the provider for an intent.</summary>
+    public const string IntentCheckoutOpened = "pay.intent.checkout-opened";
+
+    /// <summary>A browser returned from checkout with a signature that did not verify.</summary>
+    public const string IntentCheckoutSignatureRejected = "pay.intent.checkout-signature-rejected";
     public const string IntentCancelled = "pay.intent.cancelled";
     public const string IntentExpired = "pay.intent.expired";
     public const string IntentExported = "pay.intent.exported";

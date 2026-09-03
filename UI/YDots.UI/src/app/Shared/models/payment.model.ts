@@ -189,6 +189,62 @@ export interface CreateDonationIntentRequest {
   publicRecognitionName?: string | null;
 }
 
+/**
+ * Asking to open the provider's checkout on an intent.
+ *
+ * THE VERSION IS THE ONLY FIELD, and its absence from everything else is the design. Amount,
+ * currency, donor and campaign are already on the intent; a request that could restate them is a
+ * request that could disagree with them.
+ */
+export interface CreateCheckoutSessionRequest {
+  expectedVersion: number;
+}
+
+/**
+ * What the browser needs to open the provider's checkout — and deliberately nothing else.
+ *
+ * `publicKey` IS THE PUBLISHABLE HALF OF THE MERCHANT CREDENTIAL and is meant to be here. It says
+ * whose checkout to draw and authorises nothing on its own; every operation that moves money is
+ * signed with the key SECRET, which never leaves the server. It arrives per organisation, from
+ * that organisation's own configured account, which is also what keeps one charity's key out of
+ * another charity's page — the thing a key compiled into the bundle could never do.
+ *
+ * `amountMinorUnits` IS A LABEL, NOT A PRICE. The provider charges what the ORDER says. A page
+ * that edits this number changes what the donor reads and not what they pay, which is precisely
+ * why an in-page checkout can be trusted at all.
+ */
+export interface CheckoutSession {
+  intentId: string;
+  intentReference: string;
+  gatewayName: string;
+
+  /** The provider's order id. Checkout opens against this, never against an amount. */
+  orderReference: string;
+
+  publicKey: string;
+  amountMinorUnits: number;
+  currencyCode: string;
+  amount: MoneyResponse;
+  donorName: string;
+  email: string | null;
+  mobile: string | null;
+  description: string;
+  attemptNumber: number;
+}
+
+/**
+ * What the provider's checkout hands back, on its way to being proved.
+ *
+ * NONE OF IT IS TRUSTED UNTIL THE SERVER CHECKS THE SIGNATURE, which is an HMAC over the order
+ * and payment ids made with the merchant secret this browser has never held. That is what stops
+ * anybody marking a donation paid by posting its reference.
+ */
+export interface ConfirmCheckoutRequest {
+  paymentReference: string;
+  orderReference: string;
+  signature: string;
+}
+
 export interface DonationIntentResponse {
   id: string;
   intentReference: string;

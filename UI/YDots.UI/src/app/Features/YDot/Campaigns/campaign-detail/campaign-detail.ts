@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -141,7 +141,26 @@ export class CampaignDetailComponent {
     // dashes.
     this.store.loadDetail(this.reference);
 
-    this.loadActivity();
+    // THE HISTORY WAITS FOR THE CAMPAIGN'S ID.
+    //
+    // `loadActivity` needs `store.apiId(reference)`, and on a cold load - a deep link, a refresh,
+    // anything that is not a click through from the register - the store has not fetched the
+    // campaign list yet, so that map is empty. The call used to be made once here, found no id,
+    // set the trail to an empty array and never asked again: the Related history tab was blank
+    // for exactly the visits where somebody would go looking at it.
+    let historyLoadedFor: string | null = null;
+
+    effect(() => {
+      const campaignId = this.store.apiId(this.reference);
+
+      if (!campaignId || historyLoadedFor === campaignId) {
+        return;
+      }
+
+      historyLoadedFor = campaignId;
+      untracked(() => this.loadActivity());
+    });
+
     // Donations-in-scope is modelled as a backend fetch: stamp a freshly-fetched time on load,
     // the same as the manual refresh action does.
     this.refreshDonationsScope();
@@ -514,27 +533,34 @@ export class CampaignDetailComponent {
     this.activityLoading.set(true);
     this.activityError.set(null);
 
+    // THE FIELD NAMES ARE THE ONES THE SERVER ACTUALLY SENDS.
+    //
+    // This read `actionTypeDescription`, `actionType`, `detailedReason`, `reasonCategory`,
+    // `effectiveAtUtc`, `createdAtUtc` and `actionStatus` off an untyped bag. `CampaignHistoryResponse`
+    // carries none of them - it is `actionCode`, `actorUserId`, `result`, `reason` and
+    // `occurredAtUtc` - so every one of those lookups was undefined, and each row came out as a
+    // blank title, a blank detail and a blank time. Those names belong to
+    // `CampaignLifecycleAction`, a different DTO on a different endpoint.
     this.campaignApi.getCampaignHistory(campaignId).subscribe({
       next: (entries) =>
         this.recentActivity.set(
           entries.map((entry) => {
-            const record = entry as unknown as Record<string, unknown>;
-            const action = String(record['actionTypeDescription'] ?? record['actionType'] ?? '');
-            const reason = String(record['detailedReason'] ?? record['reasonCategory'] ?? '');
-            const at = String(record['effectiveAtUtc'] ?? record['createdAtUtc'] ?? '');
-            const status = String(record['actionStatus'] ?? '');
+            const result = String(entry.result ?? '');
 
             return {
-              title: action,
-              detail: reason || status,
-              time: at ? new Date(at).toLocaleString('en-IN') : '',
+              title: this.describeHistoryAction(entry.actionCode),
+              detail: entry.reason ?? this.describeHistoryResult(result),
+              time: entry.occurredAtUtc
+                ? new Date(entry.occurredAtUtc).toLocaleString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })
+                : '',
 
               // A REFUSED ACTION IS DRAWN DIFFERENTLY. The history records attempts that were not
               // allowed as well as ones that were, and a trail that showed both the same way would
               // hide the more interesting half.
-              tone: status.toLowerCase().includes('reject') || status.toLowerCase().includes('refus')
-                ? 'plum'
-                : 'good',
+              tone: /denied|failure|failed|reject|refus/i.test(result) ? 'plum' : 'good',
             } as ActivityItem;
           }),
         ),
@@ -545,6 +571,36 @@ export class CampaignDetailComponent {
       },
       complete: () => this.activityLoading.set(false),
     });
+  }
+
+  /**
+   * An audit action code as a sentence.
+   *
+   * `actionCode` is a machine token - 'CampaignSubmitted', 'CAMPAIGN_APPROVED' - and printing it
+   * raw is how a history panel ends up reading like a log file. Anything this does not recognise
+   * is split on its own word boundaries rather than dropped, so a code added later still reads.
+   */
+  private describeHistoryAction(code: string | null | undefined): string {
+    const raw = (code ?? '').trim();
+
+    if (!raw) {
+      return 'Recorded change';
+    }
+
+    return raw
+      .replace(/[_.-]+/g, ' ')
+      .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .replace(/^./, (first) => first.toUpperCase());
+  }
+
+  /** The outcome, for the rows that carry no reason of their own. */
+  private describeHistoryResult(result: string): string {
+    if (!result) {
+      return '';
+    }
+
+    return /denied|failure|failed|reject|refus/i.test(result) ? 'Not permitted' : 'Completed';
   }
 
   // ================= Campaign Overview summary card content =================
@@ -908,31 +964,86 @@ export class CampaignDetailComponent {
     this.uiState.set('ready');
   }
 
-  // ----- Export this campaign (per-detail-page export; reuses the register's CSV shape) -----
+  // ----- Export this campaign -----
+  /**
+   * The campaign, as a document about THIS campaign.
+   *
+   * IT USED TO BE A REGISTER ROW. The file was a header line and one data line in the register's
+   * own column shape - code, name, status, owner, dates, target, progress - which is to say the
+   * detail page's Export produced the same nine fields the Campaign Register's Export produces
+   * for every campaign at once, and nothing that is only on this page. Somebody exporting from a
+   * campaign's own screen is asking for that campaign's configuration: its purpose, the fund it
+   * belongs to, its channels, where it runs, how it activates, and the public wording. Those are
+   * the fields below, and none of them fit a register column.
+   *
+   * KEY-AND-VALUE ROWS RATHER THAN A WIDE HEADER. One campaign in a fifteen-column single-row CSV
+   * is unreadable in a spreadsheet without scrolling sideways; a two-column extract of the same
+   * fields reads down the page, which is how a person actually reviews one record.
+   *
+   * IT SAYS WHEN IT WAS TAKEN. The old file carried no date anywhere - the name ended in an epoch
+   * number and the body had no stamp at all - so two exports of the same campaign taken a month
+   * apart were indistinguishable.
+   */
   protected exportThisCampaign(): void {
     if (!this.exportAllowed()) {
       return;
     }
-    const header = [
-      'Campaign Code', 'Campaign Name', 'Status', 'Owner', 'Launch Date', 'End Date',
-      'Target Amount', 'Reconciled Amount', 'Progress %',
-    ];
-    const csvField = (value: string | number): string => {
-      const s = String(value);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+
+    const csvField = (value: string | number | null | undefined): string => {
+      const s = String(value ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const row = [
-      this.reference, this.campaignName(), this.status(), this.owner(),
-      this.launchDate(), this.endDate(), this.targetAmount(), this.reconciledAmount(),
-      this.progressPercent(),
-    ].map(csvField).join(',');
-    const csv = [header.join(','), row].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+    const takenAt = new Date();
+    const rows: readonly (readonly [string, string | number])[] = [
+      ['Campaign reference', this.reference],
+      ['Campaign name', this.campaignName()],
+      ['Status', this.status()],
+      ['Owner', this.ownerLine()],
+      ['Fund or programme', this.fundProgramme()],
+      ['Purpose', this.purpose()],
+      ['Start date', this.launchDate()],
+      ['End date', this.endDate()],
+      ['Channel', this.channelsLabel()],
+      ['Location', this.locationLabel()],
+      ['Lifecycle activation', this.activationLabel()],
+      ['Public description', this.publicDescriptionPlain()],
+      ['Terms and notice', this.termsNoticePlain()],
+      ['Tracking assets', this.trackingAssets().length],
+      ['Exported on', takenAt.toLocaleString('en-IN')],
+      ['Exported by', this.currentUser.current().name],
+    ];
+
+    const csv = [
+      ['Field', 'Value'].join(','),
+      ...rows.map(([field, value]) => [csvField(field), csvField(value)].join(',')),
+    ].join('\n');
+
+    // A date in the NAME as well, so a folder of these sorts and reads without being opened.
+    const stamp = takenAt.toISOString().slice(0, 10);
+
+    this.saveFile(
+      new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+      'campaign-' + this.reference + '-' + stamp + '.csv');
+  }
+
+  /** The two rich-text fields as plain text, so a spreadsheet cell does not fill with markup. */
+  private readonly publicDescriptionPlain = computed(
+    () => this.liveRecord()?.publicDescription?.trim() || '',
+  );
+  private readonly termsNoticePlain = computed(
+    () => this.liveRecord()?.termsNotice?.trim() || '',
+  );
+
+  /** Hand a blob to the browser under a given name. */
+  private saveFile(blob: Blob, fileName: string): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
-    link.download = `campaign-${this.reference}-${Date.now()}.csv`;
+    link.download = fileName;
     link.click();
+
     URL.revokeObjectURL(url);
   }
 

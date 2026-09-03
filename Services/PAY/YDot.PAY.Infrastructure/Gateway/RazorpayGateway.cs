@@ -77,6 +77,222 @@ public sealed class RazorpayGateway(
     public string GatewayName => ProviderName;
 
     // =============================================================================================
+    // Opening a checkout session
+    // =============================================================================================
+
+    /// <summary>
+    /// Creates a Razorpay ORDER, which is what Razorpay Checkout is opened against.
+    /// </summary>
+    /// <remarks>
+    /// AN ORDER IS NOT A PAYMENT LINK, and the difference is the whole point of this method. A
+    /// link is a page Razorpay hosts and e-mails; an order is a server-side record of "this
+    /// merchant expects this much, for this reference" which the donor pays against WITHOUT
+    /// leaving our site - Checkout draws over the page they are already on, and we choose where
+    /// they go afterwards. It is also the flow every Razorpay test key is set up for, so a
+    /// development machine can complete a payment end to end.
+    ///
+    /// THE AMOUNT LIVES ON THE ORDER, so the browser cannot change it. This is the reason the
+    /// earlier in-page integration was removed and the reason this one is safe: that version
+    /// passed an amount from a client signal straight to Checkout with no order behind it, so a
+    /// donor could pay one rupee against a ten-thousand intent. Here the browser is handed an
+    /// ORDER ID; the price is Razorpay's own copy of what we told it.
+    ///
+    /// THE RECEIPT FIELD CARRIES THE INTENT REFERENCE. Razorpay caps it at forty characters and
+    /// shows it on the dashboard row, which is what lets support start from a Razorpay payment
+    /// and reach the donation. Unlike a payment link's reference_id it is NOT enforced unique, so
+    /// the double-submit guard stays where it already is - the attempt and version check in the
+    /// command handler.
+    /// </remarks>
+    public async Task<GatewayCheckoutSession> CreateCheckoutSessionAsync(
+        PaymentGatewayAccount account,
+        DonationIntent intent,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(intent);
+
+        var credential = ResolveUsableCredential(account);
+
+        if (credential is null)
+        {
+            return GatewayCheckoutSession.Failed(
+                "GATEWAY_NOT_CONFIGURED",
+                "This organisation's Razorpay credentials are not configured.");
+        }
+
+        // THE KEY ID, WHICH IS THE HALF THAT MAY BE PUBLISHED. Checkout needs it in the browser to
+        // know whose merchant account to draw; the secret after the colon never leaves this
+        // process. A credential stored pre-encoded has no colon to split on, and while that is a
+        // perfectly good credential for the Basic-auth calls it cannot yield a key id - so
+        // checkout is declined rather than guessed at, and the caller falls back to a link.
+        var separator = credential.ApiKey.IndexOf(':', StringComparison.Ordinal);
+
+        if (separator <= 0)
+        {
+            logger.LogWarning(
+                "The Razorpay credential at PaymentGateways:{Reference} is stored pre-encoded, so "
+                + "no key id can be read from it and in-page checkout is unavailable for merchant "
+                + "{MerchantId}. A payment link will be used instead.",
+                account.ApiKeyReference,
+                account.MerchantId);
+
+            return GatewayCheckoutSession.NotSupported(ProviderName);
+        }
+
+        var publicKey = credential.ApiKey[..separator];
+
+        var payload = new CreateOrderPayload
+        {
+            Amount = ToMinorUnits(intent.Amount),
+            Currency = intent.Amount.CurrencyCode,
+
+            // Razorpay caps receipt at 40 characters and rejects the whole request over it.
+            Receipt = Trim(intent.IntentReference, 40),
+
+            // CAPTURED AUTOMATICALLY. The alternative is an authorisation this platform would then
+            // have to capture on a second call - a state a donation has no use for, and one that
+            // expires into a refund if anything goes wrong between the two.
+            PaymentCapture = true,
+
+            Notes = new Dictionary<string, string>
+            {
+                ["intent_reference"] = intent.IntentReference,
+                ["merchant_id"] = account.MerchantId,
+                ["campaign_id"] = intent.CampaignId?.ToString() ?? string.Empty,
+                ["idempotency_key"] = idempotencyKey
+            }
+        };
+
+        try
+        {
+            var client = CreateClient(credential);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "orders")
+            {
+                Content = JsonContent.Create(payload, options: JsonOptions)
+            };
+
+            // Razorpay honours this header on order creation, so a call retried after a timeout
+            // returns the SAME order rather than opening a second one against the same intent.
+            request.Headers.TryAddWithoutValidation("X-Razorpay-Idempotency-Key", idempotencyKey);
+
+            using var response = await client.SendAsync(request, cancellationToken);
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogError(
+                    "Razorpay refused an order for intent {IntentReference}: {StatusCode} {Body}.",
+                    intent.IntentReference,
+                    (int)response.StatusCode,
+                    Truncate(body));
+
+                return GatewayCheckoutSession.Failed(
+                    $"RAZORPAY_{(int)response.StatusCode}",
+                    ReadError(body) ?? "Razorpay could not start this payment.");
+            }
+
+            var order = JsonSerializer.Deserialize<OrderResponse>(body, JsonOptions);
+
+            if (order is null || string.IsNullOrWhiteSpace(order.Id))
+            {
+                return GatewayCheckoutSession.Failed(
+                    "RAZORPAY_BAD_RESPONSE", "Razorpay returned an order we could not read.");
+            }
+
+            return GatewayCheckoutSession.Ok(
+                order.Id,
+                publicKey,
+                order.Amount > 0 ? order.Amount : ToMinorUnits(intent.Amount),
+                string.IsNullOrWhiteSpace(order.Currency) ? intent.Amount.CurrencyCode : order.Currency);
+        }
+        catch (Exception exception)
+            when (exception is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogError(
+                exception,
+                "Could not reach Razorpay to open a checkout session for intent {IntentReference}.",
+                intent.IntentReference);
+
+            return GatewayCheckoutSession.Failed(
+                "GATEWAY_UNREACHABLE", "We could not reach Razorpay to start this payment.");
+        }
+    }
+
+    /// <summary>
+    /// Checks the signature Razorpay Checkout hands back to the browser.
+    /// </summary>
+    /// <remarks>
+    /// HMAC-SHA256 OVER THE ORDER ID, A PIPE AND THE PAYMENT ID, KEYED ON THE KEY SECRET and
+    /// hex-encoded - which is Razorpay's documented scheme for a Checkout handler response, and a
+    /// different construction from the webhook signature above (raw body, webhook secret).
+    /// Confusing the two fails every check, so they stay as two methods rather than one with a
+    /// flag.
+    ///
+    /// THE PIPE IS PART OF THE MESSAGE AND THE ORDER COMES FIRST. Reversing them, or joining with
+    /// anything else, produces a valid-looking hash that never matches.
+    ///
+    /// COMPARED IN CONSTANT TIME. A signature check that returns early on the first wrong byte
+    /// leaks how much of a guess was right, which is enough to forge one a byte at a time.
+    /// </remarks>
+    public bool VerifyCheckoutSignature(
+        PaymentGatewayAccount account,
+        string orderReference,
+        string paymentReference,
+        string signature)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        if (string.IsNullOrWhiteSpace(orderReference)
+            || string.IsNullOrWhiteSpace(paymentReference)
+            || string.IsNullOrWhiteSpace(signature))
+        {
+            return false;
+        }
+
+        var credential = ResolveUsableCredential(account);
+
+        var separator = credential?.ApiKey.IndexOf(':', StringComparison.Ordinal) ?? -1;
+
+        if (credential is null || separator <= 0)
+        {
+            // FAILS CLOSED. Without the secret there is no way to tell Razorpay's word from a
+            // fabricated one, and the safe answer to "did this payment happen" is not "yes".
+            logger.LogWarning(
+                "A checkout confirmation arrived for merchant {MerchantId} but no usable key "
+                + "secret is configured, so it cannot be verified.",
+                account.MerchantId);
+
+            return false;
+        }
+
+        var keySecret = credential.ApiKey[(separator + 1)..];
+
+        try
+        {
+            var expected = HMACSHA256.HashData(
+                Encoding.UTF8.GetBytes(keySecret),
+                Encoding.UTF8.GetBytes($"{orderReference}|{paymentReference}"));
+
+            var provided = Convert.FromHexString(signature.Trim());
+
+            return provided.Length == expected.Length
+                   && CryptographicOperations.FixedTimeEquals(expected, provided);
+        }
+        catch (FormatException)
+        {
+            logger.LogWarning(
+                "A checkout confirmation for merchant {MerchantId} carried a signature that is "
+                + "not hexadecimal, so it was rejected.",
+                account.MerchantId);
+
+            return false;
+        }
+    }
+
+    // =============================================================================================
     // Creating the payment link
     // =============================================================================================
 
@@ -902,6 +1118,26 @@ public sealed class RazorpayGateway(
     // =============================================================================================
     // Razorpay's wire shapes
     // =============================================================================================
+
+    private sealed class CreateOrderPayload
+    {
+        public long Amount { get; init; }
+        public string Currency { get; init; } = "INR";
+        public string? Receipt { get; init; }
+
+        /// <summary>Serialises to Razorpay's payment_capture; true captures on authorisation.</summary>
+        public bool PaymentCapture { get; init; }
+
+        public Dictionary<string, string>? Notes { get; init; }
+    }
+
+    private sealed class OrderResponse
+    {
+        public string? Id { get; init; }
+        public long Amount { get; init; }
+        public string? Currency { get; init; }
+        public string? Status { get; init; }
+    }
 
     private sealed class CreateLinkPayload
     {

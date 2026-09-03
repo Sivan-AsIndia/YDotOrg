@@ -42,7 +42,6 @@ import { PaymentEventQueueComponent } from './Features/YDot/Donations and Paymen
 import { PublicDonationInitiationComponent } from './Features/YDot/Donations and Payments/public-donation-initiation/public-donation-initiation';
 import { PaymentSupportAndSafeRetryComponent } from './Features/YDot/Donations and Payments/payment-support-and-safe-retry/payment-support-and-safe-retry';
 import { ReceiptRegisterComponent } from './Features/YDot/Donations and Payments/receipt-register/receipt-register';
-import { ReceiptCorrectionComponent } from './Features/YDot/Donations and Payments/receipt-correction/receipt-correction';
 import { PaymentResultComponent } from './Features/YDot/Donations and Payments/payment-result/payment-result';
 import { UnifiedInboxComponent } from './Features/YDot/Communications/unified-inbox/unified-inbox';
 import { CommunicationExceptionQueueComponent } from './Features/YDot/Communications/communication-exception-queue/communication-exception-queue';
@@ -439,18 +438,23 @@ export const routes: Routes = [
 
       // ===== Donations and Payments pages =====
       //
-      // FIVE SCREENS, AND THE DOCUMENT NAMES ALL FIVE. The YDot Donation Flow guide describes the
-      // whole module as: Public Donation Initiation (the entry form), Payment Queue (Fail and
-      // Pending only), Support & Retry (failed retries), Receipt Correction and Receipt Register -
-      // which is also, in that order, the menu its screenshots show under Donations & Payments.
-      // Donation-intent detail, the donation register, gateway configuration and the
-      // refund/chargeback case screen were all removed: none appears in the document flow, and
-      // each one carried its own mock JSON.
+      // FOUR SCREENS, AND THE DOCUMENT NAMES ALL FOUR. The YDot Donation Flow guide's Quick
+      // Reference Summary lists the whole module as: Public Donation Initiation (the entry
+      // form), Payment Queue (Fail and Pending only), Payment Support & Safe Retry (failed
+      // retries) and Receipt Register - which is also, in that order, the menu its screenshots
+      // show under Donations & Payments. Donation-intent detail, the donation register, gateway
+      // configuration and the refund/chargeback case screen were all removed: none appears in
+      // the document flow, and each one carried its own mock JSON.
       //
-      // RECEIPT CORRECTION WAS REMOVED WITH THEM AND SHOULD NOT HAVE BEEN. It is the fourth item
-      // in every one of the document's sidebar screenshots, it is section 7 of the guide - the
-      // gap between "Step 5 - Payment Receipt & Email" and the Quick Reference - and the
-      // document's own subtitle names it: "donor form -> payment -> receipt -> correction".
+      // RECEIPT CORRECTION IS GONE FOR THE SAME REASON, and an earlier comment here was wrong to
+      // restore it. It read the document's subtitle - "donor form -> payment -> receipt ->
+      // correction" - as a screen list, but the guide has no section for it and its Quick
+      // Reference names four screens, not five. There is no Receipt Correction page.
+      //
+      // CORRECTING A RECEIPT IS STILL A THING THE SERVER DOES. `POST /receipts/{id}/correct` and
+      // `pay.receipts.correct` are untouched, because a correction is a receipt-domain operation
+      // rather than a screen; what has gone is the page that offered it its own place in the
+      // sidebar.
       //
       // EVERY ONE OF THESE IS GUARDED except the public donation form, and the exception is the
       // point: a donor with a QR code has no account and no permissions. Requiring one would mean
@@ -483,20 +487,6 @@ export const routes: Routes = [
         path: 'donations/payment-support-and-safe-retry',
         component: PaymentSupportAndSafeRetryComponent,
         canActivate: [requirePermission('pay.payments.safe-retry')],
-      },
-
-      // CORRECTING AN ISSUED RECEIPT - a new version, never an edit of the original, because a
-      // donor who claimed tax relief on version 1 must still be able to produce version 1.
-      //
-      // THE GUARD IS THE VIEW PERMISSION, NOT THE CORRECT ONE, and the difference matters. The
-      // screen lists receipts before it changes any of them, and the write buttons are drawn
-      // from the server's own `permittedActions` per record - so somebody holding only
-      // pay.receipts.view reaches a working read-only queue instead of access-denied, and
-      // somebody without even that is stopped here.
-      {
-        path: 'donations/receipt-correction',
-        component: ReceiptCorrectionComponent,
-        canActivate: [requirePermission('pay.receipts.view', 'pay.receipts.correct')],
       },
 
       {

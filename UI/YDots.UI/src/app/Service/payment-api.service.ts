@@ -11,6 +11,9 @@ import {
   ChargebackSearchFilter,
   CorrectReceiptRequest,
   CreateDonationIntentRequest,
+  CheckoutSession,
+  ConfirmCheckoutRequest,
+  CreateCheckoutSessionRequest,
   CreatePaymentLinkRequest,
   DecideRefundRequest,
   DismissPaymentEventRequest,
@@ -123,6 +126,44 @@ export class PaymentApiService {
   }
 
   /** Issues the payment link and opens an attempt. */
+  /**
+   * Opens the provider's checkout for a donation.
+   *
+   * THIS IS WHAT SUBMIT CALLS. The payment-link method below stays for what a link is actually
+   * for — reaching a donor who is not at a screen — and is the fallback when an organisation's
+   * provider cannot draw an in-page checkout, which the API reports as a dependency error.
+   */
+  createCheckoutSession(
+    intentReference: string,
+    request: CreateCheckoutSessionRequest,
+  ): Observable<CheckoutSession> {
+    return this.http
+      .post<ApiResponse<CheckoutSession>>(
+        `${this.publicApi}/${encodeURIComponent(intentReference)}/checkout-session`,
+        request,
+      )
+      .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * Hands back the signed result of a finished checkout and settles the donation.
+   *
+   * THE ANSWER IS A VERIFICATION, NOT AN ACKNOWLEDGEMENT. The server checks the signature, then
+   * asks the provider what actually happened — so what comes back is the same shape the result
+   * page polls, and means the same thing.
+   */
+  confirmCheckout(
+    intentReference: string,
+    request: ConfirmCheckoutRequest,
+  ): Observable<PaymentVerification> {
+    return this.http
+      .post<ApiResponse<PaymentVerification>>(
+        `${this.publicApi}/${encodeURIComponent(intentReference)}/checkout-confirm`,
+        request,
+      )
+      .pipe(map((response) => response.data!));
+  }
+
   createPaymentLink(
     intentReference: string,
     request: CreatePaymentLinkRequest,

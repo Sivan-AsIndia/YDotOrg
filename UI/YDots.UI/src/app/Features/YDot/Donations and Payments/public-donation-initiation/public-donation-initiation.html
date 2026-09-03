@@ -285,7 +285,11 @@
                 <label class="field ">
                   <span class="field-label">PAN or tax identifier</span>
                   @if (!formLocked()) {
-                    <input id="fld-panOrTaxId" type="text" inputmode="numeric" class="input"
+                    <!-- inputmode IS NOT numeric. It was, which put a digits-only keypad in front of
+                         anyone entering ABCDE1234F on a phone - the field cannot be typed at all
+                         from that keyboard. maxlength matches the thirty characters the API stores. -->
+                    <input id="fld-panOrTaxId" type="text" inputmode="text" class="input"
+                           maxlength="30" autocomplete="off" spellcheck="false"
                            placeholder="Enter PAN or tax identifier (for the tax receipt)"
                            [ngModel]="panOrTaxId()" (ngModelChange)="panOrTaxId.set($event)" name="panOrTaxId"
                            [attr.aria-invalid]="panInvalid()" />
@@ -348,19 +352,33 @@
           <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
           Review
         </button> -->
-        <!-- <button type="button" class="btn btn-primary btn-sm" (click)="requestContinueToPayment()"
-                *ngIf="lifecycleState() !== 'No record'"
-                [disabled]="!continueToPaymentAllowed()"
-                [title]="continueToPaymentAllowed() ? 'Continue to payment' : 'Available once the intent is submitted'">
-          <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
-          Continue to payment
-        </button> -->
-        <button type="button" class="btn btn-primary btn-sm" (click)="requestSubmit()"
-                [disabled]="!submitAllowed()"
-                [title]="submitAllowed() ? 'Submit and create the donation intent' : 'Already submitted'">
-          <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-          Submit
-        </button>
+        <!-- CONTINUE TO PAYMENT IS BACK ON THE PAGE, and it had to be.
+             Once an intent exists, `formLocked` disables every field on this form - correctly, a
+             submitted intent is not editable - and `submitAllowed` requires 'No record', so
+             Submit is disabled too. With this button commented out, an intent reached from the
+             Payment Queue's "Continue payment", or one whose checkout the donor closed, opened a
+             page with NO enabled control anywhere: every field greyed, both buttons dead, under a
+             toast telling the donor to select the button that was not there. -->
+        @if (lifecycleState() !== 'No record') {
+          <button type="button" class="btn btn-primary btn-sm" (click)="requestContinueToPayment()"
+                  [disabled]="!continueToPaymentAllowed()"
+                  [title]="continueToPaymentAllowed()
+                    ? 'Continue to payment'
+                    : 'This donation is no longer awaiting payment'">
+            <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+            Continue to payment
+          </button>
+        }
+        <!-- SUBMIT IS ONLY FOR A FORM THAT HAS NOT BEEN SUBMITTED. Showing it disabled beside
+             Continue to payment on a resumed intent invites somebody to press the wrong one. -->
+        @if (lifecycleState() === 'No record') {
+          <button type="button" class="btn btn-primary btn-sm" (click)="requestSubmit()"
+                  [disabled]="!submitAllowed()"
+                  [title]="submitAllowed() ? 'Submit and create the donation intent' : 'Already submitted'">
+            <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            Submit
+          </button>
+        }
       </div>
 
       

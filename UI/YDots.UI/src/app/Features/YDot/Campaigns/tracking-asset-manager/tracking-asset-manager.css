@@ -1641,6 +1641,10 @@
 .tam-field-span {
   grid-column: 1 / -1;
 }
+/* The on-ground note reads as one sentence on one line at the dialog's own width. */
+.tam-hint-onground {
+  margin: -4px 0 0;
+}
 .tam-form-note {
   font-size: 12px;
   color: var(--tam-ink-2);

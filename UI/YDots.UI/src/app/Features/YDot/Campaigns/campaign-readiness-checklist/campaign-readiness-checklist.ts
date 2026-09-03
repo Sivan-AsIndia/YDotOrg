@@ -8,15 +8,9 @@ import { CampaignStatus } from '../../../../Shared/models/campaign.model';
 import {
   Blocker,
   CrcUiState,
-  DependencyKey,
-  DependencyResult,
-  DependencyStatus,
   ReadinessOwnerOption,
 } from '../../../../Shared/models/campaign-readiness.model';
 import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
-import { BudgetTargetStoreService } from '../../../../Shared/services/budget-target-store.service';
-import { TrackingAssetStoreService } from '../../../../Shared/services/tracking-asset-store.service';
-import { ContentReadinessStoreService } from '../../../../Shared/services/content-readiness-store.service';
 import { CampaignReadinessStoreService } from '../../../../Shared/services/campaign-readiness-store.service';
 import { CurrentUserService } from '../../../../Shared/services/current-user.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
@@ -50,9 +44,6 @@ import { PeopleDirectoryService } from '../../../../Shared/services/people-direc
 export class CampaignReadinessChecklistComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly campaignStore = inject(CampaignStoreService);
-  private readonly budgetStore = inject(BudgetTargetStoreService);
-  private readonly trackingStore = inject(TrackingAssetStoreService);
-  private readonly contentStub = inject(ContentReadinessStoreService);
   private readonly readinessStore = inject(CampaignReadinessStoreService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly toast = inject(ToastService);
@@ -233,183 +224,48 @@ export class CampaignReadinessChecklistComponent {
   );
   protected readonly blockers = computed<readonly Blocker[]>(() => this.readiness()?.blockers ?? []);
 
-  // ================= Derived dependency aggregation =================
+  // ================= Checklist aggregation =================
+  //
+  // EVERY CHECK ON THIS SCREEN IS ONE SOMEBODY ENTERED, and every verdict on it is one somebody
+  // recorded. This section used to open with six cards the screen derived for itself — Budget
+  // approval and Tracking readiness computed from two other stores, and Public content, Payment,
+  // Template and Consent read from a stub standing in for domains that do not exist yet. They
+  // caused three separate faults:
+  //
+  //   - THEIR VERDICTS DID NOT SURVIVE THE PAGE. "Pass" on one of them wrote to a component
+  //     signal, because there is no server record to write to: a blocker or a verdict hangs off a
+  //     readiness CHECK, and 'budget' is not a check id. So passing them, navigating away and
+  //     coming back put every one of them back to Pending, and the same reason made "Assign
+  //     blocker" on any of them fail outright.
+  //   - THEY HELD THE LAUNCH REQUEST SHUT. Request approval was gated on Budget approval AND
+  //     Tracking readiness both passing. Budget & Target Plans is on hold, so no plan can be
+  //     allocated, so Budget approval could never leave Pending — and Request approval could
+  //     never be enabled for any campaign on the platform without recording an "exception".
+  //     The server does not ask for any of this at submit; the readiness gate it does enforce is
+  //     on ACTIVATE, and it names the outstanding checks itself.
+  //   - THEY DILUTED THE COUNTS. Six cards nobody added, four of them permanently Pending, sat in
+  //     the Passed/Failed/Pending/Total tiles and in the readiness meter beside the checks that
+  //     had actually been assessed.
+  //
+  // The counts below are the manually-added checks and nothing else, which is also exactly what
+  // the server's own `canLaunch` verdict is computed from.
 
-  /** Budget approval — derived from the shared budget-plan store, never entered here. */
-  private budgetDependency(): DependencyResult {
-    const ref = this.campaignRef;
-    const plans = (this.budgetStore.all() as readonly any[]).filter((p) => p?.campaignRef === ref);
-    if (plans.length === 0) {
-      return { key: 'budget', label: 'Budget approval', status: 'pending', note: 'No budget plan allocated for this campaign', derived: true };
-    }
-    const hasApproved = (plan: any): boolean =>
-      Array.isArray(plan.versions)
-        ? plan.versions.some((v: any) => v.approvalState === 'Approved')
-        : plan.approvalState === 'Approved' || plan.hasApprovedVersion === true;
-    const isRejected = (plan: any): boolean =>
-      Array.isArray(plan.versions)
-        ? plan.versions.length > 0 && plan.versions[plan.versions.length - 1].approvalState === 'Rejected'
-        : plan.approvalState === 'Rejected';
-    const approvedCount = plans.filter(hasApproved).length;
-    const status: DependencyStatus = plans.every(hasApproved)
-      ? 'pass'
-      : plans.some(isRejected)
-        ? 'fail'
-        : 'pending';
-    return {
-      key: 'budget',
-      label: 'Budget approval',
-      status,
-      note: `${approvedCount}/${plans.length} plan${plans.length === 1 ? '' : 's'} approved by Finance`,
-      derived: true,
-    };
-  }
-
-  /** Tracking readiness — derived from the shared tracking-asset store: assets must have
-   *  passed Test and cleared Approve. Draft assets are excluded from the launch set. */
-  private trackingDependency(): DependencyResult {
-    const assets = this.trackingStore.forCampaign(this.campaignRef).filter((a) => a.assetStatus !== 'Draft');
-    if (assets.length === 0) {
-      return { key: 'tracking', label: 'Tracking readiness', status: 'pending', note: 'No tracking assets generated yet', derived: true };
-    }
-    const isReady = (a: (typeof assets)[number]): boolean =>
-      a.lastTestResult === 'Passed' && (a.approvalState === 'Approved' || a.approvalState === 'Not required');
-    const isBlocked = (a: (typeof assets)[number]): boolean =>
-      a.lastTestResult === 'Failed' || a.approvalState === 'Rejected';
-    const readyCount = assets.filter(isReady).length;
-    const status: DependencyStatus = assets.every(isReady) ? 'pass' : assets.some(isBlocked) ? 'fail' : 'pending';
-    return {
-      key: 'tracking',
-      label: 'Tracking readiness',
-      status,
-      note: `${readyCount}/${assets.length} assets tested & approved`,
-      derived: true,
-    };
-  }
-
-  /** Content / Template / Payment / Consent — read from the labelled STUB store (external domains). */
-  private stubDependency(
-    key: DependencyKey,
-    label: string,
-    status: DependencyStatus,
-    note: string,
-  ): DependencyResult {
-    // A stubbed dependency whose backing service is unreachable reports `unknown`,
-    // which is what routes the page into the Dependency-failure state — kept
-    // strictly separate from the locally computed budget/tracking results.
-    if (!this.contentStub.serviceReachable()) {
-      return { key, label, status: 'unknown', note: 'Dependent service unreachable', derived: false };
-    }
-    return { key, label, status, note, derived: false };
-  }
-
-  /** Manual status override per dependency card — set via its Action menu (Pass / Fail) and
-   *  cleared via "Reset to automatic". Takes precedence over the computed value below, so the
-   *  existing (derived/stub) cards get the same manual override the added checks have. */
-  protected readonly dependencyOverrides = signal<Partial<Record<DependencyKey, 'pass' | 'fail'>>>({});
-  protected isDependencyOverridden(key: DependencyKey): boolean {
-    return this.dependencyOverrides()[key] !== undefined;
-  }
-  private applyOverride(result: DependencyResult): DependencyResult {
-    const override = this.dependencyOverrides()[result.key];
-    if (!override) return result;
-    return {
-      ...result,
-      status: override,
-      note: `Manually marked as ${override === 'pass' ? 'Passed' : 'Failed'} — overrides the computed result.`,
-    };
-  }
-
-  /** The six launch dependencies, in the page's established order. Recomputed live. */
-  protected readonly dependencyResults = computed<readonly DependencyResult[]>(() => {
-    const stub = this.contentStub.get(this.campaignRef);
-    const raw = [
-      this.stubDependency('content', 'Public content status', stub.publicContentStatus, stub.publicContentNote),
-      this.budgetDependency(),
-      this.trackingDependency(),
-      this.stubDependency('payment', 'Payment readiness', stub.paymentStatus, stub.paymentNote),
-      this.stubDependency('template', 'Template readiness', stub.templateStatus, stub.templateNote),
-      this.stubDependency(
-        'consent',
-        'Consent notice version',
-        stub.consentPublished ? 'pass' : 'pending',
-        stub.consentPublished ? `Notice ${stub.consentNoticeVersion} published` : 'Consent notice not published',
-      ),
-    ];
-    return raw.map((r) => this.applyOverride(r));
-  });
-
-  // ----- Dependency card Action menu: Pass / Fail / Reset to automatic -----
-  protected readonly dependencyRowMenuOpen = signal<DependencyKey | ''>('');
-  protected toggleDependencyMenu(key: DependencyKey): void {
-    this.dependencyRowMenuOpen.update((cur) => (cur === key ? '' : key));
-  }
-  protected closeDependencyMenu(): void {
-    this.dependencyRowMenuOpen.set('');
-  }
-  protected markDependencyPassed(item: DependencyResult): void {
-    this.closeDependencyMenu();
-    this.dependencyOverrides.update((cur) => ({ ...cur, [item.key]: 'pass' }));
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check updated', `${item.label} marked as passed.`, 'success');
-  }
-  protected markDependencyFailed(item: DependencyResult): void {
-    this.closeDependencyMenu();
-    this.dependencyOverrides.update((cur) => ({ ...cur, [item.key]: 'fail' }));
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check updated', `${item.label} marked as failed.`, 'success');
-  }
-  protected resetDependencyOverride(item: DependencyResult): void {
-    this.closeDependencyMenu();
-    this.dependencyOverrides.update((cur) => {
-      const next = { ...cur };
-      delete next[item.key];
-      return next;
-    });
-    this.lastRefresh.set('Just now · IST');
-    this.toast.show('Readiness check updated', `${item.label} reset to automatic.`, 'success');
-  }
-
-  protected readonly consentNoticeVersion = computed(() => this.contentStub.get(this.campaignRef).consentNoticeVersion);
-
-  /** Map a dependency status onto the 3-band meter (unknown shows as pending). */
-  protected meterStatus(s: DependencyStatus): 'pass' | 'fail' | 'pending' {
-    return s === 'pass' ? 'pass' : s === 'fail' ? 'fail' : 'pending';
-  }
   protected getPassCount(): number {
-    return (
-      this.dependencyResults().filter((i) => i.status === 'pass').length +
-      this.checklistItems().filter((c) => c.status === 'Passed').length
-    );
+    return this.checklistItems().filter((c) => c.status === 'Passed').length;
   }
   protected getFailCount(): number {
-    return (
-      this.dependencyResults().filter((i) => i.status === 'fail').length +
-      this.checklistItems().filter((c) => c.status === 'Failed').length
-    );
+    return this.checklistItems().filter((c) => c.status === 'Failed').length;
   }
   protected getPendingCount(): number {
-    return (
-      this.dependencyResults().filter((i) => i.status === 'pending' || i.status === 'unknown').length +
-      this.checklistItems().filter((c) => c.status === 'Pending').length
-    );
+    return this.checklistItems().filter((c) => c.status === 'Pending').length;
   }
   protected getTotalCount(): number {
-    return this.dependencyResults().length + this.checklistItems().length;
+    return this.checklistItems().length;
   }
   protected getReadinessPct(): number {
     const total = this.getTotalCount();
     return total ? Math.round((this.getPassCount() / total) * 100) : 0;
   }
-
-  /** Budget + Tracking are the "at minimum" gate for Request approval. */
-  protected readonly budgetResult = computed(() => this.dependencyResults().find((d) => d.key === 'budget')!);
-  protected readonly trackingResult = computed(() => this.dependencyResults().find((d) => d.key === 'tracking')!);
-  protected readonly minimumGateMet = computed(
-    () => this.budgetResult().status === 'pass' && this.trackingResult().status === 'pass',
-  );
-  /** Dependencies not yet passing — the candidate targets for Assign blocker. */
-  protected readonly unmetDependencies = computed(() => this.dependencyResults().filter((d) => d.status !== 'pass'));
 
   // ================= UI state machine =================
   protected readonly uiState = signal<CrcUiState>('loading');
@@ -494,7 +350,6 @@ export class CampaignReadinessChecklistComponent {
 
   // ================= Persistent success + last-validated evidence =================
   protected readonly lastValidatedAt = signal<string | null>(null);
-  protected readonly validationResults = signal<readonly DependencyResult[] | null>(null);
   protected readonly successReference = signal('');
   protected readonly successState = signal('');
   protected readonly successEffective = signal('');
@@ -512,22 +367,21 @@ export class CampaignReadinessChecklistComponent {
   }
 
   // ================= Validate readiness =================
+  /**
+   * Re-reads the checklist from the server and reports where it stands.
+   *
+   * IT RELOADS RATHER THAN RECOMPUTING. The old version copied the six derived/stub dependency
+   * results into a local array and looked for an 'unknown' among them to decide whether a
+   * dependent service was down - which is a question about a stub, not about this campaign. The
+   * checks are the server's now, so the honest way to re-validate is to fetch them again; the
+   * counts below then reflect what came back.
+   */
   protected validateReadiness(): void {
     if (!this.permissions().validate) return;
-    // A real recompute against the shared stores (the computed signals re-read them now):
-    // both the derived/stub dependencies AND every manually-added readiness check.
-    const results = this.dependencyResults().map((r) => ({ ...r }));
-    this.validationResults.set(results);
-    // Stamp a fresh timestamp so Overall readiness, the Passed/Failed/Pending/Total
-    // counts and the "Last validated" note all reflect this run — including any
-    // check just added.
+
+    this.checklistStore.load(this.campaignRef);
     this.lastRefresh.set('Just now · IST');
     this.lastValidatedAt.set(this.lastRefresh());
-    // Separate a failed *dependent service* step from the confirmed local result.
-    if (results.some((r) => r.status === 'unknown')) {
-      this.uiState.set('dependency-failure');
-      return;
-    }
     this.uiState.set('ready');
     this.toast.show(
       'Readiness validated',
@@ -535,22 +389,6 @@ export class CampaignReadinessChecklistComponent {
       'success',
     );
   }
-  /**
-   * Retry only the failed dependency.
-   *
-   * IT RELOADS, rather than declaring the service reachable again. `setReachable` is an empty
-   * method - reachability is what the last request answered, not a flag a screen may set - so
-   * calling it here achieved nothing and the retry re-validated against the same stale failure.
-   * Reloading the checklist is what actually re-asks the question.
-   *
-   * The "Simulate content/payment service outage" link that sat beside this is gone with it: it
-   * was the same no-op call with `false`, and did nothing at all when clicked.
-   */
-  protected retryDependency(): void {
-    this.checklistStore.load(this.campaignRef);
-    this.validateReadiness();
-  }
-
   // ================= Owner selector + Planned launch time =================
   protected onOwnerChange(reference: string): void {
     if (!reference) return;
@@ -622,18 +460,6 @@ export class CampaignReadinessChecklistComponent {
     this.viewCheck.set(null);
   }
 
-  // ----- View an existing (derived / stub) dependency card in the same popup style -----
-  protected readonly viewDependency = signal<DependencyResult | null>(null);
-  protected openViewDependency(item: DependencyResult): void {
-    this.viewDependency.set(item);
-  }
-  protected closeViewDependency(): void {
-    this.viewDependency.set(null);
-  }
-  protected dependencySourceLabel(item: DependencyResult): string {
-    if (this.isDependencyOverridden(item.key)) return 'Manually overridden';
-    return item.derived ? 'Derived live' : 'Stub · external domain';
-  }
   protected editFromView(check: ReadinessCheck): void {
     this.viewCheck.set(null);
     this.openEditCheckDrawer(check);
@@ -759,11 +585,16 @@ export class CampaignReadinessChecklistComponent {
     () => this.blockerDependency() !== '' && this.blockerOwnerValid() && this.blockerNoteValid(),
   );
 
-  /** Open Assign blocker pre-targeted at a specific checklist card (dependency or manual check). */
+  /** Open Assign blocker pre-targeted at a specific readiness check. */
   protected openBlockerFor(key: string, label: string): void {
-    this.closeDependencyMenu();
     this.closeChecklistRowMenu();
     if (!this.permissions().assignBlocker) return;
+
+    // The menu disables both of these, and this is the second half of the same rule: a passed
+    // check has nothing left to block, and the server keeps at most one open blocker per check.
+    const check = this.checklistItems().find((item) => item.id === key);
+
+    if (check && (check.status === 'Passed' || !!check.openBlocker)) return;
     this.blockerDependency.set(key);
     this.blockerTargetLabel.set(label);
     this.blockerOwnerRef.set('');
@@ -843,13 +674,28 @@ export class CampaignReadinessChecklistComponent {
 
   // ================= Request approval =================
   protected readonly requestDialogOpen = signal(false);
-  protected readonly exceptionRecorded = signal(false);
-  protected readonly exceptionReason = signal('');
   protected readonly requestTouched = signal(false);
-  /** Eligible when the minimum derived gate (budget + tracking) passes, OR an authorised exception is recorded. */
-  protected readonly requestApprovalEligible = computed(() => this.minimumGateMet() || this.exceptionRecorded());
-  protected readonly requestReasonValid = computed(
-    () => !this.exceptionRecorded() || this.exceptionReason().trim().length >= 10,
+
+  /**
+   * Whether the campaign may be sent for approval.
+   *
+   * THE CHECKLIST DOES NOT HOLD THIS SHUT, and that is a change. It was gated on Budget approval
+   * AND Tracking readiness both passing, or an "authorised exception" being recorded in their
+   * place. Budget & Target Plans is on hold, so no budget plan can be allocated to any campaign,
+   * so Budget approval never left Pending - and Request approval was therefore disabled on every
+   * campaign on the platform unless somebody first ticked an exception box and wrote ten
+   * characters of justification for a module that does not exist.
+   *
+   * The server does not ask for any of this at SUBMIT. The readiness gate it does enforce is on
+   * ACTIVATE, where a required check that has not passed refuses the transition and names itself
+   * in the refusal. Requesting approval is asking a second person to look; whether the checklist
+   * is finished is part of what they are being asked to look at.
+   *
+   * The lifecycle state still governs: only a Draft campaign can be submitted, which is what
+   * `requestDisabledReason` and the server both say.
+   */
+  protected readonly requestApprovalEligible = computed(
+    () => this.campaign()?.status === 'Draft',
   );
 
   /**
@@ -870,18 +716,12 @@ export class CampaignReadinessChecklistComponent {
         : `Already ${status.toLowerCase()} — a launch request has been raised for this campaign.`;
     }
 
-    if (!this.requestApprovalEligible()) {
-      return 'Budget approval and Tracking readiness must pass, or an exception must be recorded, first.';
-    }
-
     return '';
   }
 
   protected openRequestDialog(): void {
     this.closeActionsMenu();
     if (!this.permissions().requestApproval) return;
-    this.exceptionRecorded.set(false);
-    this.exceptionReason.set('');
     this.requestTouched.set(false);
     this.requestDialogOpen.set(true);
   }
@@ -890,7 +730,7 @@ export class CampaignReadinessChecklistComponent {
   }
   protected confirmRequest(): void {
     this.requestTouched.set(true);
-    if (!this.requestApprovalEligible() || !this.requestReasonValid()) {
+    if (!this.requestApprovalEligible()) {
       this.uiState.set('validation');
       return;
     }
@@ -906,14 +746,39 @@ export class CampaignReadinessChecklistComponent {
       this.uiState.set('duplicate');
       return;
     }
-    this.readinessStore.update(this.campaignRef, {
-      requestState: 'Submitted',
-      requestedByRef: this.currentUserRef(),
-      requestedByName: this.currentUserName(),
-      requestedAt: this.lastRefresh(),
-    });
-    this.requestDialogOpen.set(false);
-    this.showSuccess(this.campaignRef, 'Submitted — awaiting Approve launch', 'An independent approver must Approve launch');
+    // THE REQUEST GOES TO THE SERVER. This used to be `readinessStore.update(...)` and nothing
+    // else - and that method patches the LOCAL record only, as its own contract says: the request
+    // state belongs to the campaign lifecycle endpoint, which is what enforces segregation of
+    // duties. So the checklist said "Submitted — awaiting Approve launch", the campaign stayed
+    // in Draft on the server, `load()` re-derived the state from the campaign on the next visit,
+    // and everything the person had done went back to Pending. Nobody's approval queue ever saw
+    // the campaign either, which is why Approve launch could never become available.
+    this.campaignStore.submitForApproval(
+      this.campaignRef,
+      this.currentUser.role(),
+      this.currentUserRef(),
+      (outcome) => {
+        if (!outcome.applied) {
+          this.toast.show(
+            'Approval not requested',
+            outcome.error ?? 'The launch request could not be raised.',
+            'error');
+          return;
+        }
+
+        this.readinessStore.update(this.campaignRef, {
+          requestState: 'Submitted',
+          requestedByRef: this.currentUserRef(),
+          requestedByName: this.currentUserName(),
+          requestedAt: this.lastRefresh(),
+        });
+        this.requestDialogOpen.set(false);
+        this.showSuccess(
+          this.campaignRef,
+          'Submitted — awaiting Approve launch',
+          'An independent approver must Approve launch');
+      },
+    );
   }
 
   // ================= Approve launch =================
@@ -993,20 +858,45 @@ export class CampaignReadinessChecklistComponent {
       return;
     }
     const target = this.launchTarget();
-    // Advance the CAMPAIGN lifecycle in the shared store when a launch transition exists;
-    // otherwise the campaign keeps its current state and only the readiness record advances.
-    if (target) {
-      this.campaignStore.update(this.campaignRef, { status: target });
+
+    const applyLocally = () => {
+      this.readinessStore.update(this.campaignRef, {
+        requestState: 'Approved',
+        approvedByRef: this.currentUserRef(),
+        approvedByName: this.currentUserName(),
+        approvedAt: this.lastRefresh(),
+        decisionReason: this.approveReason().trim(),
+      });
+      this.approveDialogOpen.set(false);
+      this.showSuccess(
+        this.campaignRef, target ?? this.lifecycleState(), 'Monitor the campaign from Campaign detail');
+    };
+
+    // No launch transition to make - the campaign is already running - so only the readiness
+    // record advances.
+    if (!target) {
+      applyLocally();
+      return;
     }
-    this.readinessStore.update(this.campaignRef, {
-      requestState: 'Approved',
-      approvedByRef: this.currentUserRef(),
-      approvedByName: this.currentUserName(),
-      approvedAt: this.lastRefresh(),
-      decisionReason: this.approveReason().trim(),
+
+    // SETSTATUS, NOT UPDATE. `campaignStore.update` is the CONTENT edit: a PUT whose body carries
+    // the campaign's fields and no status at all. Writing `{ status: target }` through it set the
+    // status on the local row, saved nothing of the kind, and then the refresh that follows the
+    // PUT replaced that row with the server's - still Submitted. The status appeared to change
+    // and then silently changed back, which is exactly what "Approve launch — status not
+    // updated" looks like from the outside. `setStatus` routes to the lifecycle endpoint that
+    // owns the transition.
+    this.campaignStore.setStatus(this.campaignRef, target, (outcome) => {
+      if (!outcome.applied) {
+        this.toast.show(
+          'Launch not approved',
+          outcome.error ?? 'The campaign could not be approved.',
+          'error');
+        return;
+      }
+
+      applyLocally();
     });
-    this.approveDialogOpen.set(false);
-    this.showSuccess(this.campaignRef, target ?? this.lifecycleState(), 'Monitor the campaign from Campaign detail');
   }
 
   // ================= Return to draft =================
@@ -1059,20 +949,32 @@ export class CampaignReadinessChecklistComponent {
       this.uiState.set('conflict');
       return;
     }
-    // Regress the CAMPAIGN lifecycle to Draft in the shared store — visible on the other campaign screens.
-    this.campaignStore.update(this.campaignRef, { status: 'Draft' });
-    this.readinessStore.update(this.campaignRef, {
-      requestState: 'Draft',
-      requestedByRef: null,
-      requestedByName: null,
-      requestedAt: null,
-      approvedByRef: null,
-      approvedByName: null,
-      approvedAt: null,
-      decisionReason: this.returnReason().trim(),
+    // THE CAMPAIGN'S OWN RETURN-TO-DRAFT ENDPOINT, which takes the reason this dialog just
+    // collected. This used to be `campaignStore.update(ref, { status: 'Draft' })` - the content
+    // PUT, which carries no status - so the row flipped to Draft in the browser and the refresh
+    // that followed put it straight back. Nothing changed anywhere, which is what the testers saw.
+    this.campaignStore.returnToDraft(this.campaignRef, this.returnReason().trim(), (outcome) => {
+      if (!outcome.applied) {
+        this.toast.show(
+          'Not returned to draft',
+          outcome.error ?? 'The campaign could not be returned to draft.',
+          'error');
+        return;
+      }
+
+      this.readinessStore.update(this.campaignRef, {
+        requestState: 'Draft',
+        requestedByRef: null,
+        requestedByName: null,
+        requestedAt: null,
+        approvedByRef: null,
+        approvedByName: null,
+        approvedAt: null,
+        decisionReason: this.returnReason().trim(),
+      });
+      this.returnDialogOpen.set(false);
+      this.showSuccess(this.campaignRef, 'Draft', 'Resolve blockers, then Request approval again');
     });
-    this.returnDialogOpen.set(false);
-    this.showSuccess(this.campaignRef, 'Draft', 'Resolve blockers, then Request approval again');
   }
 
   // ================= Validation summary + focus =================

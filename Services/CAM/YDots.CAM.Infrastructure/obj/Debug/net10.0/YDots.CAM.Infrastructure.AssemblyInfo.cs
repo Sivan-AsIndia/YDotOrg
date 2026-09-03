@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("YDots.CAM.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+248490ceb95824d0b7f77dbec97c59894d20cde2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9467affe08ddced2588f60234afafff7e4ea3fc5")]
 [assembly: System.Reflection.AssemblyProductAttribute("YDots.CAM.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("YDots.CAM.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

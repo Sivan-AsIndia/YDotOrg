@@ -702,8 +702,16 @@
               }
             </div>
             @if (missing('channel')) { <p class="tam-field-hint tam-field-error">Enter Channel.</p> }
-            @else if (isOnGround()) { <p class="tam-field-hint">On-ground event — add one or more places below; each gets its own separate QR/link.</p> }
           </div>
+
+          <!-- ON ONE LINE, WHICH IS WHY IT IS OUT HERE. This sentence used to sit inside the
+               Channel field above, and Channel is one of two columns in a `1fr 1fr` grid - so a
+               nineteen-word sentence wrapped across three lines in a half-width box and pushed
+               the field beside it out of alignment. Spanning the grid gives it the width it needs
+               to read as the single line it is. -->
+          @if (!missing('channel') && isOnGround()) {
+            <p class="tam-field-hint tam-field-span tam-hint-onground">On-ground event — add one or more places below; each gets its own separate QR/link.</p>
+          }
 
           @if (!isOnGround()) {
             <!-- Destination (required) — the landing URL this QR / short link / UTM link sends
@@ -730,17 +738,17 @@
                         <input type="text" class="tam-input" placeholder="Place name (e.g. Main entrance stall)"
                                [ngModel]="p.label" (ngModelChange)="updatePlaceLabel(p.id, $event)" />
                       </label>
-                      <!-- City — read-only, fetched from the selected campaign (not typed by hand) -->
+                      <!-- City — read-only, read live from the selected campaign (not typed by hand) -->
                       <label class="tam-place-cell">
                         <span class="tam-place-cell-label">City</span>
                         <input type="text" class="tam-input tam-input-auto" readonly
-                               placeholder="From campaign" [ngModel]="p.city" [ngModelOptions]="{ standalone: true }" />
+                               placeholder="From campaign" [ngModel]="placeLocation().city" [ngModelOptions]="{ standalone: true }" />
                       </label>
-                      <!-- State — read-only, fetched from the selected campaign (not typed by hand) -->
+                      <!-- State — read-only, read live from the selected campaign (not typed by hand) -->
                       <label class="tam-place-cell">
                         <span class="tam-place-cell-label">State</span>
                         <input type="text" class="tam-input tam-input-auto" readonly
-                               placeholder="From campaign" [ngModel]="p.state" [ngModelOptions]="{ standalone: true }" />
+                               placeholder="From campaign" [ngModel]="placeLocation().state" [ngModelOptions]="{ standalone: true }" />
                       </label>
                       <button type="button" class="tam-btn tam-btn-outline tam-btn-sm tam-place-remove" (click)="removePlace(p.id)" [disabled]="gPlaces().length <= 1">Remove</button>
                     </div>

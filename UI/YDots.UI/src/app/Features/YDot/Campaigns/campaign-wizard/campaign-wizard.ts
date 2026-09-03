@@ -392,8 +392,17 @@ export class CampaignWizardComponent {
   protected readonly regionOptions = signal<readonly MasterOption[]>([]);
   /** The SELECTED STATE'S ID. */
   protected readonly region = signal('');
+  /**
+   * State is satisfied once a COUNTRY HAS BEEN CHOSEN and either a state was picked or the
+   * country has none.
+   *
+   * THE COUNTRY CLAUSE IS THE FIX. Without it this read `regionOptions().length === 0`, and the
+   * option list is empty before any country is chosen - so a wizard nobody had touched counted
+   * State (and City below it) as already captured. Two of the sixteen required fields were
+   * satisfied on load, which is why the progress meter opened at 13% on a blank form.
+   */
   protected readonly regionValid = computed(
-    () => this.regionOptions().length === 0 || !!this.region(),
+    () => !!this.selectedCountry() && (this.regionOptions().length === 0 || !!this.region()),
   );
   protected readonly selectedRegionLabel = computed(
     () => this.regionOptions().find((r) => r.ref === this.region())?.label ?? '—',
@@ -424,7 +433,19 @@ export class CampaignWizardComponent {
   protected readonly cityOptions = signal<readonly MasterOption[]>([]);
   /** The SELECTED CITY'S ID. */
   protected readonly city = signal('');
-  protected readonly cityValid = computed(() => this.cityOptions().length === 0 || !!this.city());
+  /**
+   * City is satisfied once the cascade above it has been answered.
+   *
+   * The list is empty before a state is chosen, so - like State - an unanswered City counted as
+   * captured and inflated the progress meter on an untouched form. A country with no states has
+   * no cities either, which is the one case that resolves without a selection.
+   */
+  protected readonly cityValid = computed(() => {
+    if (!this.selectedCountry()) return false;
+    if (this.regionOptions().length === 0) return true;
+    if (!this.region()) return false;
+    return this.cityOptions().length === 0 || !!this.city();
+  });
   protected readonly selectedCityLabel = computed(
     () => this.cityOptions().find((c) => c.ref === this.city())?.label ?? '—',
   );
@@ -832,6 +853,22 @@ export class CampaignWizardComponent {
   protected readonly termsNoticeLen = computed(() => this.termsNotice().trim().length);
   protected readonly termsNoticeValid = computed(
     () => this.termsNoticeLen() >= this.purposeMin && this.termsNoticeLen() <= this.termsNoticeMax,
+  );
+
+  /**
+   * Whether the two Publication & Notice editors should be showing their error.
+   *
+   * NOT SIMPLY "IS THE FIELD INVALID". An empty field IS invalid - the minimum is ten characters
+   * - so binding the error straight to validity painted both editors red and printed
+   * "Review Public description" the instant somebody arrived on step 3, before they had been
+   * given the chance to type anything. Every other required field on this wizard waits for
+   * either an entered value or a failed attempt to advance, and these two now do the same.
+   */
+  protected readonly showDescError = computed(
+    () => !this.publicDescriptionValid() && (this.publicDescriptionLen() > 0 || this.wasAttempted(2)),
+  );
+  protected readonly showTermsError = computed(
+    () => !this.termsNoticeValid() && (this.termsNoticeLen() > 0 || this.wasAttempted(2)),
   );
 
   // --- Draft version — read-only, server-derived, immutable in this view ---
@@ -1384,7 +1421,10 @@ export class CampaignWizardComponent {
     this.city.set('');
     this.pincode.set('');
     this.activationMode.set('manual');
-    this.reminderDaysBefore.set(3);
+    // NULL, NOT 3. The field's own initial value is null, and seeding a valid 3 here made Discard
+    // count one more required field as captured than a freshly opened wizard does - so the last
+    // thing the progress meter did before the form was abandoned was climb.
+    this.reminderDaysBefore.set(null);
     this.reminderTime.set('');
     this.publicDescription.set('');
     this.publicDescriptionHtml.set('');
@@ -1397,6 +1437,10 @@ export class CampaignWizardComponent {
     this.previewField.set(null);
     this.previewEditing.set(false);
     this.stepIndex.set(0);
+    // The red highlighting and the validation banner belong to the abandoned attempt, not to
+    // the blank form that replaces it.
+    this.stepAttempted.set(this.steps.map(() => false));
+    this.uiState.set('ready');
   }
 
   // ================= UI state demonstrability =================
