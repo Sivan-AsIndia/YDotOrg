@@ -86,7 +86,6 @@ import { BusinessUnitComponent } from './Features/YDot/Platform/business-unit/bu
 import { MenuCatalogueComponent } from './Features/YDot/Platform/menu-catalogue/menu-catalogue';
 import { PermissionCatalogueComponent } from './Features/YDot/Platform/permission-catalogue/permission-catalogue';
 import { CampaignDetailComponent } from './Features/YDot/Campaigns/campaign-detail/campaign-detail';
-import { CampaignReadinessChecklistComponent } from './Features/YDot/Campaigns/campaign-readiness-checklist/campaign-readiness-checklist';
 import { CampaignRegisterComponent } from './Features/YDot/Campaigns/campaign-register/campaign-register';
 import { CampaignWizardComponent } from './Features/YDot/Campaigns/campaign-wizard/campaign-wizard';
 import { TrackingAssetManagerComponent } from './Features/YDot/Campaigns/tracking-asset-manager/tracking-asset-manager';
@@ -106,6 +105,7 @@ import { FollowUpExecutionComponent } from './Features/YDot/Donors and Leads/fol
 import { FollowUpQueueComponent } from './Features/YDot/Donors and Leads/follow-up-queue/follow-up-queue';
 import { MyLeadsComponent } from './Features/YDot/Donors and Leads/my-leads/my-leads';
 import { DonorformComponent } from './Features/YDot/Auth/Auth/donorform/donorform';
+import { CampaignReadinessChecklistComponent } from './Features/YDot/Campaigns/campaign-readiness-checklist/campaign-readiness-checklist';
 
 
 

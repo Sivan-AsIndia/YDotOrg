@@ -869,8 +869,6 @@ export class CampaignReadinessChecklistComponent {
       return;
     }
     const target = this.launchTarget();
-<<<<<<< HEAD
-=======
 
     const applyLocally = () => {
       this.readinessStore.update(this.campaignRef, {
@@ -909,89 +907,6 @@ export class CampaignReadinessChecklistComponent {
       }
 
       applyLocally();
-    });
-  }
->>>>>>> eeac78670ac51e6b9b1ee60b27692bbabc15a380
-
-    const applyLocally = () => {
-      this.readinessStore.update(this.campaignRef, {
-        requestState: 'Approved',
-        approvedByRef: this.currentUserRef(),
-        approvedByName: this.currentUserName(),
-        approvedAt: this.lastRefresh(),
-        decisionReason: this.approveReason().trim(),
-      });
-      this.approveDialogOpen.set(false);
-      this.showSuccess(
-        this.campaignRef, target ?? this.lifecycleState(), 'Monitor the campaign from Campaign detail');
-    };
-
-    // No launch transition to make - the campaign is already running - so only the readiness
-    // record advances.
-    if (!target) {
-      applyLocally();
-      return;
-    }
-<<<<<<< HEAD
-
-    // SETSTATUS, NOT UPDATE. `campaignStore.update` is the CONTENT edit: a PUT whose body carries
-    // the campaign's fields and no status at all. Writing `{ status: target }` through it set the
-    // status on the local row, saved nothing of the kind, and then the refresh that follows the
-    // PUT replaced that row with the server's - still Submitted. The status appeared to change
-    // and then silently changed back, which is exactly what "Approve launch — status not
-    // updated" looks like from the outside. `setStatus` routes to the lifecycle endpoint that
-    // owns the transition.
-    this.campaignStore.setStatus(this.campaignRef, target, (outcome) => {
-      if (!outcome.applied) {
-        this.toast.show(
-          'Launch not approved',
-          outcome.error ?? 'The campaign could not be approved.',
-=======
-    this.returnReason.set('');
-    this.returnTouched.set(false);
-    this.returnDialogOpen.set(true);
-  }
-  protected cancelReturn(): void {
-    this.returnDialogOpen.set(false);
-  }
-  protected confirmReturn(): void {
-    this.returnTouched.set(true);
-    if (!this.returnReasonValid()) return;
-    if (this.isStale()) {
-      this.returnDialogOpen.set(false);
-      this.uiState.set('conflict');
-      return;
-    }
-    // THE CAMPAIGN'S OWN RETURN-TO-DRAFT ENDPOINT, which takes the reason this dialog just
-    // collected. This used to be `campaignStore.update(ref, { status: 'Draft' })` - the content
-    // PUT, which carries no status - so the row flipped to Draft in the browser and the refresh
-    // that followed put it straight back. Nothing changed anywhere, which is what the testers saw.
-    this.campaignStore.returnToDraft(this.campaignRef, this.returnReason().trim(), (outcome) => {
-      if (!outcome.applied) {
-        this.toast.show(
-          'Not returned to draft',
-          outcome.error ?? 'The campaign could not be returned to draft.',
->>>>>>> eeac78670ac51e6b9b1ee60b27692bbabc15a380
-          'error');
-        return;
-      }
-
-<<<<<<< HEAD
-      applyLocally();
-=======
-      this.readinessStore.update(this.campaignRef, {
-        requestState: 'Draft',
-        requestedByRef: null,
-        requestedByName: null,
-        requestedAt: null,
-        approvedByRef: null,
-        approvedByName: null,
-        approvedAt: null,
-        decisionReason: this.returnReason().trim(),
-      });
-      this.returnDialogOpen.set(false);
-      this.showSuccess(this.campaignRef, 'Draft', 'Resolve blockers, then Request approval again');
->>>>>>> eeac78670ac51e6b9b1ee60b27692bbabc15a380
     });
   }
 
