@@ -52,7 +52,14 @@ public static class DocumentSubmissionMappingConfig
             files.Sum(file => file.FileSizeBytes),
             [.. files.Select(file => DocumentContentTypes.ShortLabel(file.ContentType)).Distinct(StringComparer.Ordinal)],
             files,
-            PermittedActionsFor(submission, callerIsReviewer),
+            // THE ORGANISATION'S OWN STATUS IS PART OF THE ANSWER. Once its registration has been
+            // decided the document set is settled, so AddFile / RemoveFile / Submit go - and the
+            // client's upload box and buttons, which are drawn from this list and nothing else,
+            // go with them. `tenant` is null only where the caller was not given one to map
+            // against, and an unknown Organisation is treated as still open so an existing draft
+            // is never silently frozen by a missing join.
+            PermittedActionsFor(
+                submission, callerIsReviewer, tenant?.AcceptsDocumentSubmissions ?? true),
             submission.Version);
     }
 
@@ -82,7 +89,7 @@ public static class DocumentSubmissionMappingConfig
     /// pick up and decide, and neither should be offered the other's buttons.
     /// </summary>
     private static IReadOnlyList<string> PermittedActionsFor(
-        TenantDocumentSubmission submission, bool callerIsReviewer)
+        TenantDocumentSubmission submission, bool callerIsReviewer, bool tenantAcceptsSubmissions)
     {
         var actions = new List<string> { "View" };
 
@@ -103,7 +110,7 @@ public static class DocumentSubmissionMappingConfig
             return actions;
         }
 
-        if (submission.IsEditable)
+        if (submission.IsEditable && tenantAcceptsSubmissions)
         {
             actions.Add("AddFile");
             actions.Add("RemoveFile");

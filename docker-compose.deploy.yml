@@ -66,7 +66,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: sivan67906/ydot-iam:9.1.1
+    image: sivan67906/ydot-iam:9.1.3
     pull_policy: always
     container_name: ydot-iam
     depends_on:
@@ -216,7 +216,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: sivan67906/ydot-cam:9.1.1
+    image: sivan67906/ydot-cam:9.1.3
     pull_policy: always
     container_name: ydot-cam
     depends_on:
@@ -264,7 +264,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: sivan67906/ydot-don:9.1.1
+    image: sivan67906/ydot-don:9.1.3
     pull_policy: always
     container_name: ydot-don
     depends_on:
@@ -313,7 +313,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: sivan67906/ydot-pay:9.1.1
+    image: sivan67906/ydot-pay:9.1.3
     pull_policy: always
     container_name: ydot-pay
     depends_on:
@@ -408,7 +408,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: sivan67906/ydot-ui:9.1.1
+    image: sivan67906/ydot-ui:9.1.3
     pull_policy: always
     container_name: ydot-ui
     # service_started, not service_healthy: nginx retries its upstream anyway, so an API still

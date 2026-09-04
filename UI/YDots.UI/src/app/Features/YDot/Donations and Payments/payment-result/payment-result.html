@@ -36,6 +36,19 @@
           If this is your first gift to this organisation, you will also receive an invitation to
           activate an account, where you can see your giving history and download your receipts.
         </p>
+
+        <!-- THE WAY OUT. This branch used to end at the paragraph above, leaving whoever had just
+             paid on a page with nothing to press. The countdown is announced rather than silent,
+             so the redirect reads as the page finishing rather than as something going wrong. -->
+        <button type="button" class="pr-btn pr-btn-primary" (click)="continueNow()">
+          Continue now
+        </button>
+        @if (redirectIn() > 0) {
+          <p class="pr-redirect" aria-live="polite">
+            Returning you to the donation page in {{ redirectIn() }}
+            {{ redirectIn() === 1 ? 'second' : 'seconds' }}…
+          </p>
+        }
       }
 
       @case ('pending') {

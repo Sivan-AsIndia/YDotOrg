@@ -10,8 +10,22 @@ EXPOSE 8080
 # this the compose healthcheck fails with "curl: not found" every fifteen seconds and the
 # container is marked unhealthy while the application is working perfectly - which is exactly
 # what happened to CAM and PAY.
+#
+# /var/ydot/receipts IS CREATED AND CHOWNED HERE FOR A REASON THAT IS EASY TO MISS.
+#
+# It is a named volume in compose. When a named volume's mountpoint does not exist in the image,
+# Docker creates it owned by root:root - and this container runs as $APP_UID (uid 1654), which
+# then cannot create the per-receipt subdirectory underneath it. Every rendered receipt PDF
+# failed with
+#
+#     UnauthorizedAccessException: Access to the path '/var/ydot/receipts/<id>' is denied.
+#
+# so receipts were issued and numbered correctly but had no document behind them, and the donor's
+# e-mail went out with nothing attached. Creating the directory in the IMAGE with the right owner
+# is what makes Docker seed the fresh volume with that ownership instead of root's.
+#
 USER root
-RUN apt-get update     && apt-get install -y --no-install-recommends curl     && rm -rf /var/lib/apt/lists/*     && mkdir -p /app/logs     && chown -R $APP_UID /app/logs
+RUN apt-get update     && apt-get install -y --no-install-recommends curl     && rm -rf /var/lib/apt/lists/*     && mkdir -p /app/logs /var/ydot/receipts     && chown -R $APP_UID /app/logs /var/ydot
 USER $APP_UID
 
 

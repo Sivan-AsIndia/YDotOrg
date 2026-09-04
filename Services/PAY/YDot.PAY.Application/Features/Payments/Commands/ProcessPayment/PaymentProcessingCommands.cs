@@ -27,6 +27,13 @@ public sealed record ApplyPaymentEventCommand(Guid PaymentEventId);
 /// <summary>Asks the gateway what actually happened to an attempt.</summary>
 public sealed record VerifyPaymentCommand(VerifyPaymentRequest Request);
 
+/// <summary>
+/// What the browser brings back when an in-page checkout finishes, and the signature that says
+/// it really came from the provider.
+/// </summary>
+public sealed record ConfirmCheckoutPaymentCommand(
+    string IntentReference, ConfirmCheckoutRequest Request);
+
 /// <summary>Section 23: retry a failed payment, safely.</summary>
 public sealed record SafeRetryCommand(Guid IntentId, SafeRetryRequest Request);
 
@@ -218,9 +225,53 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        try
+        {
+            return await ApplyEventAsync(command.PaymentEventId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A REFUSED WRITE IS A RESULT, NOT AN EXCEPTION THE CALLER HAS TO SURVIVE.
+            //
+            // Both callers of this method already treat it as returning a Result and log a
+            // failure - the webhook path says so in as many words: "a failure here does not fail
+            // the webhook: the event is stored and the queue will retry it". But a constraint
+            // violation reached them as a thrown DbUpdateException instead, and neither caught
+            // it. On the webhook path that answers the provider with a 500 and invites a
+            // redelivery; on the verification path it reached the DONOR'S RESULT PAGE, which
+            // printed the exception text - "An error occurred while saving the entity changes.
+            // See the inner exception for details." - to somebody who had just given money.
+            //
+            // THE TRANSACTION HAS ALREADY ROLLED BACK by the time this runs, which is what makes
+            // it safe: the event stays Pending and the queue can retry it, exactly as an
+            // unapplied event is meant to.
+            //
+            // THE INNER EXCEPTION IS WHAT GETS LOGGED. `DbUpdateException`'s own message says to
+            // look at the inner one and carries nothing else; the provider's message underneath
+            // is the part that names the constraint. This layer does not reference EF Core - by
+            // design - so the type is not named here and the unwrapping is generic.
+            //
+            // CANCELLATION IS NOT SWALLOWED. A cancelled request is the caller going away, not a
+            // payment that failed, and turning it into a recorded failure would be a lie.
+            logger.LogError(
+                exception,
+                "Payment event {PaymentEventId} could not be applied: {Reason}",
+                command.PaymentEventId,
+                DescribeFailure(exception));
+
+            return Result.Failure<OutcomeResponse>(Error.Dependency(
+                "This payment could not be recorded. It has been kept for reprocessing and needs "
+                + "attention - do not take a second payment."));
+        }
+    }
+
+    /// <summary>The body of <see cref="ApplyPaymentEventCommand"/>, inside its transaction.</summary>
+    private async Task<Result<OutcomeResponse>> ApplyEventAsync(
+        Guid paymentEventId, CancellationToken cancellationToken)
+    {
         return await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
-            var paymentEvent = await paymentEvents.GetAsync(command.PaymentEventId, token);
+            var paymentEvent = await paymentEvents.GetAsync(paymentEventId, token);
 
             if (paymentEvent is null)
             {
@@ -331,6 +382,51 @@ public sealed class PaymentProcessingCommandHandler(
     }
 
     /// <summary>
+    /// The reason a write was refused, from the exception that actually knows it.
+    ///
+    /// <c>DbUpdateException</c> carries one fixed sentence - "An error occurred while saving the
+    /// entity changes. See the inner exception for details." - and every diagnosable fact is on
+    /// the provider exception underneath it: the constraint name, the column, the value. Logging
+    /// the outer message alone is why a refused donation write left nothing in the log a person
+    /// could act on, and why that same useless sentence is what the donor ended up reading.
+    /// </summary>
+    private static string DescribeFailure(Exception exception)
+    {
+        var inner = exception.InnerException;
+
+        var described = inner is null
+            ? $"{exception.GetType().Name}: {exception.Message}"
+            : $"{exception.GetType().Name}: {inner.GetType().Name}: {inner.Message}";
+
+        // A CONCURRENCY FAILURE IS USELESS WITHOUT THE ENTITY THAT LOST. Its message names a row
+        // count and nothing else - "expected to affect 1 row(s), but actually affected 0" - so
+        // without this a person reading the log knows a write was refused and has no way to find
+        // out which one. `Entries` is on DbUpdateConcurrencyException, which this layer cannot
+        // name (no EF reference, by design), so it is read reflectively and skipped if absent.
+        var entries = exception.GetType()
+            .GetProperty("Entries")?
+            .GetValue(exception) as System.Collections.IEnumerable;
+
+        if (entries is null)
+        {
+            return described;
+        }
+
+        var names = new List<string>();
+
+        foreach (var entry in entries)
+        {
+            var metadata = entry?.GetType().GetProperty("Metadata")?.GetValue(entry);
+            var name = metadata?.GetType().GetProperty("Name")?.GetValue(metadata) as string;
+            var state = entry?.GetType().GetProperty("State")?.GetValue(entry);
+
+            names.Add($"{name ?? entry?.GetType().Name} ({state})");
+        }
+
+        return names.Count == 0 ? described : $"{described} Conflicting entries: {string.Join(", ", names)}.";
+    }
+
+    /// <summary>
     /// Money captured: sections 15 to 18 in one method.
     ///
     /// THE DONATION IS RECORDED FIRST. Everything after it - the donor, the account, the
@@ -362,7 +458,13 @@ public sealed class PaymentProcessingCommandHandler(
         var capturedAmount = paymentEvent.Amount ?? attempt.RequestedAmount;
 
         attempt.Status = PaymentAttemptStatus.Succeeded;
-        attempt.CapturedAmount = capturedAmount;
+
+        // A COPY, NOT THE INSTANCE ITSELF. `capturedAmount` is already owned by either the
+        // PaymentEvent or the PaymentAttempt it was read from, and MoneyValue is an EF owned type
+        // whose identity is its owner - so storing the same object under a second owner makes EF
+        // track one instance as two entities and emit an update for both. See MoneyValue.Copy:
+        // this is what threw DbUpdateConcurrencyException and rolled back a captured donation.
+        attempt.CapturedAmount = capturedAmount.Copy();
         attempt.CapturedAtUtc = paymentEvent.OccurredAtUtc;
 
         var reference = await MintDonationReferenceAsync(cancellationToken);
@@ -381,7 +483,8 @@ public sealed class PaymentProcessingCommandHandler(
             PaymentAttemptId = attempt.Id,
             DonorId = intent.DonorId,
             CampaignId = intent.CampaignId,
-            Amount = capturedAmount,
+            // Its own instance, for the same reason as the attempt above.
+            Amount = capturedAmount.Copy(),
             RefundedAmount = MoneyValue.Zero(capturedAmount.CurrencyCode),
             CurrencyId = intent.CurrencyId,
 
@@ -610,7 +713,11 @@ public sealed class PaymentProcessingCommandHandler(
                 Status = ReceiptStatus.Issued,
                 DeliveryStatus = ReceiptDeliveryStatus.NotSent,
                 FinancialYear = financialYear,
-                Amount = donation.Amount,
+
+                // THE DONATION'S AMOUNT, COPIED. Assigning `donation.Amount` directly handed the
+                // Donation's own owned instance to the Receipt as well, which is the pairing EF
+                // named first in its warning and the one that failed the save.
+                Amount = donation.Amount.Copy(),
                 DonorName = donation.DonorName,
                 DonorEmail = donation.DonorEmail,
                 DonorAddress = donation.DonorAddress,
@@ -729,7 +836,26 @@ public sealed class PaymentProcessingCommandHandler(
                         receipt.ReceiptNumber, result.FailureReason);
                 }
 
-                receipt.Deliveries.Add(delivery);
+                // ADDED THROUGH THE REPOSITORY, NOT BY DROPPING IT IN THE NAVIGATION COLLECTION.
+                //
+                // `BaseEntity.Id` is initialised to `Guid.NewGuid()`, so a ReceiptDelivery has a
+                // non-default primary key from the moment it is constructed. When EF then
+                // discovers it during DetectChanges as a new child of an already-tracked Receipt,
+                // it reads that set key as "this row exists" and marks the entity MODIFIED - so
+                // the save issued an UPDATE against a row that had never been inserted and got
+                // back "expected to affect 1 row(s), but actually affected 0".
+                //
+                // THAT EXCEPTION WAS THE ONE THAT UNWOUND THE DONATION. It was thrown inside this
+                // best-effort block, swallowed and logged as a delivery problem - but the failed
+                // entity stayed in the change tracker, so ApplyPaymentEventCommand's own save
+                // retried the same impossible UPDATE, threw again outside any catch, and rolled
+                // the transaction back. The receipt, the donation and the payment event all went
+                // with it, for a payment the gateway had already captured.
+                //
+                // `AddDeliveryAsync` puts it in the context as ADDED explicitly, which is how the
+                // receipt-administration handler this method mirrors has always done it. Every
+                // other new entity in this service goes through a repository for the same reason.
+                await receipts.AddDeliveryAsync(delivery, cancellationToken);
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -823,6 +949,104 @@ public sealed class PaymentProcessingCommandHandler(
     }
 
     // =====================================================================================
+    // Confirming an in-page checkout
+    // =====================================================================================
+
+    /// <summary>
+    /// Takes the provider's signed word that a checkout completed, then confirms the outcome
+    /// with the provider directly.
+    /// </summary>
+    /// <remarks>
+    /// TWO STEPS, AND BOTH ARE NECESSARY. The signature proves the message is the provider's: it
+    /// is an HMAC over the order and payment ids made with the merchant secret, which the browser
+    /// has never held, so a fabricated payment id cannot be signed. What it does NOT prove is
+    /// that money moved - it is a receipt for a conversation, not for a capture. So a valid
+    /// signature only earns the payment id the right to be written down; the outcome still comes
+    /// from <see cref="VerifyPaymentCommand"/>, which asks the provider what actually happened.
+    ///
+    /// THE PAYMENT ID REPLACES THE ORDER ID ON THE ATTEMPT, and that is the hinge of the whole
+    /// flow. Verification resolves a reference at the provider; an order id says only what was
+    /// asked for, a payment id says what was done. Writing it here is what lets every existing
+    /// downstream path - the receipt, the donor account, the e-mail, Support and Safe Retry -
+    /// work unchanged against a checkout payment.
+    ///
+    /// A BAD SIGNATURE CHANGES NOTHING AND IS AUDITED. The attempt is left exactly as it was, so
+    /// the donation stays recoverable through the ordinary verification route; nothing is marked
+    /// failed on the strength of a message we could not authenticate. It is the one event here
+    /// worth alerting on: a genuine donor's browser does not produce one.
+    /// </remarks>
+    public async Task<Result<PaymentVerificationResponse>> HandleAsync(
+        ConfirmCheckoutPaymentCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var intent = await donations.GetIntentByReferenceAsync(
+            command.IntentReference, cancellationToken);
+
+        if (intent is null)
+        {
+            return Result.Failure<PaymentVerificationResponse>(
+                Error.NotFound("That donation was not found."));
+        }
+
+        var attempt = await donations.GetLatestAttemptAsync(intent.Id, cancellationToken);
+
+        if (attempt is null)
+        {
+            return Result.Failure<PaymentVerificationResponse>(
+                Error.NotFound("That payment was not found."));
+        }
+
+        var account = await gatewayAccounts.GetActiveForTenantAsync(intent.TenantId, cancellationToken);
+
+        if (account is null)
+        {
+            return Result.Failure<PaymentVerificationResponse>(Error.PaymentGatewayNotConfigured());
+        }
+
+        var signatureValid = paymentGateway.VerifyCheckoutSignature(
+            account,
+            command.Request.OrderReference,
+            command.Request.PaymentReference,
+            command.Request.Signature);
+
+        if (!signatureValid)
+        {
+            logger.LogWarning(
+                "A checkout confirmation for intent {IntentReference} failed signature "
+                + "verification and was not applied.",
+                intent.IntentReference);
+
+            await audit.WriteAnonymousAsync(
+                AuditActionCodes.IntentCheckoutSignatureRejected,
+                nameof(PaymentAttempt),
+                attempt.Id,
+                intent.TenantId,
+                AuditResult.Failed,
+                new { intent.IntentReference, attempt.AttemptNumber },
+                cancellationToken);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Result.Failure<PaymentVerificationResponse>(Error.Forbidden(
+                "This payment could not be verified. Please contact the organisation before "
+                + "trying again - do not make a second payment."));
+        }
+
+        attempt.GatewayReference = command.Request.PaymentReference;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // THE ORDINARY VERIFICATION PATH FROM HERE. It asks the provider, records the donation,
+        // issues the receipt, converts the donor and sends the e-mail - none of which needs to
+        // know that this payment came from a checkout rather than a link.
+        return await HandleAsync(
+            new VerifyPaymentCommand(
+                new VerifyPaymentRequest(IntentReference: intent.IntentReference)),
+            cancellationToken);
+    }
+
+    // =====================================================================================
     // Verification - SCR-PAY-002
     // =====================================================================================
 
@@ -910,34 +1134,80 @@ public sealed class PaymentProcessingCommandHandler(
             attempt.MethodType = verification.MethodType;
             attempt.MaskedInstrument = verification.MaskedInstrument;
 
-            var syntheticEvent = new PaymentEvent
+            // THE RECONSTRUCTED EVENT IS LOOKED UP BEFORE IT IS CREATED, exactly as the webhook
+            // path above looks up a redelivery before storing one.
+            //
+            // WHY IT HAS TO BE. `GatewayEventId` is deterministic here - "verify:{gateway
+            // reference}" - and (gateway_name, gateway_event_id) is UNIQUE. So the second
+            // verification of the same payment inserted a row the database had already, and
+            // SaveChangesAsync threw DbUpdateException from outside every try/catch on this path.
+            //
+            // A SECOND VERIFICATION IS THE NORMAL CASE, NOT AN EDGE ONE. The donor's result page
+            // polls this endpoint four times while a capture settles, Support & Retry offers a
+            // Verify button, and Safe Retry verifies before it re-pays. Any of those, on a
+            // payment whose donation had not been recorded, hit the duplicate - and the donor was
+            // shown "An error occurred while saving the entity changes. See the inner exception
+            // for details." on the page that was meant to confirm their gift.
+            var eventReference = $"verify:{attempt.GatewayReference}";
+
+            var reconstructed = await paymentEvents.FindByGatewayEventIdAsync(
+                account.GatewayName, eventReference, cancellationToken);
+
+            if (reconstructed is null)
             {
-                TenantId = intent.TenantId,
-                BusinessUnitId = intent.BusinessUnitId,
-                PaymentAttemptId = attempt.Id,
-                DonationIntentId = intent.Id,
-                EventType = PaymentEventType.Captured,
-                Status = PaymentEventStatus.Pending,
-                GatewayName = account.GatewayName,
+                reconstructed = new PaymentEvent
+                {
+                    TenantId = intent.TenantId,
+                    BusinessUnitId = intent.BusinessUnitId,
+                    PaymentAttemptId = attempt.Id,
+                    DonationIntentId = intent.Id,
+                    EventType = PaymentEventType.Captured,
+                    Status = PaymentEventStatus.Pending,
+                    GatewayName = account.GatewayName,
 
-                // Marked as reconstructed, so the queue shows this came from verification rather
-                // than from the provider - which matters when somebody asks why there is no
-                // matching webhook.
-                GatewayEventId = $"verify:{attempt.GatewayReference}",
+                    // Marked as reconstructed, so the queue shows this came from verification
+                    // rather than from the provider - which matters when somebody asks why there
+                    // is no matching webhook.
+                    GatewayEventId = eventReference,
 
-                GatewayReference = attempt.GatewayReference,
-                Amount = verification.CapturedAmount ?? attempt.RequestedAmount,
-                OccurredAtUtc = verification.CapturedAtUtc ?? clock.UtcNow,
-                ReceivedAtUtc = clock.UtcNow,
-                SignatureVerified = true
-            };
+                    GatewayReference = attempt.GatewayReference,
 
-            await paymentEvents.AddAsync(syntheticEvent, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+                    // `CapturedAmount` is freshly built from the gateway response and owned by
+                    // nobody; `RequestedAmount` belongs to the attempt, so that branch is copied.
+                    Amount = verification.CapturedAmount ?? attempt.RequestedAmount.Copy(),
+                    OccurredAtUtc = verification.CapturedAtUtc ?? clock.UtcNow,
+                    ReceivedAtUtc = clock.UtcNow,
+                    SignatureVerified = true
+                };
 
-            await HandleAsync(new ApplyPaymentEventCommand(syntheticEvent.Id), cancellationToken);
+                await paymentEvents.AddAsync(reconstructed, cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            // AN EVENT THAT HAS ALREADY BEEN APPLIED IS NOT APPLIED AGAIN. Re-applying is refused
+            // by the handler anyway, but asking it to is how a retry turns into an error the
+            // caller has to interpret.
+            if (reconstructed.Status != PaymentEventStatus.Processed)
+            {
+                // THE OUTCOME IS READ AND LOGGED, NOT DISCARDED - the same treatment the webhook
+                // path gives it. This was `await HandleAsync(...)` with the Result thrown away, so
+                // a capture that could not be applied left the donation unrecorded and said
+                // nothing anywhere, and any exception from inside it escaped this method
+                // entirely and became a 500 on the donor's result page.
+                var applied = await HandleAsync(
+                    new ApplyPaymentEventCommand(reconstructed.Id), cancellationToken);
+
+                if (applied.IsFailure)
+                {
+                    logger.LogError(
+                        "The reconstructed capture {GatewayEventId} for intent {IntentReference} "
+                        + "was stored but could not be applied: {Message}",
+                        eventReference, intent.IntentReference, applied.Error!.Message);
+                }
+            }
 
             intent = await donations.GetIntentAsync(intent.Id, cancellationToken) ?? intent;
+            attempt = await donations.GetAttemptAsync(attempt.Id, cancellationToken) ?? attempt;
         }
         else
         {

@@ -100,6 +100,56 @@ public sealed class PublicDonationsController(
                 new CreatePaymentLinkCommand(intentReference, request), cancellationToken));
 
     /// <summary>
+    /// Opens the provider's checkout for this donation, so the donor pays without leaving us.
+    ///
+    /// THIS IS THE ROUTE SUBMIT TAKES. The donor pressed a button on a form they are looking at;
+    /// the payment form should open in front of them. The payment-link endpoint above stays for
+    /// what a link is genuinely for - reaching somebody who is NOT at a screen - and is also what
+    /// the client falls back to when the organisation's provider cannot draw an in-page checkout.
+    ///
+    /// WHAT COMES BACK CARRIES NO SECRET. An order id, the merchant's publishable key, the amount
+    /// for display and the donor's own details to prefill. The price is the order's, held by the
+    /// provider, so a browser that edits this response changes a label and nothing else.
+    /// </summary>
+    [HttpPost("{intentReference}/checkout-session")]
+    [ProducesResponseType(typeof(ApiResponse<CheckoutSessionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateCheckoutSessionAsync(
+        string intentReference,
+        [FromBody] CreateCheckoutSessionRequest request,
+        CancellationToken cancellationToken) =>
+        FromResult(
+            await intents.HandleAsync(
+                new CreateCheckoutSessionCommand(intentReference, request), cancellationToken));
+
+    /// <summary>
+    /// Takes the signed result of a finished checkout and settles the donation.
+    ///
+    /// ANONYMOUS, LIKE EVERYTHING ELSE HERE, AND SAFE FOR THE SAME REASON THE OTHERS ARE - with
+    /// one addition that matters more here than anywhere. The body is a claim made by a browser
+    /// that a payment happened, which is exactly the claim an attacker would like to make. It is
+    /// believed only because it carries a signature made with the merchant secret, checked on the
+    /// server before anything is written. Without that this endpoint would let anybody mark any
+    /// donation paid by naming its reference.
+    ///
+    /// IT DOES NOT DECIDE THE OUTCOME EITHER. A good signature earns the payment id the right to
+    /// be recorded; whether money actually moved is then asked of the provider directly, through
+    /// the same verification the result page and Support and Retry use.
+    /// </summary>
+    [HttpPost("{intentReference}/checkout-confirm")]
+    [ProducesResponseType(typeof(ApiResponse<PaymentVerificationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ConfirmCheckoutAsync(
+        string intentReference,
+        [FromBody] ConfirmCheckoutRequest request,
+        CancellationToken cancellationToken) =>
+        FromResult(
+            await payments.HandleAsync(
+                new ConfirmCheckoutPaymentCommand(intentReference, request), cancellationToken));
+
+    /// <summary>
     /// The donor's own view of their donation, for the result page they land on after paying.
     ///
     /// ALWAYS MASKED, even though it is the donor's own record. There is no session to prove who

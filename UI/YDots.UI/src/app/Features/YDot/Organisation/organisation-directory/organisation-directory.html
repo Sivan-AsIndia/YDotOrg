@@ -216,6 +216,22 @@
                         }
                       </button>
                     }
+
+                    <!-- Suspend puts a running Organisation on hold; Reactivate is the way back.
+                         Offered only in the states the server's own transition table allows. -->
+                    @if (canSuspend(org)) {
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                              (click)="beginDecision(org, 'suspend')">
+                        <i class="ri-pause-circle-line"></i> Suspend
+                      </button>
+                    }
+
+                    @if (canReactivate(org)) {
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                              (click)="beginDecision(org, 'reactivate')">
+                        <i class="ri-play-circle-line"></i> Reactivate
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -223,6 +239,48 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Suspend / reactivate confirmation. Suspending stops everybody inside the Organisation
+           working, so it asks for a reason and records it with the decision. -->
+      @if (decidingOn(); as target) {
+        <div class="org-modal-backdrop" (click)="cancelDecision()">
+          <div class="org-modal" role="dialog" aria-modal="true"
+               aria-labelledby="org-decide-title" (click)="$event.stopPropagation()">
+            <h2 id="org-decide-title" class="org-modal-title">
+              {{ decision() === 'suspend' ? 'Suspend' : 'Reactivate' }} {{ target.name }}
+            </h2>
+            <p class="org-modal-lead">
+              @if (decision() === 'suspend') {
+                Nobody inside this Organisation will be able to sign in until it is reactivated.
+                Its data is untouched.
+              } @else {
+                People inside this Organisation will be able to sign in again.
+              }
+            </p>
+
+            <label class="org-field-label" for="org-decide-reason">
+              {{ decision() === 'suspend' ? 'Reason (required, at least 10 characters)' : 'Note (optional)' }}
+            </label>
+            <textarea id="org-decide-reason" class="org-textarea" rows="3"
+                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"
+                      [placeholder]="decision() === 'suspend'
+                        ? 'Why this Organisation is being put on hold.'
+                        : 'Anything worth recording with the decision.'"></textarea>
+            @if (decision() === 'suspend' && decisionReason().length > 0 && !suspendReasonValid()) {
+              <p class="org-field-error">Enter at least 10 characters.</p>
+            }
+
+            <div class="org-modal-actions">
+              <button type="button" class="org-btn org-btn-ghost" (click)="cancelDecision()">Cancel</button>
+              <button type="button" class="org-btn org-btn-primary"
+                      [disabled]="deciding() || (decision() === 'suspend' && !suspendReasonValid())"
+                      (click)="confirmDecision()">
+                {{ deciding() ? 'Working…' : (decision() === 'suspend' ? 'Suspend' : 'Reactivate') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
 
       @if (totalPages() > 1) {
         <div class="org-pager">

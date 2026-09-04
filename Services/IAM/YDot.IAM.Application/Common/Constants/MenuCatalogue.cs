@@ -288,6 +288,21 @@ public static class MenuCatalogue
         new("FR_LEAD_QUEUE", "Lead Work Queue", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
             "/app/fundraising/relationships/lead-work-queue", "inbox", "don.lead-work-queue.view", 10),
 
+        // FOLLOW-UP QUEUE BELONGS IN THE SIDEBAR, and it is the exception to the rule the four
+        // withdrawn screens below follow.
+        //
+        // THAT RULE IS "IS THERE ALREADY A WAY IN", and the reason behind it is that a screen
+        // about ONE record says nothing when it is reached cold. This one is not about one
+        // record: it is a person's own list of the follow-up calls and e-mails they owe, which is
+        // exactly the kind of thing somebody opens first thing in the morning without having
+        // clicked a donor to get there - the same shape as Lead Work Queue above it.
+        //
+        // It was reachable only from My Leads, Follow-up Planner and Follow-up Execution, all of
+        // which are places you arrive at AFTER choosing a record, so the queue could only be found
+        // by somebody who had already stopped needing it.
+        new("FR_FOLLOW_UP_QUEUE", "Follow-up Queue", "FR_RELATIONSHIPS", MenuLevel.ChildSubMenu, "DON",
+            "/app/fundraising/relationships/follow-up-queue", "clock", "don.follow-up-planner.view", 20),
+
         // LEAD CAPTURE HAS COME OFF THE SIDEBAR, on the same test as the four screens below: the
         // way in already exists. Lead Work Queue carries a "Create Lead" button on both its
         // populated and its empty state, and that is the context the form belongs in - a capture
@@ -370,9 +385,21 @@ public static class MenuCatalogue
 
         // ---- Donations and payments (PAY) ---------------------------------------------------
         //
-        // FIVE CHILDREN, AND THE DONATION FLOW DOCUMENT NAMES ALL FIVE - in this order, with
+        // FOUR CHILDREN, AND THE DONATION FLOW DOCUMENT NAMES ALL FOUR - in this order, with
         // these words. Public Donation Initiation, Payment Queue, Support & Retry, Receipt
-        // Correction, Receipt Register. Nothing else belongs under this parent.
+        // Register. Nothing else belongs under this parent.
+        //
+        // RECEIPT CORRECTION IS NOT ONE OF THEM ANY MORE. It was seeded here pointing at
+        // /app/donations/receipt-correction on the strength of the document's subtitle - "donor
+        // form -> payment -> receipt -> correction" - but the guide has no section for the screen
+        // and its Quick Reference Summary names four. The Angular route is gone, so leaving the
+        // node would put an item in the sidebar that resolves to page-not-found, which is the one
+        // failure the note below is about. Dropping the code here retires the row on the next
+        // start for every Organisation that already has it, overrides and role mappings intact.
+        //
+        // CORRECTING A RECEIPT IS STILL SOMETHING THE SERVER DOES. `pay.receipts.correct` and
+        // POST /receipts/{id}/correct stay exactly as they are - a receipt-domain operation does
+        // not need a menu node to exist.
         //
         // WHAT WAS HERE BEFORE AND IS NOT ANY MORE. Donation Register, Donation Intents, Refunds
         // and Chargebacks and Payment Gateway were all seeded as child nodes pointing at
@@ -414,12 +441,7 @@ public static class MenuCatalogue
         new("MN_PAYMENT_SUPPORT", "Support & Retry", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
             "/app/donations/payment-support-and-safe-retry", "life-buoy", "pay.payments.safe-retry", 30),
 
-        // STEP 5a. Correcting an issued receipt - a new version, never an edit of the original,
-        // because a donor who claimed tax relief on version 1 must still be able to produce it.
-        new("MN_RECEIPT_CORRECTION", "Receipt Correction", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/receipt-correction", "edit-3", "pay.receipts.correct", 40),
-
-        // STEP 5b. Every receipt this organisation has issued, with the running totals the
+        // STEP 5. Every receipt this organisation has issued, with the running totals the
         // document shows across the top of Fig 5.
         new("MN_RECEIPT_REGISTER", "Receipt Register", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
             "/app/donations/receipt-register", "file-text", "pay.receipts.view", 50),

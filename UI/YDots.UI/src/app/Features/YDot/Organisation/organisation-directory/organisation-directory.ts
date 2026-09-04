@@ -281,6 +281,101 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
       });
   }
 
+  // ---- Suspend / reactivate ----------------------------------------------------------------
+  //
+  // THE ROW HAD NO WAY TO STOP AN ORGANISATION. `POST /organisations/{id}/suspend` and its
+  // `/reactivate` twin have existed on the API and in `OrganisationApiService` throughout, the
+  // status filter offers "Suspended", and the statistics strip counts suspended Organisations -
+  // but nothing in the client ever called either endpoint, so the only way to reach that state
+  // was through the registration-verification screen for an Organisation still under review. A
+  // live Organisation could not be put on hold at all.
+
+  /** The Organisation a suspend / reactivate is being confirmed for, or null. */
+  readonly decidingOn = signal<OrganisationListItemResponse | null>(null);
+  readonly decision = signal<'suspend' | 'reactivate'>('suspend');
+  readonly decisionReason = signal('');
+  readonly deciding = signal(false);
+
+  /** Suspend applies to an Organisation that is approved or running. The server agrees:
+   *  `Tenant.AllowedTransitionsFrom` permits Suspended from Approved and from Active only. */
+  canSuspend(organisation: OrganisationListItemResponse): boolean {
+    return (
+      this.isSuperAdmin() && (organisation.status === 'active' || organisation.status === 'approved')
+    );
+  }
+
+  /** Reactivate is the way back, and only from Suspended. */
+  canReactivate(organisation: OrganisationListItemResponse): boolean {
+    return this.isSuperAdmin() && organisation.status === 'suspended';
+  }
+
+  beginDecision(
+    organisation: OrganisationListItemResponse,
+    decision: 'suspend' | 'reactivate',
+  ): void {
+    this.decision.set(decision);
+    this.decisionReason.set('');
+    this.decidingOn.set(organisation);
+  }
+
+  cancelDecision(): void {
+    this.decidingOn.set(null);
+    this.decisionReason.set('');
+  }
+
+  /**
+   * A REASON IS REQUIRED TO SUSPEND, and optional to lift one.
+   *
+   * Suspending an Organisation stops everybody inside it working; the record of why has to
+   * outlive whoever pressed the button.
+   */
+  readonly suspendReasonValid = computed(() => this.decisionReason().trim().length >= 10);
+
+  confirmDecision(): void {
+    const organisation = this.decidingOn();
+
+    if (!organisation?.id || this.deciding()) {
+      return;
+    }
+
+    const suspending = this.decision() === 'suspend';
+    const reason = this.decisionReason().trim();
+
+    if (suspending && !this.suspendReasonValid()) {
+      return;
+    }
+
+    this.deciding.set(true);
+
+    const call = suspending
+      ? this.api.suspend(organisation.id, { reason, expectedVersion: organisation.version })
+      : this.api.reactivate(organisation.id, {
+          notes: reason || null,
+          expectedVersion: organisation.version,
+        });
+
+    call.pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.deciding.set(false);
+        this.cancelDecision();
+        this.toast.show(
+          suspending ? 'Organisation suspended' : 'Organisation reactivated',
+          suspending
+            ? `${organisation.name} is on hold. Nobody inside it can sign in.`
+            : `${organisation.name} is active again.`,
+          'success');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.deciding.set(false);
+        this.toast.show(
+          suspending ? 'Could not suspend' : 'Could not reactivate',
+          apiErrorMessage(error),
+          'error');
+      },
+    });
+  }
+
   // =========================================================================================
   // Display helpers
   // =========================================================================================

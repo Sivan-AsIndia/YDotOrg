@@ -151,6 +151,28 @@ public static class RoleAccessProfiles
     /// </summary>
     private static readonly IReadOnlyList<string> CheckerOnlyOperations =
     [
+        // TAKING A CAMPAIGN LIVE. It is the last act of the approval chain, not the first act of
+        // running the campaign: `PostApprovalOperations` above says in as many words that activate
+        // is "downstream of the approval", and it was still reaching the maker because that list
+        // only ADDS codes to the checker and nothing took this one away from INITIATOR. So the
+        // person who created a campaign and submitted it for approval could then activate it
+        // themselves the moment somebody approved it - and worse, an Initiator who was shown the
+        // Activate action on an Approved campaign they had raised could put it live with no
+        // second person involved in that step at all.
+        //
+        // PAUSE AND RESUME STAY WITH THE MAKER. Those are running a campaign that is already
+        // live - noticing a problem this afternoon and stopping the spend is exactly the maker's
+        // job, and neither one starts or ends anything.
+        "cam.campaigns.activate",
+
+        // TURNING A ROLE ON. Role creation runs draft -> submit -> activate for the same reason
+        // campaigns do: a role is a grant of permissions, and the person who chose the permissions
+        // must not be the person who makes them effective. INITIATOR held
+        // `iam.roles.activate` through the same gap as the campaign verb above, so a role drafted
+        // and submitted by a maker was activated by that same maker and the approval step in the
+        // middle was decorative.
+        PermissionCodes.RolesActivate,
+
         // DISABLING A LIVE TRACKING ASSET. It stops a printed QR code and a circulated short link
         // resolving, so the campaign stops being able to attribute anything that arrives through
         // them - not recoverable by reprinting. The maker asks with

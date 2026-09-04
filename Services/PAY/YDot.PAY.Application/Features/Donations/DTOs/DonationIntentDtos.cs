@@ -126,6 +126,53 @@ public sealed record PaymentLinkResponse(
     string GatewayName,
     int AttemptNumber);
 
+/// <summary>Asking to open an in-page checkout session on an intent.</summary>
+public sealed record CreateCheckoutSessionRequest(long ExpectedVersion);
+
+/// <summary>
+/// What the browser needs to draw the provider's checkout - and deliberately nothing else.
+///
+/// THERE IS NO SECRET HERE AND THERE MUST NEVER BE. <see cref="PublicKey"/> is the merchant's
+/// publishable key: it names whose checkout to open and authorises nothing on its own. Every
+/// operation that moves money is signed with the key SECRET, which stays on the server.
+///
+/// THE AMOUNT IS FOR DISPLAY. The provider charges what the ORDER says, so a page that edits
+/// this figure changes a label and nothing else. That is the property that makes it safe to run
+/// a checkout in a browser at all.
+/// </summary>
+public sealed record CheckoutSessionResponse(
+    Guid IntentId,
+    string IntentReference,
+    string GatewayName,
+
+    /// <summary>The provider's order id. Checkout is opened against this, never against a price.</summary>
+    string OrderReference,
+
+    string PublicKey,
+    long AmountMinorUnits,
+    string CurrencyCode,
+    MoneyResponse Amount,
+
+    /// <summary>Prefilled on the provider's form so the donor does not retype what we already hold.</summary>
+    string DonorName,
+    string? Email,
+    string? Mobile,
+
+    string Description,
+    int AttemptNumber);
+
+/// <summary>
+/// What the browser brings back when the provider's checkout finishes.
+///
+/// ALL THREE ARE REQUIRED AND ALL THREE ARE UNTRUSTED. The signature is what turns them into
+/// evidence: it is made with the merchant secret the browser has never held, so a fabricated
+/// payment id cannot be signed. The server checks it before believing any of this.
+/// </summary>
+public sealed record ConfirmCheckoutRequest(
+    string PaymentReference,
+    string OrderReference,
+    string Signature);
+
 /// <summary>Cancelling an intent.</summary>
 public sealed record CancelDonationIntentRequest(long ExpectedVersion, string Reason);
 

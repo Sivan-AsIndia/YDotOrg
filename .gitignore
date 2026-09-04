@@ -56,3 +56,30 @@ Services/DON/docs/
 /docs
 .env
 .env.example
+
+# =================================================================================================
+# .NET build output
+#
+# THESE WERE TRACKED, all 1,338 of them. bin/ and obj/ carry compiled DLLs, the NuGet restore
+# graph and generated AssemblyInfo files - all reproducible from source, all rewritten by every
+# build. The visible cost was a `git status` permanently dirty with AssemblyInfo and .cache churn
+# nobody had edited, which buries the files somebody actually changed.
+#
+# ANCHORED WITH ** SO THEY MATCH AT ANY DEPTH. A bare `/bin` would only match the repository root
+# and would miss Services/CAM/YDots.CAM.API/obj, which is where all of it actually lives.
+# =================================================================================================
+**/bin/
+**/obj/
+
+# The Angular build, at any depth. `/dist` above only matches the repository root, and the UI
+# builds to UI/YDots.UI/dist.
+**/dist/
+**/.angular/
+**/node_modules/
+
+# Visual Studio / Rider local state
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/

@@ -441,7 +441,12 @@
           409 "Select an organisation to continue." for a caller who has not entered one. The
           reviewer's route carries the id, so it is passed here too.
         -->
+        <!-- `canStartNew` closes the document set once SuperAdmin has decided the registration:
+             an approved Organisation's evidence is what the approval was granted against, and a
+             certificate added afterwards would change that with nobody reviewing it. The server
+             refuses the create either way; this is so the button is not offered. -->
         <app-document-submissions [mode]="documentsMode()" [tenantId]="organisationId()"
+                                  [canStartNew]="!isApproved()"
                                   (changed)="reload()"></app-document-submissions>
 
         @if (ungroupedDocuments().length) {

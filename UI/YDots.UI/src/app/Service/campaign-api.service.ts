@@ -114,11 +114,21 @@ export class CampaignApiService {
       .pipe(map((response) => response.data!));
   }
 
-  /** The append-only audit trail: every lifecycle action, who took it and whether it was allowed. */
+  /**
+   * The append-only audit trail: every lifecycle action, who took it and whether it was allowed.
+   *
+   * THE PAYLOAD IS PAGED, and this used to say it was not. `GET /campaigns/{id}/history` returns
+   * `ApiResponse<PagedResponse<CampaignHistoryResponse>>` - the controller's own
+   * `ProducesResponseType` says so - so `response.data` is `{ items, totalCount, page, pageSize }`
+   * and never an array. The old body handed that OBJECT back as `CampaignHistoryEntry[]`, and the
+   * one caller then called `.map` on it, which threw `entries.map is not a function` inside the
+   * subscriber. The Related history tab was empty on every campaign, and the failure did not even
+   * reach the error branch that would have said so.
+   */
   getCampaignHistory(id: string): Observable<CampaignHistoryEntry[]> {
     return this.http
-      .get<ApiResponse<CampaignHistoryEntry[]>>(`${this.campaignsUrl}/${id}/history`)
-      .pipe(map((response) => response.data ?? []));
+      .get<ApiResponse<PagedResponse<CampaignHistoryEntry>>>(`${this.campaignsUrl}/${id}/history`)
+      .pipe(map((response) => response.data?.items ?? []));
   }
 
   exportCampaigns(filter: CampaignSearchFilter = {}): Observable<{ blob: Blob; fileName: string }> {

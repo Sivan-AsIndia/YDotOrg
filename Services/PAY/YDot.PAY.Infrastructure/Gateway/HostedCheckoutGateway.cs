@@ -72,6 +72,33 @@ public class HostedCheckoutGateway(
     /// for a day and one that wants fifteen minutes are both reasonable, and the choice belongs
     /// with the organisation rather than the code.
     /// </summary>
+    /// <summary>
+    /// Declines, because a generic hosted checkout has no in-page form to draw.
+    /// </summary>
+    /// <remarks>
+    /// DECLINING IS THE CORRECT ANSWER, NOT A GAP. An in-page checkout is a provider's own
+    /// JavaScript opening over our page against an order it holds; there is no vendor-neutral
+    /// shape for that, and inventing one would produce a session no script anywhere knows how to
+    /// open. Saying so lets the caller fall back to a payment link - which this adapter does
+    /// support, and which every provider behind it can honour.
+    /// </remarks>
+    public virtual Task<GatewayCheckoutSession> CreateCheckoutSessionAsync(
+        PaymentGatewayAccount account,
+        DonationIntent intent,
+        string idempotencyKey,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(GatewayCheckoutSession.NotSupported(GatewayName));
+
+    /// <summary>
+    /// Always false: this adapter issues no checkout session, so nothing it could be asked to
+    /// verify came from it. Fails closed for the same reason every other signature check does.
+    /// </summary>
+    public virtual bool VerifyCheckoutSignature(
+        PaymentGatewayAccount account,
+        string orderReference,
+        string paymentReference,
+        string signature) => false;
+
     public virtual async Task<GatewayLinkResult> CreatePaymentLinkAsync(
         PaymentGatewayAccount account,
         DonationIntent intent,

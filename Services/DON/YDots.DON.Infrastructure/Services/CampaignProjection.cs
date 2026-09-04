@@ -39,11 +39,22 @@ public sealed class CampaignProjection(
     /// <summary>
     /// CAM's statuses that a lead may be captured against.
     ///
-    /// Draft and PendingApproval are excluded deliberately: a campaign nobody has approved yet is
-    /// not something to be taking donor interest against. Closed is excluded for the same reason
-    /// DON's own query excludes it.
+    /// SCHEDULED WAS MISSING, and it is the commonest of the four. Approving a campaign whose
+    /// lifecycle activation is automatic does not leave it Approved - it leaves it SCHEDULED,
+    /// waiting for its own start date, which is what the readiness screen's Approve launch
+    /// produces for every campaign set up that way. Those campaigns were never mirrored into DON,
+    /// so they were absent from the campaign picker on Lead Capture, the Lead Work Queue and the
+    /// Assignment Board: an Organisation whose campaigns were all approved-and-scheduled saw an
+    /// empty dropdown and could not capture a lead at all.
+    ///
+    /// DRAFT AND SUBMITTED ARE STILL EXCLUDED deliberately: a campaign nobody has approved yet is
+    /// not something to be taking donor interest against. Closing, Closed and Cancelled are
+    /// excluded for the same reason DON's own query excludes Closed.
+    ///
+    /// KEEP THIS IN STEP WITH <see cref="Translate"/>, which decides what each of these becomes
+    /// on DON's side.
     /// </summary>
-    private const string OfferableStatuses = "('Active', 'Approved', 'Paused')";
+    private const string OfferableStatuses = "('Active', 'Approved', 'Scheduled', 'Paused')";
 
     public async Task RefreshAsync(Guid organisationId, CancellationToken cancellationToken)
     {
@@ -198,11 +209,17 @@ public sealed class CampaignProjection(
         new(value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
     /// <summary>
-    /// CAM's status vocabulary is richer than DON's. Approved and Paused both mean "a lead may be
-    /// taken against it" as far as this module is concerned, so they arrive as Active.
+    /// CAM's status vocabulary is richer than DON's. Approved, Scheduled and Paused all mean "a
+    /// lead may be taken against it" as far as this module is concerned, so they arrive as Active.
+    ///
+    /// Only the rows selected by <see cref="OfferableStatuses"/> reach this, so the Closed branch
+    /// is defensive: it keeps a campaign that has been closed since it was last mirrored from
+    /// being resurrected as Active by a later refresh.
     /// </summary>
     private static CampaignStatus Translate(string status) =>
         status.Equals("Closed", StringComparison.OrdinalIgnoreCase)
+        || status.Equals("Closing", StringComparison.OrdinalIgnoreCase)
+        || status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
             ? CampaignStatus.Closed
             : CampaignStatus.Active;
 

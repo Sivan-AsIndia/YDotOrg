@@ -69,6 +69,20 @@ public sealed class PaymentGatewayRouter : IPaymentGateway
         CancellationToken cancellationToken) =>
         For(account).CreatePaymentLinkAsync(account, intent, idempotencyKey, cancellationToken);
 
+    public Task<GatewayCheckoutSession> CreateCheckoutSessionAsync(
+        PaymentGatewayAccount account,
+        DonationIntent intent,
+        string idempotencyKey,
+        CancellationToken cancellationToken) =>
+        For(account).CreateCheckoutSessionAsync(account, intent, idempotencyKey, cancellationToken);
+
+    public bool VerifyCheckoutSignature(
+        PaymentGatewayAccount account,
+        string orderReference,
+        string paymentReference,
+        string signature) =>
+        For(account).VerifyCheckoutSignature(account, orderReference, paymentReference, signature);
+
     public Task<GatewayVerificationResult> VerifyPaymentAsync(
         PaymentGatewayAccount account,
         string gatewayReference,

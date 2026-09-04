@@ -33,7 +33,7 @@
       </p>
     </div>
 
-    @if (!isReview()) {
+    @if (!isReview() && canStartNew()) {
       <button type="button" class="ds-btn is-primary"
               (click)="showNewForm.set(!showNewForm())" [disabled]="busy()">
         <i class="ri-add-line"></i> New submission
@@ -42,7 +42,7 @@
   </header>
 
   <!-- -------------------------------------------------------- New submission form -->
-  @if (showNewForm() && !isReview()) {
+  @if (showNewForm() && !isReview() && canStartNew()) {
     <div class="ds-newform">
       <div class="ds-field">
         <label class="ds-label" for="ds-type">What is this evidence of?</label>
@@ -89,8 +89,10 @@
       <i class="ri-inbox-line"></i>
       @if (isReview()) {
         <span>Nothing has been submitted yet. Ask for the registration certificate before deciding.</span>
-      } @else {
+      } @else if (canStartNew()) {
         <span>No submissions yet. Start one, attach your certificate, and send it for review.</span>
+      } @else {
+        <span>No documents were submitted. This Organisation's registration has already been decided, so its document set is closed.</span>
       }
     </div>
   }
@@ -241,21 +243,17 @@
           </button>
         }
 
-        @if (can(submission, 'StartReview')) {
-          <button type="button" class="ds-btn" [disabled]="busy()"
-                  (click)="startReview(submission)">
-            <i class="ri-eye-line"></i> Start review
-          </button>
-        }
-
+        <!-- START REVIEW AND REQUEST RE-UPLOAD ARE DELIBERATELY NOT OFFERED.
+             "Start review" only moved a Submitted submission to Under review; the server treats
+             both as awaiting review (Tenant DocumentSubmission.IsAwaitingReview) and allows
+             Approve and Reject from either, so it was a step that changed a badge and nothing
+             else. "Request re-upload" is withdrawn on the same instruction: a submission that is
+             not good enough is Rejected with a reason, and the Organisation puts a fresh one
+             forward. Both endpoints remain on the API; only the buttons are gone. -->
         @if (can(submission, 'Approve') && decidingOn() !== submission.id) {
           <button type="button" class="ds-btn is-approve" [disabled]="busy()"
                   (click)="beginDecision(submission, 'Approve')">
             <i class="ri-check-line"></i> Approve
-          </button>
-          <button type="button" class="ds-btn is-return" [disabled]="busy()"
-                  (click)="beginDecision(submission, 'RequestReupload')">
-            <i class="ri-refresh-line"></i> Request re-upload
           </button>
           <button type="button" class="ds-btn is-reject" [disabled]="busy()"
                   (click)="beginDecision(submission, 'Reject')">

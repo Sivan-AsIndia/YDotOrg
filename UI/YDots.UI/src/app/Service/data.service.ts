@@ -5,7 +5,6 @@ import { PaymentEventRecord, PaymentStatus } from '../Shared/models/payment-even
 import { ReceiptRecord } from '../Shared/models/receipt-register.model';
 import { RccRefundCaseRecord } from '../Shared/models/refund-chargeback-case.model';
 import { PsrRecoveryRecord } from '../Shared/models/payment-support-safe-retry.model';
-import { RcrCorrectionRequest } from '../Shared/models/receipt-correction-and-reissue.model';
 import {
   DonationIntentListItem,
   DonationIntentSearchFilter,
@@ -115,7 +114,32 @@ export class DataService {
         { reference: 'EUR', label: 'EUR - Euro' },
       ],
 
-      geographies: [],
+      // THE APPROVED ADMINISTRATIVE GEOGRAPHY, AND IT HAS TO BE HARD-CODED HERE. The picker on
+      // the form was fed an empty array, so "Select approved administrative geography" was the
+      // only line it ever showed - a control the screen asks people to answer and that could
+      // not be answered.
+      //
+      // IT DOES NOT COME FROM THE MASTERS API, deliberately. `GET /masters/reference-data` is
+      // gated on the GlobalMaster section permission and refuses an anonymous caller outright,
+      // and this same form is served to a donor who followed a QR code with no session at all.
+      // Calling it would give a stranger a 401 and a staff Initiator without Masters rights a
+      // 403 - both of them an empty dropdown again, with a failed request behind it.
+      //
+      // The list is the approved administrative catalogue the lead capture screen already works
+      // from, and it is presentation for the same reason the currency list above is: what the
+      // form OFFERS is a client concern; what it may RECORD is decided by the API.
+      geographies: [
+        { reference: 'IN-TN', label: 'India · Tamil Nadu' },
+        { reference: 'IN-KA', label: 'India · Karnataka' },
+        { reference: 'IN-KL', label: 'India · Kerala' },
+        { reference: 'IN-AP', label: 'India · Andhra Pradesh' },
+        { reference: 'IN-TG', label: 'India · Telangana' },
+        { reference: 'IN-PY', label: 'India · Puducherry' },
+        { reference: 'IN-MH', label: 'India · Maharashtra' },
+        { reference: 'IN-DL', label: 'India · Delhi' },
+        { reference: 'IN-GJ', label: 'India · Gujarat' },
+        { reference: 'IN-WB', label: 'India · West Bengal' },
+      ],
 
       permissions: { view: true, submit: true, continueToPayment: true },
 
@@ -449,86 +473,6 @@ export class DataService {
   }
 
   getPaymentSupportRetryCache(): PsrRecoveryRecord[] | null {
-    return null;
-  }
-
-  // =========================================================================================
-  // Receipt correction and reissue - SCR-PAY-008
-  // =========================================================================================
-
-  /**
-   * The correction worklist.
-   *
-   * IT IS DERIVED FROM THE RECEIPTS THEMSELVES rather than from a separate correction table, and
-   * that follows the domain: on this platform a correction IS a receipt - a new version pointing
-   * back at the one it supersedes. There is no pending-correction record to list, because a
-   * correction is issued in one step by somebody who holds the permission.
-   *
-   * So what this returns is every receipt that COULD be corrected: issued, not voided. That is
-   * the worklist an operator actually wants, and it cannot drift from the register because it is
-   * the same rows.
-   */
-  getReceiptCorrectionData(): Observable<RcrCorrectionRequest[]> {
-    return this.payments
-      .searchReceipts({ pageSize: DataService.WorkingSetSize, issueState: 'issued' })
-      .pipe(
-        map((page) =>
-          page.items.map<RcrCorrectionRequest>((receipt) => ({
-            receiptId: receipt.id,
-
-            // THE REFERENCE AN OPERATOR READS, never the identifier. A receipt number is what
-            // somebody quotes down a telephone; a GUID in that column tells them nothing and is
-            // the kind of internal detail a register should keep to itself.
-            requestReference: receipt.receiptNumber ?? receipt.donationReference,
-
-            correctionCategory: 'Reissue (Duplicate)',
-            receiptReference: receipt.receiptNumber ?? '',
-
-            // Blank until a correction is actually issued: the new number is allocated by the
-            // API at that moment and cannot be predicted here.
-            newReceiptReference: '',
-
-            donationReference: receipt.donationReference,
-            donorName: receipt.donorSnapshot,
-            currentValue: receipt.amount.display,
-            proposedValue: '',
-            currentVersion: receipt.versionNumber,
-            status: 'Draft',
-            requestedAtIso: receipt.issuedAtUtc ?? '',
-            requestedAtLabel: formatMoment(receipt.issuedAtUtc),
-            requestedBy: '',
-            reason: '',
-            supportingEvidence: [],
-            approver: '',
-            deliveryChannel: receipt.deliveryStateDescription,
-            version: receipt.version,
-            hasDownstreamReference: !!receipt.supersedesReceiptId,
-            downstreamStatus: receipt.issueStateDescription,
-
-            history: [
-              {
-                label: 'Issued',
-                detail: receipt.receiptNumber ?? '',
-                meta: formatMoment(receipt.issuedAtUtc),
-              },
-            ],
-
-            linkedRecords: [{ reference: receipt.donationReference, kind: 'Donation' }],
-            documents: receipt.documentUrl
-              ? [{ name: 'Receipt document', classification: 'Tax document' }]
-              : [],
-            integrationStatus: { provider: 'Receipt delivery', state: receipt.deliveryStateDescription },
-            supportCorrelation: { reference: receipt.donationReference, state: 'Open' },
-          })),
-        ),
-      );
-  }
-
-  updateReceiptCorrectionData(_data: RcrCorrectionRequest[]): void {
-    // Intentionally empty.
-  }
-
-  getReceiptCorrectionCache(): RcrCorrectionRequest[] | null {
     return null;
   }
 }

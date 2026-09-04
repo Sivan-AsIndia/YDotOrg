@@ -249,6 +249,21 @@ public class Tenant : AuditEntity, IBusinessUnitOwned, ICodedEntity
         or TenantStatus.UnderReview;
 
     /// <summary>
+    /// True while the Organisation may still put registration evidence forward.
+    ///
+    /// THE DOCUMENT SET CLOSES ON APPROVAL. Registration documents are what SuperAdmin decides
+    /// the Organisation on, so once that decision is made the evidence behind it is settled: an
+    /// approved Organisation adding a fresh certificate afterwards changes what its approval was
+    /// granted against, with nobody looking at the new file. Nothing enforced this - a
+    /// TenantAdmin could open a new submission and upload to it the day after being accepted -
+    /// and the screen offered the button, which is what made it look supported.
+    ///
+    /// SUSPENDED AND ARCHIVED ARE CLOSED FOR THE SAME REASON, one step further along.
+    /// </summary>
+    public bool AcceptsDocumentSubmissions => Status is not (TenantStatus.Approved
+        or TenantStatus.Active or TenantStatus.Suspended or TenantStatus.Archived);
+
+    /// <summary>
     /// The legal moves out of each status, in one place. Keeping the table here rather than
     /// scattering it across handlers is what makes "Invited straight to Active" impossible
     /// to write by accident.

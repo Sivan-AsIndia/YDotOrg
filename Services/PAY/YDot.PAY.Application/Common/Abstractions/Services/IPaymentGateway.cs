@@ -36,6 +36,63 @@ public interface IPaymentGateway
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Opens a CHECKOUT SESSION for an intent - an order held at the provider that the donor's
+    /// own browser then pays against, on our page.
+    ///
+    /// HOW IT DIFFERS FROM <see cref="CreatePaymentLinkAsync"/>, AND WHY BOTH EXIST. A payment
+    /// link is a URL the donor is sent away to, and which the provider also e-mails them; the
+    /// donor leaves our site, pays on the provider's, and comes back only if a callback was
+    /// configured and reached. A checkout session never leaves: the provider's own script draws
+    /// its card form over our page, the donor pays, and we decide where they go next. For a
+    /// staff member entering a donation on a donor's behalf - and for any donor sitting in front
+    /// of the form right now - that is the flow that matches what they are doing. The link stays
+    /// for the cases it is genuinely better at: an e-mail to somebody who is not at a screen, and
+    /// any provider that cannot do an in-page checkout.
+    ///
+    /// THE AMOUNT IS DECIDED HERE AND HELD BY THE PROVIDER, which is the security property that
+    /// makes an in-page checkout safe at all. The browser is told the order's id, not its price;
+    /// a page that edits the figure it was handed still pays what the order says.
+    ///
+    /// THE PUBLIC KEY IS PUBLIC BY DESIGN and is the only credential that crosses to the browser.
+    /// It identifies the merchant so the provider's script knows whose checkout to draw, and it
+    /// authorises nothing on its own - every operation that moves money needs the SECRET, which
+    /// stays here. Returning it per organisation, from the account's own configured credential,
+    /// is also what keeps one charity's key out of another's page.
+    ///
+    /// AN IMPLEMENTATION THAT CANNOT DO THIS SAYS SO rather than throwing, by returning
+    /// <see cref="GatewayCheckoutSession.NotSupported"/>. The caller falls back to the link,
+    /// which every provider here can do.
+    /// </summary>
+    Task<GatewayCheckoutSession> CreateCheckoutSessionAsync(
+        PaymentGatewayAccount account,
+        DonationIntent intent,
+        string idempotencyKey,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the browser's account of a completed checkout is genuinely the provider's.
+    ///
+    /// THIS IS THE WHOLE REASON AN IN-PAGE CHECKOUT CAN BE TRUSTED. When the provider's script
+    /// finishes it hands the page a payment id, the order id and a signature over the pair, made
+    /// with the merchant secret the browser has never seen. Checking it here is what separates
+    /// "the provider says this was paid" from "a script on the donor's machine says so" - and
+    /// the browser is the one party in the exchange with a motive to lie.
+    ///
+    /// IT PROVES THE MESSAGE, NOT THE MONEY. A valid signature says this payment id belongs to
+    /// this order and came from the provider; it does not say the payment was captured. The
+    /// caller still verifies the outcome through <see cref="VerifyPaymentAsync"/>, which asks the
+    /// provider directly.
+    ///
+    /// FAILS CLOSED, always: no secret, a malformed signature or an implementation that does not
+    /// support checkout all return false.
+    /// </summary>
+    bool VerifyCheckoutSignature(
+        PaymentGatewayAccount account,
+        string orderReference,
+        string paymentReference,
+        string signature);
+
+    /// <summary>
     /// Asks the provider what actually happened to an attempt.
     ///
     /// THE MOST IMPORTANT METHOD ON THIS INTERFACE. It is how a TIMED-OUT attempt is resolved
@@ -82,6 +139,40 @@ public sealed record GatewayLinkResult(
 
     public static GatewayLinkResult Failed(string code, string message) =>
         new(false, null, null, null, code, message);
+}
+
+/// <summary>
+/// An open checkout session: what the browser needs to draw the provider's payment form, and
+/// nothing else.
+///
+/// <see cref="AmountMinorUnits"/> IS FOR DISPLAY ONLY. The provider charges what the order says;
+/// this travels so the page can show a figure before the form opens without a second call.
+/// </summary>
+public sealed record GatewayCheckoutSession(
+    bool Succeeded,
+    string? OrderReference,
+    string? PublicKey,
+    long AmountMinorUnits,
+    string? CurrencyCode,
+    string? FailureCode,
+    string? FailureMessage)
+{
+    /// <summary>The failure code a caller matches on to fall back to a payment link.</summary>
+    public const string NotSupportedCode = "CHECKOUT_NOT_SUPPORTED";
+
+    public static GatewayCheckoutSession Ok(
+        string orderReference, string publicKey, long amountMinorUnits, string currencyCode) =>
+        new(true, orderReference, publicKey, amountMinorUnits, currencyCode, null, null);
+
+    public static GatewayCheckoutSession Failed(string code, string message) =>
+        new(false, null, null, 0, null, code, message);
+
+    /// <summary>
+    /// This provider does not do in-page checkout. Not an error: the caller issues a payment
+    /// link instead, and the donation proceeds.
+    /// </summary>
+    public static GatewayCheckoutSession NotSupported(string gatewayName) =>
+        Failed(NotSupportedCode, $"{gatewayName} does not support an in-page checkout.");
 }
 
 /// <summary>

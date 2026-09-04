@@ -47,6 +47,17 @@ export class DocumentSubmissionsComponent implements OnInit {
   /** Required in review mode; ignored in tenant mode, where the server knows the Organisation. */
   readonly tenantId = input<string | null>(null);
 
+  /**
+   * Whether a NEW submission may be started.
+   *
+   * THE DOCUMENT SET CLOSES ON APPROVAL, and this is the button that has to know. Every other
+   * control here is drawn from `permittedActions`, which the server now withholds once the
+   * Organisation's registration has been decided - so the drop zone and Send for review
+   * disappear on their own. "New submission" has no submission to ask about, so the host tells
+   * it. Default true: a host that says nothing gets the behaviour it had before.
+   */
+  readonly canStartNew = input(true);
+
   /** Raised after anything that changes state, so the host screen can refresh its own summary. */
   readonly changed = output<void>();
 

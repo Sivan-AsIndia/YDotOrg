@@ -21,36 +21,45 @@ export const environment = {
   /**
    * Root of the IAM WebAPI. Every service builds its URLs from this.
    *
-   * Plain HTTP on purpose in development: the API's dev profile turns HTTPS redirection off, and
-   * the refresh cookie is issued with Secure=false, because a Secure cookie is simply not stored
-   * by a browser on an http:// origin — the refresh flow would fail with nothing in the console
-   * to explain why. Production is same-origin over HTTPS; see environment.prod.ts.
+   * RELATIVE, NOT http://localhost:6702, AND THAT IS THE WHOLE POINT. `ng serve` proxies these
+   * prefixes to the four APIs (see proxy.conf.json), exactly as nginx does in the container. So
+   * the browser makes every call to its OWN origin.
+   *
+   * WHY IT HAS TO BE THIS WAY. IAM picks the Organisation from the Host header of the API
+   * request: `localhost` is the PLATFORM host and only the SuperAdmin is visible there, while
+   * `ten1.localhost` is an Organisation host. With an absolute URL the page could be on
+   * ten1.localhost:6701 and the call would still arrive as `localhost` - so an Organisation user
+   * signing in with a perfectly good password was told the details were incorrect. Proxied, the
+   * Host travels with the request and the Organisation resolves.
+   *
+   * Two things come free with same-origin: no CORS preflight, and the refresh cookie is a
+   * first-party cookie, which browsers treat far more kindly. Production works the same way -
+   * see environment.prod.ts.
    */
-  apiBaseUrl: 'http://localhost:6702/api/v1',
+  apiBaseUrl: '/api/v1',
 
   /**
-   * The other three services, each on its own port in development.
+   * The other three services, reached through the dev-server proxy on the SAME origin.
    *
    * WHY FOUR BASE URLS AND NOT ONE. The platform is four ASP.NET services sharing one
    * PostgreSQL database, not one API. IAM signs the token; CAM, DON and PAY only validate it.
    * A single base URL would mean one service answering for endpoints it does not own, which is
    * exactly the coupling the split was meant to avoid.
    *
-   * IN PRODUCTION ALL FOUR ARE SAME-ORIGIN PATHS behind nginx - see environment.prod.ts. The
-   * ports below exist only because `ng serve` runs on 4200 and each API runs on its own port,
-   * so the browser genuinely is talking to four origins. Each API's CORS list names
-   * http://localhost:6701 for that reason.
+   * Each prefix is rewritten back to /api/... before it is forwarded, so the service on the far
+   * side sees the path it actually routes on and knows nothing about the prefix. The rewrites in
+   * proxy.conf.json are the same ones nginx.conf performs in the container.
    */
-  campaignApiBaseUrl: 'http://localhost:6704/api/v1',
+  campaignApiBaseUrl: '/cam-api/v1',
 
-  donorApiBaseUrl: 'http://localhost:6706/api/v1',
+  donorApiBaseUrl: '/don-api/v1',
 
   /**
    * NOTE THE MISSING /v1. The payments service has three surfaces and only one of them is
    * versioned: /api/v1/* for staff endpoints, /api/public/* for the donor flow, and
    * /api/webhooks/* for the gateway. The service appends the right segment itself.
    */
-  paymentApiBaseUrl: 'http://localhost:6708/api',
+  paymentApiBaseUrl: '/pay-api',
 
   /** Shown in page titles, e-mails and the authenticator app entry. */
   applicationName: 'YDot',

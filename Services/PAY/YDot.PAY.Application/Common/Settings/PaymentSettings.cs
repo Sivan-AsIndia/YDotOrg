@@ -102,4 +102,41 @@ public sealed class PaymentSettings
     /// everything - is worked through in batches rather than loaded whole.
     /// </summary>
     public int EventProcessingBatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// Give every organisation a gateway account at startup, from configuration.
+    ///
+    /// WHAT IT REPLACES. A bind-mounted SQL script (docker/sql/razorpay-test-gateway.sql) run by a
+    /// one-shot compose container. It worked, but it made the payment module depend on a file
+    /// outside the compose file and the .env - so a colleague handed those two and nothing else
+    /// got a stack where donations were refused with PAYMENT_GATEWAY_NOT_CONFIGURED, and the
+    /// seed container swallowed its own failure and exited 0, so nothing said why.
+    ///
+    /// OFF BY DEFAULT, AND THAT MATTERS. Sweeping the tenant table to create gateway accounts is
+    /// precisely what <see cref="Seed.PaymentDbSeeder"/>'s per-organisation seeder refuses to do
+    /// on its own: on a real deployment it would create a payment configuration for every charity
+    /// on the platform, and a stray row in a payments screen is the kind of thing somebody
+    /// activates without reading. This is a development convenience and has to be asked for.
+    ///
+    /// IT REFUSES A LIVE KEY WHATEVER THIS SAYS. See the seeder - an rzp_live_ key means real
+    /// money, and no convenience is worth auto-configuring that across every tenant.
+    /// </summary>
+    public bool SeedGatewayAccountsFromConfiguration { get; set; }
+
+    /// <summary>
+    /// The provider the seed above configures, matching a <c>PaymentGateways:{name}</c> section.
+    ///
+    /// It is both the gateway name and the credential REFERENCE, which is what keeps the row free
+    /// of secrets: the account stores "Razorpay" and the resolver reads the key from
+    /// PaymentGateways:Razorpay:ApiKey, which docker-compose fills from .env.
+    /// </summary>
+    public string SeedGatewayName { get; set; } = "Razorpay";
+
+    /// <summary>
+    /// The currency the seeded account settles in.
+    ///
+    /// MUST MATCH THE CURRENCY DONATIONS ARE RAISED IN or the payment link is refused before it is
+    /// created - a merchant account cannot be paid out in a currency it does not settle.
+    /// </summary>
+    public string SeedGatewaySettlementCurrency { get; set; } = "INR";
 }

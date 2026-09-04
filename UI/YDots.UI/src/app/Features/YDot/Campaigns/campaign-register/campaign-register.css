@@ -603,6 +603,7 @@ button:focus-visible,
 
 /* Table */
 /*
+<<<<<<< HEAD
   FILLS THE REMAINING SCREEN HEIGHT, AND NEVER GROWS PAST IT.
 
   The table used to just size itself to whatever the rows needed: too short on a filtered page
@@ -613,6 +614,15 @@ button:focus-visible,
   after the pager row and any banners; `min-height: 0` is what lets a flex item actually shrink to
   fit that space instead of overflowing it; `overflow-y: auto` is the scrollbar for whatever still
   doesn't fit — more rows than the screen holds, or one row taller than the rest.
+=======
+  A FIXED HEIGHT FOR FIVE ROWS, whether or not there are five.
+
+  The page shows at most five campaigns (`pageSize = 5`), and the table simply shrank to fit
+  however many the current filter left - so the register was tall on page one and a two-row strip
+  on the last page, and the footer, the pager and everything below them jumped up the screen each
+  time somebody paged or typed in the search box. The height is the header plus five rows at the
+  padding set below; short pages now pad out instead of collapsing.
+>>>>>>> eeac78670ac51e6b9b1ee60b27692bbabc15a380
 */
 .cr-table-scroll {
   flex: 1;
@@ -621,6 +631,7 @@ button:focus-visible,
   overflow-y: auto;
   border: 1px solid #e8e9f3;
   border-radius: 8px;
+  min-height: calc(41px + (5 * 44px));
 }
 .cr-table {
   width: 100%;
