@@ -191,6 +191,15 @@ export class DataService {
   getDonationIntentsCache(): null {
     return null;
   }
+    private intentExistingDonorFlags = new Map<string, boolean>();
+
+  setIntentExistingDonorFlag(reference: string, isExistingDonor: boolean): void {
+    this.intentExistingDonorFlags.set(reference, isExistingDonor);
+  }
+    getIntentExistingDonorFlag(reference: string): boolean | null {
+    return this.intentExistingDonorFlags.get(reference) ?? null;
+  }
+
 
   // =========================================================================================
   // Payment verification - SCR-PAY-002

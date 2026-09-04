@@ -116,6 +116,133 @@
   <!-- ================================================================= One submission -->
   @if (!loading() && !loadFailed() && !isQueueView() && organisation(); as org) {
 
+    <!-- ---------------------------------------------------------------- Decision -->
+    <!--
+      Moved to the top of the page: this is what a reviewer came here to do, and it should not
+      require scrolling past the read-only summary and the document list to find it.
+    -->
+    <section class="org-doc-section">
+      <h3 class="org-doc-heading org-doc-heading--good">Decision</h3>
+
+      @if (decision() === 'none') {
+        <p class="org-section-note">
+          <!--
+            The buttons come from the server's permittedActions, so an organisation that is
+            already approved never shows Approve, and this screen keeps no copy of the lifecycle.
+          -->
+          Only the decisions that are open at this stage are offered.
+        </p>
+
+        <div class="org-row-actions">
+          @if (can('Approve')) {
+            <button type="button" class="org-btn org-btn-primary" (click)="choose('approve')">
+              <i class="ri-check-double-line"></i> Approve
+            </button>
+          }
+          @if (can('StartReview')) {
+            <button type="button" class="org-btn org-btn-ghost"
+                    [disabled]="deciding()" (click)="startReview()">
+              <i class="ri-play-line"></i> Take this review
+            </button>
+          }
+          @if (can('Reject')) {
+            <button type="button" class="org-btn org-btn-danger" (click)="choose('reject')">
+              <i class="ri-close-circle-line"></i> Send back
+            </button>
+          }
+          @if (can('Suspend')) {
+            <button type="button" class="org-btn org-btn-danger" (click)="choose('suspend')">
+              <i class="ri-forbid-2-line"></i> Suspend
+            </button>
+          }
+          @if (can('Reactivate')) {
+            <button type="button" class="org-btn org-btn-primary" (click)="choose('reactivate')">
+              <i class="ri-play-circle-line"></i> Lift the suspension
+            </button>
+          }
+          @if (can('Archive')) {
+            <button type="button" class="org-btn org-btn-ghost" (click)="choose('archive')">
+              <i class="ri-archive-line"></i> Archive
+            </button>
+          }
+        </div>
+
+        @if (permittedActions().length === 0) {
+          <p class="org-section-note">
+            There is nothing to decide on this organisation at the moment.
+          </p>
+        }
+      } @else {
+        <div class="org-decision-panel">
+          <h4 class="org-doc-subheading">{{ decisionTitle() }}</h4>
+
+          @if (decision() === 'approve') {
+            <div class="org-alert is-info">
+              <i class="ri-information-line"></i>
+              <span>
+                Approving lets this organisation start working. Check the certificates below
+                first — that is the whole point of the review.
+              </span>
+            </div>
+
+            <label class="org-check-row">
+              <input type="checkbox" [checked]="activateImmediately()"
+                     (change)="activateImmediately.set(!activateImmediately())">
+              <span>
+                <span class="org-radio-label">Activate straight away</span>
+                <small class="org-field-hint">
+                  Leave this on unless the organisation is not meant to start yet. An approved
+                  organisation that is still inactive needs somebody to come back and finish it.
+                </small>
+              </span>
+            </label>
+          }
+
+          @if (reasonRequired()) {
+            <div class="org-field">
+              <label class="org-field-label" for="v-reason">
+                Reason <span class="org-required">*</span>
+              </label>
+              <textarea id="v-reason" class="org-input" rows="3" maxlength="1000"
+                        [ngModel]="reason()" (ngModelChange)="reason.set($event)"
+                        [placeholder]="decision() === 'reject'
+                          ? 'What needs to change before this can be approved?'
+                          : 'Why is this happening?'"></textarea>
+              <!--
+                A rejection with no reason leaves the organisation nothing to act on, which turns
+                a decision into a dead end. The server refuses one; the button is disabled here so
+                nobody finds out the hard way.
+              -->
+              <span class="org-field-hint">
+                This is shown to the organisation, so write it for them.
+                @if (reason().trim().length < 10) {
+                  <strong>At least ten characters.</strong>
+                }
+              </span>
+            </div>
+          }
+
+          <div class="org-field">
+            <label class="org-field-label" for="v-notes">Internal note</label>
+            <textarea id="v-notes" class="org-input" rows="2" maxlength="1000"
+                      [ngModel]="notes()" (ngModelChange)="notes.set($event)"
+                      placeholder="Optional. Kept for the record, not shown to the organisation."></textarea>
+          </div>
+
+          <div class="org-step-actions">
+            <button type="button" class="org-btn org-btn-ghost" (click)="cancelDecision()">
+              Cancel
+            </button>
+            <button type="button" class="org-btn org-btn-primary"
+                    [disabled]="!canConfirm()" (click)="confirm()">
+              @if (deciding()) { <i class="ri-loader-4-line"></i> Recording… }
+              @else { <i class="ri-check-line"></i> Confirm }
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+
     <section class="org-doc-section">
       <div class="org-section-header">
         <h3 class="org-doc-heading org-doc-heading--blue">{{ org.name }}</h3>
@@ -223,129 +350,6 @@
               }
             </tbody>
           </table>
-        </div>
-      }
-    </section>
-
-    <!-- ---------------------------------------------------------------- Decision -->
-    <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--good">Decision</h3>
-
-      @if (decision() === 'none') {
-        <p class="org-section-note">
-          <!--
-            The buttons come from the server's permittedActions, so an organisation that is
-            already approved never shows Approve, and this screen keeps no copy of the lifecycle.
-          -->
-          Only the decisions that are open at this stage are offered.
-        </p>
-
-        <div class="org-row-actions">
-          @if (can('StartReview')) {
-            <button type="button" class="org-btn org-btn-ghost"
-                    [disabled]="deciding()" (click)="startReview()">
-              <i class="ri-play-line"></i> Take this review
-            </button>
-          }
-          @if (can('Approve')) {
-            <button type="button" class="org-btn org-btn-primary" (click)="choose('approve')">
-              <i class="ri-check-double-line"></i> Approve
-            </button>
-          }
-          @if (can('Reject')) {
-            <button type="button" class="org-btn org-btn-danger" (click)="choose('reject')">
-              <i class="ri-close-circle-line"></i> Send back
-            </button>
-          }
-          @if (can('Suspend')) {
-            <button type="button" class="org-btn org-btn-danger" (click)="choose('suspend')">
-              <i class="ri-forbid-2-line"></i> Suspend
-            </button>
-          }
-          @if (can('Reactivate')) {
-            <button type="button" class="org-btn org-btn-primary" (click)="choose('reactivate')">
-              <i class="ri-play-circle-line"></i> Lift the suspension
-            </button>
-          }
-          @if (can('Archive')) {
-            <button type="button" class="org-btn org-btn-ghost" (click)="choose('archive')">
-              <i class="ri-archive-line"></i> Archive
-            </button>
-          }
-        </div>
-
-        @if (permittedActions().length === 0) {
-          <p class="org-section-note">
-            There is nothing to decide on this organisation at the moment.
-          </p>
-        }
-      } @else {
-        <div class="org-decision-panel">
-          <h4 class="org-doc-subheading">{{ decisionTitle() }}</h4>
-
-          @if (decision() === 'approve') {
-            <div class="org-alert is-info">
-              <i class="ri-information-line"></i>
-              <span>
-                Approving lets this organisation start working. Check the certificates above
-                first — that is the whole point of the review.
-              </span>
-            </div>
-
-            <label class="org-check-row">
-              <input type="checkbox" [checked]="activateImmediately()"
-                     (change)="activateImmediately.set(!activateImmediately())">
-              <span>
-                <span class="org-radio-label">Activate straight away</span>
-                <small class="org-field-hint">
-                  Leave this on unless the organisation is not meant to start yet. An approved
-                  organisation that is still inactive needs somebody to come back and finish it.
-                </small>
-              </span>
-            </label>
-          }
-
-          @if (reasonRequired()) {
-            <div class="org-field">
-              <label class="org-field-label" for="v-reason">
-                Reason <span class="org-required">*</span>
-              </label>
-              <textarea id="v-reason" class="org-input" rows="3" maxlength="1000"
-                        [ngModel]="reason()" (ngModelChange)="reason.set($event)"
-                        [placeholder]="decision() === 'reject'
-                          ? 'What needs to change before this can be approved?'
-                          : 'Why is this happening?'"></textarea>
-              <!--
-                A rejection with no reason leaves the organisation nothing to act on, which turns
-                a decision into a dead end. The server refuses one; the button is disabled here so
-                nobody finds out the hard way.
-              -->
-              <span class="org-field-hint">
-                This is shown to the organisation, so write it for them.
-                @if (reason().trim().length < 10) {
-                  <strong>At least ten characters.</strong>
-                }
-              </span>
-            </div>
-          }
-
-          <div class="org-field">
-            <label class="org-field-label" for="v-notes">Internal note</label>
-            <textarea id="v-notes" class="org-input" rows="2" maxlength="1000"
-                      [ngModel]="notes()" (ngModelChange)="notes.set($event)"
-                      placeholder="Optional. Kept for the record, not shown to the organisation."></textarea>
-          </div>
-
-          <div class="org-step-actions">
-            <button type="button" class="org-btn org-btn-ghost" (click)="cancelDecision()">
-              Cancel
-            </button>
-            <button type="button" class="org-btn org-btn-primary"
-                    [disabled]="!canConfirm()" (click)="confirm()">
-              @if (deciding()) { <i class="ri-loader-4-line"></i> Recording… }
-              @else { <i class="ri-check-line"></i> Confirm }
-            </button>
-          </div>
         </div>
       }
     </section>

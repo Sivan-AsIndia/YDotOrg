@@ -37,7 +37,19 @@
 * {
   box-sizing: border-box;
 }
+/*
+  FILLS THE SCREEN, RATHER THAN HUGGING ITS CONTENT. The app shell (applayout.css) already makes
+  `.page-wrapper` a flex column with `flex: 1` so a routed page CAN reach the bottom of the
+  viewport — but this component's own root (`.cr-page`, not `.container-fluid`, which is the one
+  case the shell's `::ng-deep` rules target) never joined that chain, so the card stopped at
+  whatever height its content needed and left blank page below it. `flex: 1` here, and again on
+  `.cr-main` and `.cr-table-scroll` below, carries that fill all the way down to the table itself.
+*/
 .cr-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding: 24px 17px 48px;
 }
 .cr-visually-hidden {
@@ -432,8 +444,14 @@ button:focus-visible,
   width: 100%;
 }
 
-/* Main table */
+/* Main table — the flex item that actually grows to fill the page (see `.cr-page` above); the
+   pager row and any banners above the table keep their natural height, so only the table itself
+   claims the extra space. */
 .cr-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   margin-bottom: 20px;
 }
 .cr-pager-row {
@@ -584,8 +602,23 @@ button:focus-visible,
 }
 
 /* Table */
+/*
+  FILLS THE REMAINING SCREEN HEIGHT, AND NEVER GROWS PAST IT.
+
+  The table used to just size itself to whatever the rows needed: too short on a filtered page
+  with only a couple of rows (leaving blank page below the card down to the browser chrome), and
+  too tall the moment a row's own content (a long Purpose line, an owner list that wraps) needed
+  more than the standard row height — either way the footer, pager and everything below jumped
+  around the screen. `flex: 1` (from `.cr-main` above) hands this element all the space left over
+  after the pager row and any banners; `min-height: 0` is what lets a flex item actually shrink to
+  fit that space instead of overflowing it; `overflow-y: auto` is the scrollbar for whatever still
+  doesn't fit — more rows than the screen holds, or one row taller than the rest.
+*/
 .cr-table-scroll {
+  flex: 1;
+  min-height: 260px;
   overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #e8e9f3;
   border-radius: 8px;
 }
@@ -594,8 +627,13 @@ button:focus-visible,
   border-collapse: collapse;
   font-size: 13.5px;
 }
-/* Unified table design (user-directory look): light-grey header, white rows, thin borders. */
+/* Unified table design (user-directory look): light-grey header, white rows, thin borders.
+   `position: sticky` keeps the header in view while the body scrolls inside the fixed-height
+   container above, instead of the header scrolling away with the first few rows. */
 .cr-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: #f8f9fa;
   color: #495057;
   padding: 12px 14px;
@@ -606,10 +644,16 @@ button:focus-visible,
   white-space: nowrap;
   border-bottom: 1px solid #dee2e6;
 }
+/* Status / progress / owner / launch date / actions centre themselves on the row's own height —
+   only Campaign name (below) stays pinned to the top, since its Purpose line is what makes a row
+   taller than the standard height in the first place. */
 .cr-table tbody td {
   padding: 12px 14px;
   border-bottom: 1px solid #e9ecef;
   background: #fff;
+  vertical-align: middle;
+}
+.cr-cell-name {
   vertical-align: top;
 }
 .cr-table tbody tr:hover td {
@@ -761,9 +805,6 @@ button:focus-visible,
 }
 .cr-progress-hold {
   background: var(--cr-warn);
-}
-.cr-cell-owner {
-  vertical-align: top;
 }
 .cr-owner-inner {
   display: flex;

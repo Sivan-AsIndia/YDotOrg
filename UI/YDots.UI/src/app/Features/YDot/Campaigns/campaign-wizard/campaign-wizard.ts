@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -61,6 +61,7 @@ export class CampaignWizardComponent {
   private readonly user = inject(CurrentUserService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly elementRef = inject(ElementRef<HTMLElement>);
   private readonly toast = inject(ToastService);
 
   /** Countries, states, cities and currencies — the platform's global master data. */
@@ -159,7 +160,10 @@ export class CampaignWizardComponent {
   protected readonly isLastStep = computed(() => this.stepIndex() === this.totalSteps - 1);
 
   protected goToStep(i: number): void {
-    if (i >= 0 && i < this.totalSteps) this.stepIndex.set(i);
+    if (i >= 0 && i < this.totalSteps) {
+      this.stepIndex.set(i);
+      this.scrollToTop();
+    }
   }
   protected nextStep(): void {
     if (this.isLastStep()) return;
@@ -172,9 +176,32 @@ export class CampaignWizardComponent {
     }
     if (this.uiState() === 'validation') this.uiState.set('ready');
     this.stepIndex.update((i) => i + 1);
+    this.scrollToTop();
   }
   protected previousStep(): void {
-    if (!this.isFirstStep()) this.stepIndex.update((i) => i - 1);
+    if (!this.isFirstStep()) {
+      this.stepIndex.update((i) => i - 1);
+      this.scrollToTop();
+    }
+  }
+
+  /**
+   * Lands the person at the top of the new step's card instead of wherever the page
+   * happened to be scrolled to on the step they just left. Without this, a long step
+   * (e.g. Publication & Notice) leaves the viewport scrolled well down the page, and
+   * moving to a shorter step renders it starting from that same scroll offset — so the
+   * step appears to open "from the bottom" instead of at its own top.
+   *
+   * `.content-page` IS THE SCROLLING ELEMENT, NOT THE WINDOW. The app shell
+   * (`applayout.css`) pins `html`/`body` to exactly the viewport height and scrolls the
+   * routed page inside `.content-page` (`overflow-y: auto`) so the sidebar and top header
+   * stay put — which means `window.scrollTo` never has anything to move; the document
+   * itself never overflows.
+   */
+  private scrollToTop(): void {
+    queueMicrotask(() => {
+      this.elementRef.nativeElement.closest('.content-page')?.scrollTo({ top: 0, behavior: 'auto' });
+    });
   }
 
   /** Required-field validity for a single step, checked before advancing. */
@@ -215,7 +242,9 @@ export class CampaignWizardComponent {
   protected readonly campaignCodeMax = 20;
   protected readonly campaignCode = signal('');
   protected setCampaignCode(value: string): void {
-    this.campaignCode.set(value.toUpperCase().slice(0, this.campaignCodeMax));
+    // No whitespace — a code is a compact identifier, not a phrase, and a stray space is
+    // rarely intentional (a leading one especially, since it's invisible in the field).
+    this.campaignCode.set(value.replace(/\s+/g, '').toUpperCase().slice(0, this.campaignCodeMax));
   }
 
   // --- Purpose — rich-text editor with character counter, 10–1,000 chars.
@@ -342,6 +371,19 @@ export class CampaignWizardComponent {
     if (!this.startDate()) return true;
     return new Date(this.endDate()) >= new Date(this.startDate());
   });
+
+  /**
+   * Opens the native calendar for a date field on click anywhere in the box, not just its
+   * calendar-icon glyph. `showPicker` is unsupported in a handful of hosts, so a click there
+   * still falls through to normal text-caret placement instead of throwing.
+   */
+  protected openDatePicker(input: HTMLInputElement): void {
+    try {
+      input.showPicker?.();
+    } catch {
+      /* showPicker unavailable/blocked in this host — the field still works via the icon. */
+    }
+  }
   /** Interpreted date shown before submit. */
   protected interpretDate(value: string): string {
     if (!value) return '—';
@@ -392,8 +434,17 @@ export class CampaignWizardComponent {
   protected readonly regionOptions = signal<readonly MasterOption[]>([]);
   /** The SELECTED STATE'S ID. */
   protected readonly region = signal('');
+  /**
+   * State is satisfied once a COUNTRY HAS BEEN CHOSEN and either a state was picked or the
+   * country has none.
+   *
+   * THE COUNTRY CLAUSE IS THE FIX. Without it this read `regionOptions().length === 0`, and the
+   * option list is empty before any country is chosen - so a wizard nobody had touched counted
+   * State (and City below it) as already captured. Two of the sixteen required fields were
+   * satisfied on load, which is why the progress meter opened at 13% on a blank form.
+   */
   protected readonly regionValid = computed(
-    () => this.regionOptions().length === 0 || !!this.region(),
+    () => !!this.selectedCountry() && (this.regionOptions().length === 0 || !!this.region()),
   );
   protected readonly selectedRegionLabel = computed(
     () => this.regionOptions().find((r) => r.ref === this.region())?.label ?? '—',
@@ -424,7 +475,19 @@ export class CampaignWizardComponent {
   protected readonly cityOptions = signal<readonly MasterOption[]>([]);
   /** The SELECTED CITY'S ID. */
   protected readonly city = signal('');
-  protected readonly cityValid = computed(() => this.cityOptions().length === 0 || !!this.city());
+  /**
+   * City is satisfied once the cascade above it has been answered.
+   *
+   * The list is empty before a state is chosen, so - like State - an unanswered City counted as
+   * captured and inflated the progress meter on an untouched form. A country with no states has
+   * no cities either, which is the one case that resolves without a selection.
+   */
+  protected readonly cityValid = computed(() => {
+    if (!this.selectedCountry()) return false;
+    if (this.regionOptions().length === 0) return true;
+    if (!this.region()) return false;
+    return this.cityOptions().length === 0 || !!this.city();
+  });
   protected readonly selectedCityLabel = computed(
     () => this.cityOptions().find((c) => c.ref === this.city())?.label ?? '—',
   );
@@ -618,8 +681,11 @@ export class CampaignWizardComponent {
    * browser's fallback selection (often the whole paragraph) instead of just the
    * caret position or the text the user highlighted. Toolbar buttons/selects call
    * `preventDefault` on `mousedown` (see the template) so focus + selection are
-   * never lost in the first place, which is the actual fix; this stash/restore is
-   * a defensive fallback for hosts where that isn't enough.
+   * never lost in the first place, which is the actual fix; `stashSelection` runs
+   * on that same `mousedown`, BEFORE the click, so `restoreSelection` has a real
+   * range to fall back to on a host where `preventDefault` alone isn't enough —
+   * this was previously declared but never actually wired to the template, so the
+   * fallback it describes never ran.
    */
   private lastRange: Range | null = null;
   protected stashSelection(): void {
@@ -832,6 +898,22 @@ export class CampaignWizardComponent {
   protected readonly termsNoticeLen = computed(() => this.termsNotice().trim().length);
   protected readonly termsNoticeValid = computed(
     () => this.termsNoticeLen() >= this.purposeMin && this.termsNoticeLen() <= this.termsNoticeMax,
+  );
+
+  /**
+   * Whether the two Publication & Notice editors should be showing their error.
+   *
+   * NOT SIMPLY "IS THE FIELD INVALID". An empty field IS invalid - the minimum is ten characters
+   * - so binding the error straight to validity painted both editors red and printed
+   * "Review Public description" the instant somebody arrived on step 3, before they had been
+   * given the chance to type anything. Every other required field on this wizard waits for
+   * either an entered value or a failed attempt to advance, and these two now do the same.
+   */
+  protected readonly showDescError = computed(
+    () => !this.publicDescriptionValid() && (this.publicDescriptionLen() > 0 || this.wasAttempted(2)),
+  );
+  protected readonly showTermsError = computed(
+    () => !this.termsNoticeValid() && (this.termsNoticeLen() > 0 || this.wasAttempted(2)),
   );
 
   // --- Draft version — read-only, server-derived, immutable in this view ---
@@ -1278,22 +1360,39 @@ export class CampaignWizardComponent {
 
       const ref = outcome.reference;
 
-      this.store.submitForApproval(ref, this.user.role(), this.user.reference());
-
       this.stableReference.set(ref);
 
-      // SUBMITTED, NOT DRAFT. This set the header's lifecycle state back to 'Draft' immediately
-      // after a successful submit, so the one screen that had just sent the campaign for approval
-      // was also the one screen still calling it a draft.
-      this.lifecycleState.set('Submitted');
-      this.lastSaved.set('Today, just now · IST');
-      this.successRef.set(ref);
-      this.toast.show('Submitted for approval', `${ref} is with its approver.`, 'success');
+      // WAIT FOR THE ACTUAL TRANSITION. This used to announce "Submitted for approval" and
+      // navigate away in the same tick it CALLED `submitForApproval`, never looking at whether
+      // the request the call fired off actually succeeded. A refusal — a version conflict, a
+      // permission the server enforces beyond what the button's own guard checks, a network
+      // error — surfaced nothing: no error, no navigation, no visible difference from success,
+      // which is exactly "clicked Submit and nothing happened." The success toast and the
+      // redirect now both wait for `onDone`, and a refusal keeps the person on the wizard with
+      // the reason instead of failing silently underneath an optimistic "success".
+      this.store.submitForApproval(ref, this.user.role(), this.user.reference(), (result) => {
+        if (!result.applied) {
+          this.toast.show(
+            'Campaign not submitted',
+            result.error ?? 'The campaign was saved as a draft, but could not be sent for approval.',
+            'error',
+          );
+          return;
+        }
 
-      // Return to the Campaign Register, which surfaces a persistent success banner via the
-      // ?created reference.
-      this.router.navigate(['/app/fundraising/campaigns/campaign-register'], {
-        queryParams: { created: ref },
+        // SUBMITTED, NOT DRAFT. This set the header's lifecycle state back to 'Draft' immediately
+        // after a successful submit, so the one screen that had just sent the campaign for
+        // approval was also the one screen still calling it a draft.
+        this.lifecycleState.set('Submitted');
+        this.lastSaved.set('Today, just now · IST');
+        this.successRef.set(ref);
+        this.toast.show('Submitted for approval', `${ref} is with its approver.`, 'success');
+
+        // Return to the Campaign Register, which surfaces a persistent success banner via the
+        // ?created reference.
+        this.router.navigate(['/app/fundraising/campaigns/campaign-register'], {
+          queryParams: { created: ref },
+        });
       });
     });
   }
@@ -1384,7 +1483,10 @@ export class CampaignWizardComponent {
     this.city.set('');
     this.pincode.set('');
     this.activationMode.set('manual');
-    this.reminderDaysBefore.set(3);
+    // NULL, NOT 3. The field's own initial value is null, and seeding a valid 3 here made Discard
+    // count one more required field as captured than a freshly opened wizard does - so the last
+    // thing the progress meter did before the form was abandoned was climb.
+    this.reminderDaysBefore.set(null);
     this.reminderTime.set('');
     this.publicDescription.set('');
     this.publicDescriptionHtml.set('');
@@ -1397,6 +1499,10 @@ export class CampaignWizardComponent {
     this.previewField.set(null);
     this.previewEditing.set(false);
     this.stepIndex.set(0);
+    // The red highlighting and the validation banner belong to the abandoned attempt, not to
+    // the blank form that replaces it.
+    this.stepAttempted.set(this.steps.map(() => false));
+    this.uiState.set('ready');
   }
 
   // ================= UI state demonstrability =================
@@ -1513,7 +1619,34 @@ export class CampaignWizardComponent {
     // Editing an existing Draft — opened from the Campaign Register's "Edit" row action
     // with ?ref={code}. Pre-fills every field from the shared store record so Save
     // Draft below writes back to the SAME record instead of creating a new one.
-    this.loadExistingDraft(this.route.snapshot.queryParamMap.get('ref'));
+    //
+    // THE LIST ROW IS NOT ENOUGH. `store.get(ref)` right here only ever returns the LIST
+    // projection Campaign Register's own table is built from — code, name, dates, status and a
+    // few counts. Country, State, City, Zip code, currency, channels, the Publication & Notice
+    // wording and the activation/reminder fields all live on the DETAIL response only (see
+    // `CampaignStoreService.mergeDetail`), which nothing was asking for. The one call below
+    // populated the form with whatever the list row happened to carry and stopped there, so
+    // editing a draft silently dropped every field that only the detail response holds — Country,
+    // State and City among them, but not only them.
+    //
+    // `loadExistingDraft` still runs once synchronously so the form isn't empty for the moment
+    // it takes the detail to arrive; `loadDetail` is asked for the rest, and the effect below
+    // re-populates the form the ONE TIME `detailLoaded` flips true — not on every later store
+    // update (a background refresh replaces every record with a new object, and re-running this
+    // on each one would silently overwrite whatever the person is mid-typing).
+    const editRef = this.route.snapshot.queryParamMap.get('ref');
+    if (editRef) {
+      this.loadExistingDraft(editRef);
+      this.store.loadDetail(editRef);
+      let detailApplied = false;
+      effect(() => {
+        const record = this.store.get(editRef);
+        if (!detailApplied && record?.detailLoaded) {
+          detailApplied = true;
+          untracked(() => this.loadExistingDraft(editRef));
+        }
+      });
+    }
 
     // Re-seed the rich-text editor from the stored markup whenever the Publication step
     // (index 2 since Target & Budget was withdrawn) becomes active, so leaving and returning to

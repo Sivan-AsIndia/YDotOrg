@@ -101,8 +101,15 @@ export class TrackingAssetManagerComponent {
   protected readonly savedViews = ['All tracking assets (Default)', 'QR destinations', 'Awaiting approval'];
   protected readonly savedView = signal(this.savedViews[0]);
 
-  /** Fixed page size for pagination (records-per-page selector removed per design). */
-  protected readonly pageSize = 5;
+  /**
+   * Fixed page size for pagination (records-per-page selector removed per design).
+   *
+   * TEN PER PAGE, FIVE VISIBLE AT ONCE. The table's own height is fixed to five rows
+   * (`.tam-table-scroll`) with an inner scrollbar for the rest of the current page, so a page
+   * holds a full ten before pagination has to advance — the table never grows taller than five
+   * rows to show them.
+   */
+  protected readonly pageSize = 10;
   protected readonly currentPage = signal(1);
 
   /** The filters section is hidden until the user opens it with the Filter button. */
@@ -307,12 +314,30 @@ export class TrackingAssetManagerComponent {
   // ================= Campaign selector =================
   /** Scope-aware searchable selector with identity preview — reads live from
    *  the single shared CampaignStoreService. Never a hardcoded list. */
+  /**
+   * The campaigns an asset can still be created against.
+   *
+   * A CLOSED OR CANCELLED CAMPAIGN IS NOT ONE OF THEM. This offered every campaign the store
+   * held, so the Generate form's campaign picker listed campaigns that finished last year
+   * alongside the one being set up - and the server accepts the create either way, so a QR code
+   * could be minted, printed and put on a table for a campaign that had already been closed. It
+   * would resolve, and every scan of it would be attributed to a campaign nobody is running.
+   *
+   * DRAFT AND SCHEDULED CAMPAIGNS STAY, deliberately, even though a tester asked for Active only.
+   * Tracking readiness is one of the checks that has to PASS before a campaign can be activated,
+   * so its assets have to exist before it is active; an Active-only picker would make that gate
+   * impossible to satisfy for every campaign on the platform. Excluding the two dead states is
+   * the part of that request that holds.
+   */
   protected readonly campaignOptions = computed<readonly CampaignOption[]>(() =>
-    this.campaignStore.all().map((c) => ({
-      reference: c.code,
-      name: c.name,
-      context: `${c.status}${c.startDate ? ' · ' + this.formatDate(c.startDate) : ''}`,
-    })),
+    this.campaignStore
+      .all()
+      .filter((c) => c.status !== 'Closed' && c.status !== 'Cancelled')
+      .map((c) => ({
+        reference: c.code,
+        name: c.name,
+        context: `${c.status}${c.startDate ? ' · ' + this.formatDate(c.startDate) : ''}`,
+      })),
   );
 
   // ================= Main work: tracking asset index =================
@@ -388,13 +413,42 @@ export class TrackingAssetManagerComponent {
   protected readonly selectedAsset = computed(
     () => this.records().find((r) => r.trackingReference === this.selectedRef()) ?? null,
   );
+  /**
+   * Whether a workflow dialog launched from inside the detail off-canvas is open.
+   *
+   * THE OFF-CANVAS AND EVERY WORKFLOW DIALOG SHARE THE SAME STACKING LAYER — `.tam-detail` and
+   * `.tam-modal-backdrop` sit at the same z-index band, so Approve (or Submit, Activate, Edit,
+   * Request disable, Disable, Delete unused draft, Generate) used to open BEHIND the still-open
+   * off-canvas instead of over it. Raising the dialog's z-index would only trade one visual bug
+   * for another — the off-canvas would still be sitting there, now behind a dialog that visually
+   * belongs to it. Hiding the off-canvas outright while a dialog is open, then letting it
+   * reappear the moment the dialog closes, is what `detailAsset` (below) does — it is a plain
+   * derived value, so there is no separate close/reopen bookkeeping to keep in sync.
+   */
+  protected readonly anyWorkflowDialogOpen = computed(
+    () =>
+      this.submitDialogOpen() ||
+      this.approveDialogOpen() ||
+      this.activateDialogOpen() ||
+      this.editDialogOpen() ||
+      this.requestDisableDialogOpen() ||
+      this.disableDialogOpen() ||
+      this.deleteDialogOpen() ||
+      this.generateDialogOpen(),
+  );
+  /** What the off-canvas template renders from — `null` (hidden) whenever a workflow dialog is
+   *  open, even though `selectedAsset`/`selectedRef` are left untouched underneath, so the panel
+   *  comes back showing the same record the moment the dialog closes. */
+  protected readonly detailAsset = computed(() =>
+    this.anyWorkflowDialogOpen() ? null : this.selectedAsset(),
+  );
   /** Version of the selected asset at the moment it was opened — detects "record changed after
    *  you opened it" if a workflow action is then attempted on the same still-open panel. */
   protected readonly selectedSnapshotVersion = signal<number | null>(null);
   protected selectAsset(ref: string): void {
     this.selectedRef.set(ref);
     this.selectedSnapshotVersion.set(this.store.get(ref)?.version ?? null);
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
   }
   /** True when a workflow action targets the currently-open asset and it has changed since it was opened. */
   private isStaleSinceOpened(asset: TrackingAsset): boolean {
@@ -720,8 +774,46 @@ export class TrackingAssetManagerComponent {
 
   // ----- Row overflow menu -----
   protected readonly openRowMenu = signal<string | null>(null);
-  protected toggleRowMenu(ref: string): void {
-    this.openRowMenu.update((cur) => (cur === ref ? null : ref));
+  /**
+   * Fixed-viewport placement for the open row menu, computed from the trigger button's own
+   * position rather than the table's layout.
+   *
+   * THE TABLE SCROLLS (see `.tam-table-scroll`'s fixed height), and an `overflow: auto` ancestor
+   * clips any `position: absolute` descendant that would render outside its box — including this
+   * menu, which used to always open downward with no way to avoid that clipping for a row near
+   * the bottom of the visible five. Anchoring it with `position: fixed` off the button's
+   * `getBoundingClientRect()` escapes the clipping entirely and picks a direction with room.
+   */
+  protected readonly rowMenuStyle = signal<Record<string, string> | null>(null);
+  protected readonly rowMenuUp = computed(() => {
+    const style = this.rowMenuStyle();
+    return !!style && style['bottom'] !== 'auto';
+  });
+  protected toggleRowMenu(ref: string, trigger?: HTMLElement): void {
+    if (this.openRowMenu() === ref) {
+      this.closeRowMenu();
+      return;
+    }
+    this.openRowMenu.set(ref);
+    if (!trigger) {
+      this.rowMenuStyle.set(null);
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    // Room for the longest possible menu (Open / Submit / Approve / Activate / Edit /
+    // Request disable / Disable / Delete unused draft).
+    const menuAllowance = 340;
+    const openUp = window.innerHeight - rect.bottom < menuAllowance;
+    this.rowMenuStyle.set({
+      position: 'fixed',
+      right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+      top: openUp ? 'auto' : `${rect.bottom + 6}px`,
+      bottom: openUp ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+    });
+  }
+  protected closeRowMenu(): void {
+    this.openRowMenu.set(null);
+    this.rowMenuStyle.set(null);
   }
 
   // ================= Generate primary action =================
@@ -777,7 +869,43 @@ export class TrackingAssetManagerComponent {
 
     if (rec.startDate) this.gActiveFrom.set(rec.startDate);
     if (rec.endDate) this.gActiveTo.set(rec.endDate);
+
+    // THE CAMPAIGN'S GEOGRAPHY HAS TO BE FETCHED BEFORE IT CAN BE SHOWN.
+    //
+    // City and State render as read-only "From campaign" boxes on every place row, and they were
+    // reliably empty. Two separate reasons, both fixed here:
+    //
+    //   - THE LIST PROJECTION DOES NOT CARRY THEM. `CampaignListItem` - what the register loads,
+    //     and what this picker's campaigns come from - has a code, a name, dates, amounts and
+    //     counts. `cityName` and `stateName` are on the DETAIL response, so `campaignStore.get()`
+    //     returned a record with both undefined until somebody had opened that campaign's detail
+    //     page in the same session. `loadDetail` asks for them; `placeLocation` below reads them
+    //     back the moment they land, because the store is a signal.
+    //   - ONLY `addPlace()` EVER STAMPED THEM. The first place row is created by `openGenerate()`,
+    //     before any campaign has been chosen, so a single-place asset - the ordinary case - had
+    //     no way to acquire a city at all. The two boxes are now driven by `placeLocation()`
+    //     rather than by a value copied onto each row, so every row is right, including after the
+    //     campaign is changed.
+    this.campaignStore.loadDetail(ref);
   }
+
+  /**
+   * The selected campaign's City and State, as people read them.
+   *
+   * THE NAMES, NOT THE IDS. `CampaignRecord.city` and `.region` hold the API's Guids, because
+   * that is what the create and update bodies require; the readable values live alongside them in
+   * `cityName` and `regionName`.
+   */
+  protected readonly placeLocation = computed<{ readonly city: string; readonly state: string }>(
+    () => {
+      const rec = this.campaignStore.get(this.gCampaign());
+
+      return {
+        city: rec?.cityName ?? '',
+        state: rec?.regionName ?? rec?.regionLabel ?? '',
+      };
+    },
+  );
 
   /** On-ground events happen in more than one physical place for the same campaign, so each place
    *  gets its own separate QR/link — this is what lets the team see which place is contributing most. */
@@ -801,40 +929,25 @@ export class TrackingAssetManagerComponent {
       this.gAssetType().toLowerCase() === 'qr code' &&
       this.channelLabel(this.gChannel()).toLowerCase() === 'offline',
   );
+  // CITY AND STATE ARE NOT ROW STATE. They belong to the campaign, are the same on every row,
+  // and are read live from `placeLocation()` - which is what stops them from being blank on the
+  // first row and stale on the rest.
   protected readonly gPlaces = signal<
     readonly {
       readonly id: string;
       label: string;
-      city: string;
-      state: string;
       destination: string;
       customFields: readonly { readonly id: string; key: string; value: string }[];
     }[]
-  >([{ id: 'place-1', label: '', city: '', state: '', destination: '', customFields: [] }]);
+  >([{ id: 'place-1', label: '', destination: '', customFields: [] }]);
   private placeSeq = 1;
   private placeFieldSeq = 1;
-  /** City/State are never typed by hand — they are fetched from the selected campaign's own
-   *  City / State (captured at campaign creation in the Wizard), the same source of truth every
-   *  other page reads from.
-   *
-   *  THE NAMES, NOT THE IDS. `CampaignRecord.city` and `.region` hold the API's Guids, because
-   *  that is what the create and update bodies require; the readable values live alongside them
-   *  in `cityName` and `regionName`. Reading the id fields here put two raw Guids into the City
-   *  and State boxes of the Generate form. Nothing downstream is affected — these two boxes are
-   *  display only, and the server derives a placement's geography from the campaign itself. */
-  private currentCampaignLocation(): { readonly city: string; readonly state: string } {
-    const rec = this.campaignStore.get(this.gCampaign());
-    return {
-      city: rec?.cityName ?? '',
-      state: rec?.regionName ?? rec?.regionLabel ?? '',
-    };
-  }
   protected addPlace(): void {
     this.placeSeq += 1;
-    const loc = this.currentCampaignLocation();
+
     this.gPlaces.update((list) => [
       ...list,
-      { id: `place-${this.placeSeq}`, label: '', city: loc.city, state: loc.state, destination: '', customFields: [] },
+      { id: `place-${this.placeSeq}`, label: '', destination: '', customFields: [] },
     ]);
   }
   protected removePlace(id: string): void {
@@ -995,7 +1108,7 @@ export class TrackingAssetManagerComponent {
     this.gContentTag.set('');
     this.gActiveFrom.set('');
     this.gActiveTo.set('');
-    this.gPlaces.set([{ id: 'place-1', label: '', city: '', state: '', destination: '', customFields: [] }]);
+    this.gPlaces.set([{ id: 'place-1', label: '', destination: '', customFields: [] }]);
     this.generateSubmitted.set(false);
     this.generatedReferences.set([]);
     this.generateDialogOpen.set(true);
@@ -1075,8 +1188,8 @@ export class TrackingAssetManagerComponent {
       for (const p of places) {
         const asset = this.buildAsset(p.destination.trim(), {
           label: p.label.trim(),
-          city: p.city,
-          state: p.state,
+          city: this.placeLocation().city,
+          state: this.placeLocation().state,
           customFields: p.customFields,
         });
         refs.push(asset.trackingReference);
@@ -1151,7 +1264,7 @@ export class TrackingAssetManagerComponent {
   protected readonly submitDialogOpen = signal(false);
   protected readonly submitTarget = signal<TrackingAsset | null>(null);
   protected requestSubmit(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.submitAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1170,8 +1283,23 @@ export class TrackingAssetManagerComponent {
     this.submitDialogOpen.set(false);
     this.submitTarget.set(null);
     if (!target) return;
-    this.store.update(target.trackingReference, { assetStatus: 'Submitted', approvalState: 'Pending review' });
-    this.toast.show('Submitted for approval', `${target.trackingReference} moved to Submitted.`, 'success');
+    // Waits for the real outcome — see `TrackingAssetStoreService.update`'s doc comment. A toast
+    // fired the instant this call was MADE said "Submitted" even when the server refused it.
+    this.store.update(
+      target.trackingReference,
+      { assetStatus: 'Submitted', approvalState: 'Pending review' },
+      (result) => {
+        if (!result.applied) {
+          this.toast.show(
+            'Not submitted',
+            result.error ?? `${target.trackingReference} could not be submitted.`,
+            'error',
+          );
+          return;
+        }
+        this.toast.show('Submitted for approval', `${target.trackingReference} moved to Submitted.`, 'success');
+      },
+    );
     this.uiState.set('ready');
   }
 
@@ -1188,7 +1316,7 @@ export class TrackingAssetManagerComponent {
   protected readonly approveReasonCount = computed(() => this.approveReason().trim().length);
 
   protected requestApprove(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.approveAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1215,22 +1343,39 @@ export class TrackingAssetManagerComponent {
     if (!this.approveReasonValid()) return;
     const target = this.approveTarget();
     if (target) {
-      this.store.update(target.trackingReference, {
-        approvalState: 'Approved',
-        assetStatus: 'Approved',
-        approvedByRef: this.currentUserRef(),
-        approvedAt: this.lastRefresh(),
-      });
+      // Waits for the real outcome — see `TrackingAssetStoreService.update`'s doc comment. This
+      // used to toast "Asset approved" the instant the call was MADE, before the server had
+      // agreed to it — so a refusal (a version conflict, a permission the button's own guard
+      // didn't catch) left the asset exactly as it was, said "approved" anyway, and only a
+      // later refresh quietly put the row back — which is indistinguishable from "clicking
+      // Approve did nothing" unless somebody happens to reload at the right moment.
+      this.store.update(
+        target.trackingReference,
+        {
+          approvalState: 'Approved',
+          assetStatus: 'Approved',
+          approvedByRef: this.currentUserRef(),
+          approvedAt: this.lastRefresh(),
+        },
+        (result) => {
+          if (!result.applied) {
+            this.toast.show(
+              'Asset not approved',
+              result.error ?? `${target.trackingReference} could not be approved.`,
+              'error',
+            );
+            return;
+          }
+          this.toast.show(
+            'Asset approved',
+            `${target.trackingReference} is Approved. Activate it to make it live.`,
+            'success',
+          );
+        },
+      );
     }
     this.approveDialogOpen.set(false);
     this.approveTarget.set(null);
-    if (target) {
-      this.toast.show(
-        'Asset approved',
-        `${target.trackingReference} is Approved. Activate it to make it live.`,
-        'success',
-      );
-    }
     this.uiState.set('ready');
   }
 
@@ -1239,7 +1384,7 @@ export class TrackingAssetManagerComponent {
   protected readonly activateTarget = signal<TrackingAsset | null>(null);
 
   protected requestActivate(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.activateAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1258,8 +1403,17 @@ export class TrackingAssetManagerComponent {
     this.activateDialogOpen.set(false);
     this.activateTarget.set(null);
     if (!target) return;
-    this.store.update(target.trackingReference, { assetStatus: 'Active' });
-    this.toast.show('Asset activated', `${target.trackingReference} is now Active.`, 'success');
+    this.store.update(target.trackingReference, { assetStatus: 'Active' }, (result) => {
+      if (!result.applied) {
+        this.toast.show(
+          'Asset not activated',
+          result.error ?? `${target.trackingReference} could not be activated.`,
+          'error',
+        );
+        return;
+      }
+      this.toast.show('Asset activated', `${target.trackingReference} is now Active.`, 'success');
+    });
     this.uiState.set('ready');
   }
 
@@ -1276,7 +1430,7 @@ export class TrackingAssetManagerComponent {
   protected readonly requestDisableReasonCount = computed(() => this.requestDisableReason().trim().length);
 
   protected askForDisable(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.requestDisableAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1297,12 +1451,21 @@ export class TrackingAssetManagerComponent {
     this.requestDisableDialogOpen.set(false);
     this.requestDisableTarget.set(null);
     if (!target) return;
-    this.store.update(target.trackingReference, { assetStatus: 'Disable requested' });
-    this.toast.show(
-      'Disable requested',
-      `${target.trackingReference} stays live until an approver decides the request.`,
-      'success',
-    );
+    this.store.update(target.trackingReference, { assetStatus: 'Disable requested' }, (result) => {
+      if (!result.applied) {
+        this.toast.show(
+          'Request not raised',
+          result.error ?? `The disable request for ${target.trackingReference} could not be raised.`,
+          'error',
+        );
+        return;
+      }
+      this.toast.show(
+        'Disable requested',
+        `${target.trackingReference} stays live until an approver decides the request.`,
+        'success',
+      );
+    });
     this.uiState.set('ready');
   }
 
@@ -1319,7 +1482,7 @@ export class TrackingAssetManagerComponent {
   protected readonly disableReasonCount = computed(() => this.disableReason().trim().length);
 
   protected requestDisable(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.disableAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1338,11 +1501,20 @@ export class TrackingAssetManagerComponent {
     if (!this.disableReasonValid()) return;
     const target = this.disableTarget();
     if (target) {
-      this.store.update(target.trackingReference, { assetStatus: 'Disabled' });
+      this.store.update(target.trackingReference, { assetStatus: 'Disabled' }, (result) => {
+        if (!result.applied) {
+          this.toast.show(
+            'Asset not disabled',
+            result.error ?? `${target.trackingReference} could not be disabled.`,
+            'error',
+          );
+          return;
+        }
+        this.toast.show('Asset disabled', `${target.trackingReference} was disabled.`, 'success');
+      });
     }
     this.disableDialogOpen.set(false);
     this.disableTarget.set(null);
-    if (target) this.toast.show('Asset disabled', `${target.trackingReference} was disabled.`, 'success');
     this.uiState.set('ready');
   }
 
@@ -1365,7 +1537,7 @@ export class TrackingAssetManagerComponent {
   });
 
   protected requestEdit(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.editAllowed(asset)) return;
     if (this.isStaleSinceOpened(asset)) {
       this.uiState.set('conflict');
@@ -1392,19 +1564,32 @@ export class TrackingAssetManagerComponent {
     if (!this.editDestinationValid() || this.editRangeInvalid()) return;
     const target = this.editTarget();
     if (target) {
-      this.store.update(target.trackingReference, {
-        destination: this.editDestination().trim(),
-        channel: this.editChannel(),
-        source: this.editSource().trim(),
-        medium: this.editMedium().trim(),
-        contentTag: this.editContentTag().trim(),
-        activeFrom: this.editActiveFrom(),
-        activeTo: this.editActiveTo(),
-      });
+      this.store.update(
+        target.trackingReference,
+        {
+          destination: this.editDestination().trim(),
+          channel: this.editChannel(),
+          source: this.editSource().trim(),
+          medium: this.editMedium().trim(),
+          contentTag: this.editContentTag().trim(),
+          activeFrom: this.editActiveFrom(),
+          activeTo: this.editActiveTo(),
+        },
+        (result) => {
+          if (!result.applied) {
+            this.toast.show(
+              'Changes not saved',
+              result.error ?? `${target.trackingReference} could not be updated.`,
+              'error',
+            );
+            return;
+          }
+          this.toast.show('Changes saved', `${target.trackingReference} updated.`, 'success');
+        },
+      );
     }
     this.editDialogOpen.set(false);
     this.editTarget.set(null);
-    if (target) this.toast.show('Changes saved', `${target.trackingReference} updated.`, 'success');
     this.uiState.set('ready');
   }
 
@@ -1421,7 +1606,7 @@ export class TrackingAssetManagerComponent {
   protected readonly deleteReasonCount = computed(() => this.deleteReason().trim().length);
 
   protected requestDeleteDraft(asset: TrackingAsset): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.canDeleteDraft(asset)) return;
     this.deleteTarget.set(asset);
     this.deleteReason.set('');
@@ -1436,14 +1621,23 @@ export class TrackingAssetManagerComponent {
     if (!this.deleteReasonValid()) return;
     const target = this.deleteTarget();
     if (target) {
-      this.store.delete(target.trackingReference);
+      this.store.delete(target.trackingReference, (result) => {
+        if (!result.applied) {
+          this.toast.show(
+            'Draft not deleted',
+            result.error ?? `${target.trackingReference} could not be deleted.`,
+            'error',
+          );
+          return;
+        }
+        this.toast.show('Draft deleted', `${target.trackingReference} was removed.`, 'success');
+      });
       if (this.selectedRef() === target.trackingReference) {
         this.selectedRef.set('');
       }
     }
     this.deleteDialogOpen.set(false);
     this.deleteTarget.set(null);
-    if (target) this.toast.show('Draft deleted', `${target.trackingReference} was removed.`, 'success');
     this.uiState.set('ready');
   }
 
@@ -1530,17 +1724,13 @@ export class TrackingAssetManagerComponent {
       }
     });
 
-    // City/State on every on-ground place are fetched from the selected campaign, never
-    // typed by hand — keep them in sync whenever the campaign changes or the channel
-    // switches to on-ground (Offline), covering either order the person fills the form in.
-    effect(() => {
-      // Both are read for their dependency as much as their value: the effect has to re-run when
-      // the campaign changes and when the channel becomes on-ground, in either order.
-      const onGround = this.isOnGround();
-      const { city, state } = this.currentCampaignLocation();
-      if (!onGround) return;
-      untracked(() => this.gPlaces.update((list) => list.map((p) => ({ ...p, city, state }))));
-    });
+    // THE EFFECT THAT USED TO COPY CITY/STATE ONTO EVERY PLACE ROW IS GONE, and with it the
+    // reason those two boxes were empty. It read `currentCampaignLocation()`, which read
+    // `cityName` and `regionName` off the store record - and the register's list projection
+    // carries neither, so on a campaign whose detail had not been opened in this session it
+    // faithfully copied two empty strings onto every row on every change. `placeLocation()` is a
+    // computed off the same store, so it fills in by itself the moment `loadDetail` (dispatched
+    // from `onCampaignSelect`) brings the names back.
   }
 
   // ================= Persistent outcome =================

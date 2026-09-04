@@ -3,303 +3,327 @@
   <div class="container-fluid px-4 py-3">
 <div [attr.data-ui-state]="uiState()">
 
-
-
-  <!-- ============ TASK HEADER (4.4.1 Task header) ============
-       Primary action (Inspect) is placed at page/row, not the header, so no
-       header CTA is shown; only the Filters toggle appears here. -->
-  <header class="peq-task-header" aria-labelledby="peq-title">
-    <div class="peq-header-text">
-      <h1 class="peq-title" id="peq-title">
-        {{ pageTitle }}
-     
-      </h1>
-      <p class="peq-subtitle">{{ pageSubtitle }}</p>
- 
+  <!-- ============ TASK HEADER ============ -->
+  <header class="pr-task-header" aria-labelledby="pr-title">
+    <div class="pr-header-text">
+      <h1 class="pr-title" id="pr-title">{{ pageTitle }}</h1>
+      <p class="pr-subtitle">{{ pageSubtitle }}</p>
     </div>
 
-    <div class="peq-header-actions">
-      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="toggleFiltersVisible()"
+    <div class="pr-header-actions">
+      <button type="button" class="pr-btn pr-btn-outline pr-btn-sm" (click)="toggleFiltersVisible()"
               [attr.aria-expanded]="filtersVisible()">
-        <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
-        {{ filtersVisible() ? 'Hide filters' : 'Filters' }}
-        @if (activeFilterSummary().length) { <span class="peq-count">{{ activeFilterSummary().length }}</span> }
+        <svg class="pr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+        Filters
+        @if (activeFilterSummary().length) { <span class="pr-count">{{ activeFilterSummary().length }}</span> }
       </button>
     </div>
   </header>
 
-  <!-- ============ CONTEXT AND FILTERS — shown only when the Filters button is used ============ -->
-  @if (filtersVisible()) {
-  <section class="peq-filters-card" aria-label="Search and filters">
-  
-    <div class="peq-filter-grid">
-      <!-- Search — by event reference, donor name, email or campaign -->
-      <label class="peq-field peq-field-search">
-        <span class="peq-field-label">Search</span>
-        <span class="peq-input-wrap">
-          <input type="search" class="peq-input" placeholder="Search by event reference, donor name, email or campaign…"
-                 [ngModel]="searchTerm()" (ngModelChange)="onSearchChange($event)"
-                 aria-label="Search payment events" />
-          <svg class="peq-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        </span>
-      </label>
-
-      <!-- Payment status — filter by Pending / Success / Fail -->
-      <label class="peq-field">
-        <span class="peq-field-label">Payment status</span>
-        <span class="peq-select-wrap">
-          <select class="peq-select" [ngModel]="paymentStatusFilter()" (ngModelChange)="onStatusChange($event)" aria-label="Payment status">
-            <option value="">All statuses</option>
-            @for (s of paymentStatusOptions; track s) { <option [value]="s">{{ s }}</option> }
-          </select>
-          <svg class="peq-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-        </span>
-      </label>
+  <!-- ============ TOTALS: 5 tiles, scope-wide, server-counted ============ -->
+  <section class="pr-totals" aria-label="Totals in scope">
+    <div class="pr-tile">
+      <span class="pr-tile-icon pr-tile-icon-neutral">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10l2 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7l2-4Z"/><path d="M9 11h6M9 15h6"/></svg>
+      </span>
+      <div class="pr-tile-body">
+        <span class="pr-tile-label">Total Events</span>
+        <span class="pr-tile-value">{{ totalEvents() }}</span>
+        <span class="pr-tile-note">In selected scope</span>
+      </div>
     </div>
-
-    <!-- Active-filter summary -->
-    <div class="peq-active-row">
-      <span class="peq-active-label">Active filters:</span>
-      @for (chip of activeFilterSummary(); track chip.key) {
-        <span class="peq-chip">
-          {{ chip.label }}
-          <button type="button" class="peq-chip-x" (click)="removeFilterChip(chip.key)"
-                  [attr.aria-label]="'Remove filter ' + chip.label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
-        </span>
-      } @empty {
-        <span class="peq-active-none">None applied</span>
-      }
-      @if (activeFilterSummary().length) {
-        <button type="button" class="peq-link" (click)="clearFilters()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4.5v4h-4"/></svg>
-          Clear all
-        </button>
-      }
+    <div class="pr-tile">
+      <span class="pr-tile-icon pr-tile-icon-gold">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a1.8 1.8 0 0 1 0 3.6H10a1.8 1.8 0 0 0 0 3.6H15"/></svg>
+      </span>
+      <div class="pr-tile-body">
+        <span class="pr-tile-label">Total Amount</span>
+        <span class="pr-tile-value">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
+        <span class="pr-tile-note">In selected scope</span>
+      </div>
+    </div>
+    <div class="pr-tile">
+      <span class="pr-tile-icon pr-tile-icon-good">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+      </span>
+      <div class="pr-tile-body">
+        <span class="pr-tile-label">Successful</span>
+        <span class="pr-tile-value">{{ successfulCount() }}</span>
+        <span class="pr-tile-note">Receipt sent</span>
+      </div>
+    </div>
+    <div class="pr-tile">
+      <span class="pr-tile-icon pr-tile-icon-gold">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+      </span>
+      <div class="pr-tile-body">
+        <span class="pr-tile-label">Pending</span>
+        <span class="pr-tile-value">{{ pendingCount() }}</span>
+        <span class="pr-tile-note">Awaiting payment</span>
+      </div>
+    </div>
+    <div class="pr-tile">
+      <span class="pr-tile-icon pr-tile-icon-danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </span>
+      <div class="pr-tile-body">
+        <span class="pr-tile-label">Failed</span>
+        <span class="pr-tile-value">{{ failedCount() }}</span>
+        <span class="pr-tile-note">Needs retry</span>
+      </div>
     </div>
   </section>
+
+  <!-- ============ FILTERS ============ -->
+  @if (filtersVisible()) {
+    <section class="pr-filters-card" aria-label="Search and filters">
+      <div class="pr-filter-grid">
+        <label class="pr-field pr-field-search">
+          <span class="pr-field-label">Search</span>
+          <span class="pr-input-wrap">
+            <input type="search" class="pr-input" placeholder="Search by event reference, donor name, email or campaign…"
+                   [ngModel]="searchTerm()" (ngModelChange)="onSearchChange($event)"
+                   aria-label="Search payments and receipts" />
+            <svg class="pr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </span>
+        </label>
+
+        <label class="pr-field">
+          <span class="pr-field-label">Payment status</span>
+          <span class="pr-select-wrap">
+            <select class="pr-select" [ngModel]="paymentStatusFilter()" (ngModelChange)="onStatusChange($event)" aria-label="Payment status">
+              <option value="">All statuses</option>
+              @for (s of paymentStatusOptions; track s) { <option [value]="s">{{ s }}</option> }
+            </select>
+            <svg class="pr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </label>
+      </div>
+
+      <div class="pr-active-row">
+        <span class="pr-active-label">Active filters:</span>
+        @for (chip of activeFilterSummary(); track chip.key) {
+          <span class="pr-chip">
+            {{ chip.label }}
+            <button type="button" class="pr-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </span>
+        } @empty {
+          <span class="pr-active-none">None applied</span>
+        }
+        <span class="pr-active-spacer"></span>
+        <button type="button" class="pr-link" (click)="clearFilters()">Clear all</button>
+        <button type="button" class="pr-btn pr-btn-primary pr-btn-sm" (click)="applyFilters()">Apply</button>
+      </div>
+    </section>
   }
 
-  <!-- ============ SITUATIONAL BANNERS (4.4.4 / 4.4.6) ============ -->
-  @if (uiState() === 'validation') {
-    <div class="peq-banner peq-banner-error" role="alert">
-      <strong>Review the highlighted fields.</strong>
-      A value does not meet the stated format or range. Correct it to continue; entered values are kept.
-      <button type="button" class="peq-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
-    </div>
-  }
-  @if (uiState() === 'duplicate') {
-    <div class="peq-banner peq-banner-warn" role="alert">
-      A similar gateway event already exists in this queue. Link, merge, change the value, request review or cancel —
-      nothing is overwritten silently.
-      <button type="button" class="peq-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
-    </div>
-  }
+  <!-- ============ SITUATIONAL BANNERS ============ -->
   @if (uiState() === 'conflict') {
-    <div class="peq-banner peq-banner-warn" role="alert">
+    <div class="pr-banner pr-banner-warn" role="alert">
       This record changed after you opened it. Review the latest version before continuing.
-      <span class="peq-banner-actions">
-        <a href="javascript:void(0)" (click)="dismissBanner()">Compare</a>
-        <a href="javascript:void(0)" (click)="dismissBanner()">Reapply eligible changes</a>
-        <a href="javascript:void(0)" (click)="dismissBanner()">Cancel</a>
-      </span>
+      <button type="button" class="pr-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
     </div>
   }
   @if (uiState() === 'dependency-failure') {
-    <div class="peq-banner peq-banner-warn" role="alert">
+    <div class="pr-banner pr-banner-warn" role="alert">
       We could not complete the dependent service step. Your confirmed local result is unchanged.
-      <span class="peq-banner-actions">
-        <span class="peq-corr">Correlation INT-88421</span>
-        <a href="javascript:void(0)" (click)="dismissBanner()">Retry dependency</a>
-      </span>
+      <button type="button" class="pr-banner-x" (click)="dismissBanner()" aria-label="Dismiss">✕</button>
     </div>
   }
 
-  <!-- ============ WORK AREA: index + overlay detail drawer (4.4.5) ============ -->
-  <div class="peq-work">
+  <!-- ============ MAIN WORK: index + overlay detail drawer ============ -->
+  <div class="pr-work">
+    <section class="pr-main" aria-labelledby="pr-records-heading">
+      <h2 id="pr-records-heading" class="pr-visually-hidden">Payment events and receipts</h2>
 
-    <!-- ---------- MAIN WORK: gateway event index (4.4.1 Main work) ---------- -->
-    <section class="peq-main" aria-labelledby="peq-records-heading">
-      <h2 id="peq-records-heading" class="peq-visually-hidden">Gateway events</h2>
-
-      <!-- LOADING (4.4.4) -->
+      <!-- LOADING -->
       @if (uiState() === 'loading') {
-        <div class="peq-state-block" role="status" aria-live="polite">
-          <p class="peq-state-title">Loading Payment event queue…</p>
-          <div class="peq-skeleton" aria-hidden="true">
-            @for (n of [1,2,3,4,5]; track n) { <div class="peq-skeleton-row"></div> }
+        <div class="pr-state-block" role="status" aria-live="polite">
+          <p class="pr-state-title">Loading payments & receipts…</p>
+          <div class="pr-skeleton" aria-hidden="true">
+            @for (n of [1,2,3,4,5]; track n) { <div class="pr-skeleton-row"></div> }
           </div>
-          <button type="button" class="peq-btn peq-btn-outline peq-btn-sm" (click)="setUiState('ready')">Cancel</button>
         </div>
       }
 
-      <!-- EMPTY (4.4.4) -->
+      <!-- EMPTY -->
       @else if (uiState() === 'empty') {
-        <div class="peq-state-block">
-          <p class="peq-state-title">No payment events match this scope and filter.</p>
-          <p class="peq-state-body">Zero results come from the current filters, not a global zero. Adjust the search,
-            failure type, gateway event ID, date, state or scope, or reset filters to continue.</p>
-          <div class="peq-state-actions">
-            <button type="button" class="peq-btn peq-btn-outline peq-btn-sm" (click)="clearFilters()">Reset filters</button>
+        <div class="pr-state-block">
+          <p class="pr-state-title">No payments or receipts match this scope and filter.</p>
+          <p class="pr-state-body">Zero results come from the current filters, not a global zero. Adjust the search or status, or reset filters to continue.</p>
+          <div class="pr-state-actions">
+            <button type="button" class="pr-btn pr-btn-outline pr-btn-sm" (click)="clearFilters()">Reset filters</button>
           </div>
         </div>
       }
 
-      <!-- NO ACCESS (4.4.4 / 4.4.6 restricted value) -->
+      <!-- NO ACCESS -->
       @else if (uiState() === 'no-access') {
-        <div class="peq-state-block">
-          <p class="peq-state-title">This value cannot be displayed with your current access.</p>
-          <p class="peq-state-body">Restricted records, fields, counts, actions and search suggestions are hidden.
-            Return to your permitted landing page to continue.</p>
-          <a class="peq-btn peq-btn-outline peq-btn-sm" href="javascript:void(0)" (click)="setUiState('ready')">Back to Payments</a>
+        <div class="pr-state-block">
+          <p class="pr-state-title">This value cannot be displayed with your current access.</p>
+          <p class="pr-state-body">Restricted records, fields, counts, actions and search suggestions are hidden.</p>
         </div>
       }
 
-      <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the index visible -->
+      <!-- ERROR -->
+      @else if (uiState() === 'error') {
+        <div class="pr-state-block">
+          <p class="pr-state-title">Payments & Receipts unavailable.</p>
+          <p class="pr-state-body">{{ errorMessage() }}</p>
+          <div class="pr-state-actions">
+            <button type="button" class="pr-btn pr-btn-primary pr-btn-sm" (click)="applyFilters()">Try again</button>
+          </div>
+        </div>
+      }
+
+      <!-- READY / CONFLICT / DEPENDENCY-FAILURE keep the index visible -->
       @else {
-        <div class="peq-table-scroll">
-          <table class="peq-table">
+        <div class="pr-table-scroll">
+          <table class="pr-table">
             <thead>
               <tr>
-                <th scope="col">Event reference</th>
+                <th scope="col">Event / Receipt ref</th>
                 <th scope="col">Donor name</th>
                 <th scope="col">Email</th>
                 <th scope="col">Campaign</th>
-                <th scope="col" class="peq-col-num">Amount</th>
+                <th scope="col" class="pr-col-num">Amount</th>
                 <th scope="col">Payment status</th>
+                <th scope="col">Receipt status</th>
                 <th scope="col">Received at</th>
-                <th scope="col" class="peq-col-actions">Actions</th>
+                <th scope="col" class="pr-col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
               @for (r of pagedRecords(); track r.eventReference) {
-                <tr [class.peq-row-selected]="isSelected(r.eventReference)" >
-                  <!-- Event reference (stable, read-only) -->
-                  <td class="peq-cell-event" data-label="Event reference">
-                    <button type="button" class="peq-event-link" (click)="inspect(r.eventReference); $event.stopPropagation()">
-                      {{ r.eventReference }}
-                    </button>
-                    <span class="peq-event-type">{{ r.mappedIntentOrPayment }}</span>
+                <tr [class.pr-row-selected]="isSelected(r.eventReference)" >
+                  <td class="pr-cell-event" data-label="Event / Receipt ref">
+                    <span class="pr-event-ref">{{ r.eventReference }}</span>
+                    <span class="pr-event-sub">{{ r.receiptOrIntentRef }}</span>
                   </td>
-
-                  <!-- Donor name -->
                   <td data-label="Donor name">{{ r.donorName }}</td>
-
-                  <!-- Donor email -->
                   <td data-label="Email">{{ r.donorEmail }}</td>
-
-                  <!-- Campaign name -->
                   <td data-label="Campaign">{{ r.campaignName }}</td>
-
-                  <!-- Amount + currency -->
-                  <td class="peq-col-num" data-label="Amount">{{ r.currency }} {{ r.donationAmount }}</td>
-
-                  <!-- Payment status (Pending / Success / Fail) -->
+                  <td class="pr-col-num" data-label="Amount">{{ r.currency }} {{ formatAmount(r.amount) }}</td>
                   <td data-label="Payment status">
-                    <span class="peq-badge" [class]="paymentStatusClass(r.paymentStatus)">{{ r.paymentStatus }}</span>
+                    <span class="pr-badge" [class]="paymentStatusClass(r.paymentStatus)">{{ r.paymentStatus }}</span>
                   </td>
-
-                  <!-- Received time (read-only) -->
+                  <td data-label="Receipt status">
+                    <span class="pr-badge" [class]="receiptStatusClass(r.receiptStatus)">{{ r.receiptStatus }}</span>
+                  </td>
                   <td data-label="Received at">{{ r.receivedTime }}</td>
-
-                  <!-- Row actions: Verify (shield-check) + Eye (view) + Delete -->
-                  <td class="peq-col-actions" (click)="$event.stopPropagation()">
-                    <div class="peq-row-icons">
-                      
-                      <button type="button" class="peq-icon-btn" (click)="inspect(r.eventReference)"
-                              [attr.aria-label]="'View ' + r.eventReference" title="View details">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                      </button>
-                      
-                    </div>
+                  <td class="pr-col-actions" (click)="$event.stopPropagation()">
+                    <button type="button" class="pr-icon-btn" (click)="inspect(r.eventReference)"
+                            [attr.aria-label]="'View ' + r.eventReference" title="View details">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
                   </td>
                 </tr>
               } @empty {
-                <tr>
-                  <td colspan="8" class="peq-table-empty">
-                    No payment events match this scope and filter. Reset filters to continue.
-                  </td>
-                </tr>
+                <tr><td colspan="9" class="pr-table-empty">No payments or receipts match this scope and filter.</td></tr>
               }
             </tbody>
           </table>
         </div>
 
-        <!-- Footer: totals qualified by scope + last refresh, and pagination (4.4.1) -->
-        <div class="peq-table-footer">
-          <span class="peq-showing">
-            Showing {{ pagedRecords().length ? (currentPage() - 1) * pageSize + 1 : 0 }}–{{ (currentPage() - 1) * pageSize + pagedRecords().length }}
-            of {{ recordCount() }}
-          </span>
-          <nav class="peq-pagination" aria-label="Pagination">
-            <!-- <button type="button" class="peq-page-btn" aria-label="First page" [disabled]="currentPage() === 1" (click)="goToPage(1)">«</button> -->
-            <button type="button" class="peq-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
+        <div class="pr-table-footer">
+          <span class="pr-showing">Showing {{ pageStart() }}–{{ pageEnd() }} of {{ totalRecords() }}</span>
+          <nav class="pr-pagination" aria-label="Pagination">
+            <button type="button" class="pr-page-btn" aria-label="Previous page" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">‹</button>
             @for (p of pageNumbers(); track p) {
-              <button type="button" class="peq-page-btn" [class.is-current]="currentPage() === p"
+              <button type="button" class="pr-page-btn" [class.is-current]="currentPage() === p"
                       [attr.aria-current]="currentPage() === p ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
             }
-            <button type="button" class="peq-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
-            <!-- <button type="button" class="peq-page-btn" aria-label="Last page" [disabled]="currentPage() === totalPages()" (click)="goToPage(totalPages())">»</button> -->
+            <button type="button" class="pr-page-btn" aria-label="Next page" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">›</button>
           </nav>
         </div>
       }
     </section>
 
-    <!-- ---------- SECONDARY PANEL: payment details (offcanvas) ----------
-         Hidden until a row is inspected; opens as a fixed drawer overlaying the
-         right of the viewport (dimming backdrop behind it). Core view: Name, Mail,
-         Campaign, Payment status and Amount + basic event details below. -->
+    <!-- ---------- DETAIL DRAWER: Event details (matches reference image) ---------- -->
     @if (selectedEvent(); as e) {
-      <div class="peq-detail-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
-      <aside class="peq-detail" role="dialog" aria-modal="true" aria-label="Payment details">
-        <div class="peq-detail-head">
-          <div class="peq-detail-id">
-            <span class="peq-detail-badge" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>
-            </span>
-            <div>
-              <h2 class="peq-detail-title">Payment details</h2>
-            </div>
+      <div class="pr-detail-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
+      <aside class="pr-detail" role="dialog" aria-modal="true" aria-label="Event details">
+        <div class="pr-detail-head">
+          <div>
+            <h2 class="pr-detail-title">Payment details</h2>
+            <p class="pr-detail-sub">{{ e.receiptOrIntentRef }}</p>
           </div>
-          <button type="button" class="peq-detail-close" (click)="closeDetail()" aria-label="Close payment details">✕</button>
+          <button type="button" class="pr-detail-close" (click)="closeDetail()" aria-label="Close event details">✕</button>
         </div>
 
-          <div class="peq-detail-body">
-            <dl class="peq-kv">
-              <div><dt>Name</dt><dd>{{ e.donorName }}</dd></div>
-              <div><dt>Mail</dt><dd>{{ e.donorEmail }}</dd></div>
-              <div><dt>Campaign</dt><dd>{{ e.campaignName }}</dd></div>
-              <div><dt>Payment status</dt><dd><span class="peq-badge" [class]="paymentStatusClass(e.paymentStatus)">{{ e.paymentStatus }}</span></dd></div>
-              <div><dt>Amount</dt><dd>{{ e.currency }} {{ e.donationAmount }}</dd></div>
-              <div><dt>Event reference</dt><dd>{{ e.eventReference }}</dd></div>
-              <div><dt>Donation reference</dt><dd>{{ e.mappedIntentOrPayment }}</dd></div>
-              <div><dt>Last gateway message</dt><dd>{{ e.processingError || '—' }}</dd></div>
-              <div><dt>Received time</dt><dd>{{ e.receivedTime }}</dd></div>
-              <div><dt>Attempts</dt><dd>{{ e.attempts }}</dd></div>
-            </dl>
+        <div class="pr-detail-body">
+          <p class="pr-section-label">Payment</p>
+          <dl class="pr-kv">
+            <div><dt>Donor</dt><dd>{{ e.donorName }}</dd></div>
+            <div><dt>Campaign</dt><dd>{{ e.campaignName }}</dd></div>
+            <div><dt>Amount</dt><dd>{{ e.currency }} {{ formatAmount(e.amount) }}</dd></div>
+            <div><dt>Payment status</dt><dd><span class="pr-badge" [class]="paymentStatusClass(e.paymentStatus)">{{ e.paymentStatus }}</span></dd></div>
+            <div><dt>Received at</dt><dd>{{ e.receivedTime }}</dd></div>
+          </dl>
 
-            <!-- Payment process actions on this event -->
-            <div class="peq-detail-actions">
-              @if (e.paymentStatus === 'Pending') {
-                <button type="button" class="peq-btn peq-btn-primary peq-btn-sm" (click)="continuePaymentFromQueue(e)">
-                  <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
-                  Continue payment
-                </button>
-              }
-              @if (e.paymentStatus === 'Fail') {
-                <button type="button" class="peq-btn peq-btn-primary peq-btn-sm" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
-                  <svg class="peq-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                  {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry payment' }}
-                </button>
-              }
-            </div>
+          <p class="pr-section-label pr-section-label-spaced">Receipt</p>
+          <dl class="pr-kv">
+            <div><dt>Receipt status</dt><dd><span class="pr-badge" [class]="receiptStatusClass(e.receiptStatus)">{{ e.receiptStatus }}</span></dd></div>
+            @if (e.receiptReference) {
+              <div><dt>Receipt reference</dt><dd>{{ e.receiptReference }}</dd></div>
+            }
+          </dl>
 
+          <!-- Contextual action: exactly one of Retry / Continue payment / Resend, or none. -->
+          <div class="pr-detail-actions">
+            @if (e.paymentStatus === 'Fail') {
+              <button type="button" class="pr-btn pr-btn-danger pr-btn-block" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
+                {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry' }}
+              </button>
+              <p class="pr-hint">Retries the same payment. A second failure sends this to Payment Support &amp; Safe Retry.</p>
+            }
+            @if (e.paymentStatus === 'Pending') {
+              <button type="button" class="pr-btn pr-btn-primary btn-sm pr-btn-block" (click)="continuePaymentFromQueue(e)">
+                Continue payment
+              </button>
+            }
+            @if (resendAllowed()) {
+              <button type="button" class="btn btn-outline-secondary pr-btn-block" (click)="openResendDialog()">
+                Resend receipt
+              </button>
+            }
           </div>
+        </div>
       </aside>
     }
   </div>
 
+  <!-- ============ HIGH-RISK CONFIRM: Resend ============ -->
+  @if (resendDialogOpen() && selectedEvent(); as e) {
+    <div class="pr-modal-backdrop" (click)="cancelResend()">
+      <div class="pr-modal" role="dialog" aria-modal="true" aria-labelledby="pr-resend-title" (click)="$event.stopPropagation()">
+        <h2 class="pr-modal-title" id="pr-resend-title">Confirm resend</h2>
+        <p class="pr-modal-lead">Review the affected record and reason. This decision requires explicit confirmation.</p>
+
+        <dl class="pr-kv">
+          <div><dt>Affected record</dt><dd>{{ e.receiptReference }}</dd></div>
+          <div><dt>Donor</dt><dd>{{ e.donorName }}</dd></div>
+        </dl>
+
+        <label class="pr-modal-field">
+          <span class="pr-field-label">Reason</span>
+          <textarea class="pr-textarea" rows="3" [ngModel]="resendReason()" (ngModelChange)="resendReason.set($event)"
+                    (blur)="resendReasonTouched.set(true)" placeholder="State why you are resending this receipt…"
+                    [attr.aria-invalid]="resendReasonTouched() && !resendReasonValid()"></textarea>
+          @if (resendReasonTouched() && !resendReasonValid()) {
+            <span class="pr-field-error" role="alert">Enter a reason between {{ resendReasonMin }} and {{ resendReasonMax }} characters.</span>
+          }
+        </label>
+
+        <div class="pr-modal-actions">
+          <button type="button" class="pr-btn pr-btn-outline pr-btn-sm" (click)="cancelResend()">Cancel</button>
+          <button type="button" class="pr-btn pr-btn-primary pr-btn-sm" (click)="confirmResend()" [disabled]="!resendReasonValid()">Confirm</button>
+        </div>
+      </div>
+    </div>
+  }
 
 </div>
 </div>

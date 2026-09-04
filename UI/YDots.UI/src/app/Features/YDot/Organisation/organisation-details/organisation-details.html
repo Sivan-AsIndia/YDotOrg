@@ -145,11 +145,11 @@
             </dl>
           } @else {
             <div class="org-grid org-grid-2">
-              <div class="org-field">
+              <div class="org-field org-span-2">
                 <label class="org-field-label">Address Line 1</label>
                 <input class="org-input" [ngModel]="editValues().addressLine1" (ngModelChange)="setField('addressLine1', $event)">
               </div>
-              <div class="org-field">
+              <div class="org-field org-span-2">
                 <label class="org-field-label">Address Line 2</label>
                 <input class="org-input" [ngModel]="editValues().addressLine2" (ngModelChange)="setField('addressLine2', $event)">
               </div>
@@ -228,17 +228,17 @@
         <section class="org-doc-section org-doc-section--full">
           <h3 class="org-doc-heading org-doc-heading--good">Compliance Information</h3>
           @if (!editing()) {
-            <dl class="org-dl" style="max-width:320px;">
+            <dl class="org-dl org-dl--narrow">
               <div class="org-dl-row"><dt>PAN / Tax ID</dt><dd>{{ org.panTaxId || '—' }}</dd></div>
             </dl>
           } @else {
-            <div class="org-field" style="max-width:320px;">
+            <div class="org-field org-field--narrow">
               <label class="org-field-label">PAN / Tax ID</label>
               <input class="org-input" [ngModel]="editValues().panTaxId" (ngModelChange)="setField('panTaxId', $event)">
             </div>
             <p class="org-field-hint">12A / 80G / FCRA / GST applicability is set at creation and is not changed here.</p>
           }
-          <dl class="org-dl" style="max-width:480px; margin-top:8px;">
+          <dl class="org-dl org-compliance-status">
             <div class="org-dl-row"><dt>12A</dt><dd [class.is-good]="org.compliance.twelveA.applicable">{{ org.compliance.twelveA.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
             <div class="org-dl-row"><dt>80G</dt><dd [class.is-good]="org.compliance.eightyG.applicable">{{ org.compliance.eightyG.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
             <div class="org-dl-row"><dt>FCRA</dt><dd [class.is-good]="org.compliance.fcra.applicable">{{ org.compliance.fcra.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
@@ -246,9 +246,9 @@
           </dl>
 
           @if (editing()) {
-            <div class="d-flex gap-2" style="margin-top:20px;">
-              <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="saveEdit()">Save Changes</button>
+            <div class="org-step-actions">
               <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="cancelEdit()">Cancel</button>
+              <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="saveEdit()">Save Changes</button>
             </div>
           }
         </section>
@@ -284,7 +284,7 @@
               </div>
             }
           </div>
-          <p class="org-field-hint" style="margin-top:12px;">Documents are uploaded by the Organisation Owner through their own workflow &mdash; Super Admin reviews here but does not edit them.</p>
+          <p class="org-field-hint org-field-hint--top">Documents are uploaded by the Organisation Owner through their own workflow &mdash; Super Admin reviews here but does not edit them.</p>
         </section>
 
         <!-- Audit -->

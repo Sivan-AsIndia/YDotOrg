@@ -552,7 +552,7 @@
 
         <!-- READY / VALIDATION / DUPLICATE / CONFLICT / DEPENDENCY-FAILURE / SUCCESS keep the register visible -->
         @else {
-          <div class="cr-table-scroll">
+          <div class="cr-table-scroll" (scroll)="closeRowMenu()">
             <table class="cr-table">
               <thead>
                 <tr>
@@ -684,7 +684,7 @@
                           #crRowBtn
                           type="button"
                           class="cr-row-action"
-                          (click)="toggleRowMenu(r.code)"
+                          (click)="toggleRowMenu(r.code, crRowBtn)"
                           [attr.aria-expanded]="openRowMenu() === r.code"
                           aria-haspopup="menu"
                           aria-label="Row actions"
@@ -693,8 +693,9 @@
                         </button>
                         @if (openRowMenu() === r.code) {
                           <div class="cr-menu" role="menu" aria-label="Campaign actions"
-                               [class.cr-menu-up]="$last && !$first"
-                               appClickOutside [clickOutsideExcept]="crRowBtn" (appClickOutside)="openRowMenu.set(null)">
+                               [class.cr-menu-up]="rowMenuUp()"
+                               [ngStyle]="rowMenuStyle()"
+                               appClickOutside [clickOutsideExcept]="crRowBtn" (appClickOutside)="closeRowMenu()">
                             <button
                               type="button"
                               class="cr-menu-item"

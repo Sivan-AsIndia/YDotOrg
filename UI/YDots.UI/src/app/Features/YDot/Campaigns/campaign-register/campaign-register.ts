@@ -9,6 +9,7 @@ import { CampaignStoreService } from '../../../../Shared/services/campaign-store
 import { CurrentUserService } from '../../../../Shared/services/current-user.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
+import { CampaignApiService } from '../../../../Service/campaign-api.service';
 
 /**
  * The sentinel that means "do not filter by owner".
@@ -47,6 +48,7 @@ export class CampaignRegisterComponent {
   private readonly store = inject(CampaignStoreService);
   protected readonly user = inject(CurrentUserService);
   private readonly toast = inject(ToastService);
+  private readonly campaignApi = inject(CampaignApiService);
 
   /** Dev-only session switcher — every permission combination is testable (Step 3). */
   /**
@@ -89,8 +91,15 @@ export class CampaignRegisterComponent {
   protected readonly savedViews = ['All Campaigns (Default)', 'Board pack — monthly', 'Exceptions focus'];
   protected readonly savedView = signal(this.savedViews[0]);
 
-  /** Fixed page size for pagination (records-per-page selector removed per design). */
-  protected readonly pageSize = 5;
+  /**
+   * Fixed page size for pagination (records-per-page selector removed per design).
+   *
+   * The table's row area now fills whatever screen height is left below the pager row (see
+   * `.cr-table-scroll`'s `flex: 1`), so a page holds enough rows to make use of a tall screen
+   * rather than leaving it mostly-empty above the pagination footer; a shorter viewport still
+   * gets an inner scrollbar for the rest of the current page.
+   */
+  protected readonly pageSize = 15;
   protected readonly currentPage = signal(1);
 
   /** Campaign name or code — scope-aware searchable selector. */
@@ -447,7 +456,7 @@ export class CampaignRegisterComponent {
   // ----- Open action -----
   /** Open navigates to Campaign Detail, passing the campaign reference, reading from the same shared store. */
   protected openRecord(record: CampaignRecord): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     this.router.navigate(['/app/fundraising/campaigns/campaign-detail'], { queryParams: { ref: record.code } });
   }
 
@@ -456,7 +465,7 @@ export class CampaignRegisterComponent {
     return record.status === 'Draft';
   }
   protected openEdit(record: CampaignRecord): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.canEdit(record)) return;
     this.router.navigate(['/app/fundraising/campaigns/campaign-wizard'], { queryParams: { ref: record.code } });
   }
@@ -465,14 +474,14 @@ export class CampaignRegisterComponent {
    *  launch-gate opens on the right record. This is now the ONLY way in: the checklist has come
    *  off the sidebar, because opened bare it is a list of checks against no campaign. */
   protected openReadiness(record: CampaignRecord): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     this.router.navigate(['/app/cam/campaign-readiness-checklist'], { queryParams: { ref: record.code } });
   }
 
   /** Open the Tracking Asset Manager scoped to this campaign — the register's counterpart to the
    *  same button on Campaign detail, and the other half of the sidebar entry's replacement. */
   protected openTrackingAssets(record: CampaignRecord): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.canViewTrackingAssets()) return;
     this.router.navigate(['/app/fundraising/campaigns/tracking-asset-manager'], {
       queryParams: { campaign: record.code },
@@ -484,8 +493,50 @@ export class CampaignRegisterComponent {
 
   // ----- Row overflow menu (Open / Export / Delete unused draft) -----
   protected readonly openRowMenu = signal<string | null>(null);
-  protected toggleRowMenu(code: string): void {
-    this.openRowMenu.update((cur) => (cur === code ? null : code));
+  /**
+   * Fixed-viewport placement for the open row menu, computed from the trigger button's own
+   * position rather than the table's layout.
+   *
+   * THE TABLE NOW SCROLLS (see `.cr-table-scroll`'s fixed height), and an `overflow: auto`
+   * ancestor clips any `position: absolute` descendant that would render outside its box —
+   * including this menu. Anchoring it with `position: fixed` off the button's
+   * `getBoundingClientRect()` escapes that clipping entirely, so the menu for the last row (or
+   * any row near the bottom of the visible five) renders in the viewport instead of being cut off
+   * inside the table.
+   */
+  protected readonly rowMenuStyle = signal<Record<string, string> | null>(null);
+  protected readonly rowMenuUp = computed(() => {
+    const style = this.rowMenuStyle();
+    return !!style && style['bottom'] !== 'auto';
+  });
+  protected toggleRowMenu(code: string, trigger?: HTMLElement): void {
+    if (this.openRowMenu() === code) {
+      this.openRowMenu.set(null);
+      this.rowMenuStyle.set(null);
+      return;
+    }
+    this.openRowMenu.set(code);
+    if (!trigger) {
+      this.rowMenuStyle.set(null);
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    // Room for the longest possible menu (Open / Edit / Readiness / Tracking / Approve / Delete).
+    const menuAllowance = 260;
+    const openUp = window.innerHeight - rect.bottom < menuAllowance;
+    // `top`/`bottom` are both set explicitly (one real, one 'auto') on every open so neither
+    // ever falls back to the base `.cr-menu` rule's `top: 100%' — which, once this is
+    // `position: fixed`, would resolve against the viewport instead of the row it belongs to.
+    this.rowMenuStyle.set({
+      position: 'fixed',
+      right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+      top: openUp ? 'auto' : `${rect.bottom + 6}px`,
+      bottom: openUp ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+    });
+  }
+  protected closeRowMenu(): void {
+    this.openRowMenu.set(null);
+    this.rowMenuStyle.set(null);
   }
 
   /**
@@ -527,7 +578,7 @@ export class CampaignRegisterComponent {
   protected readonly approveTarget = signal<CampaignRecord | null>(null);
   protected requestApprove(record: CampaignRecord): void {
     if (!this.canApprove(record)) return;
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     this.approveTarget.set(record);
     this.approveDialogOpen.set(true);
   }
@@ -539,7 +590,20 @@ export class CampaignRegisterComponent {
   protected confirmApprove(): void {
     const record = this.approveTarget();
     if (!record) return;
-    this.store.approveCampaign(record.code, this.user.reference());
+    // Waits for the real outcome instead of assuming it. Nothing here announced success OR
+    // failure before, so a refusal (a version conflict, a permission the button's own guard
+    // didn't already rule out) looked identical to success — the dialog just closed either way.
+    this.store.approveCampaign(record.code, this.user.reference(), (result) => {
+      if (!result.applied) {
+        this.toast.show(
+          'Campaign not approved',
+          result.error ?? `${record.code} could not be approved.`,
+          'error',
+        );
+        return;
+      }
+      this.toast.show('Campaign approved', `${record.code} was approved.`, 'success');
+    });
     this.approveDialogOpen.set(false);
     this.approveTarget.set(null);
   }
@@ -573,55 +637,58 @@ export class CampaignRegisterComponent {
   protected cancelExport(): void {
     this.exportDialogOpen.set(false);
   }
-  /** Confirm classification, purpose, scope, count, expiry and audit reference before release. */
+  /**
+   * Confirm classification, purpose, scope, count, expiry and audit reference before release.
+   *
+   * THE FILE COMES FROM THE SERVER NOW. `GET /campaigns/export` has existed on the API and in
+   * `CampaignApiService` throughout, and nothing called it: this screen assembled a seven-column
+   * CSV in the browser out of whatever the register happened to be holding. Three things followed.
+   *
+   *   - THE COLUMNS WERE NOT THE EXPORT'S. `CampaignExportRow` carries the fund or programme, the
+   *     target and budget amounts, the owner and tracking-asset counts and the last-updated
+   *     stamp; the browser's version carried none of them, because the list projection it read
+   *     from does not hold them.
+   *   - THE FILE HAD NO DATE ON IT. The name ended in `Date.now()`, a thirteen-digit epoch
+   *     number, and nothing inside the file said when the extract was taken. The server names
+   *     its own file.
+   *   - THE AUDIT REFERENCE WAS FICTION. This dialog shows one, and the server writes a real
+   *     `CampaignExported` audit row against the file it produces. The browser-side download
+   *     wrote nothing anywhere, so the reference on screen referred to no record at all.
+   */
   protected confirmExport(): void {
     if (!this.exportReasonValid()) {
       return;
     }
-    // The header Export button exports EVERY campaign in the register, not just the
-    // filtered view (per requirement) — a real CSV file is downloaded to the browser.
-    this.downloadExport(this.store.all(), 'campaign-register-all');
-    this.lastActionReference.set(this.exportConfirmation().auditReference);
+
     this.exportDialogOpen.set(false);
-    this.toast.show('Export ready', `Campaign register exported · ${this.exportConfirmation().auditReference}.`, 'success');
-    this.uiState.set('ready');
+
+    // EVERY campaign in the register, not just the filtered view (per requirement), so no filter
+    // is sent.
+    this.campaignApi.exportCampaigns().subscribe({
+      next: ({ blob, fileName }) => {
+        this.saveFile(blob, fileName);
+        this.lastActionReference.set(this.exportConfirmation().auditReference);
+        this.toast.show('Export ready', `Campaign register exported · ${fileName}.`, 'success');
+        this.uiState.set('ready');
+      },
+      error: () => {
+        this.toast.show(
+          'Export failed',
+          'The campaign register could not be exported. Try again in a moment.',
+          'error');
+      },
+    });
   }
 
-  /** Produce a downloadable CSV of the given rows. */
-  private downloadExport(rows: readonly CampaignRecord[], filenameBase = 'campaign-register-export'): void {
-    const header = [
-      'Campaign Code',
-      'Campaign Name',
-      'Status',
-      'Owner',
-      'Launch Date',
-      'End Date',
-      'Progress %',
-    ];
-    const csvField = (value: string | number): string => {
-      const s = String(value);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const lines = rows.map((r) =>
-      [
-        r.code,
-        r.name,
-        r.status,
-        this.ownerOf(r.ownerReference).name,
-        r.startDate,
-        r.endDate,
-        r.progress,
-      ]
-        .map(csvField)
-        .join(','),
-    );
-    const csv = [header.join(','), ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  /** Hand a downloaded blob to the browser under the name the server gave it. */
+  private saveFile(blob: Blob, fileName: string): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
-    link.download = `${filenameBase}-${Date.now()}.csv`;
+    link.download = fileName;
     link.click();
+
     URL.revokeObjectURL(url);
   }
 
@@ -638,7 +705,7 @@ export class CampaignRegisterComponent {
   protected readonly deleteReasonCount = computed(() => this.deleteReason().trim().length);
 
   protected requestDeleteDraft(record: CampaignRecord): void {
-    this.openRowMenu.set(null);
+    this.closeRowMenu();
     if (!this.canDeleteDraft(record)) {
       return;
     }
@@ -659,7 +726,17 @@ export class CampaignRegisterComponent {
     if (!target) {
       return;
     }
-    this.store.delete(target.code);
+    this.store.delete(target.code, (result) => {
+      if (!result.applied) {
+        this.toast.show(
+          'Draft not deleted',
+          result.error ?? `${target.name} (${target.code}) could not be deleted.`,
+          'error',
+        );
+        return;
+      }
+      this.toast.show('Draft deleted', `${target.name} (${target.code}) was removed.`, 'success');
+    });
     this.lastActionReference.set(target.code);
     this.selectedRefs.update((cur) => {
       const next = new Set(cur);
@@ -668,7 +745,6 @@ export class CampaignRegisterComponent {
     });
     this.deleteDialogOpen.set(false);
     this.deleteTarget.set(null);
-    this.toast.show('Draft deleted', `${target.name} (${target.code}) was removed.`, 'success');
     this.uiState.set('ready');
   }
 

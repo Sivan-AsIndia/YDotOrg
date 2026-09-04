@@ -2,85 +2,114 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { switchMap } from 'rxjs';
+import { forkJoin, switchMap } from 'rxjs';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
-import { PaymentEventListItem } from '../../../../Shared/models/payment.model';
-
-/** The outcome the document names on a row: Fail or Pending. Success never reaches this queue. */
-type QueueOutcome = 'Fail' | 'Pending' | 'Success';
+import { PaymentEventListItem, ReceiptRegisterRow } from '../../../../Shared/models/payment.model';
 
 /**
- * The states the template can draw.
- *
- * The last four are reachable from the server's error envelope rather than from anything this
- * screen decides: a 400 is 'validation', a 409 is 'conflict', and a gateway that could not be
- * reached is 'dependency-failure'.
+ * The three outcomes a payment event can settle in. Unlike the old Payment Event Queue (which
+ * only ever showed Fail/Pending) and the old Receipt Register (which only ever showed
+ * Success/Failed), THIS screen shows all three side by side - that is the whole point of merging
+ * them: "one place to track every payment event and the receipt it generated."
  */
-type UiState =
+export type PaymentOutcome = 'Success' | 'Pending' | 'Fail';
+
+/** Whether a tax receipt exists for the row yet. Never invented - only ever what the server says. */
+export type ReceiptStatus = 'Sent' | 'Not generated';
+
+export type UiState =
   | 'ready'
   | 'loading'
   | 'empty'
   | 'error'
-  | 'success'
   | 'no-access'
-  | 'validation'
-  | 'duplicate'
   | 'conflict'
   | 'dependency-failure';
 
 /**
- * One row of the queue, in the shape the template binds to.
+ * One row of the merged register, in the shape the template binds to.
  *
- * `eventReference` IS THE GATEWAY'S OWN EVENT ID. There is no separate EVT- column in the
- * database, and inventing one in the browser would produce a reference that means nothing to
- * anybody looking at the gateway dashboard - which is exactly who is looked at next when a
- * payment queue row needs explaining.
+ * ============================================================================================
+ * HOW THE MERGE IS DONE - THERE IS NO UNIFIED BACKEND ENDPOINT (YET)
+ * ============================================================================================
+ * There is no single API that returns Success + Pending + Fail together, so this component
+ * composes the two calls that already exist and were already correct on their own screens:
+ *
+ *   - PaymentApiService.searchPaymentEvents(...)  -> Fail and Pending rows. This is the only
+ *     source for them: a successful payment never reaches this queue (see SCR-PAY-003), and this
+ *     is also the only source with the fields Retry actually needs - donationIntentId, version,
+ *     attempts, gatewayEventId.
+ *   - PaymentApiService.getReceiptRegister(...) filtered to status 'Success' -> Success rows,
+ *     because only an issued receipt has a real receipt number, and only the register knows it.
+ *
+ * Failed rows are taken from the queue, not the register, even though the register's union also
+ * contains failed intents - the queue's copy carries donor email, gateway event id and version,
+ * which the register's row does not, and Retry needs all three.
+ *
+ * WHEN NO STATUS FILTER IS APPLIED ("All statuses"), both sources are fetched up to
+ * `mergedBatchSize` rows each and merged/sorted client-side, because true cross-source pagination
+ * and a single accurate "Showing X of Y" require a real backend union - which does not exist yet.
+ * The summary tiles do NOT have this limitation: they come from two lightweight, unpaged count
+ * requests (see `loadSummary`), so they stay accurate for the whole scope regardless of how many
+ * rows are actually fetched for display.
+ *
+ * WHEN A SINGLE STATUS IS SELECTED (Success, Pending or Fail), only one source is queried and
+ * pagination is exact, the same as it always was on the two original screens.
+ *
+ * If/when a real `GET /payments/receipts-register` union endpoint is added server-side, this
+ * whole composition block is what it should replace.
  */
-interface PaymentQueueRow {
+export interface PaymentReceiptRow {
   readonly id: string;
   readonly eventReference: string;
-  readonly mappedIntentOrPayment: string;
+  readonly receiptOrIntentRef: string;
   readonly donationIntentId: string | null;
   readonly donorName: string;
   readonly donorEmail: string;
   readonly campaignName: string;
-  readonly donationAmount: string;
+  readonly amount: number | null;
   readonly currency: string;
-  readonly paymentStatus: QueueOutcome;
+  readonly paymentStatus: PaymentOutcome;
+  readonly receiptStatus: ReceiptStatus;
+  readonly receiptReference: string | null;
   readonly receivedTime: string;
+  /** Raw ISO timestamp used only to sort the merged "All statuses" list - never rendered. */
+  readonly sortKey: string;
   readonly attempts: number;
   readonly version: number;
   readonly processingError: string | null;
 }
 
+export interface PaymentsReceiptsSummary {
+  readonly totalEvents: number;
+  readonly totalAmount: number;
+  readonly successful: number;
+  readonly pending: number;
+  readonly failed: number;
+}
+
 /**
- * SCR-PAY-003 - Payment Queue. Section 4 of the YDot Donation Flow document.
+ * SCR-PAY-00X - Payments & Receipts (merged view).
  *
- * WHAT THE DOCUMENT SAYS THIS SCREEN IS. "Success -> the payment does NOT appear in the Payment
- * Event Queue. It goes straight to the Payment Receipt page. Fail -> appears with status Fail.
- * Pending -> appears with status Pending (this also happens if the donor cancels mid-way)." The
- * only actions it describes are the eye icon, which opens the detail panel, and Retry on a failed
- * row - and a retry that fails again sends the record to Payment Support and Safe Retry.
+ * Replaces two separate screens - the Payment Event Queue (SCR-PAY-003) and the Receipt Register
+ * (SCR-PAY-005) - with the single index the reference design shows: every payment event, whatever
+ * it settled as, in one table, with the receipt outcome alongside it instead of on a different
+ * page. Payment Support and Safe Retry, and Receipt Correction, are unaffected - they stay as
+ * their own screens for the same reason they always were separate: this index is for finding a
+ * record, not for the deeper edit/void workflow.
  *
- * WHAT THIS REPLACES, AND WHY IT MATTERED MOST HERE OF ANYWHERE. The screen opened Razorpay
- * Checkout directly from the browser with `key: 'rzp_test_TCwSZidEO9q88a'` compiled into the
- * bundle and `order_id: ''` - a comment beside it read "A real integration would create an order
- * server-side". Four things followed:
- *
- *   - THE KEY WAS PUBLIC, readable by anyone who opened dev-tools on the page.
- *   - THE AMOUNT CAME FROM THE ROW IN MEMORY. `Math.round(amount * 100)` was computed here, so
- *     what the donor was charged was decided by the browser.
- *   - NOTHING WAS VERIFIED. `handler` marked the event Success because a client-side callback
- *     said so - no signature check and no confirmation from the gateway.
- *   - RETRY COULD DOUBLE-CHARGE. It re-opened checkout against an attempt whose outcome nobody
- *     had asked about, which is precisely how a donor pays twice.
- *
- * IT NOW CALLS `POST /api/v1/payments/intents/{id}/safe-retry`, which VERIFIES WITH THE GATEWAY
- * BEFORE RETRYING and refuses when the original attempt actually succeeded. The four outcomes it
- * can answer - Retried, AlreadyPaid, StillPending, Refused - are reported to the operator as they
- * come back, because each one means something different to the donor on the phone.
+ * THE ONE WRITE ACTION IS CONTEXTUAL, NOT UNIFORM, because the four statuses are not four
+ * variations of the same button:
+ *   - Fail    -> Retry, via the same safe-retry flow the queue used (read the intent's version
+ *                first, then call safe-retry with it, then report Retried / AlreadyPaid /
+ *                StillPending / sent-to-Support exactly as before).
+ *   - Pending -> Continue payment, handing over only the reference (never donor data) to the
+ *                public donation form.
+ *   - Success -> Resend, and only if the row actually has a receipt to resend and the caller is
+ *                permitted to (permittedActions().includes('Resend')).
+ * A row with none of these available shows no action, not a disabled one.
  */
 @Component({
   selector: 'app-payment-event-queue',
@@ -93,9 +122,8 @@ export class PaymentEventQueueComponent {
   private readonly toast = inject(ToastService);
   private readonly payments = inject(PaymentApiService);
 
-  protected readonly pageTitle = 'Payment queue';
-  protected readonly pageSubtitle =
-    'Donations that did not complete. Fail and Pending only - a successful payment goes straight to its receipt.';
+  protected readonly pageTitle = 'Payments & Receipts';
+  protected readonly pageSubtitle = 'One place to track every payment event and the receipt it generated.';
   protected readonly operatingTimeZone = 'Asia/Kolkata · IST (UTC+05:30)';
   protected readonly lastRefresh = signal('');
 
@@ -113,9 +141,9 @@ export class PaymentEventQueueComponent {
 
   protected readonly searchTerm = signal('');
 
-  /** Only the two the document names. Success is not an option because it is never in the queue. */
-  protected readonly paymentStatusOptions: readonly QueueOutcome[] = ['Pending', 'Fail'];
-  protected readonly paymentStatusFilter = signal<QueueOutcome | ''>('');
+  /** All three, unlike either predecessor screen, because this index shows every outcome. */
+  protected readonly paymentStatusOptions: readonly PaymentOutcome[] = ['Success', 'Pending', 'Fail'];
+  protected readonly paymentStatusFilter = signal<PaymentOutcome | ''>('');
 
   protected readonly activeFilterSummary = computed(() => {
     const chips: { key: string; label: string }[] = [];
@@ -129,142 +157,228 @@ export class PaymentEventQueueComponent {
   });
 
   protected removeFilterChip(key: string): void {
-    if (key === 'paymentStatus') {
-      this.paymentStatusFilter.set('');
-    }
-    if (key === 'search') {
-      this.searchTerm.set('');
-    }
-    this.currentPage.set(1);
-    this.load();
+    if (key === 'paymentStatus') this.paymentStatusFilter.set('');
+    if (key === 'search') this.searchTerm.set('');
+    this.refreshAfterFilterChange();
   }
 
   protected clearFilters(): void {
     this.searchTerm.set('');
     this.paymentStatusFilter.set('');
-    this.currentPage.set(1);
-    this.load();
+    this.refreshAfterFilterChange();
   }
 
   protected applyFilters(): void {
-    this.currentPage.set(1);
-    this.load();
+    this.refreshAfterFilterChange();
   }
 
-  /**
-   * Typing in the search box.
-   *
-   * DEBOUNCED, BECAUSE THE SERVER DOES THE SEARCHING NOW. The old screen filtered an array it
-   * already held, so every keystroke was free; each keystroke is now a request, and firing one
-   * per character would put eight requests in flight for "Priya" and render whichever happened
-   * to come back last.
-   */
+  /** Debounced, same reasoning as the old queue: every keystroke is now a request, not a filter. */
   protected onSearchChange(value: string): void {
     this.searchTerm.set(value);
-    this.currentPage.set(1);
-
     clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => this.load(), 300);
+    this.searchTimer = setTimeout(() => this.refreshAfterFilterChange(), 300);
   }
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** Changing the status filter. One deliberate choice, so it reloads at once. */
-  protected onStatusChange(value: QueueOutcome | ''): void {
+  protected onStatusChange(value: PaymentOutcome | ''): void {
     this.paymentStatusFilter.set(value);
+    this.refreshAfterFilterChange();
+  }
+
+  /** Search affects the summary tiles too (they are scoped by the same search term), so both
+   *  the rows and the summary are re-fetched together whenever a filter changes. */
+  private refreshAfterFilterChange(): void {
     this.currentPage.set(1);
-    this.load();
+    this.loadRows();
+    this.loadSummary();
   }
 
   // ===========================================================================================
-  // Rows and paging
+  // Rows, totals and paging - all server-side, scope-wide
   // ===========================================================================================
 
-  protected readonly records = signal<readonly PaymentQueueRow[]>([]);
+  protected readonly records = signal<readonly PaymentReceiptRow[]>([]);
   protected readonly totalRecords = signal(0);
+  protected readonly summary = signal<PaymentsReceiptsSummary | null>(null);
+  protected readonly permittedActions = signal<readonly string[]>([]);
   protected readonly pageSize = 8;
   protected readonly currentPage = signal(1);
 
-  protected readonly totalPages = computed(() =>
-    Math.max(1, Math.ceil(this.totalRecords() / this.pageSize)),
-  );
-  protected readonly pageNumbers = computed(() =>
-    Array.from({ length: this.totalPages() }, (_, i) => i + 1),
-  );
+  protected readonly totalEvents = computed(() => this.summary()?.totalEvents ?? 0);
+  protected readonly totalAmount = computed(() => this.summary()?.totalAmount ?? 0);
+  protected readonly successfulCount = computed(() => this.summary()?.successful ?? 0);
+  protected readonly pendingCount = computed(() => this.summary()?.pending ?? 0);
+  protected readonly failedCount = computed(() => this.summary()?.failed ?? 0);
 
-  /**
-   * THE SERVER PAGES, so this is the page rather than a slice of everything.
-   *
-   * The previous version fetched the lot and sliced in memory, which meant "Showing 1-8 of 8" was
-   * true of the file it was reading and false of the organisation.
-   */
+  protected readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalRecords() / this.pageSize)));
+  protected readonly pageNumbers = computed(() => Array.from({ length: this.totalPages() }, (_, i) => i + 1));
   protected readonly pagedRecords = computed(() => this.records());
-  protected readonly recordCount = computed(() => this.totalRecords());
+  protected readonly pageStart = computed(() =>
+    this.totalRecords() === 0 ? 0 : (this.currentPage() - 1) * this.pageSize + 1,
+  );
+  protected readonly pageEnd = computed(() =>
+    Math.min(this.currentPage() * this.pageSize, this.totalRecords()),
+  );
 
   protected goToPage(page: number): void {
-    if (page < 1 || page > this.totalPages() || page === this.currentPage()) {
-      return;
-    }
+    if (page < 1 || page > this.totalPages() || page === this.currentPage()) return;
     this.currentPage.set(page);
-    this.load();
+    this.loadRows();
   }
+
+  /** How many rows to pull per source when both are queried for the unfiltered "All" view. */
+  private readonly mergedBatchSize = 200;
 
   constructor() {
-    this.load();
+    this.loadSummary();
+    this.loadRows();
   }
 
-  private load(): void {
+  /**
+   * The five tiles. Two small, unpaged requests - independent of whatever page or batch of rows
+   * is currently on screen, so the totals stay honest about the whole scope (4.5.1's "totals
+   * qualified by scope", not by what happens to be rendered).
+   */
+  private loadSummary(): void {
+    const search = this.searchTerm().trim() || undefined;
+
+    forkJoin([
+      this.payments.getReceiptRegister({ page: 1, pageSize: 1, search, status: 'Success' }),
+      this.payments.searchPaymentEvents({ page: 1, pageSize: 1, search, paymentOutcome: 'Pending' }),
+    ]).subscribe({
+      next: ([receiptPage, pendingPage]) => {
+        const s = receiptPage.summary;
+        this.summary.set({
+          // registerSummary.totalReceipts is already successful + failed together (the union);
+          // pending never appears in the register, so it is added on here.
+          totalEvents: (s?.totalReceipts ?? 0) + pendingPage.totalCount,
+          totalAmount: s?.totalAmount.amount ?? 0,
+          successful: s?.successful ?? 0,
+          pending: pendingPage.totalCount,
+          failed: s?.failed ?? 0,
+        });
+      },
+      // Summary is a nice-to-have next to the row data; a failure here should not block the table.
+      error: () => this.summary.set(null),
+    });
+  }
+
+  private loadRows(): void {
     this.uiState.set('loading');
     this.errorMessage.set('');
 
-    this.payments
-      .searchPaymentEvents({
-        page: this.currentPage(),
-        pageSize: this.pageSize,
-        search: this.searchTerm().trim() || undefined,
+    const search = this.searchTerm().trim() || undefined;
+    const filter = this.paymentStatusFilter();
 
-        // NULL STILL EXCLUDES SUCCESS. The server treats an unset outcome as "Fail and Pending",
-        // which is the queue the document describes.
-        paymentOutcome: this.paymentStatusFilter() || null,
-      })
-      .subscribe({
-        next: (page) => {
-          this.records.set(page.items.map((item) => this.toRow(item)));
-          this.totalRecords.set(page.totalCount);
-          this.lastRefresh.set(this.nowLabel());
-          this.uiState.set(page.items.length === 0 ? 'empty' : 'ready');
-        },
-        error: (error: unknown) => {
-          this.errorMessage.set(apiErrorMessage(error));
-          this.uiState.set('error');
-          this.toast.show('Payment queue unavailable', this.errorMessage(), 'error');
-        },
-      });
+    // Single status selected -> single source, exact server-side pagination (same as before).
+    if (filter === 'Fail' || filter === 'Pending') {
+      this.payments
+        .searchPaymentEvents({ page: this.currentPage(), pageSize: this.pageSize, search, paymentOutcome: filter })
+        .subscribe({
+          next: (page) => this.applyRows(page.items.map((item) => this.fromQueueItem(item)), page.totalCount),
+          error: (error) => this.handleLoadError(error),
+        });
+      return;
+    }
+    if (filter === 'Success') {
+      this.payments
+        .getReceiptRegister({ page: this.currentPage(), pageSize: this.pageSize, search, status: 'Success' })
+        .subscribe({
+          next: (page) => {
+            this.permittedActions.set(page.permittedActions ?? []);
+            this.applyRows(page.rows.items.map((row) => this.fromReceiptRow(row)), page.rows.totalCount);
+          },
+          error: (error) => this.handleLoadError(error),
+        });
+      return;
+    }
+
+    // "All statuses" -> both sources, merged and sorted client-side. See the class-level note on
+    // PaymentReceiptRow for why this is a stop-gap rather than real server-side pagination.
+    forkJoin([
+      this.payments.searchPaymentEvents({ page: 1, pageSize: this.mergedBatchSize, search, paymentOutcome: null }),
+      this.payments.getReceiptRegister({ page: 1, pageSize: this.mergedBatchSize, search, status: 'Success' }),
+    ]).subscribe({
+      next: ([queuePage, receiptPage]) => {
+        this.permittedActions.set(receiptPage.permittedActions ?? []);
+        const queueRows = queuePage.items.map((item) => this.fromQueueItem(item));
+        const receiptRows = receiptPage.rows.items.map((row) => this.fromReceiptRow(row));
+        const merged = [...queueRows, ...receiptRows].sort((a, b) =>
+          b.sortKey.localeCompare(a.sortKey),
+        );
+        const start = (this.currentPage() - 1) * this.pageSize;
+        this.applyRows(merged.slice(start, start + this.pageSize), merged.length);
+      },
+      error: (error) => this.handleLoadError(error),
+    });
   }
 
-  private toRow(item: PaymentEventListItem): PaymentQueueRow {
+  private applyRows(rows: readonly PaymentReceiptRow[], totalCount: number): void {
+    this.records.set(rows);
+    this.totalRecords.set(totalCount);
+    this.lastRefresh.set(this.nowLabel());
+    this.uiState.set(rows.length === 0 ? 'empty' : 'ready');
+  }
+
+  private handleLoadError(error: unknown): void {
+    this.errorMessage.set(apiErrorMessage(error));
+    this.uiState.set(this.isForbidden(error) ? 'no-access' : 'error');
+    this.toast.show('Payments & Receipts unavailable', this.errorMessage(), 'error');
+  }
+
+  private isForbidden(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && (error as { status?: number }).status === 403;
+  }
+
+  /** A Fail or Pending row - Success never appears in the queue, so this never produces one. */
+  private fromQueueItem(item: PaymentEventListItem): PaymentReceiptRow {
     return {
       id: item.id,
       eventReference: item.gatewayEventId,
-      mappedIntentOrPayment: item.intentReference ?? '—',
+      receiptOrIntentRef: item.intentReference ?? '—',
       donationIntentId: item.donationIntentId,
       donorName: item.donorName ?? '—',
-
-      // ALREADY MASKED, OR ALREADY NOT. Whether this is the real address is the server's
-      // decision, taken from pay.donations.view-sensitive-donor.
       donorEmail: item.donorEmail ?? '—',
       campaignName: item.campaignName ?? '—',
-      donationAmount: item.amount ? this.formatAmount(item.amount.amount) : '—',
+      amount: item.amount?.amount ?? null,
       currency: item.amount?.currencyCode ?? '',
-      paymentStatus: item.paymentOutcome,
+      paymentStatus: item.paymentOutcome as PaymentOutcome,
+      // A failed or still-pending payment never has a receipt - never invent one here.
+      receiptStatus: 'Not generated',
+      receiptReference: null,
       receivedTime: this.formatDateTime(item.receivedAtUtc),
+      sortKey: item.receivedAtUtc ?? '',
       attempts: item.processingAttempts,
       version: item.version,
       processingError: item.processingError,
     };
   }
 
+  /** A Success row - only ever built from an issued receipt, so receiptReference is always real. */
+  private fromReceiptRow(row: ReceiptRegisterRow): PaymentReceiptRow {
+    return {
+      id: row.id,
+      eventReference: row.reference,
+      receiptOrIntentRef: row.receiptNumber ?? '—',
+      donationIntentId: null,
+      donorName: row.donorSnapshot ?? '—',
+      donorEmail: '—',
+      campaignName: row.campaignOrFundName ?? '—',
+      amount: row.amount?.amount ?? null,
+      currency: row.amount?.currencyCode ?? '',
+      paymentStatus: 'Success',
+      receiptStatus: row.receiptNumber ? 'Sent' : 'Not generated',
+      receiptReference: row.receiptNumber ?? null,
+      receivedTime: row.receiptDateUtc ? this.formatDateTime(row.receiptDateUtc) : '—',
+      sortKey: row.receiptDateUtc ?? '',
+      attempts: 0,
+      version: 0,
+      processingError: null,
+    };
+  }
+
   // ===========================================================================================
-  // Detail panel - the document's eye icon
+  // Detail panel - the eye/gear icon on a row
   // ===========================================================================================
 
   protected readonly selectedRef = signal<string>('');
@@ -285,21 +399,12 @@ export class PaymentEventQueueComponent {
   }
 
   // ===========================================================================================
-  // Retry - the one write this screen owns
+  // Retry (Fail rows) - unchanged from the queue's safe-retry flow
   // ===========================================================================================
 
-  /** The row currently being retried, so its button can say so and refuse a second click. */
   protected readonly retryingRef = signal<string | null>(null);
 
-  /**
-   * Retry, as the document describes it, and safely.
-   *
-   * TWO CALLS, NOT ONE, AND THE FIRST IS THE IMPORTANT ONE. `safe-retry` needs the INTENT's
-   * version - the row carries the event's - so the intent is read first. That read is also what
-   * makes the concurrency check meaningful: retrying against a version somebody else has since
-   * changed is refused rather than applied.
-   */
-  protected retryPaymentFromQueue(row: PaymentQueueRow): void {
+  protected retryPaymentFromQueue(row: PaymentReceiptRow): void {
     if (!row.donationIntentId) {
       this.toast.show(
         'Nothing to retry',
@@ -308,9 +413,7 @@ export class PaymentEventQueueComponent {
       );
       return;
     }
-    if (this.retryingRef() !== null) {
-      return;
-    }
+    if (this.retryingRef() !== null) return;
 
     const intentId = row.donationIntentId;
     this.retryingRef.set(row.eventReference);
@@ -321,7 +424,7 @@ export class PaymentEventQueueComponent {
         switchMap((intent) =>
           this.payments.safeRetry(intentId, {
             expectedVersion: intent.version,
-            reason: `Retried from the payment queue for event ${row.eventReference}.`,
+            reason: `Retried from Payments & Receipts for event ${row.eventReference}.`,
           }),
         ),
       )
@@ -329,27 +432,18 @@ export class PaymentEventQueueComponent {
         next: (result) => {
           this.retryingRef.set(null);
           this.reportRetryOutcome(row, result.outcome, result.message, result.paymentLinkUrl);
-          this.load();
+          this.loadRows();
+          this.loadSummary();
         },
         error: (error: unknown) => {
           this.retryingRef.set(null);
-
-          // A REFUSED RETRY IS NOT A BUG. The server refuses when the previous attempt's outcome
-          // is unknown, and the document's own answer to that is this screen's neighbour.
           this.toast.show('Retry not completed', apiErrorMessage(error), 'error');
         },
       });
   }
 
-  /**
-   * Says what actually happened, in the donor's terms.
-   *
-   * THE FOUR OUTCOMES MEAN FOUR DIFFERENT THINGS TO THE PERSON ON THE PHONE, so they are not
-   * collapsed into "retried". AlreadyPaid in particular must never read as a failure: the donor
-   * has been charged and is owed a receipt, not another payment link.
-   */
   private reportRetryOutcome(
-    row: PaymentQueueRow,
+    row: PaymentReceiptRow,
     outcome: string,
     message: string,
     paymentLinkUrl: string | null,
@@ -358,21 +452,17 @@ export class PaymentEventQueueComponent {
       case 'Retried':
         this.toast.show(
           'Retry started',
-          paymentLinkUrl
-            ? `A fresh payment link was issued for ${row.mappedIntentOrPayment}.`
-            : message,
+          paymentLinkUrl ? `A fresh payment link was issued for ${row.receiptOrIntentRef}.` : message,
           'success',
         );
         break;
-
       case 'AlreadyPaid':
         this.toast.show(
           'Already paid',
-          `${row.donorName} has already been charged for ${row.mappedIntentOrPayment}. No second payment was taken; the receipt is in the Receipt Register.`,
+          `${row.donorName} has already been charged for ${row.receiptOrIntentRef}. No second payment was taken; the receipt is in the Receipt Register.`,
           'info',
         );
         break;
-
       case 'StillPending':
         this.toast.show(
           'Still pending',
@@ -380,11 +470,7 @@ export class PaymentEventQueueComponent {
           'warning',
         );
         break;
-
       default:
-        // "If the retry also fails, the payment record moves to the Payment Support and Safe
-        // Retry page for the admin to handle." The server has already moved it; this is how the
-        // operator finds out where it went.
         this.toast.show(
           'Sent to Payment Support',
           message || 'This payment could not be retried safely. It is now on the Payment Support and Safe Retry page.',
@@ -394,21 +480,67 @@ export class PaymentEventQueueComponent {
     }
   }
 
-  /**
-   * Continue payment, for a Pending row.
-   *
-   * IT HANDS OVER THE REFERENCE AND NOTHING ELSE. The old version copied donor name, e-mail,
-   * amount and currency into a shared `DataService` field for the next screen to read, so the
-   * figures on the donation form were whatever this screen chose to put there - and a refresh
-   * lost them. The public form now loads the intent from the API using this reference.
-   */
-  protected continuePaymentFromQueue(row: PaymentQueueRow): void {
-    if (row.mappedIntentOrPayment === '—') {
+  // ===========================================================================================
+  // Continue payment (Pending rows) - reference only, unchanged from the queue
+  // ===========================================================================================
+
+  protected continuePaymentFromQueue(row: PaymentReceiptRow): void {
+    if (row.receiptOrIntentRef === '—') {
       this.toast.show('No donation to continue', 'This event was never matched to a donation.', 'warning');
       return;
     }
     this.router.navigate(['/app/donations/public-donation-initiation'], {
-      queryParams: { intent: row.mappedIntentOrPayment },
+      queryParams: { intent: row.receiptOrIntentRef },
+    });
+  }
+
+  // ===========================================================================================
+  // Resend receipt (Success rows) - unchanged from the register, reason still audited
+  // ===========================================================================================
+
+  protected readonly resendAllowed = computed(() => {
+    const current = this.selectedEvent();
+    return (
+      !!current &&
+      current.paymentStatus === 'Success' &&
+      current.receiptStatus === 'Sent' &&
+      this.permittedActions().includes('Resend')
+    );
+  });
+
+  protected readonly resendDialogOpen = signal(false);
+  protected readonly resendReason = signal('');
+  protected readonly resendReasonTouched = signal(false);
+  protected readonly resendReasonMin = 10;
+  protected readonly resendReasonMax = 500;
+  protected readonly resendReasonValid = computed(() => {
+    const length = this.resendReason().trim().length;
+    return length >= this.resendReasonMin && length <= this.resendReasonMax;
+  });
+
+  protected openResendDialog(): void {
+    if (!this.resendAllowed()) return;
+    this.resendReason.set('');
+    this.resendReasonTouched.set(false);
+    this.resendDialogOpen.set(true);
+  }
+
+  protected cancelResend(): void {
+    this.resendDialogOpen.set(false);
+  }
+
+  protected confirmResend(): void {
+    const current = this.selectedEvent();
+    this.resendReasonTouched.set(true);
+    if (!current || !this.resendReasonValid()) return;
+
+    this.payments.resendReceipt(current.id, { channel: 'Email' }).subscribe({
+      next: () => {
+        this.resendDialogOpen.set(false);
+        this.toast.show('Receipt resent', `A copy of ${current.receiptReference} was sent to the donor.`, 'success');
+        this.loadRows();
+      },
+      error: (error: unknown) => this.toast.show('Receipt not resent', apiErrorMessage(error), 'error'),
     });
   }
 
@@ -421,9 +553,7 @@ export class PaymentEventQueueComponent {
     navigator.clipboard?.writeText(value).catch(() => undefined);
     this.copiedField.set(label);
     setTimeout(() => {
-      if (this.copiedField() === label) {
-        this.copiedField.set(null);
-      }
+      if (this.copiedField() === label) this.copiedField.set(null);
     }, 1500);
   }
 
@@ -435,33 +565,26 @@ export class PaymentEventQueueComponent {
     this.uiState.set(this.records().length === 0 ? 'empty' : 'ready');
   }
 
-  protected paymentStatusClass(status: QueueOutcome): string {
+  protected paymentStatusClass(status: PaymentOutcome): string {
     switch (status) {
-      case 'Success': return 'peq-badge-good';
-      case 'Fail': return 'peq-badge-danger';
-      case 'Pending': return 'peq-badge-gold';
-      default: return 'peq-badge-muted';
+      case 'Success': return 'pr-badge-good';
+      case 'Fail': return 'pr-badge-danger';
+      case 'Pending': return 'pr-badge-gold';
+      default: return 'pr-badge-muted';
     }
   }
 
-  private formatAmount(amount: number): string {
+  protected receiptStatusClass(status: ReceiptStatus): string {
+    return status === 'Sent' ? 'pr-badge-blue' : 'pr-badge-muted';
+  }
+
+  protected formatAmount(amount: number | null): string {
+    if (amount === null) return '—';
     return amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  protected formatDate(iso: string): string {
-    if (!iso) {
-      return '—';
-    }
-    const parsed = new Date(iso);
-    return Number.isNaN(parsed.getTime())
-      ? iso
-      : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  }
-
   private formatDateTime(iso: string): string {
-    if (!iso) {
-      return '—';
-    }
+    if (!iso) return '—';
     const parsed = new Date(iso);
     return Number.isNaN(parsed.getTime())
       ? iso

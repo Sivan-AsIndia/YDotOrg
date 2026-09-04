@@ -62,9 +62,6 @@
                     <span class="step-caption">{{ step.caption }}</span>
                   </span>
                 </button>
-                @if (i < steps.length - 1) {
-                  <span class="step-line" aria-hidden="true"></span>
-                }
               </li>
             }
           </ol>
@@ -202,18 +199,6 @@
                 </div>
               }
 
-              <!-- VALIDATION — error summary linking to the exact fields -->
-              @if (uiState() === 'validation' && !requiredComplete()) {
-                <div class="alert alert-error" role="alert" aria-live="assertive">
-                  <p class="alert-title">Some required information is missing.</p>
-                  <ul class="alert-list">
-                    @for (label of remainingRequired(); track label) {
-                      <li>Enter {{ label }}.</li>
-                    }
-                  </ul>
-                </div>
-              }
-
               <!-- SUCCESS — stable reference, resulting state, effective time, remaining dependency, next action -->
               @if (uiState() === 'success') {
                 <div class="alert alert-success" role="status" aria-live="polite">
@@ -312,7 +297,7 @@
                           class="rte-toolbar"
                           role="toolbar"
                           aria-label="Purpose formatting"
-                          (mousedown)="$event.preventDefault()"
+                          (mousedown)="$event.preventDefault(); stashSelection()"
                         >
                           <button type="button" class="rte-btn" title="Bold" aria-label="Bold" (click)="applyFormat(purposeBody, 'bold')">
                             <strong>B</strong>
@@ -500,12 +485,14 @@
                         >Start date <span class="req" aria-hidden="true">*</span></label
                       >
                       <input
+                        #startDateInput
                         id="f-start"
                         type="date"
                         class="control"
                         [min]="todayIso"
                         [ngModel]="startDate()"
                         (ngModelChange)="startDate.set($event)"
+                        (click)="openDatePicker(startDateInput)"
                         [attr.aria-invalid]="
                           !startDateValid() && (!!startDate() || wasAttempted(0)) ? 'true' : null
                         "
@@ -533,12 +520,14 @@
                         >End date <span class="req" aria-hidden="true">*</span></label
                       >
                       <input
+                        #endDateInput
                         id="f-end"
                         type="date"
                         class="control"
                         [min]="endDateMin()"
                         [ngModel]="endDate()"
                         (ngModelChange)="endDate.set($event)"
+                        (click)="openDatePicker(endDateInput)"
                         [attr.aria-invalid]="
                           !endDateValid() && (!!endDate() || wasAttempted(0)) ? 'true' : null
                         "
@@ -566,19 +555,10 @@
                   <div class="field-grid">
                     <!-- Channels — searchable controlled choice -->
                     <div class="field field-wide">
-                      <label class="field-label" for="f-channels"
+                      <label class="field-label" id="f-channels"
                         >Channels <span class="req" aria-hidden="true">*</span></label
                       >
-                      <input
-                        id="f-channels"
-                        type="text"
-                        class="control"
-                        [ngModel]="channelQuery()"
-                        (ngModelChange)="channelQuery.set($event)"
-                        [attr.aria-invalid]="wasAttempted(1) && !channelsValid() ? 'true' : null"
-                        placeholder="Search approved channels…"
-                      />
-                      <div class="choice-chips" role="group" aria-label="Channels">
+                      <div class="choice-chips" role="group" aria-label="Channels" aria-labelledby="f-channels">
                         @for (c of channelResults(); track c.ref) {
                           <button
                             type="button"
@@ -938,7 +918,7 @@
                           class="rte-toolbar"
                           role="toolbar"
                           aria-label="Text formatting"
-                          (mousedown)="$event.preventDefault()"
+                          (mousedown)="$event.preventDefault(); stashSelection()"
                         >
                           <button
                             type="button"
@@ -1075,7 +1055,7 @@
                           role="textbox"
                           aria-multiline="true"
                           aria-labelledby="f-public"
-                          [attr.aria-invalid]="!publicDescriptionValid()"
+                          [attr.aria-invalid]="showDescError() ? 'true' : null"
                           [style.lineHeight]="descLineHeight()"
                           [innerHTML]="descSeed()"
                           (input)="syncDescription(descBody)"
@@ -1084,7 +1064,7 @@
                         ></div>
                       </div>
                       <div class="counter-row">
-                        @if (!publicDescriptionValid()) {
+                        @if (showDescError()) {
                           <span class="field-error"
                             >Review Public description. Enter {{ purposeMin }}–{{
                               publicDescriptionMax
@@ -1121,7 +1101,7 @@
                           class="rte-toolbar"
                           role="toolbar"
                           aria-label="Terms and notice formatting"
-                          (mousedown)="$event.preventDefault()"
+                          (mousedown)="$event.preventDefault(); stashSelection()"
                         >
                           <button
                             type="button"
@@ -1258,7 +1238,7 @@
                           role="textbox"
                           aria-multiline="true"
                           aria-labelledby="f-terms"
-                          [attr.aria-invalid]="!termsNoticeValid()"
+                          [attr.aria-invalid]="showTermsError() ? 'true' : null"
                           [style.lineHeight]="termsLineHeight()"
                           [innerHTML]="termsSeed()"
                           (input)="syncEditor(termsBody)"
@@ -1267,7 +1247,7 @@
                         ></div>
                       </div>
                       <div class="counter-row">
-                        @if (!termsNoticeValid()) {
+                        @if (showTermsError()) {
                           <span class="field-error"
                             >Review Terms and notice. Enter {{ purposeMin }}–{{
                               termsNoticeMax | number
@@ -1689,7 +1669,7 @@
                     class="rte-toolbar"
                     role="toolbar"
                     aria-label="Text formatting"
-                    (mousedown)="$event.preventDefault()"
+                    (mousedown)="$event.preventDefault(); stashSelection()"
                   >
                     <button
                       type="button"

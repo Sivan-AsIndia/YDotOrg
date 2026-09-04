@@ -91,7 +91,10 @@
   flex-wrap: wrap;
 }
 .org-title {
-  font-family: Georgia, 'Times New Roman', serif;
+  /* The app's global stylesheet forces a site-wide heading font onto every <h1>-<h6> with
+     !important. A class selector beats that element selector even inside !important, so this
+     is the only way to keep this module's own titles on its own sans-serif system. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 32px;
   line-height: 1.15;
   font-weight: 400;
@@ -116,6 +119,10 @@
   flex: none;
 }
 .org-subtitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   font-size: 14px;
   color: var(--org-ink-2);
   margin: 0;
@@ -518,7 +525,7 @@
   margin: 0 0 8px;
 }
 .org-stat-value {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 32px;
   font-weight: 400;
   color: var(--org-ink);
@@ -586,6 +593,22 @@
   font-family: inherit;
   color: var(--org-ink);
   background: #fff;
+}
+/* ---------- Native <select> chrome varies by browser/OS; force it to match <input> exactly ---------- */
+.org-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234a564e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  line-height: normal;
+  cursor: pointer;
+}
+.org-select.org-select-narrow {
+  padding-right: 28px;
+  background-position: right 10px center;
 }
 .org-input:focus,
 .org-select:focus,
@@ -918,6 +941,9 @@
   overflow-x: auto;
 }
 .org-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: none;
   padding: 12px 18px;
@@ -1201,6 +1227,14 @@
   min-width: 0;
 }
 
+/* ---------- A select and an input that stand apart, e.g. country code + phone number ---------- */
+.org-input-group--gap {
+  gap: 8px;
+}
+.org-input-group--gap .org-input {
+  border-radius: 10px;
+}
+
 /*
  * The read-only domain suffix.
  *
@@ -1264,7 +1298,9 @@
 }
 
 .org-select-narrow {
-  max-width: 320px;
+  flex: 0 0 96px;
+  width: 96px;
+  max-width: 96px;
 }
 
 /* ---------- Radio rows ---------- */
@@ -1332,8 +1368,8 @@
 }
 
 .org-alert i {
-  font-size: 18px;
-  line-height: 1.3;
+  font-size: 16px;
+  margin-top: 1px;
   flex: 0 0 auto;
 }
 
@@ -1473,11 +1509,11 @@
     margin-left: 4px;
   }
 
-  .org-input-group {
+  .org-input-group:not(.org-input-group--gap) {
     flex-direction: column;
   }
 
-  .org-input-group .org-input {
+  .org-input-group:not(.org-input-group--gap) .org-input {
     border-radius: 10px 10px 0 0;
   }
 
@@ -1516,12 +1552,17 @@
 }
 
 .org-doc-subheading {
-  margin: 0;
-  font-size: 14px;
+  margin: 28px 0 16px;
+  padding-bottom: 8px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--org-ink-2);
+  color: var(--org-meadow);
+  border-bottom: 1px solid var(--org-border);
+}
+.org-doc-subheading:first-child {
+  margin-top: 0;
 }
 
 .org-tab-count {
@@ -1531,7 +1572,6 @@
   min-width: 20px;
   height: 20px;
   padding: 0 7px;
-  margin-left: 6px;
   border-radius: 999px;
   background: var(--org-meadow-soft);
   color: var(--org-meadow);

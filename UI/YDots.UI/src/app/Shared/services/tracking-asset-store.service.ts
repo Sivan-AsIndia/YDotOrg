@@ -11,6 +11,9 @@ import { OrganisationScopeService } from './organisation-scope.service';
 import { CampaignStoreService } from './campaign-store.service';
 import { apiErrorMessage } from '../models/api-response.model';
 
+/** Reports whether an `update()`/`delete()` call actually succeeded, and why if not. */
+export type TrackingAssetOutcome = (result: { readonly applied: boolean; readonly error?: string }) => void;
+
 /**
  * The single shared source of truth for tracking assets.
  *
@@ -233,11 +236,25 @@ export class TrackingAssetStoreService {
    * has its own permission, and approval is what generates the reference and the URL - so a PUT
    * that set the status would skip the one step that makes the asset usable.
    */
-  update(ref: string, patch: Partial<TrackingAsset>): void {
+  /**
+   * Applies a change to an asset.
+   *
+   * `onDone` REPORTS THE REAL OUTCOME. Every branch below used to resolve straight to
+   * `this.refresh()` on success and `this.failed(message)` on error, with nothing telling the
+   * caller which had happened — `failed()` only sets a store-level `loadError` signal that no
+   * screen was reading. A caller (Approve, Activate, …) that shows its own "done" toast right
+   * after calling `update()` therefore showed it unconditionally, including when the server had
+   * just refused the change: the optimistic local patch below made the row LOOK approved/active
+   * for a moment, the toast said so too, and only the refresh a beat later put it back — with
+   * nothing on screen ever having said why. `onDone` lets a caller wait for the real result
+   * before announcing anything.
+   */
+  update(ref: string, patch: Partial<TrackingAsset>, onDone?: TrackingAssetOutcome): void {
     const current = this.get(ref);
     const id = this.idsByReference.get(ref);
 
     if (!current || !id) {
+      onDone?.({ applied: false, error: 'That asset is not loaded yet. Refresh and try again.' });
       return;
     }
 
@@ -253,8 +270,15 @@ export class TrackingAssetStoreService {
 
     if (patch.approvalState === 'Approved') {
       this.api.approveTrackingAsset(id, { expectedVersion }).subscribe({
-        next: () => this.refresh(),
-        error: () => this.failed('The asset could not be approved.'),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be approved.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
 
       return;
@@ -262,8 +286,15 @@ export class TrackingAssetStoreService {
 
     if (patch.assetStatus === 'Active') {
       this.api.activateTrackingAsset(id, { expectedVersion }).subscribe({
-        next: () => this.refresh(),
-        error: () => this.failed('The asset could not be activated.'),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be activated.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
 
       return;
@@ -273,9 +304,15 @@ export class TrackingAssetStoreService {
     // deactivate, so routing their click to the decision endpoint answered 403.
     if (patch.assetStatus === 'Disable requested') {
       this.api.requestDisableTrackingAsset(id, { expectedVersion }).subscribe({
-        next: () => this.refresh(),
-        error: (error: unknown) =>
-          this.failed(apiErrorMessage(error, 'The disable request could not be raised.')),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The disable request could not be raised.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
 
       return;
@@ -283,9 +320,15 @@ export class TrackingAssetStoreService {
 
     if (patch.assetStatus === 'Paused' || patch.assetStatus === 'Disabled') {
       this.api.deactivateTrackingAsset(id, { expectedVersion }).subscribe({
-        next: () => this.refresh(),
-        error: (error: unknown) =>
-          this.failed(apiErrorMessage(error, 'The asset could not be deactivated.')),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be deactivated.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
 
       return;
@@ -293,8 +336,15 @@ export class TrackingAssetStoreService {
 
     if (patch.approvalState === 'Pending review') {
       this.api.submitTrackingAsset(id, { expectedVersion }).subscribe({
-        next: () => this.refresh(),
-        error: () => this.failed('The asset could not be submitted.'),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be submitted.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
 
       return;
@@ -316,8 +366,15 @@ export class TrackingAssetStoreService {
         contentTag: merged.contentTag || null,
       })
       .subscribe({
-        next: () => this.refresh(),
-        error: () => this.failed('The asset could not be saved.'),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be saved.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
   }
 
@@ -334,10 +391,11 @@ export class TrackingAssetStoreService {
    * now, so a draft discarded from the register is actually gone rather than left on the list as
    * an Inactive row nobody asked for.
    */
-  delete(ref: string): void {
+  delete(ref: string, onDone?: TrackingAssetOutcome): void {
     const id = this.idsByReference.get(ref);
 
     if (!id) {
+      onDone?.({ applied: false, error: 'That asset is not loaded yet. Refresh and try again.' });
       return;
     }
 
@@ -350,9 +408,15 @@ export class TrackingAssetStoreService {
           reason: 'Unused draft discarded from the tracking asset manager.',
         })
         .subscribe({
-          next: () => this.refresh(),
-          error: (error: unknown) =>
-            this.failed(apiErrorMessage(error, 'The draft could not be deleted.')),
+          next: () => {
+            this.refresh();
+            onDone?.({ applied: true });
+          },
+          error: (error: unknown) => {
+            const message = apiErrorMessage(error, 'The draft could not be deleted.');
+            this.failed(message);
+            onDone?.({ applied: false, error: message });
+          },
         });
 
       return;
@@ -364,9 +428,15 @@ export class TrackingAssetStoreService {
         reason: 'Retired from the tracking asset manager.',
       })
       .subscribe({
-        next: () => this.refresh(),
-        error: (error: unknown) =>
-          this.failed(apiErrorMessage(error, 'The asset could not be retired.')),
+        next: () => {
+          this.refresh();
+          onDone?.({ applied: true });
+        },
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The asset could not be retired.');
+          this.failed(message);
+          onDone?.({ applied: false, error: message });
+        },
       });
   }
 

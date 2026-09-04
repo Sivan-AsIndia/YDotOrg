@@ -1,0 +1,222 @@
+<main class="df-auth">
+
+<!-- ===== LEFT: full-height real-photo brand panel ===== -->
+<aside class="df-hero">
+  <div class="df-hero-media" role="img" aria-label="Volunteers caring for their community and the planet"></div>
+  <div class="df-hero-shade" aria-hidden="true"></div>
+  <div class="df-hero-content">
+    <div class="df-brand">
+      <!-- <img src="assets/images/Outline ydot logo 2.svg" alt="YDot logo" /> -->
+      <!-- <span class="df-brand-name">YDot</span> -->
+    </div>
+    <div class="df-hero-copy">
+          <div class="df-brand">
+      <img src="assets/images/Outline ydot logo 2.svg" alt="YDot logo" />
+      <!-- <span class="df-brand-name">YDot</span> -->
+    </div>
+      <!-- <span class="df-hero-eyebrow">Scan · Give · Done</span> -->
+      <h2 class="df-hero-title">A gift that starts<br />with a scan.</h2>
+      <p class="df-hero-sub">You reached this page from the YDot giving QR — a few details and your donation goes straight to the cause you scanned for.</p>
+      <ul class="df-hero-points">
+        <li>Secure Razorpay payment — UPI, card or netbanking</li>
+        <li>Instant receipt sent to your phone</li>
+        <li>Eligible for 80G tax benefits</li>
+      </ul>
+    </div>
+    <div class="df-hero-foot">
+      <span class="df-chip">80G tax benefits</span>
+      <span class="df-chip">Razorpay secured</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== RIGHT: the donation form ===== -->
+<section class="df-panel">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+<div [attr.data-ui-state]="uiState()">
+
+  <!-- ============ TASK HEADER (4.2.1 Application shell + Task header) ============ -->
+  <header class="task-header" aria-labelledby="pdi-title">
+
+    <div class="task-header-main">
+      <div class="task-identity">
+        <h1 class="page-title" id="pdi-title">
+          {{ pageTitle() }}
+        </h1>
+        <p class="page-subtitle">{{ pageSubtitle() }}</p>
+        <div class="task-meta">
+          <span>Secure Razorpay checkout</span>
+          <span class="muted">•</span>
+          <span>TZ {{ operatingTimeZone() }}</span>
+          @if (intentReference()) {
+            <span class="muted">•</span>
+            <span>Ref {{ intentReference() }}</span>
+          }
+        </div>
+      </div>
+
+      <!-- Actions, eligibility and result (4.2.3). One primary action — Submit. -->
+
+    </div>
+  </header>
+      <!-- ============ MAIN WORK + RELATED SECONDARY PANEL (4.2.1; two-region desktop layout, 4.2.5) ============ -->
+      <div class="pdi-grid">
+
+        <!-- ======= WORK AREA (4.2.1 Main work — task-oriented groups, progressive disclosure) ======= -->
+        <form class="pdi-col pdi-col-main" (ngSubmit)="requestSubmit()" novalidate>
+
+          <!-- 1. Campaign or appeal -->
+          <section class="card form-section" aria-labelledby="sec-campaign">
+            <h2 class="section-title">
+              <span>Donation details</span>
+              @if (intentReference()) {
+                <span class="ticket-ref">Ticket {{ intentReference() }}</span>
+              }
+            </h2>
+            <div class="fields-grid">
+              <!-- Campaign or appeal — scope-aware searchable selector with identity preview; Required (4.2.2) -->
+              <div class="field ">
+                <span class="field-label" id="lbl-campaign">Campaign or appeal <span class="req-star">*</span></span>
+                <div class="scope-picker">
+                  <button type="button" id="fld-campaign" class="input picker-trigger" (click)="toggleCampaignPicker()"
+                         
+                          [attr.aria-invalid]="!selectedCampaign() && uiState() === 'validation'"
+                          aria-haspopup="listbox" [attr.aria-expanded]="campaignPickerOpen()" aria-labelledby="lbl-campaign">
+                    @if (selectedCampaign()) {
+                      <span class="picker-value">
+                        <span class="picker-name">{{ selectedCampaign()!.name }}</span>
+                      </span>
+                    } @else {
+                      <span class="picker-placeholder">Search an eligible campaign or appeal in scope</span>
+                    }
+                    <svg class="chev-ic static" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  @if (campaignPickerOpen()) {
+                    <div class="picker-pop" role="listbox" aria-label="Eligible campaigns or appeals in scope">
+                      <div class="picker-search">
+                        <input type="search" class="input" placeholder="Search campaigns or appeals in scope…"
+                               [ngModel]="campaignQuery()" (ngModelChange)="campaignQuery.set($event)"
+                               name="campaignQuery" aria-label="Search campaigns or appeals" />
+                      </div>
+                      @for (c of campaignResults(); track c.reference) {
+                        <button type="button" class="picker-option" role="option"
+                                [attr.aria-selected]="selectedCampaign()?.reference === c.reference"
+                                (click)="selectCampaign(c)">
+                          <span class="picker-name">{{ c.name }}</span>
+                          <span class="picker-context">{{ c.reference }} · {{ c.context }}</span>
+                        </button>
+                      }
+                      @if (campaignResults().length === 0) {
+                        <p class="picker-empty">No eligible campaign or appeal matches inside your scope.</p>
+                      }
+                    </div>
+                  }
+                </div>
+                @if (!selectedCampaign() && uiState() === 'validation') {
+                  <span class="field-error">Enter Campaign or appeal.</span>
+                }
+              </div>
+
+              <!-- Full name — text; Conditional (4.2.2) -->
+              <label class="field">
+                <span class="field-label">Full name</span>
+                <input id="fld-fullName" type="text" class="input" maxlength="120" autocomplete="off"
+                       placeholder="Enter your full name" 
+                       [ngModel]="fullName()" (ngModelChange)="fullName.set($event)" name="fullName" />
+              </label>
+
+              <!-- Email or mobile — email input; Required; Restricted (4.2.2 / 4.2.5) -->
+              <label class="field">
+                <span class="field-label">Email or mobile <span class="req-star">*</span></span>
+                <input id="fld-emailOrMobile" type="email" class="input" autocomplete="off"
+                       placeholder="Enter email or mobile" 
+                       [ngModel]="emailOrMobile()" (ngModelChange)="emailOrMobile.set($event)" name="emailOrMobile"
+                       [attr.aria-invalid]="(!emailOrMobile().trim() || !emailValid()) && uiState() === 'validation'" />
+                @if (!emailOrMobile().trim() && uiState() === 'validation') {
+                  <span class="field-error">Enter Email or mobile.</span>
+                } @else if (!emailValid()) {
+                  <span class="field-error">Review Email or mobile. The value does not meet the stated format or range.</span>
+                }
+              </label>
+
+              <label class="field field-amount">
+                <span class="field-label">Donation amount <span class="req-star">*</span></span>
+              
+                  <input id="fld-donationAmount" type="text" inputmode="decimal" class="input"
+                         placeholder="0.00"
+                         [ngModel]="donationAmount()" (ngModelChange)="donationAmount.set($event)" name="donationAmount"
+                         [attr.aria-invalid]="(!donationAmount().trim() || amountInvalid()) && uiState() === 'validation'" />
+                  <!-- QR-scan flow: one-tap quick amounts -->
+               
+              
+                @if (!donationAmount().trim() && uiState() === 'validation') {
+                  <span class="field-error">Enter Donation amount.</span>
+                } 
+              </label>
+
+              <!-- Currency — searchable controlled choice; Required (4.2.2) -->
+              <label class="field">
+                <span class="field-label">Currency <span class="req-star">*</span></span>
+                <div class="select-wrap">
+                  <select id="fld-currency" class="input" [ngModel]="currency()" (ngModelChange)="currency.set($event)"
+                          name="currency" aria-label="Currency" 
+                          [attr.aria-invalid]="!currency() && uiState() === 'validation'">
+                    <option value="">Select currency</option>
+                    @for (c of currencyCatalogue(); track c.reference) { <option [value]="c.reference">{{ c.label }}</option> }
+                  </select>
+                  <svg class="chev-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                @if (currency()) {
+                  <span class="field-hint">Selected: {{ currencyFullLabel(currency()) }}</span>
+                }
+                @if (!currency() && uiState() === 'validation') {
+                  <span class="field-error">Enter Currency.</span>
+                }
+              </label>
+
+            </div>
+            <label class="consent-row" style="width:100%;margin-top:22px"
+                   [class.is-invalid]="!consentChecked() && uiState() === 'validation'">
+              <input id="fld-consent" type="checkbox" [checked]="consentChecked()" 
+                     (change)="toggleConsent($any($event.target).checked)"
+                     [attr.aria-invalid]="!consentChecked() && uiState() === 'validation'" />
+              <span class="consent-body">
+                <span class="consent-label">I acknowledge the {{ consentPolicyVersion() }} <span class="req-star">*</span></span>
+                @if (consentEffectiveTime()) {
+                  <span class="consent-hint">Recorded for {{ owner() }} · effective {{ consentEffectiveTime() }}</span>
+                } @else {
+                  <span class="consent-hint">Not yet acknowledged</span>
+                }
+              </span>
+            </label>
+            @if (!consentChecked() && uiState() === 'validation') {
+              <span class="field-error">Enter Consent acknowledgement.</span>
+            }
+
+
+            
+          <div class="task-actions">
+          
+            <button type="button" class="btn btn-primary btn-sm" (click)="requestSubmit()"
+                  >
+              <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+              Submit
+            </button>
+          </div>
+
+
+
+          </section>
+
+        </form>
+
+      </div>
+
+
+
+</div>
+</div>
+</div>
+</section>
+</main>

@@ -54,14 +54,14 @@
   <section class="org-doc-section">
     <h3 class="org-doc-heading org-doc-heading--blue">Filters</h3>
     <div class="org-grid org-grid-4">
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label" for="org-search">Search</label>
         <input id="org-search" type="text" class="org-input"
                placeholder="Name, code, subdomain or administrator"
                [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)">
       </div>
 
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label" for="org-status">Status</label>
         <select id="org-status" class="org-select"
                 [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
@@ -72,16 +72,16 @@
         </select>
       </div>
 
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label" for="org-awaiting">On my desk</label>
-        <div class="org-check-row">
+        <label class="org-checkbox-tile" for="org-awaiting">
           <input id="org-awaiting" type="checkbox"
                  [checked]="awaitingReviewOnly()" (change)="toggleAwaitingReview()">
-          <label for="org-awaiting">Awaiting my review only</label>
-        </div>
+          Awaiting my review only
+        </label>
       </div>
 
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label" for="org-page-size">Rows per page</label>
         <select id="org-page-size" class="org-select"
                 [ngModel]="pageSize()"
@@ -94,10 +94,11 @@
     </div>
 
     @if (hasActiveFilters()) {
-      <button type="button" class="org-btn org-btn-ghost org-btn-sm" style="margin-top:16px;"
-              (click)="clearFilters()">
-        <i class="ri-close-line"></i> Clear filters
-      </button>
+      <div class="org-filter-actions">
+        <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="clearFilters()">
+          <i class="ri-close-line"></i> Clear filters
+        </button>
+      </div>
     }
   </section>
 
@@ -177,22 +178,23 @@
                 <td>{{ org.createdAtUtc | date: 'mediumDate' }}</td>
                 <td class="text-end">
                   <div class="org-row-actions">
-                    <button type="button" class="org-btn org-btn-ghost org-btn-sm"
-                            (click)="view(org.id!)">
-                      <i class="ri-eye-line"></i> View
+                    <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
+                            (click)="view(org.id!)" title="View" aria-label="View">
+                      <i class="ri-eye-line"></i>
                     </button>
 
                     @if (org.isAwaitingReview) {
-                      <button type="button" class="org-btn org-btn-primary org-btn-sm"
-                              (click)="review(org.id!)">
-                        <i class="ri-shield-check-line"></i> Review
+                      <button type="button" class="org-btn org-btn-primary org-btn-sm org-btn-icon"
+                              (click)="review(org.id!)" title="Review" aria-label="Review">
+                        <i class="ri-shield-check-line"></i>
                       </button>
                     }
 
                     @if (awaitingInvitation(org)) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
-                              (click)="resendInvitation(org)">
-                        <i class="ri-mail-send-line"></i> Re-send invitation
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
+                              (click)="resendInvitation(org)"
+                              title="Re-send invitation" aria-label="Re-send invitation">
+                        <i class="ri-mail-send-line"></i>
                       </button>
                     }
 
@@ -202,13 +204,15 @@
                       ownership.
                     -->
                     @if (isSuperAdmin()) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
                               [disabled]="switching() === org.id"
-                              (click)="enter(org)">
+                              (click)="enter(org)"
+                              [title]="switching() === org.id ? 'Switching…' : 'Work inside'"
+                              [attr.aria-label]="switching() === org.id ? 'Switching…' : 'Work inside'">
                         @if (switching() === org.id) {
-                          <i class="ri-loader-4-line"></i> Switching…
+                          <i class="ri-loader-4-line"></i>
                         } @else {
-                          <i class="ri-login-box-line"></i> Work inside
+                          <i class="ri-login-box-line"></i>
                         }
                       </button>
                     }

@@ -39,12 +39,12 @@
   <section class="org-doc-section">
     <h3 class="org-doc-heading org-doc-heading--blue">Filters</h3>
     <div class="org-grid org-grid-4">
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label">Search</label>
         <input type="text" class="org-input" placeholder="Name, ID, Owner, Email or Reg. No."
                [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
       </div>
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label">Type</label>
         <select class="org-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
           <option value="">All types</option>
@@ -60,7 +60,7 @@
           <option value="Other">Other</option>
         </select>
       </div>
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label">Legal Structure</label>
         <select class="org-select" [ngModel]="legalStructureFilter()" (ngModelChange)="legalStructureFilter.set($event)">
           <option value="">All structures</option>
@@ -71,7 +71,7 @@
           <option value="Other">Other</option>
         </select>
       </div>
-      <div class="org-field" style="margin-bottom:0;">
+      <div class="org-field org-field--tight">
         <label class="org-field-label">Status</label>
         <select class="org-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
           <option value="">All statuses</option>
@@ -87,9 +87,11 @@
       </div>
     </div>
     @if (hasActiveFilters()) {
-      <button type="button" class="org-btn org-btn-ghost org-btn-sm" style="margin-top:16px;" (click)="clearFilters()">
-        <i class="ri-close-line"></i> Clear filters
-      </button>
+      <div class="org-filter-actions">
+        <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="clearFilters()">
+          <i class="ri-close-line"></i> Clear filters
+        </button>
+      </div>
     }
   </section>
 
@@ -139,7 +141,7 @@
                 <td>{{ org.createdDate }}</td>
                 <td>{{ org.updatedDate }}</td>
                 <td class="text-end">
-                  <div class="d-flex justify-content-end gap-2">
+                  <div class="org-row-actions">
                     <button type="button" class="org-menu-btn org-icon-btn" (click)="viewOrganisation(org.id)" title="View" aria-label="View"><i class="ri-eye-line"></i></button>
                     @if (canSuspend(org) || canDeactivate(org)) {
                       <div class="org-menu-wrap dropdown">

@@ -647,8 +647,20 @@ export class WorkflowStateService {
    *
    * The method is kept as a no-op returning the existing record because the public donation
    * screen calls it after a payment. Refreshing is what makes the new donor appear.
+   *
+   * The input accepts the full donation payload the public form carries (mobile, campaign,
+   * amount, paid) so its call sites compile unchanged. Only `name` and `email` are read —
+   * they are the match keys used to find the donor the payment belongs to.
    */
-  registerDonorFromPayment(input: { name: string; email?: string; reference: string }): WorkflowDonor | undefined {
+  registerDonorFromPayment(input: {
+    name: string;
+    email?: string;
+    mobile?: string;
+    campaign?: string;
+    reference: string;
+    amount?: number;
+    paid?: boolean;
+  }): WorkflowDonor | undefined {
     this.refresh();
 
     const email = input.email?.trim().toLowerCase() ?? '';

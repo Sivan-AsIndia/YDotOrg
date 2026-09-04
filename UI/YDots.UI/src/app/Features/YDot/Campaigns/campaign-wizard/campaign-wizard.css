@@ -94,19 +94,20 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 
 .stepper { margin-top: 24px; padding: 18px 22px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; }
 .stepper ol { display: flex; align-items: flex-start; margin: 0; padding: 0; list-style: none; gap: 0; }
-.step { display: flex; align-items: center; flex: 1 1 0; min-width: 0; }
-.step:last-child { flex: 1 1 0; }
-.step-btn { display: flex; align-items: center; gap: 9px; background: none; border: none; cursor: pointer; padding: 6px 6px; border-radius: 10px; text-align: left; min-width: 0; flex: 1 1 auto; }
+/* Each step gets an EQUAL share of the stepper's width (flex: 1 1 0, same basis) and centers
+   its own button within that share, so the gap between one step and the next is identical
+   regardless of how long that step's title/caption text is — no connecting line needed to see
+   that the steps are evenly spaced. */
+.step { display: flex; align-items: flex-start; justify-content: center; flex: 1 1 0; min-width: 0; }
+.step-btn { display: flex; flex-direction: row; align-items: center; gap: 9px; background: none; border: none; cursor: pointer; padding: 6px 10px; border-radius: 10px; text-align: left; min-width: 0; max-width: 100%; }
 .step-btn:hover { background: #f2efe8; }
 .step-index { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; background: var(--row-alt); color: var(--ink-soft); border: 1.5px solid var(--border); }
 .step.active .step-index { background: var(--meadow); color: #fff; border-color: var(--meadow); }
 .step.done .step-index { background: var(--good-soft); color: var(--good); border-color: var(--good); }
-.step-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.step-title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.step-caption { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
+.step-title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.step-caption { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .step.active .step-title { color: var(--meadow); }
-.step-line { flex: 0 0 14px; height: 2px; margin: 0 2px; background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 12px); }
-.step.done .step-line { background: var(--good); }
 
 .wizard-body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; margin-top: 24px; }
 /* Review & Launch hides the Campaign Summary aside (it only duplicates the full

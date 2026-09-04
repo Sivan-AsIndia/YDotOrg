@@ -98,7 +98,7 @@
           @if (!approvalCheck().ok && !alreadyProcessed()) {
             <div class="org-banner org-banner-warn"><i class="ri-error-warning-line"></i><span>Organisation cannot be approved because required information or applicable documents are incomplete.</span></div>
           }
-          <div class="d-flex gap-2 flex-wrap">
+          <div class="org-row-actions">
             <button type="button" class="org-btn org-btn-primary org-btn-sm" [disabled]="alreadyProcessed() || !approvalCheck().ok || approving()" (click)="approve()">
               @if (approving()) { <span class="org-spinner"></span> Approving... } @else { <i class="ri-checkbox-circle-line"></i> Approve }
             </button>
@@ -150,7 +150,7 @@
         <div class="org-empty-icon"><i class="ri-inbox-line"></i></div>
         <h3 class="org-empty-title">No organisations yet</h3>
         <p class="org-empty-body">Register an organisation first &mdash; it will appear here for verification.</p>
-        <div class="d-flex gap-2 justify-content-center flex-wrap">
+        <div class="org-row-actions org-row-actions--center">
           <a routerLink="/app/administration/organisation/setup-wizard" class="org-btn org-btn-primary org-btn-sm">Register Organisation</a>
           <a routerLink="/app/administration/organisation/super-admin-view" class="org-btn org-btn-ghost org-btn-sm">Back to Directory</a>
         </div>

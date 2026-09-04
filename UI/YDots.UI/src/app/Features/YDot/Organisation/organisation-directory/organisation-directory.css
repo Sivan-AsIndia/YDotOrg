@@ -91,7 +91,7 @@
   flex-wrap: wrap;
 }
 .org-title {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 32px;
   line-height: 1.15;
   font-weight: 400;
@@ -216,6 +216,14 @@
   padding: 6px 14px;
   font-size: 13px;
   border-radius: 10px;
+}
+.org-btn-icon {
+  min-width: 36px;
+  width: 36px;
+  padding: 0;
+  gap: 0;
+  font-size: 15px;
+  flex: none;
 }
 .org-btn:disabled {
   opacity: 0.5;
@@ -356,7 +364,6 @@
   text-decoration: underline;
 }
 
-/* ---------- Card grid (multi-box layout — always fills the row, no dead gaps) ---------- */
 /* ---------- Professional document layout — no cards, no boxes ---------- */
 .org-doc-section {
   padding: 24px 0;
@@ -396,6 +403,10 @@
   margin-bottom: 20px;
 }
 .org-stat-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
   background: var(--org-card);
   border: 1px solid var(--org-border);
   border-radius: 16px;
@@ -455,7 +466,7 @@
   margin: 0 0 8px;
 }
 .org-stat-value {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 32px;
   font-weight: 400;
   color: var(--org-ink);
@@ -524,6 +535,22 @@
   color: var(--org-ink);
   background: #fff;
 }
+/* ---------- Native <select> chrome varies by browser/OS; force it to match <input> exactly ---------- */
+.org-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234a564e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  line-height: normal;
+  cursor: pointer;
+}
+.org-select.org-select-narrow {
+  padding-right: 28px;
+  background-position: right 10px center;
+}
 .org-input:focus,
 .org-select:focus,
 .org-textarea:focus {
@@ -549,10 +576,19 @@
   color: var(--org-muted);
   font-size: 12px;
 }
+.org-field--tight {
+  margin-bottom: 0;
+}
+.org-filter-actions {
+  margin-top: 16px;
+}
 .org-grid {
   display: grid;
   gap: 16px;
   min-width: 0;
+}
+.org-grid-1 {
+  grid-template-columns: minmax(0, 1fr);
 }
 .org-grid-2 {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1011,7 +1047,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 7px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .org-pager {

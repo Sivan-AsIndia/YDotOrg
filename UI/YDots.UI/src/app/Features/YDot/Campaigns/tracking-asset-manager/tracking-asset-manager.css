@@ -677,8 +677,28 @@
   }
 }
 
+/*
+  FILLS THE SCREEN, RATHER THAN HUGGING ITS CONTENT.
+
+  The app shell (applayout.css) makes `.container-fluid` a flex column with `flex: 1` so a routed
+  page can reach the bottom of the viewport, but the unstyled div this template wrapped its
+  content in (now `.tam-page`) never joined that chain, and neither did `.tam-main` below it — so
+  the card stopped at whatever height its content needed and left blank page below it. `flex: 1`
+  on both, plus on `.tam-table-scroll` further down, carries the fill all the way to the table.
+*/
+.tam-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* ============ MAIN WORK / INDEX ============ */
 .tam-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   background: var(--tam-surface);
   border: 1px solid var(--tam-border);
   border-radius: var(--tam-radius);
@@ -749,9 +769,20 @@
   padding: 0 4px;
 }
 
+/*
+  FILLS THE REMAINING SCREEN HEIGHT, holding up to ten (the page size) with an inner scrollbar for
+  whatever doesn't fit. Without this the table simply grew with every asset added, pushing the
+  pagination/footer further down the page each time; `flex: 1` (see `.tam-main` above) hands it
+  whatever space is left after the pager row and any banners, `min-height: 0` is what lets a flex
+  item actually shrink to fit that space, and `overflow-y: auto` plus the sticky header above
+  keeps the header in view while the rest scrolls inside this box.
+*/
 .tam-table-scroll {
   width: 100%;
+  flex: 1;
+  min-height: 260px;
   overflow-x: auto;
+  overflow-y: auto;
 }
 .tam-table {
   width: 100%;
@@ -773,6 +804,7 @@
   border-bottom: 1px solid #dee2e6;
   position: sticky;
   top: 0;
+  z-index: 1;
 }
 .tam-table thead th.tam-col-num {
   text-align: right;
@@ -928,6 +960,12 @@
   min-width: 190px;
   padding: 6px;
   text-align: left;
+}
+/* Opened upward (see `rowMenuUp`/`rowMenuStyle` in the component) when there isn't room to open
+   downward without being clipped by the scrolling table — e.g. a row near the bottom of the
+   visible five. Position itself comes from the inline style; this only flips the shadow. */
+.tam-menu.tam-menu-up {
+  box-shadow: 0 -12px 30px rgba(30, 42, 36, 0.16);
 }
 .tam-menu-item {
   display: block;
@@ -1640,6 +1678,10 @@
 }
 .tam-field-span {
   grid-column: 1 / -1;
+}
+/* The on-ground note reads as one sentence on one line at the dialog's own width. */
+.tam-hint-onground {
+  margin: -4px 0 0;
 }
 .tam-form-note {
   font-size: 12px;

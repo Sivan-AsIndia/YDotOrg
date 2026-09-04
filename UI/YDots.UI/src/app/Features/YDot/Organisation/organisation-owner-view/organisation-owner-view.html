@@ -109,7 +109,7 @@
 
         <section class="org-doc-section">
           <h3 class="org-doc-heading org-doc-heading--good">Compliance</h3>
-          <p class="org-doc-note" style="margin-top:-6px;">Applicability was set when the organisation was created &mdash; only the identification number can be updated here.</p>
+          <p class="org-doc-note">Applicability was set when the organisation was created &mdash; only the identification number can be updated here.</p>
           <dl class="org-dl">
             <div class="org-dl-row"><dt>PAN / Tax ID</dt><dd>{{ org.panTaxId || '—' }}</dd></div>
             <div class="org-dl-row"><dt>12A</dt><dd>{{ org.compliance.twelveA.applicable ? 'Applicable' : 'Not Applicable' }}</dd></div>
@@ -164,7 +164,7 @@
                   <button type="button" class="org-menu-btn" (click)="viewDocument(d)">View</button>
                 }
                 @if (canUpload(d)) {
-                  <input #fileInput type="file" class="d-none" accept=".pdf,.jpg,.jpeg,.png" (change)="onFileSelected(d.id, $event)">
+                  <input #fileInput type="file" class="org-hidden-input" accept=".pdf,.jpg,.jpeg,.png" (change)="onFileSelected(d.id, $event)">
                   <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="triggerUpload(d.id, fileInput)">{{ actionLabel(d) }}</button>
                 }
               </div>
@@ -172,7 +172,7 @@
           }
         </div>
         @if (!canEdit()) {
-          <p class="org-field-hint" style="margin-top:12px;">Documents can be uploaded or replaced while the organisation is in Draft or Changes Requested status.</p>
+          <p class="org-field-hint org-field-hint--top">Documents can be uploaded or replaced while the organisation is in Draft or Changes Requested status.</p>
         }
       </section>
     }
@@ -190,7 +190,7 @@
           <h3 class="org-doc-heading">Submission Checklist</h3>
           <p class="org-doc-note">{{ checklistProgress().completed }} of {{ checklistProgress().total }} complete ({{ checklistProgress().percent }}%)</p>
           <div class="org-progress-track"><div class="org-progress-fill" [style.width.%]="checklistProgress().percent"></div></div>
-          <dl class="org-dl" style="margin-top:14px;">
+          <dl class="org-dl org-dl--spaced-top">
             @for (item of checklistItems(); track item.label) {
               <div class="org-dl-row">
                 <dt>{{ item.label }}</dt>
@@ -229,7 +229,7 @@
             @if (submitError()) {
               <div class="org-banner org-banner-error"><i class="ri-error-warning-line"></i><span>{{ submitError() }}</span></div>
             }
-            <label class="org-check-row" style="margin-bottom:16px;">
+            <label class="org-check-row org-check-row--spaced-bottom">
               <input type="checkbox" [ngModel]="declarationChecked()" (ngModelChange)="declarationChecked.set($event)">
               <span>I confirm that the information and documents submitted for this Organisation are true, complete and accurate to the best of my knowledge.</span>
             </label>

@@ -246,7 +246,7 @@
             </div>
             <div class="org-field">
               <label class="org-field-label" for="d-phone">Telephone</label>
-              <div class="org-input-group">
+              <div class="org-input-group org-input-group--gap">
                 <select class="org-select org-select-narrow"
                         [ngModel]="form().contactPhoneCountryCode"
                         (ngModelChange)="update('contactPhoneCountryCode', $event)">
@@ -269,13 +269,13 @@
 
           <h4 class="org-doc-subheading">Address</h4>
           <div class="org-grid org-grid-2">
-            <div class="org-field">
+            <div class="org-field org-span-2">
               <label class="org-field-label" for="d-addr1">Address line 1</label>
               <input id="d-addr1" type="text" class="org-input" maxlength="200"
                      [ngModel]="form().addressLine1"
                      (ngModelChange)="update('addressLine1', $event)">
             </div>
-            <div class="org-field">
+            <div class="org-field org-span-2">
               <label class="org-field-label" for="d-addr2">Address line 2</label>
               <input id="d-addr2" type="text" class="org-input" maxlength="200"
                      [ngModel]="form().addressLine2"
@@ -515,7 +515,7 @@
           </label>
         </div>
 
-        <div class="org-grid org-grid-3">
+        <div class="org-grid org-grid-2">
           <div class="org-field">
             <label class="org-field-label" for="s-attempts">Failed sign-ins before lockout</label>
             <input id="s-attempts" type="number" class="org-input" min="3" max="10"
@@ -541,7 +541,7 @@
                    (ngModelChange)="updateSetting('passwordExpiryDays', +$event)">
             <span class="org-field-hint">Zero means passwords never expire.</span>
           </div>
-          <div class="org-field">
+          <div class="org-field org-span-2">
             <label class="org-field-label" for="s-idle">Idle sign-out (minutes)</label>
             <input id="s-idle" type="number" class="org-input" min="5" max="480"
                    [ngModel]="settingsForm().sessionIdleTimeoutMinutes"

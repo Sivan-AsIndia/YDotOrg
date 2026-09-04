@@ -106,6 +106,7 @@ import { DonorListComponent } from './Features/YDot/Donors and Leads/donor-list/
 import { FollowUpExecutionComponent } from './Features/YDot/Donors and Leads/follow-up-execution/follow-up-execution';
 import { FollowUpQueueComponent } from './Features/YDot/Donors and Leads/follow-up-queue/follow-up-queue';
 import { MyLeadsComponent } from './Features/YDot/Donors and Leads/my-leads/my-leads';
+import { DonorformComponent } from './Features/YDot/Auth/Auth/donorform/donorform';
 
 
 
@@ -647,7 +648,7 @@ export const routes: Routes = [
       // dashboard instead of showing them a sign-in form they do not need.
       { path: 'login', redirectTo: 'auth/sign-in', pathMatch: 'full' },
       { path: 'auth/sign-in', component: LoginComponent, canActivate: [anonymousOnlyGuard] },
-
+ { path: 'Donor-form', component: DonorformComponent},
       // Where sign-in ends for a root user. They are properly authenticated — the token is real
       // — but they belong to no organisation, so every organisation-scoped screen has nothing to
       // show until they say which one they mean. authGuard, not anonymousOnlyGuard: they ARE

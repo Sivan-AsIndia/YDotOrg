@@ -46,14 +46,6 @@
           Manage lifecycle
         </button>
       }
-      <!-- Tracking assets — the Tracking Asset Manager, scoped to this campaign -->
-      @if (trackingAssetsAllowed()) {
-        <button type="button" class="cd-btn cd-btn-outline" (click)="openTrackingAssets()"
-                aria-label="Open tracking assets for this campaign">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.8" cy="7.8" r="1.4"/></svg>
-          Tracking assets
-        </button>
-      }
       @if (exportAllowed()) {
         <button type="button" class="cd-btn cd-btn-outline" (click)="exportThisCampaign()" aria-label="Export this campaign">
           <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>

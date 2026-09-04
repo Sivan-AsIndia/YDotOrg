@@ -1,6 +1,9 @@
 :host {
   display: flex;
   flex-direction: column;
+  /* Fits the viewport exactly when the page content is short — the footer then sits
+     at the bottom of the screen with NO leftover scroll. min-height (not height) keeps
+     long pages growing past the viewport and scrollable as they should be. */
   min-height: 100vh;
 }
 
@@ -8,7 +11,9 @@
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* Instead of a full 100vh of its own, the wrapper only needs the space the footer
+     takes below it, so short pages total exactly 100vh instead of 100vh + footer. */
+  min-height: calc(100vh - var(--pe-app-footer-height, 60px));
 }
 
 app-footer {
@@ -28,6 +33,10 @@ app-footer {
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  /* Wraps only what the routed page needs — a short page contributes no extra height,
+     so the window cannot scroll unless the page content genuinely overflows. */
+  height: auto;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -40,12 +49,18 @@ app-footer {
   min-width: 0;
 }
 
-/* Force app-wrapper inside routed components to fill height */
+/* Force app-wrapper inside routed components to fill height.
+   min-height: 0 is deliberate: the template's own .app-wrapper carries
+   min-height: calc(100vh - footer) on top of its header padding, which made even a
+   nearly-empty page taller than the space applayout gives it — the window therefore
+   scrolled even when there was nothing to scroll. The shell already sizes the page,
+   so the routed wrapper just fills whatever room it is given. */
 ::ng-deep .app-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 /* Make the page-wrapper inside app-wrapper fill space */

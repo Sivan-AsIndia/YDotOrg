@@ -1,0 +1,320 @@
+<!--
+  Grouped document submissions.
+
+  The same markup serves the Organisation assembling paperwork and the reviewer deciding on it.
+  Every control is gated on `can(submission, ...)`, which reads the server's permittedActions —
+  so what appears is what the server will actually allow, not what this template guessed.
+-->
+<section class="ds">
+
+  @if (errorMessage()) {
+    <div class="ds-alert is-error" role="alert">
+      <i class="ri-error-warning-line"></i>
+      <span>{{ errorMessage() }}</span>
+      <button type="button" class="ds-alert-close" (click)="errorMessage.set('')"
+              aria-label="Dismiss">
+        <i class="ri-close-line"></i>
+      </button>
+    </div>
+  }
+
+  <!-- ------------------------------------------------------------------ Header -->
+  <header class="ds-head">
+    <div>
+      <h3 class="ds-title">
+        {{ isReview() ? 'Certificates and documents' : 'Document submissions' }}
+      </h3>
+      <p class="ds-sub">
+        @if (isReview()) {
+          Grouped as the organisation submitted them. Open each file before deciding.
+        } @else {
+          Group a certificate with its supporting files, then send the set for review together.
+        }
+      </p>
+    </div>
+
+    @if (!isReview()) {
+      <button type="button" class="ds-btn is-primary"
+              (click)="showNewForm.set(!showNewForm())" [disabled]="busy()">
+        <i class="ri-add-line"></i> New submission
+      </button>
+    }
+  </header>
+
+  <!-- -------------------------------------------------------- New submission form -->
+  @if (showNewForm() && !isReview()) {
+    <div class="ds-newform">
+      <div class="ds-field">
+        <label class="ds-label" for="ds-type">What is this evidence of?</label>
+        <select id="ds-type" class="ds-input" [ngModel]="newDocumentType()"
+                (ngModelChange)="newDocumentType.set($event)">
+          @for (type of documentTypes; track type.value) {
+            <option [value]="type.value">{{ type.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="ds-field">
+        <label class="ds-label" for="ds-title">Title <span class="ds-optional">optional</span></label>
+        <input id="ds-title" type="text" class="ds-input" [ngModel]="newTitle()"
+               (ngModelChange)="newTitle.set($event)"
+               placeholder="Certificate of incorporation, 2019 amendment">
+      </div>
+
+      <div class="ds-field ds-field--wide">
+        <label class="ds-label" for="ds-notes">
+          Anything the reviewer should know <span class="ds-optional">optional</span>
+        </label>
+        <textarea id="ds-notes" class="ds-input" rows="2" [ngModel]="newNotes()"
+                  (ngModelChange)="newNotes.set($event)"
+                  placeholder="The amendment page is the second file."></textarea>
+      </div>
+
+      <div class="ds-newform-actions">
+        <button type="button" class="ds-btn" (click)="showNewForm.set(false)">Cancel</button>
+        <button type="button" class="ds-btn is-primary" (click)="createSubmission()"
+                [disabled]="busy()">Start submission</button>
+      </div>
+    </div>
+  }
+
+  <!-- ------------------------------------------------------------------ Loading -->
+  @if (loading()) {
+    <div class="ds-empty"><i class="ri-loader-4-line ds-spin"></i> Loading submissions…</div>
+  }
+
+  <!-- ------------------------------------------------------------------- Empty -->
+  @if (!loading() && submissions().length === 0) {
+    <div class="ds-empty is-warn">
+      <i class="ri-inbox-line"></i>
+      @if (isReview()) {
+        <span>Nothing has been submitted yet. Ask for the registration certificate before deciding.</span>
+      } @else {
+        <span>No submissions yet. Start one, attach your certificate, and send it for review.</span>
+      }
+    </div>
+  }
+
+  <!-- ------------------------------------------------------------- Submissions -->
+  @for (submission of submissions(); track trackById($index, submission)) {
+    <article class="ds-card">
+
+      <!-- Header: what it is, and where it has got to -->
+      <header class="ds-card-head">
+        <div class="ds-card-ident">
+          <span class="ds-badge" [class]="statusClass(submission.status)">
+            {{ submission.statusDisplay }}
+          </span>
+          <h4 class="ds-card-title">{{ submission.title || submission.documentTypeDisplay }}</h4>
+          @if (submission.title) {
+            <span class="ds-card-type">{{ submission.documentTypeDisplay }}</span>
+          }
+        </div>
+
+        <!-- The metadata a reviewer needs before opening anything -->
+        <dl class="ds-meta">
+          <div><dt>Files</dt><dd>{{ submission.fileCount }}
+            @if (submission.fileKinds.length) {
+              <span class="ds-kinds">{{ submission.fileKinds.join(', ') }}</span>
+            }
+          </dd></div>
+          <div><dt>Size</dt><dd>{{ size(submission.totalSizeBytes) }}</dd></div>
+          <div><dt>Uploaded by</dt><dd>{{ submission.submittedByName || '—' }}</dd></div>
+          <div><dt>Submitted</dt><dd>
+            {{ submission.submittedAtUtc ? (submission.submittedAtUtc | date: 'medium') : 'Not yet' }}
+          </dd></div>
+          @if (submission.reuploadCount > 0) {
+            <div><dt>Re-uploads</dt><dd>{{ submission.reuploadCount }}</dd></div>
+          }
+          @if (submission.reviewedByName) {
+            <div><dt>Reviewer</dt><dd>{{ submission.reviewedByName }}</dd></div>
+          }
+        </dl>
+      </header>
+
+      @if (submission.notes) {
+        <p class="ds-note"><i class="ri-information-line"></i> {{ submission.notes }}</p>
+      }
+
+      @if (submission.decisionNotes) {
+        <p class="ds-note is-decision" [class]="statusClass(submission.status)">
+          <i class="ri-chat-quote-line"></i>
+          <strong>{{ submission.statusDisplay }}:</strong> {{ submission.decisionNotes }}
+        </p>
+      }
+
+      <!-- ------------------------------------------------------------- Files -->
+      @if (submission.files.length) {
+        <ul class="ds-files">
+          @for (file of submission.files; track trackById($index, file)) {
+            <li class="ds-file">
+              <i class="ds-file-icon" [class]="fileIcon(file.contentType)"></i>
+
+              <div class="ds-file-main">
+                <span class="ds-file-name">{{ file.fileName }}</span>
+                <span class="ds-file-sub">
+                  {{ size(file.fileSizeBytes) }}
+                  @if (file.uploadedByName) { · {{ file.uploadedByName }} }
+                  @if (file.contentHash) {
+                    · <span class="ds-hash" [title]="'SHA-256 ' + file.contentHash">
+                        checksum {{ file.contentHash.slice(0, 8) }}
+                      </span>
+                  }
+                </span>
+              </div>
+
+              <div class="ds-file-actions">
+                @if (file.isPreviewable) {
+                  <button type="button" class="ds-icon-btn"
+                          (click)="open(submission, file, true)" title="Preview">
+                    <i class="ri-eye-line"></i>
+                  </button>
+                }
+                <button type="button" class="ds-icon-btn"
+                        (click)="open(submission, file, false)" title="Download">
+                  <i class="ri-download-2-line"></i>
+                </button>
+                @if (can(submission, 'RemoveFile')) {
+                  <button type="button" class="ds-icon-btn is-danger"
+                          (click)="removeFile(submission, file)" [disabled]="busy()" title="Remove">
+                    <i class="ri-delete-bin-line"></i>
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      <!-- --------------------------------------------------------- Drop zone -->
+      @if (can(submission, 'AddFile')) {
+        <div class="ds-drop" [class.is-over]="dragOver() === submission.id"
+             (dragover)="onDragOver($event, submission.id)"
+             (dragleave)="onDragLeave($event)"
+             (drop)="onDrop($event, submission)">
+
+          @if (uploading()?.submissionId === submission.id) {
+            <div class="ds-progress">
+              <div class="ds-progress-label">
+                <i class="ri-upload-cloud-2-line"></i>
+                {{ uploading()!.fileName }}
+                <strong>{{ uploading()!.percent }}%</strong>
+              </div>
+              <div class="ds-progress-track">
+                <div class="ds-progress-bar" [style.width.%]="uploading()!.percent"></div>
+              </div>
+            </div>
+          } @else {
+            <i class="ri-upload-cloud-2-line ds-drop-icon"></i>
+            <p class="ds-drop-main">
+              Drag files here, or
+              <label class="ds-drop-link">
+                browse
+                <input type="file" multiple hidden [accept]="acceptAttribute()"
+                       (change)="onFilePicked($event, submission)">
+              </label>
+            </p>
+            @if (acceptSummary()) {
+              <p class="ds-drop-limits">{{ acceptSummary() }}</p>
+            }
+          }
+        </div>
+      }
+
+      <!-- ----------------------------------------------------------- Actions -->
+      <footer class="ds-card-actions">
+        @if (can(submission, 'Submit') || can(submission, 'Resubmit')) {
+          <button type="button" class="ds-btn is-primary" [disabled]="busy()"
+                  (click)="submitForReview(submission)">
+            <i class="ri-send-plane-line"></i>
+            {{ can(submission, 'Resubmit') ? 'Resubmit for review' : 'Send for review' }}
+          </button>
+        }
+
+        <!-- A DRAFT MUST HAVE A WAY OUT. Without this the only control on a draft card was the
+             upload box, so a submission opened by mistake could never be closed. -->
+        @if (canDiscard(submission)) {
+          <button type="button" class="ds-btn is-reject" [disabled]="busy()"
+                  (click)="discardDraft(submission)">
+            <i class="ri-delete-bin-line"></i>
+            Discard draft
+          </button>
+        }
+
+        @if (can(submission, 'StartReview')) {
+          <button type="button" class="ds-btn" [disabled]="busy()"
+                  (click)="startReview(submission)">
+            <i class="ri-eye-line"></i> Start review
+          </button>
+        }
+
+        @if (can(submission, 'Approve') && decidingOn() !== submission.id) {
+          <button type="button" class="ds-btn is-approve" [disabled]="busy()"
+                  (click)="beginDecision(submission, 'Approve')">
+            <i class="ri-check-line"></i> Approve
+          </button>
+          <button type="button" class="ds-btn is-return" [disabled]="busy()"
+                  (click)="beginDecision(submission, 'RequestReupload')">
+            <i class="ri-refresh-line"></i> Request re-upload
+          </button>
+          <button type="button" class="ds-btn is-reject" [disabled]="busy()"
+                  (click)="beginDecision(submission, 'Reject')">
+            <i class="ri-close-line"></i> Reject
+          </button>
+        }
+      </footer>
+
+      <!-- ---------------------------------------------------------- Decision -->
+      @if (decidingOn() === submission.id) {
+        <div class="ds-decide">
+          <p class="ds-decide-head">
+            @switch (decision()) {
+              @case ('Approve') { Approve this submission }
+              @case ('Reject') { Reject this submission }
+              @default { Ask for a better copy }
+            }
+          </p>
+
+          <label class="ds-label" for="ds-decision-notes">
+            {{ decisionNeedsNotes() ? 'Reason (required)' : 'Note (optional)' }}
+          </label>
+          <textarea id="ds-decision-notes" class="ds-input" rows="3"
+                    [ngModel]="decisionNotes()" (ngModelChange)="decisionNotes.set($event)"
+                    [placeholder]="decisionNeedsNotes()
+                      ? 'Say what is wrong, so it can be corrected.'
+                      : 'Anything worth recording with the decision.'"></textarea>
+
+          <div class="ds-decide-actions">
+            <button type="button" class="ds-btn" (click)="cancelDecision()">Cancel</button>
+            <button type="button" class="ds-btn is-primary" [disabled]="busy()"
+                    (click)="confirmDecision(submission)">Confirm</button>
+          </div>
+        </div>
+      }
+    </article>
+  }
+
+  <!-- ------------------------------------------------------------ Preview pane -->
+  @if (preview(); as shown) {
+    <div class="ds-modal" (click)="closePreview()">
+      <div class="ds-modal-body" (click)="$event.stopPropagation()">
+        <header class="ds-modal-head">
+          <span class="ds-modal-title">{{ shown.link.fileName }}</span>
+          <span class="ds-modal-size">{{ size(shown.link.fileSizeBytes) }}</span>
+          <button type="button" class="ds-icon-btn" (click)="closePreview()" aria-label="Close">
+            <i class="ri-close-line"></i>
+          </button>
+        </header>
+
+        <div class="ds-modal-view">
+          @if (shown.link.contentType.startsWith('image/')) {
+            <img [src]="shown.link.url" [alt]="shown.link.fileName" class="ds-modal-image">
+          } @else {
+            <iframe [src]="shown.safeUrl" class="ds-modal-frame"
+                    [title]="shown.link.fileName"></iframe>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</section>
