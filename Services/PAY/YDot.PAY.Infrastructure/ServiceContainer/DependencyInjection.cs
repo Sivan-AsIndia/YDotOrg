@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDot.PAY.Application.Common.Abstractions.Persistence;
 using YDot.PAY.Application.Common.Abstractions.Security;
 using YDot.PAY.Application.Common.Abstractions.Services;
@@ -86,7 +88,20 @@ public static class DependencyInjection
         services.AddScoped<IPaymentEventRepository, PaymentEventRepository>();
         services.AddScoped<IReceiptRepository, ReceiptRepository>();
         services.AddScoped<IRefundRepository, RefundRepository>();
-        services.AddScoped<IGatewayAccountRepository, GatewayAccountRepository>();
+
+        // THE GATEWAY ACCOUNT IS RESOLVED THROUGH A DECORATOR, so every path that takes or
+        // refunds money honours what an Organisation entered on IAM's configuration screen
+        // without any of those paths knowing this exists. The concrete repository is registered
+        // by its own type and the decorator wraps it; see ConfiguredGatewayAccountRepository for
+        // why this is a wrapper rather than six edits across four command handlers.
+        services.AddScoped<GatewayAccountRepository>();
+        services.AddScoped<TenantGatewayConfigurationReader>();
+        services.AddScoped<IGatewayAccountRepository>(provider =>
+            new ConfiguredGatewayAccountRepository(
+                provider.GetRequiredService<GatewayAccountRepository>(),
+                provider.GetRequiredService<TenantGatewayConfigurationReader>(),
+                provider.GetRequiredService<IOptions<GatewayConfigurationSettings>>(),
+                provider.GetRequiredService<ILogger<ConfiguredGatewayAccountRepository>>()));
 
         // ---- Read services -----------------------------------------------------------------------------
         services.AddScoped<IDonationIntentReadService, DonationIntentReadService>();
@@ -137,7 +152,19 @@ public static class DependencyInjection
         // rotating handler pool: a raw `new HttpClient()` per call exhausts sockets under load,
         // and a static one never notices DNS changing - which on a payment provider's endpoint
         // means every donation failing until the process is restarted.
-        services.AddSingleton<IGatewayCredentialResolver, ConfigurationGatewayCredentialResolver>();
+        // CREDENTIALS: THE ORGANISATION'S OWN CONFIGURATION FIRST, THE DEPLOYMENT'S SECOND.
+        // The configuration resolver is registered by its own type and is the fallback the
+        // tenant-aware one delegates to when an Organisation has not configured a gateway, which
+        // is how every donation was taken before the configuration screen existed.
+        //
+        // SCOPED, NOT SINGLETON, and that is the reason the three adapter registrations below
+        // changed too: reading a tenant's configuration needs the request's DbContext, and a
+        // singleton holding a scoped dependency is a captive that outlives the connection it
+        // captured. The adapters hold no state of their own - they were singletons for economy,
+        // not correctness - so scoping them costs nothing.
+        services.AddScoped<ConfigurationGatewayCredentialResolver>();
+        services.AddSingleton<GatewayCredentialUnsealer>();
+        services.AddScoped<IGatewayCredentialResolver, TenantConfiguredCredentialResolver>();
         services.AddHttpClient(HostedCheckoutGateway.HttpClientName);
         services.AddHttpClient(RazorpayGateway.HttpClientName);
         services.AddHttpClient(IdentityAccountService.HttpClientName, client =>
@@ -160,9 +187,9 @@ public static class DependencyInjection
         // `PaymentGatewayAccount.GatewayName` and dispatches. Registering a provider directly as
         // IPaymentGateway - which is what this line used to do - makes every organisation on the
         // platform speak that one provider's protocol whatever their account says.
-        services.AddSingleton<HostedCheckoutGateway>();
-        services.AddSingleton<RazorpayGateway>();
-        services.AddSingleton<IPaymentGateway, PaymentGatewayRouter>();
+        services.AddScoped<HostedCheckoutGateway>();
+        services.AddScoped<RazorpayGateway>();
+        services.AddScoped<IPaymentGateway, PaymentGatewayRouter>();
 
         // ---- Authorization -----------------------------------------------------------------------------------
         //

@@ -150,6 +150,22 @@ services:
       JwtSettings__Audience: "YDot.Clients"
       JwtSettings__AccessTokenMinutes: "60"
       JwtSettings__RefreshTokenCookieSecure: "false"
+
+      # ---- Payment gateway credentials -------------------------------------------------------
+      # THE KEY THAT SEALS WHAT A TENANTADMIN TYPES ON THE PAYMENT GATEWAY CONFIGURATION SCREEN.
+      # 32 random bytes, base64 - generate one with `openssl rand -base64 32`.
+      #
+      # IT MUST BE THE SAME STRING ON ydot-iam AND ydot-pay. IAM seals the credential; PAY opens
+      # it at the moment a donation is taken. If the two differ, PAY cannot read what IAM wrote
+      # and every donation for an organisation that configured its own gateway is refused with
+      # PAYMENT_GATEWAY_NOT_CONFIGURED - which reads as a missing configuration rather than a
+      # mismatched key, and sends whoever investigates to the wrong screen.
+      #
+      # LEFT BLANK, BOTH SERVICES DERIVE IT FROM JwtSettings__SigningKey, which they already
+      # share. That is why this works out of the box. The cost is that rotating the signing key
+      # would make every stored merchant credential unreadable, so set an explicit one before
+      # going live.
+      PaymentGatewaySettings__EncryptionKey: "${PAYMENT_CREDENTIAL_KEY:-}"
       JwtSettings__RefreshTokenCookieSameSite: "Lax"
 
       # ---- Tenancy -------------------------------------------------------------------------
@@ -422,6 +438,14 @@ services:
       JwtSettings__SigningKey: "${JWT_SIGNING_KEY:-ydot-iam-docker-signing-key-please-replace-in-every-real-environment-2026}"
       JwtSettings__Issuer: "YDot.IAM"
       JwtSettings__Audience: "YDot.Clients"
+
+      # THE SAME KEY IAM SEALS WITH. See the note on ydot-iam for what happens if they differ.
+      PaymentGatewaySettings__EncryptionKey: "${PAYMENT_CREDENTIAL_KEY:-}"
+
+      # The escape hatch. Set to "false" to ignore every gateway configured on the IAM screen and
+      # go back to taking payments with the credentials in this file alone - which is how the
+      # module worked before that screen existed. A restart away, and no release needed.
+      PaymentGatewaySettings__UseTenantConfiguration: "true"
 
       PaymentSettings__FinancialYearStartMonth: "4"
       PaymentSettings__DefaultPaymentLinkValidityMinutes: "60"

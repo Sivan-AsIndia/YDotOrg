@@ -116,6 +116,27 @@ public static class PermissionCodes
     public const string OrganisationManageDepartments = "iam.organisation.manage-departments";
     public const string OrganisationManageUnits = "iam.organisation.manage-units";
 
+    // ---- Payment gateway configuration ----------------------------------------------------------
+    //
+    // THE MOST CONSEQUENTIAL SET OF CODES IN THIS FILE, and it is worth being blunt about why:
+    // they decide which merchant account an Organisation's donations settle into - which is to
+    // say, whose bank account the money reaches.
+    //
+    // THEY BELONG TO ADMINISTRATORS ONLY. SuperAdmin holds every code by virtue of scope and
+    // TenantAdmin by GrantsAllTenantPermissions; INITIATOR and APPROVER are excluded explicitly
+    // in RoleAccessProfiles.AdministratorOnlyCodes rather than by accident of the action
+    // derivation, which would otherwise hand "manage" to the maker as an ordinary operate verb.
+    //
+    // ALL FOUR ARE SENSITIVE, INCLUDING VIEW. The view response carries no secret - only a
+    // four-character hint - but it does say which provider takes an Organisation's money and
+    // where its webhook points, and that is worth an enhanced audit row on its own.
+    public const string PaymentGatewaysView = "iam.payment-gateways.view";
+    public const string PaymentGatewaysManage = "iam.payment-gateways.manage";
+    public const string PaymentGatewaysDelete = "iam.payment-gateways.delete";
+
+    /// <summary>Presses Test, which reaches out to the provider with the stored credentials.</summary>
+    public const string PaymentGatewaysTest = "iam.payment-gateways.test";
+
     /// <summary>
     /// The global master catalogue: Country, StateProvince, City, Currency and TimeZone.
     ///
@@ -278,6 +299,7 @@ public static class PermissionCodes
         AccessReviewsDecide, AccessReviewsCancel, AccessReviewsExport,
         AuditExport, AuditViewSensitive,
         OrganisationEdit, OrganisationSubmit, OrganisationManageSettings,
+        PaymentGatewaysView, PaymentGatewaysManage, PaymentGatewaysDelete, PaymentGatewaysTest,
         .. GlobalMaster.Sensitive,
         Platform.BusinessUnitsCreate, Platform.BusinessUnitsEdit, Platform.BusinessUnitsManageSettings,
         Platform.TenantsCreate, Platform.TenantsApprove, Platform.TenantsReject,
@@ -307,6 +329,11 @@ public static class PermissionCodes
         AuditView, AuditExport, AuditViewSensitive,
         OrganisationView, OrganisationEdit, OrganisationSubmit, OrganisationUploadDocument,
         OrganisationManageSettings, OrganisationManageDepartments, OrganisationManageUnits,
+
+        // Payment gateway configuration. Tenant-assignable because the whole point is that an
+        // Organisation configures its OWN merchant account; RoleAccessProfiles keeps the four
+        // codes to administrators.
+        PaymentGatewaysView, PaymentGatewaysManage, PaymentGatewaysDelete, PaymentGatewaysTest,
 
         // The global master catalogue, migrated in from the standalone GlobalMaster service.
         // Tenant-assignable: the permission governs an Organisation's OWN master rows, never

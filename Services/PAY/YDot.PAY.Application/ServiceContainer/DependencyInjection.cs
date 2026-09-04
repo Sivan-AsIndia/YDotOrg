@@ -34,6 +34,12 @@ public static class DependencyInjection
         services.Configure<DatabaseSettings>(configuration.GetSection(DatabaseSettings.SectionName));
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<PaymentSettings>(configuration.GetSection(PaymentSettings.SectionName));
+
+        // Bound from IAM's section name on purpose, so one variable configures both services.
+        // If the two derive different keys, PAY cannot open what IAM sealed - see the settings
+        // class for why that failure looks like a missing configuration rather than a bad key.
+        services.Configure<GatewayConfigurationSettings>(
+            configuration.GetSection(GatewayConfigurationSettings.SectionName));
         services.Configure<ClientAppSettings>(configuration.GetSection(ClientAppSettings.SectionName));
         services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
         services.Configure<IdentityIntegrationSettings>(

@@ -80,6 +80,7 @@ import { SelectOrganisationComponent } from './Features/YDot/Auth/Auth/select-or
 import { AccessDeniedComponent } from './Features/YDot/Shared/access-denied/access-denied';
 import { PageNotFoundComponent } from './Features/YDot/Shared/page-not-found/page-not-found';
 import { AuditTrailComponent } from './Features/YDot/Administration/audit-trail/audit-trail';
+import { PaymentGatewayConfigurationComponent } from './Features/YDot/Configuration/payment/payment-gateway-configuration';
 import { MenuMappingComponent } from './Features/YDot/Administration/menu-mapping/menu-mapping';
 import { OrganisationStructureComponent } from './Features/YDot/Administration/organisation-structure/organisation-structure';
 import { BusinessUnitComponent } from './Features/YDot/Platform/business-unit/business-unit';
@@ -193,6 +194,20 @@ export const routes: Routes = [
       // IAM-USR-03 — Access preview
       { path: 'administration/access/access-preview', component: AccessReviewCampaignComponent, canActivate: [requirePermission('iam.permissions.view')] },
       { path: 'administration/access/access-review-campaign', component: AccessReviewCampaignComponent, canActivate: [requirePermission('iam.access-reviews.view')] },
+
+      // ===== Configuration =====
+      //
+      // WHERE AN ORGANISATION'S DONATIONS SETTLE. Only SUPERADMIN and TENANTADMIN reach it:
+      // `iam.payment-gateways.view` is administrator-only on the server, so INITIATOR and
+      // APPROVER carry none of it however an organisation configures its roles. The guard is
+      // navigation rather than security - every endpoint behind the screen re-checks the same
+      // permission - but it is what puts a person who follows a stale bookmark on a page that
+      // explains itself instead of one that renders empty and looks broken.
+      {
+        path: 'configuration/payment/gateways',
+        component: PaymentGatewayConfigurationComponent,
+        canActivate: [requirePermission('iam.payment-gateways.view')],
+      },
 
       // ===== Workspace pages =====
       { path: 'workspace/my-workspace', component: WorkSpaceComponent },

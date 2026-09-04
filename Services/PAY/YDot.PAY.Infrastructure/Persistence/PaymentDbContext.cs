@@ -76,6 +76,19 @@ public class PaymentDbContext(
 
     public DbSet<PaymentAuditEvent> AuditEvents => Set<PaymentAuditEvent>();
 
+    /// <summary>
+    /// IAM's payment gateway configuration table, READ-ONLY and EXCLUDED FROM THIS SERVICE'S
+    /// MIGRATIONS.
+    ///
+    /// It is what a TenantAdmin fills in on the configuration screen, and it is read on the
+    /// donation path so a merchant credential entered there is honoured without a deployment.
+    /// The four services share one database, so this is a local read rather than a call to IAM
+    /// in the middle of taking money - see the entity for why that trade was made and what it
+    /// costs. IAM owns the DDL; nothing here writes to it.
+    /// </summary>
+    internal DbSet<Gateway.TenantGatewayConfiguration> TenantGatewayConfigurations =>
+        Set<Gateway.TenantGatewayConfiguration>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

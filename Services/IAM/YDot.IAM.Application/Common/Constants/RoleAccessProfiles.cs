@@ -200,6 +200,33 @@ public static class RoleAccessProfiles
     ];
 
     /// <summary>
+    /// Codes NEITHER system role holds, because they belong to an administrator and to nobody
+    /// else.
+    ///
+    /// WHY A THIRD EXCLUSION LIST. The two above are each one-sided:
+    /// <see cref="CheckerOnlyOperations"/> takes a code away from the maker and
+    /// <see cref="CheckerExcludedCodes"/> takes one away from the checker. A code that belongs to
+    /// neither would have to appear in both, which reads as two unrelated decisions and invites
+    /// somebody to "tidy up" one half of it later.
+    ///
+    /// WHAT IS IN IT. The payment gateway configuration, whose codes decide which merchant
+    /// account an Organisation's donations settle into. That is not a maker-checker question at
+    /// all - splitting it would only mean two people instead of one could re-point where the
+    /// money goes. It is an administrator's decision, so SUPER_ADMIN holds it by scope and
+    /// TENANT_ADMIN by <c>GrantsAllTenantPermissions</c>, and the working roles hold none of it.
+    ///
+    /// Note this does NOT reach a database that has already run - see
+    /// <see cref="WithdrawnGrants"/> for that. These codes are new, so no role has ever held one.
+    /// </summary>
+    private static readonly IReadOnlyList<string> AdministratorOnlyCodes =
+    [
+        PermissionCodes.PaymentGatewaysView,
+        PermissionCodes.PaymentGatewaysManage,
+        PermissionCodes.PaymentGatewaysDelete,
+        PermissionCodes.PaymentGatewaysTest
+    ];
+
+    /// <summary>
     /// Every Tenant-assignable code in the platform: IAM and GM from
     /// <see cref="PermissionCodes.AllTenant"/>, and CAM, DON and PAY from
     /// <see cref="ModulePermissionCatalogue"/>.
@@ -288,6 +315,7 @@ public static class RoleAccessProfiles
             .Where(code => !ApprovalCodes.Contains(code, StringComparer.Ordinal))
             .Concat(MakerApprovalExceptions)
             .Where(code => !CheckerOnlyOperations.Contains(code, StringComparer.Ordinal))
+            .Where(code => !AdministratorOnlyCodes.Contains(code, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
     ];
@@ -313,6 +341,7 @@ public static class RoleAccessProfiles
             .Concat(AdditionalApprovalCodes)
             .Concat(PostApprovalOperations)
             .Where(code => !CheckerExcludedCodes.Contains(code, StringComparer.Ordinal))
+            .Where(code => !AdministratorOnlyCodes.Contains(code, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
     ];

@@ -38,6 +38,22 @@ public static class AuditActionCodes
     public const string OrganisationUnitCreated = "iam.organisation.unit.created";
     public const string OrganisationUnitUpdated = "iam.organisation.unit.updated";
     public const string OrganisationUnitDeleted = "iam.organisation.unit.deleted";
+
+    // ---- Payment gateway configuration --------------------------------------------------------
+    //
+    // These say where an Organisation's donation income goes. Every one of them is written to the
+    // platform trail as well as to the configuration's own change log, because the two are read
+    // by different people for different reasons: the log answers "what did this row look like
+    // last week", and the trail answers "what did this person do on Tuesday".
+    public const string PaymentGatewayConfigured = "iam.payment-gateway.configured";
+    public const string PaymentGatewayUpdated = "iam.payment-gateway.updated";
+    public const string PaymentGatewayActivated = "iam.payment-gateway.activated";
+    public const string PaymentGatewayDeactivated = "iam.payment-gateway.deactivated";
+    public const string PaymentGatewayDeleted = "iam.payment-gateway.deleted";
+    public const string PaymentGatewayTested = "iam.payment-gateway.tested";
+
+    /// <summary>A credential was replaced. Separate because it re-points where the money goes.</summary>
+    public const string PaymentGatewayCredentialsRotated = "iam.payment-gateway.credentials-rotated";
     public const string MfaVerified = "iam.auth.mfa.verified";
     public const string MfaFailed = "iam.auth.mfa.failed";
     public const string MfaEnrolled = "iam.auth.mfa.enrolled";
