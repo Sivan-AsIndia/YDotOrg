@@ -112,6 +112,20 @@ public sealed class AccessReviewCommandHandler(
         // ---- Work out what to review ---------------------------------------------------
         var candidates = await BuildCandidatesAsync(request, tenantId, now, cancellationToken);
 
+        // ONE RESERVATION FOR THE WHOLE CAMPAIGN, taken before the loop.
+        //
+        // This used to call NextReviewNumberAsync per review. Nothing is saved until the end of
+        // the handler, so every one of those calls counted the same unchanged table and returned
+        // REV-yyyy-00001 - and the unique index on the number refused the batch. Creating a
+        // campaign that covered two or more people failed outright with a 500, which is to say
+        // the screen's whole purpose did not work.
+        //
+        // Sized to the candidate list rather than to the reviews actually raised: some
+        // candidates are skipped below when no reviewer can be found, and a gap in a reference
+        // series costs nothing while running out of numbers mid-loop would cost everything.
+        var numbers = await governance.NextReviewNumbersAsync(
+            tenantId, candidates.Count, cancellationToken);
+
         var created = 0;
 
         foreach (var candidate in candidates)
@@ -131,7 +145,7 @@ public sealed class AccessReviewCommandHandler(
             {
                 TenantId = tenantId,
                 BusinessUnitId = tenantContext.BusinessUnitId,
-                ReviewNumber = await governance.NextReviewNumberAsync(tenantId, cancellationToken),
+                ReviewNumber = numbers[created],
                 CampaignId = campaign.Id,
                 SubjectUserId = candidate.UserId,
                 ReviewerUserId = reviewerId.Value,

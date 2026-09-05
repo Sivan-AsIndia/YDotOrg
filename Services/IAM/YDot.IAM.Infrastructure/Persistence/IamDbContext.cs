@@ -5,6 +5,7 @@ using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Domain.Common;
 using YDot.IAM.Domain.Entities;
+using YDot.IAM.Domain.Entities.Configuration;
 
 namespace YDot.IAM.Infrastructure.Persistence;
 
@@ -176,6 +177,33 @@ public class IamDbContext(
     /// table, where loading a tracked Country aggregate to fill a dropdown is not.
     /// </summary>
     public DbSet<CountryLanguage> CountryLanguages => Set<CountryLanguage>();
+
+    // ---- Configuration ---------------------------------------------------------------------------------------
+    //
+    // WHERE AN ORGANISATION'S DONATIONS SETTLE. Owned by IAM because it is administrative
+    // configuration attached to an Organisation, and READ BY PAY at the moment a donation is
+    // taken - the four services share one database, each owning its own table prefix, so PAY maps
+    // the same table read-only rather than calling across a network on the payment path.
+    //
+    // THE CREDENTIAL COLUMNS ARE SEALED. See PaymentGatewayConfiguration for what that buys and,
+    // more importantly, what it does not.
+
+    public DbSet<PaymentGatewayConfiguration> PaymentGatewayConfigurations =>
+        Set<PaymentGatewayConfiguration>();
+
+    public DbSet<PaymentGatewayConfigurationAudit> PaymentGatewayConfigurationAudits =>
+        Set<PaymentGatewayConfigurationAudit>();
+
+    /// <summary>
+    /// PAY's <c>pay_gateway_accounts</c>, READ-ONLY and excluded from this service's migrations.
+    ///
+    /// The gateway rows PAY's seeder built from the deployment's own environment - the ones
+    /// taking donations today. The configuration screen lists them beside the configurations
+    /// entered on it, because a screen that showed "nothing configured" for an Organisation whose
+    /// donations are working would invite somebody to fix what was never broken.
+    /// </summary>
+    internal DbSet<Configuration.DeploymentGatewayAccount> DeploymentGatewayAccounts =>
+        Set<Configuration.DeploymentGatewayAccount>();
 
     // ---- Platform ------------------------------------------------------------------------------------------
 

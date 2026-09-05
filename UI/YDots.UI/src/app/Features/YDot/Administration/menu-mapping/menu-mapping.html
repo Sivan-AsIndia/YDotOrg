@@ -20,13 +20,32 @@
         enable here, what their role is given, and what their permissions allow. Hiding a menu
         item tidies the navigation — it does not grant or remove access, which is checked on
         every request regardless.
+        <br>
+        Switching a section off switches off everything under it, and switching an item on
+        switches on the section it lives in — an item under a hidden section is not shown greyed
+        out, it is not shown at all.
       </span>
     </div>
 
     @if (errorMessage()) {
       <div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
         <i class="ri-error-warning-line mt-1"></i>
-        <span>{{ errorMessage() }}</span>
+        <div class="flex-grow-1">
+          <span>{{ errorMessage() }}</span>
+
+          @if (staleData()) {
+            <!--
+              Somebody else saved while this screen was open. Pressing Save again would only be
+              refused again, so the only useful button is the one that fetches their version.
+            -->
+            <div class="mt-2">
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      (click)="reloadAfterConflict()">
+                <i class="ri-refresh-line me-1"></i> Load the latest version
+              </button>
+            </div>
+          }
+        </div>
       </div>
     }
 
@@ -68,22 +87,14 @@
     <!-- ================================================== What this organisation uses -->
     @if (!loading() && !loadFailed() && tab() === 'organisation') {
       <div class="card border-0 shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h6 class="mb-0">Navigation for this organisation</h6>
-
-          @if (hasConfigurationChanges()) {
-            <div class="d-flex gap-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary"
-                      (click)="cancelConfiguration()">
-                Cancel
-              </button>
-              <button type="button" class="btn btn-sm btn-primary"
-                      [disabled]="saving()" (click)="saveConfiguration()">
-                @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
-                @else { <i class="ri-save-line me-1"></i> Save changes }
-              </button>
-            </div>
-          }
+        <div class="card-header">
+          <h6 class="mb-1">Navigation for this organisation</h6>
+          <p class="text-muted small mb-0">
+            Every switch here decides whether the item exists for this organisation at all — for
+            everybody in it, whatever their role. Switch something off and it disappears from
+            every menu; switch it back on and it returns to whichever roles are mapped to it on
+            the other tab. <strong>Changes are not stored until you save.</strong>
+          </p>
         </div>
 
         <div class="list-group list-group-flush">
@@ -104,22 +115,91 @@
         </div>
       </div>
 
+      <!--
+        THE SAVE BUTTON, WHERE IT CAN ACTUALLY BE SEEN.
+
+        This list is sixty rows long and the only Save button used to live in the card header.
+        Flip a switch two thirds of the way down and the button was some three and a half
+        THOUSAND pixels above the top of the screen - nearly four screens up, with nothing
+        beside the row you had just changed to say a save was even pending. So people flipped a
+        switch, watched it move, refreshed, and found their change gone. It was never saved;
+        it was never possible to tell that it had not been.
+
+        Sticky to the bottom of the viewport, so it follows you down the list and the action is
+        always one click from whatever row you are looking at.
+      -->
+      @if (hasConfigurationChanges()) {
+        <div class="mm-actionbar d-flex align-items-center gap-3 flex-wrap">
+          <i class="ri-error-warning-line fs-5 text-warning"></i>
+          <span class="flex-grow-1 small mb-0">
+            <strong>{{ configurationChangeCount() }} unsaved change{{ configurationChangeCount() === 1 ? '' : 's' }}.</strong>
+            Nothing takes effect until you save.
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+                  [disabled]="saving()" (click)="cancelConfiguration()">
+            Discard
+          </button>
+          <button type="button" class="btn btn-sm btn-primary"
+                  [disabled]="saving()" (click)="saveConfiguration()">
+            @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
+            @else { <i class="ri-save-line me-1"></i> Save changes }
+          </button>
+        </div>
+      }
+
       <!-- One row shape, used at all three levels, indented by depth. -->
       <ng-template #configRow let-node>
-        <div class="list-group-item d-flex align-items-center gap-3"
+        <div class="list-group-item d-flex align-items-center gap-3 flex-wrap"
              [style.padding-left]="'calc(1.25rem + ' + indent(node.level) + ')'">
-          <i [class]="iconClass(node.resolvedIcon)"></i>
+          <i [class]="pendingIcon(node)"></i>
 
           <div class="flex-grow-1">
-            <span class="d-block">{{ configuredName(node) }}</span>
+            <span class="d-block">
+              {{ pendingName(node) }}
+
+              @if (hasOverride(node)) {
+                <!--
+                  Says that what is on screen is this organisation's wording rather than the
+                  product's, and what the product calls it. Without that, somebody comparing
+                  notes with another organisation - or reading the documentation - has no way
+                  to tell that the two names are the same item.
+                -->
+                <span class="badge bg-info-subtle text-info ms-1"
+                      [title]="'Renamed by this organisation. The product calls this &quot;' + catalogueName(node) + '&quot;.'">
+                  Customised
+                </span>
+              }
+            </span>
             <small class="text-muted">
               {{ levelLabel(node.level) }}
               @if (node.route) { · <code>{{ node.route }}</code> }
               @if (node.requiredPermissionCode) {
                 · needs <code>{{ node.requiredPermissionCode }}</code>
               }
+              @if (hasOverride(node) && pendingName(node) !== catalogueName(node)) {
+                · product name: {{ catalogueName(node) }}
+              }
             </small>
           </div>
+
+          <!--
+            RENAME, RE-ICON, RE-ORDER - FOR THIS ORGANISATION ONLY.
+
+            TenantMenu has carried DisplayNameOverride, IconOverride and DisplayOrderOverride
+            from the start, the save request has always sent all three, and the query has always
+            resolved them - but nothing ever offered a way to SET one. The whole feature was
+            built and left unreachable, so an organisation that wanted "Supporters" instead of
+            "Donors" had no way to ask for it.
+
+            It edits this organisation's copy, never the catalogue: the product's own name, icon
+            and order are untouched and every other organisation is unaffected.
+          -->
+          <button type="button" class="btn btn-sm btn-link text-muted px-1"
+                  [attr.aria-label]="'Rename or reorder ' + pendingName(node)"
+                  [title]="'Rename, change the icon or reorder \'' + catalogueName(node) + '\' for this organisation'"
+                  (click)="isEditing(node) ? closeEditor() : openEditor(node)">
+            <i class="ri-edit-line"></i>
+          </button>
 
           @if (node.isMandatory) {
             <!--
@@ -133,6 +213,74 @@
               <input class="form-check-input" type="checkbox"
                      [checked]="isEnabled(node)" (change)="toggleNode(node)"
                      [attr.aria-label]="'Show ' + configuredName(node)">
+            </div>
+          }
+
+          @if (isEditing(node)) {
+            <div class="w-100 mt-3 p-3 rounded border bg-body-tertiary">
+              <div class="row g-3">
+                <div class="col-md-5">
+                  <label class="form-label small mb-1" [attr.for]="'mm-name-' + node.menuDefinitionId">
+                    What this organisation calls it
+                  </label>
+                  <input class="form-control form-control-sm" type="text" maxlength="120"
+                         [id]="'mm-name-' + node.menuDefinitionId"
+                         [placeholder]="catalogueName(node)"
+                         [ngModel]="editorDraft().name"
+                         (ngModelChange)="editorDraft.set({ ...editorDraft(), name: $event })">
+                  <small class="text-muted">Leave blank to use the product's name.</small>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label small mb-1" [attr.for]="'mm-icon-' + node.menuDefinitionId">
+                    Icon
+                  </label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i [class]="pendingIcon(node)"></i></span>
+                    <input class="form-control" type="text" maxlength="60"
+                           [id]="'mm-icon-' + node.menuDefinitionId"
+                           [placeholder]="node.resolvedIcon || 'e.g. ri-user-line'"
+                           [ngModel]="editorDraft().icon"
+                           (ngModelChange)="editorDraft.set({ ...editorDraft(), icon: $event })">
+                  </div>
+                  <small class="text-muted">A Remix Icon name. Blank keeps the default.</small>
+                </div>
+
+                <div class="col-md-3">
+                  <label class="form-label small mb-1" [attr.for]="'mm-order-' + node.menuDefinitionId">
+                    Position
+                  </label>
+                  <input class="form-control form-control-sm" type="number" min="0" max="9999"
+                         [id]="'mm-order-' + node.menuDefinitionId"
+                         [placeholder]="node.resolvedOrder"
+                         [ngModel]="editorDraft().order"
+                         (ngModelChange)="editorDraft.set({ ...editorDraft(), order: $event })">
+                  <small class="text-muted">Lower comes first.</small>
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-sm btn-link text-muted" (click)="resetEditor()">
+                  Use the product's defaults
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="closeEditor()">
+                  Cancel
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" (click)="applyEditor()">
+                  Apply
+                </button>
+              </div>
+
+              <!--
+                "Apply" only moves the change into the pending set; the save bar at the foot of
+                the list is still what writes it. One Save for the whole screen, so a rename and
+                a switch made in the same visit go together rather than half-committing.
+              -->
+              <small class="text-muted d-block mt-2">
+                <i class="ri-information-line me-1"></i>
+                Applying holds the change on this page — use <strong>Save changes</strong> at the
+                foot of the list to store it.
+              </small>
             </div>
           }
         </div>
@@ -164,27 +312,18 @@
           </div>
         } @else {
           <div class="card border-0 shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h6 class="mb-0">
+            <div class="card-header">
+              <h6 class="mb-1">
                 Visible to this role
                 <span class="badge bg-secondary-subtle text-secondary ms-1">
                   {{ mappedCount() }}
                 </span>
               </h6>
-
-              @if (hasMappingChanges()) {
-                <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-sm btn-outline-secondary"
-                          (click)="cancelMapping()">
-                    Cancel
-                  </button>
-                  <button type="button" class="btn btn-sm btn-primary"
-                          [disabled]="saving()" (click)="saveMapping()">
-                    @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
-                    @else { <i class="ri-save-line me-1"></i> Save mapping }
-                  </button>
-                </div>
-              }
+              <p class="text-muted small mb-0">
+                Which of the items this organisation offers are put in front of people holding
+                this role. It never grants access — it only decides what the menu shows them.
+                <strong>Changes are not stored until you save.</strong>
+              </p>
             </div>
 
             <div class="list-group list-group-flush">
@@ -205,6 +344,26 @@
             </div>
           </div>
 
+          <!-- Same reasoning as the organisation tab: see the note there. -->
+          @if (hasMappingChanges()) {
+            <div class="mm-actionbar d-flex align-items-center gap-3 flex-wrap">
+              <i class="ri-error-warning-line fs-5 text-warning"></i>
+              <span class="flex-grow-1 small mb-0">
+                <strong>{{ mappingChangeCount() }} unsaved change{{ mappingChangeCount() === 1 ? '' : 's' }}</strong>
+                to {{ selectedRoleName() }}. Nothing takes effect until you save.
+              </span>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      [disabled]="saving()" (click)="cancelMapping()">
+                Discard
+              </button>
+              <button type="button" class="btn btn-sm btn-primary"
+                      [disabled]="saving()" (click)="saveMapping()">
+                @if (saving()) { <i class="ri-loader-4-line me-1"></i> Saving… }
+                @else { <i class="ri-save-line me-1"></i> Save mapping }
+              </button>
+            </div>
+          }
+
           <ng-template #mapRow let-node>
             <div class="list-group-item d-flex align-items-center gap-3"
                  [class.opacity-50]="!isAvailable(node)"
@@ -224,6 +383,20 @@
                   }
                 </small>
               </div>
+
+              @if (!isEnabledForOrganisation(node)) {
+                <!--
+                  THE OTHER TAB, NOT THIS ONE. A node the organisation has switched off is
+                  removed from everybody's navigation before role mapping is consulted, so the
+                  mapping saves perfectly and shows nobody anything - which is indistinguishable
+                  from a save that was thrown away, and is exactly what people reported. Saying
+                  so here, and naming the tab that fixes it, is the whole point of the badge.
+                -->
+                <span class="badge bg-warning-subtle text-warning-emphasis me-2"
+                      title="This organisation has switched this item off, on the &quot;What this organisation uses&quot; tab. The mapping below is kept and takes effect as soon as it is switched back on.">
+                  Off for this organisation
+                </span>
+              }
 
               @if (!isAvailable(node)) {
                 <!--

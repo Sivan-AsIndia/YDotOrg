@@ -2119,8 +2119,11 @@ export interface RoleMenuNodeResponse {
   route?: string | null;
   requiredPermissionCode?: string | null;
   isVisible?: boolean;
+  /** Whether the ROLE holds the permission this node needs. */
   isPermitted?: boolean;
   isLandingPage?: boolean;
+  /** Whether the ORGANISATION offers this node at all - the other tab's decision. */
+  isEnabledForOrganisation?: boolean;
   children?: RoleMenuNodeResponse[] | null;
 }
 

@@ -1,0 +1,1226 @@
+/* =========================================================
+   Payment Gateways — Configuration
+
+   THE TOKENS AND CLASS NAMES ARE THE ONES THE MASTERS SCREENS USE (currency, time zone, city),
+   deliberately: page-header-card, summary-cards, filters-card, data-table1, status-pill,
+   action-btn, pagination-bar, form-grid. A configuration screen that invented its own visual
+   language would read as a bolt-on, and this one sits two clicks from those.
+
+   IT IS SCOPED TO :host, so nothing here reaches the rest of the application.
+   ========================================================= */
+
+:host {
+  --page: #f7faf8;
+  --surface: #ffffff;
+  --surface-soft: #f3f8f5;
+  --surface-muted: #f8fbf9;
+  --line: #e4ebe7;
+  --line-strong: #d9e4df;
+  --ink: #172b27;
+  --ink-2: #435852;
+  --muted: #7c8f89;
+  --primary: #176b52;
+  --primary-dark: #10523f;
+  --primary-soft: #e7f4ee;
+  --success: #19785a;
+  --success-bg: #e8f5ef;
+  --warning: #b96d16;
+  --warning-bg: #fff4e5;
+  --danger: #c63d3d;
+  --danger-bg: #fdeeee;
+  --info: #2b66c9;
+  --info-bg: #eaf1fd;
+  --shadow: 0 1px 2px rgba(23, 43, 39, .03), 0 8px 24px rgba(23, 43, 39, .035);
+  --shadow-lg: 0 18px 48px rgba(23, 43, 39, .16);
+  --shadow-focus: 0 0 0 3px rgba(23, 107, 82, .11);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --pill: 999px;
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  display: block;
+  min-height: 100%;
+  box-sizing: border-box;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--page);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+button, input, select, textarea { font: inherit; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.app-wrapper, .page-wrapper { width: 100%; min-height: 100%; }
+
+/* NO max-width, AND THAT IS THE FIX FOR THE OVERFLOW. The app shell already bounds this: the
+   sidebar takes its share and applayout.css stretches the container into what is left. A
+   max-width of 1540px plus 52px of padding came to more than the remaining space on a 1920
+   screen, so the page grew a horizontal scrollbar and pushed the filter bar off the right edge.
+
+   min-width: 0 matters for the same reason. applayout.css makes this element a flex COLUMN, and
+   without it a wide child - a table with long merchant ids in it - sets the floor for the whole
+   page rather than scrolling inside its own pane. */
+.container-fluid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 20px 22px 30px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .78rem;
+}
+
+.break { overflow-wrap: anywhere; }
+.nowrap { white-space: nowrap; }
+.text-center { text-align: center; }
+.text-end { text-align: right; }
+.is-success { color: var(--success); }
+.is-danger { color: var(--danger); }
+
+/* ---------------------------------------------------------
+   Page header
+   --------------------------------------------------------- */
+
+.page-header-card {
+  position: relative;
+  min-height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f1f8f5;
+  box-shadow: var(--shadow);
+}
+
+.header-left { position: relative; z-index: 2; min-width: 0; }
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: var(--primary);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.eyebrow-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  color: var(--primary);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.42rem;
+  font-weight: 700;
+  letter-spacing: -.015em;
+}
+
+.page-subtitle {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: .855rem;
+}
+
+.header-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Decorative only, and inert to a screen reader. It gives the header the same depth the
+   masters screens have without an image request. */
+.header-visual { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+
+.header-orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(23, 107, 82, .12);
+}
+
+.orbit-one { width: 190px; height: 190px; right: -40px; top: -66px; }
+.orbit-two { width: 128px; height: 128px; right: 74px; bottom: -60px; }
+
+.header-pin {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(23, 107, 82, .28);
+}
+
+.pin-one { right: 56px; top: 30px; }
+.pin-two { right: 148px; top: 62px; }
+.pin-three { right: 96px; bottom: 26px; }
+
+/* ---------------------------------------------------------
+   Buttons
+   --------------------------------------------------------- */
+
+.btn-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--pill);
+  background: var(--primary);
+  color: #fff;
+  font-size: .84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.btn-create:hover:not(:disabled) { background: var(--primary-dark); }
+.btn-create:disabled { opacity: .6; cursor: not-allowed; }
+.btn-create .plus { font-size: 1.05rem; line-height: 1; }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid var(--primary);
+  border-radius: var(--pill);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: .84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: #fff;
+  color: var(--ink-2);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+.btn-outline.sm { padding: 5px 12px; font-size: .76rem; }
+.btn-outline.mt { margin-top: 10px; }
+
+.btn-danger {
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: .84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-clear {
+  align-self: flex-end;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--muted);
+  font-size: .8rem;
+  cursor: pointer;
+}
+
+.btn-clear:hover { color: var(--danger); border-color: var(--danger); }
+
+.btn-icon-round {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.btn-icon-round:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+.btn-icon-round:disabled { opacity: .55; cursor: not-allowed; }
+
+.btn-inline {
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-soft);
+  color: var(--ink-2);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-inline:hover { color: var(--primary); }
+
+/* ---------------------------------------------------------
+   Summary tiles
+   --------------------------------------------------------- */
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 17px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* The attention tile only colours itself when there IS something to attend to. A permanently
+   amber tile reading zero is noise that trains people to ignore it. */
+.summary-card-alert { border-color: rgba(185, 109, 22, .45); background: var(--warning-bg); }
+
+.summary-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  flex-shrink: 0;
+}
+
+.summary-icon-primary { background: var(--primary-soft); color: var(--primary); }
+.summary-icon-success { background: var(--success-bg); color: var(--success); }
+.summary-icon-muted { background: var(--surface-soft); color: var(--muted); }
+.summary-icon-warning { background: var(--warning-bg); color: var(--warning); }
+
+.summary-copy { display: flex; flex-direction: column; min-width: 0; }
+.summary-value { font-size: 1.28rem; font-weight: 700; line-height: 1.15; }
+.summary-label { color: var(--muted); font-size: .765rem; }
+
+/* ---------------------------------------------------------
+   Notices
+   --------------------------------------------------------- */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.notice p { margin: 0; font-size: .825rem; line-height: 1.55; color: var(--ink-2); }
+.notice strong { color: var(--ink); }
+
+.notice-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .755rem;
+}
+
+.notice-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+
+.notice-info { background: var(--info-bg); border-color: rgba(43, 102, 201, .2); }
+.notice-info .notice-icon { background: #fff; color: var(--info); }
+
+.notice-warning { background: var(--warning-bg); border-color: rgba(185, 109, 22, .3); }
+.notice-warning .notice-icon { background: #fff; color: var(--warning); }
+
+.notice-danger { background: var(--danger-bg); border-color: rgba(198, 61, 61, .28); }
+.notice-danger .notice-icon { background: #fff; color: var(--danger); }
+
+.notice-success { background: var(--success-bg); border-color: rgba(25, 120, 90, .28); }
+.notice-success .notice-icon { background: #fff; color: var(--success); }
+
+.notice-muted { background: var(--surface-soft); }
+.notice-muted .notice-icon { background: #fff; color: var(--muted); }
+
+/* ---------------------------------------------------------
+   Filters
+   --------------------------------------------------------- */
+
+.filters-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 15px 17px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.search-wrapper { position: relative; flex: 1 1 280px; min-width: 220px; }
+
+.search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: .855rem;
+}
+
+.search-input::placeholder { color: var(--muted); }
+.search-input:focus { background: #fff; border-color: var(--primary); }
+
+.filter-selects { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.filter-field { display: flex; flex-direction: column; gap: 5px; }
+
+.filter-label {
+  color: var(--muted);
+  font-size: .715rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.filter-select {
+  min-width: 150px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font-size: .83rem;
+}
+
+.filter-select:focus { border-color: var(--primary); }
+
+/* ---------------------------------------------------------
+   Table + details workspace
+   --------------------------------------------------------- */
+
+/* ONE PANE. The details drawer used to sit here as a second flex column and the two fought over
+   the width; it is fixed to the viewport now, so the table gets the whole row at every size. */
+.data-workspace { position: relative; min-width: 0; }
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 120px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .68);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: pg-spin .8s linear infinite;
+}
+
+@keyframes pg-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
+.table-pane {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.audit-pane { margin-top: 14px; }
+
+.table-pane-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table-kicker {
+  display: block;
+  color: var(--muted);
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.table-pane-header h2 {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.result-count { color: var(--muted); font-size: .79rem; }
+.audit-header-actions { display: flex; align-items: center; gap: 12px; }
+
+.table-responsive { width: 100%; overflow-x: auto; }
+
+.data-table1 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .845rem;
+}
+
+/* WIDTHS AS PERCENTAGES, so the columns keep their proportions instead of the browser handing
+   whichever cell holds the longest unbroken string - a merchant id, a webhook URL - as much room
+   as it wants and squeezing everything else. */
+.data-table1 .col-org { width: 15%; }
+.data-table1 .col-provider { width: 20%; }
+.data-table1 .col-env { width: 11%; }
+.data-table1 .col-merchant { width: 18%; }
+.data-table1 .col-webhook { width: 16%; }
+.data-table1 .col-status { width: 9%; }
+.data-table1 .col-test { width: 10%; }
+.data-table1 .col-action { width: 1%; white-space: nowrap; }
+
+.data-table1 .col-when { width: 12%; }
+.data-table1 .col-who { width: 16%; }
+.data-table1 .col-action-name { width: 15%; }
+.data-table1 .col-field { width: 13%; }
+.data-table1 .col-old,
+.data-table1 .col-new { width: 16%; }
+.data-table1 .col-reason { width: 12%; }
+
+.data-table1 thead th {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: .715rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table1 tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.data-table1 tbody tr:last-child td { border-bottom: none; }
+.data-table1 tbody tr:hover { background: var(--surface-muted); }
+
+/* A MARKER, NOT A WASH. Tinting the whole row green said "selected" so loudly that it read as a
+   status - and on this screen green already means "taking donations", which the row may not be. */
+.data-table1 tbody tr.is-selected { background: var(--surface-muted); box-shadow: inset 3px 0 0 var(--primary); }
+
+/* A superseded deployment row is still shown, because somebody asking why the merchant account
+   changed needs to see it — but it is not competing for attention with the row taking money. */
+.data-table1 tbody tr.is-superseded { opacity: .62; }
+
+.data-table1 tbody tr.result-row:hover { background: transparent; }
+.data-table1 tbody tr.result-row td { padding-top: 0; }
+
+.empty-state { padding: 0 !important; }
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+}
+
+.empty-content p { margin: 0; font-weight: 600; color: var(--ink-2); }
+.empty-content span { color: var(--muted); font-size: .81rem; max-width: 380px; }
+
+.empty-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+/* ---- Cells ---- */
+
+.provider-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.provider-avatar {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-weight: 700;
+  font-size: .92rem;
+}
+
+.provider-avatar.lg { width: 42px; height: 42px; font-size: 1.1rem; border-radius: 12px; }
+
+/* One tint per provider, so the eye can tell two rows apart before reading either. Any provider
+   without an entry falls back to the primary tint above. */
+.provider-avatar[data-provider='Stripe'] { background: #eae7fd; color: #4b3fbb; }
+.provider-avatar[data-provider='PayPal'] { background: #e6f0fb; color: #1c4f8f; }
+.provider-avatar[data-provider='PayU'] { background: #fdf0e3; color: #a4620f; }
+.provider-avatar[data-provider='Cashfree'] { background: #e6f4f6; color: #146b76; }
+.provider-avatar[data-provider='HostedCheckout'] { background: var(--surface-soft); color: var(--muted); }
+
+.provider-copy { display: flex; flex-direction: column; min-width: 0; }
+.provider-name { font-weight: 600; }
+.provider-sub { color: var(--muted); font-size: .755rem; }
+
+.row-flags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  font-size: .69rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flag-muted { background: var(--surface-soft); color: var(--muted); border: 1px solid var(--line); }
+.flag-warning { background: var(--warning-bg); color: var(--warning); }
+.flag-danger { background: var(--danger-bg); color: var(--danger); }
+
+.name-cell { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.name-primary { font-weight: 500; overflow-wrap: anywhere; }
+.name-secondary { color: var(--muted); font-size: .755rem; }
+.name-secondary.mono { font-size: .72rem; }
+
+.truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted-dash { color: var(--muted); font-size: .8rem; }
+
+.env-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 11px;
+  border-radius: var(--pill);
+  font-size: .735rem;
+  font-weight: 600;
+}
+
+/* PRODUCTION READS AS THE LOUDER OF THE TWO, deliberately. It is the row that moves real money,
+   and it should be the one the eye lands on first. */
+.env-production { background: var(--danger-bg); color: var(--danger); }
+.env-sandbox { background: var(--surface-soft); color: var(--ink-2); border: 1px solid var(--line); }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
+  border-radius: var(--pill);
+  font-size: .735rem;
+  font-weight: 600;
+}
+
+.status-pill .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status-pill.active { background: var(--success-bg); color: var(--success); }
+.status-pill.inactive { background: var(--surface-soft); color: var(--muted); }
+
+.tone-pill {
+  display: inline-flex;
+  padding: 2px 9px;
+  border-radius: var(--pill);
+  font-size: .715rem;
+  font-weight: 600;
+}
+
+.tone-success { background: var(--success-bg); color: var(--success); }
+.tone-warning { background: var(--warning-bg); color: var(--warning); }
+.tone-danger { background: var(--danger-bg); color: var(--danger); }
+.tone-info { background: var(--info-bg); color: var(--info); }
+.tone-muted { background: var(--surface-soft); color: var(--muted); }
+.tone-neutral { background: var(--surface-soft); color: var(--ink-2); border: 1px solid var(--line); }
+
+/* Old / new value columns hold anything from a URL to a paragraph. Bounded and wrapped, so a
+   long note cannot push the Reason column off the screen. */
+.value-cell { max-width: 220px; overflow-wrap: anywhere; }
+.value-cell.muted { color: var(--muted); }
+
+.action-buttons { display: flex; justify-content: flex-end; gap: 5px; }
+
+.action-btn {
+  width: 31px;
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+
+.action-btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+.action-btn.danger:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.action-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- Pagination ---- */
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.page-size-control { display: flex; align-items: center; gap: 8px; }
+.entries-label { color: var(--muted); font-size: .78rem; }
+
+.page-size-select {
+  padding: 5px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-size: .79rem;
+}
+
+.pagination-nav { display: flex; gap: 4px; }
+
+.page-btn {
+  min-width: 31px;
+  height: 31px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: .79rem;
+  cursor: pointer;
+}
+
+.page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.page-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------------------------------------------------------
+   Details drawer
+   --------------------------------------------------------- */
+
+/* OFF-CANVAS FROM THE RIGHT.
+
+   It was a sticky column beside the table, which is a fine pattern on a wide monitor and a bad
+   one everywhere else: 380px of drawer plus a table full of merchant ids and webhook URLs came to
+   more than the page had, so the whole layout overflowed sideways - filter bar clipped, drawer
+   half off-screen, horizontal scrollbar on the document.
+
+   Fixed to the viewport it cannot overflow at any width, it can be wider where there is room, and
+   the table underneath keeps the full row. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1030;
+  background: rgba(23, 43, 39, .35);
+}
+
+.details-pane {
+  position: fixed;
+  z-index: 1035;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -18px 0 48px rgba(23, 43, 39, .16);
+  overflow: hidden;
+  animation: pg-slide-in .18s ease-out;
+}
+
+@keyframes pg-slide-in {
+  from { transform: translateX(24px); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .details-pane { animation: none; }
+}
+
+.details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.details-title-row { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+.details-kicker {
+  display: block;
+  color: var(--muted);
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.details-header h2 { margin: 2px 0 0; font-size: 1.02rem; font-weight: 700; }
+
+.details-close {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.details-close:hover { color: var(--danger); border-color: var(--danger); }
+
+.details-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 17px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.details-currency { margin-left: 8px; color: var(--muted); font-size: .78rem; font-weight: 600; }
+
+.details-scroll { flex: 1 1 auto; overflow-y: auto; padding: 16px 17px; }
+
+.detail-section { margin-bottom: 20px; }
+.detail-section:last-child { margin-bottom: 0; }
+
+.section-title {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--primary);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.detail-span-2 { grid-column: span 2; }
+
+.detail-label { color: var(--muted); font-size: .715rem; font-weight: 600; }
+.detail-value { font-size: .845rem; }
+.detail-empty, .detail-note { margin: 0; color: var(--ink-2); font-size: .82rem; line-height: 1.55; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.chip {
+  display: inline-flex;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  background: var(--surface-soft);
+  font-size: .72rem;
+}
+
+.details-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 13px 17px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+/* ---------------------------------------------------------
+   Form
+   --------------------------------------------------------- */
+
+.form-card {
+  padding: 20px 22px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 24px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.section-heading:first-child { margin-top: 0; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.form-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.form-span-2 { grid-column: span 2; }
+.form-block { margin: 14px 0 6px; }
+
+.form-label { color: var(--ink-2); font-size: .79rem; font-weight: 600; }
+.required { color: var(--danger); }
+
+.form-control {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: .855rem;
+}
+
+.form-control:focus { background: #fff; border-color: var(--primary); }
+.form-control::placeholder { color: var(--muted); }
+.form-control:disabled { background: var(--surface-soft); color: var(--muted); cursor: not-allowed; }
+.form-control.is-invalid { border-color: var(--danger); background: var(--danger-bg); }
+
+textarea.form-control { resize: vertical; min-height: 62px; }
+
+.field-hint { color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.field-hint a { color: var(--primary); font-weight: 600; }
+.validation-message { color: var(--danger); font-size: .755rem; font-weight: 500; }
+
+.input-with-action { display: flex; }
+.input-with-action .form-control { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.input-with-action .form-control:only-child { border-radius: var(--radius-sm); }
+
+.mini-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .745rem;
+  cursor: pointer;
+}
+
+/* ---- Segmented environment toggle ---- */
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+
+.segment {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: .83rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segment.is-selected { background: var(--primary); color: #fff; }
+
+/* PRODUCTION SELECTS RED, NOT GREEN. The colour is the last cue somebody gets before they paste
+   a live key, and green would say "safe" about the half of this toggle that moves real money. */
+.segment-live.is-selected { background: var(--danger); color: #fff; }
+
+/* ---- Option cards ---- */
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.option-card.is-selected { border-color: var(--primary); background: var(--primary-soft); }
+.option-card input { margin-top: 3px; accent-color: var(--primary); }
+.option-card span { display: flex; flex-direction: column; gap: 2px; }
+.option-card strong { font-size: .83rem; font-weight: 600; }
+.option-card small { color: var(--muted); font-size: .735rem; line-height: 1.45; }
+
+.chip-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chip-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: var(--surface-muted);
+  font-size: .81rem;
+  cursor: pointer;
+}
+
+.chip-choice.is-selected { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
+.chip-choice input { accent-color: var(--primary); }
+
+/* ---- Switch ---- */
+
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.switch-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: var(--pill);
+  background: var(--line-strong);
+  transition: background .15s ease;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s ease;
+}
+
+.switch input:checked + .switch-track { background: var(--success); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(20px); }
+.switch input:focus-visible + .switch-track { box-shadow: var(--shadow-focus); }
+.switch-text { font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------------------------------------------------------
+   Change log filters
+   --------------------------------------------------------- */
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+/* ---------------------------------------------------------
+   Delete dialog
+
+   Hand-rolled rather than a Bootstrap modal, because this screen does not load Bootstrap's
+   JavaScript and pulling it in for one confirmation would change what every other page ships.
+   --------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: rgba(23, 43, 39, .45);
+}
+
+.modal-dialog {
+  position: fixed;
+  z-index: 1050;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.modal-head h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--danger); }
+.modal-body { padding: 16px 20px; overflow-y: auto; }
+.modal-lead { margin: 0 0 14px; color: var(--ink-2); font-size: .84rem; line-height: 1.55; }
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+/* ---------------------------------------------------------
+   Responsive
+
+   The drawer becomes a full-width block below the table rather than a sticky column: at that
+   width there is no room for two panes, and a 380px drawer beside a table would leave neither
+   readable.
+   --------------------------------------------------------- */
+
+/* THE COLUMNS DROP IN ORDER OF HOW LITTLE THEY ARE MISSED. Webhook and Last test first - both
+   are in the drawer in full - then Merchant, then Environment, which is the last to go because a
+   Production row mistaken for a Sandbox one is the mistake this screen exists to prevent. */
+@media (max-width: 1400px) {
+  .hide-lg { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .hide-md { display: none; }
+  .form-span-2 { grid-column: auto; }
+}
+
+@media (max-width: 768px) {
+  .container-fluid { padding: 16px 14px 26px; }
+  .page-header-card { flex-direction: column; align-items: flex-start; }
+  .hide-sm { display: none; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-span-2 { grid-column: auto; }
+  .truncate { max-width: 150px; }
+}

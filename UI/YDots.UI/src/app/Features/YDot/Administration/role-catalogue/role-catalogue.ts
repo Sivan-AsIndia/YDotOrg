@@ -118,6 +118,22 @@
 
     filteredRoles = signal<RoleItemView[]>([]);
 
+    /**
+     * The owning functions to offer, taken from the roles the API returned.
+     *
+     * NOT A HARDCODED LIST, which is what this was. The filter offered four fixed names and the
+     * create form offered six, so a role tagged "Inventory" or "Communications" could be created
+     * and then never filtered for - and any function an organisation actually used, arriving
+     * through the API or a future import, appeared in neither. There is no catalogue of functions
+     * on the server to fetch: `displayTag` is free text on the role. So the honest source is the
+     * data itself, which also means the list can never drift out of step with what exists.
+     */
+    owningFunctions = computed(() => [...new Set(
+      (this.data()?.roles ?? [])
+        .map((role) => (role.displayTag ?? '').trim())
+        .filter((tag) => tag.length > 0))]
+      .sort((left, right) => left.localeCompare(right)));
+
     // ===== NEW: Stats used by the top summary cards + status tabs =====
     // Total count only — the per-status split below is fully dynamic and
     // reflects whatever approvalState values actually exist in the data
@@ -395,10 +411,13 @@
       if (s) result = result.filter((r) => r.status === s);
       if (t) result = result.filter((r) => r.roleType === t);
 
-      // There is no owning-function on a role: the department that owns a role is a matter of
-      // convention rather than a column, and inventing one here would produce a filter that
-      // silently matched nothing.
-      void f;
+      // THE FILTER NOW FILTERS. This read the selected value and then threw it away - `void f`
+      // - on the belief that a role has no owning function. It does: `displayTag` is the column,
+      // the create form on this very screen writes it, and the table beside this filter renders
+      // it in the "Owning Function" column. So choosing a function did nothing at all, on a
+      // control that looked and behaved exactly like the two working filters next to it.
+      if (f) result = result.filter((r) => (r.displayTag ?? '').trim() === f);
+
       this.filteredRoles.set(result.map(r => this.toRoleItemView(r)));
     }
 

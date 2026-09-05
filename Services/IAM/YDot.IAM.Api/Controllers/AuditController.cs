@@ -44,6 +44,19 @@ public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiC
         [FromQuery] AuditEventSearchFilter filter, CancellationToken cancellationToken) =>
         FromResult(await queries.HandleAsync(new SearchAuditEventsQuery(filter), cancellationToken));
 
+    /// <summary>
+    /// The record types this Organisation's trail contains, for the filter dropdown.
+    ///
+    /// Declared BEFORE the {id:guid} route so the literal segment is never mistaken for an id -
+    /// it would not be, since "target-types" does not parse as a Guid, but relying on that is
+    /// the kind of thing that stops being true when somebody widens the constraint.
+    /// </summary>
+    [HttpGet("target-types")]
+    [HasPermission(PermissionCodes.AuditView)]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<string>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTargetTypesAsync(CancellationToken cancellationToken) =>
+        FromResult(await queries.HandleAsync(new GetAuditTargetTypesQuery(), cancellationToken));
+
     [HttpGet("{id:guid}")]
     [HasPermission(PermissionCodes.AuditView)]
     [ProducesResponseType(typeof(ApiResponse<AuditEventResponse>), StatusCodes.Status200OK)]

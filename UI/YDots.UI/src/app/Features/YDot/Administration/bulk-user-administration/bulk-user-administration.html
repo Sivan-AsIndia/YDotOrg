@@ -89,7 +89,7 @@
                                     <select class="form-select" formControlName="campaign">
                                         <option value="">-- Choose a campaign --</option>
                                         @for (camp of campaignOptions(); track camp.id) {
-                                            <option value="{{ camp.id }}">{{ camp.name }}</option>
+                                            <option [value]="camp.id">{{ camp.name }}</option>
                                          }
                                     </select>
                                 </div>
@@ -143,7 +143,7 @@
                                 <select class="form-select" formControlName="scopeType">
                                     <option value="">-- Select scope type --</option>
                                     @for (scope of scopeTypeOptions(); track scope.id) {
-                                        <option value="{{ scope.id }}">{{ scope.name }}</option>
+                                        <option [value]="scope.id">{{ scope.name }}</option>
                                     }
                                 </select>
                             </div>

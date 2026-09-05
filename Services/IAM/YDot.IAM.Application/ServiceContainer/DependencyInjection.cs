@@ -10,6 +10,9 @@ using YDot.IAM.Application.Features.Authentication.Commands.SelectTenant;
 using YDot.IAM.Application.Features.Authentication.Commands.SignIn;
 using YDot.IAM.Application.Features.Authentication.Commands.Tokens;
 using YDot.IAM.Application.Features.Authentication.Queries.AuthenticationViews;
+using YDot.IAM.Application.Features.Configuration.PaymentGateways;
+using YDot.IAM.Application.Features.Configuration.PaymentGateways.Commands.ManagePaymentGatewayConfiguration;
+using YDot.IAM.Application.Features.Configuration.PaymentGateways.Queries;
 using YDot.IAM.Application.Features.GlobalMasters.Commands;
 using YDot.IAM.Application.Features.GlobalMasters.Commands.ManageCity;
 using YDot.IAM.Application.Features.GlobalMasters.Commands.ManageCountry;
@@ -63,6 +66,8 @@ public static class DependencyInjection
         services.Configure<DocumentStorageSettings>(
             configuration.GetSection(DocumentStorageSettings.SectionName));
         services.Configure<SeedSettings>(configuration.GetSection(SeedSettings.SectionName));
+        services.Configure<PaymentGatewaySettings>(
+            configuration.GetSection(PaymentGatewaySettings.SectionName));
 
         // ---- FluentValidation ---------------------------------------------------------------
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
@@ -131,6 +136,16 @@ public static class DependencyInjection
         services.AddScoped<CurrencyCommandHandler>();
         services.AddScoped<TimeZoneCommandHandler>();
         services.AddScoped<GlobalMasterQueryHandler>();
+
+        // ---- Configuration: payment gateways ---------------------------------------------------------------
+        //
+        // THE SCOPE OBJECT IS REGISTERED HERE, NOT IN INFRASTRUCTURE, for the same reason
+        // GlobalMasterWriteGuard is: it is application policy - who may configure whose merchant
+        // account - and not a persistence concern. Scoped, because it reads the request's
+        // ITenantContext and ICurrentUser, both of which are themselves per-request.
+        services.AddScoped<PaymentGatewayScope>();
+        services.AddScoped<PaymentGatewayConfigurationCommandHandler>();
+        services.AddScoped<PaymentGatewayConfigurationQueryHandler>();
 
         return services;
     }

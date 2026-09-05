@@ -149,16 +149,38 @@
                             <i class="ri-delete-bin-line"></i>
                           </button>
                         }
+                        <!--
+                          THE DECISION BUTTONS OBEY THE INDEPENDENCE RULE.
+
+                          These were gated on the status alone, so every submitted request
+                          offered Approve, Reject and Return - including the ones the person
+                          looking at them had raised. Clicking Approve there opened a dialog,
+                          asked for a note, and was then refused by the server with
+                          SEGREGATION_OF_DUTIES_VIOLATION: a rule the screen already knew about
+                          before the click, since `canDecide` arrives on every row.
+
+                          Offering a control that cannot work is worse than not offering it, so
+                          the buttons are withheld - and the reason is shown in their place,
+                          because an approver who simply finds nothing there cannot tell a rule
+                          from a fault.
+                        -->
                         @if (req.approvalState === 'Submitted' || req.approvalState === 'PendingReview') {
-                          <button class="btn btn-sm btn-success" (click)="openApproveModal(req)" title="Approve">
-                            <i class="ri-check-line"></i>
-                          </button>
-                          <button class="btn btn-sm btn-danger" (click)="openRejectModal(req)" title="Reject">
-                            <i class="ri-close-line"></i>
-                          </button>
-                          <button class="btn btn-sm btn-outline-warning" (click)="openReturnModal(req)" title="Return for correction">
-                            <i class="ri-arrow-go-back-line"></i>
-                          </button>
+                          @if (req.canDecide) {
+                            <button class="btn btn-sm btn-success" (click)="openApproveModal(req)" title="Approve">
+                              <i class="ri-check-line"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" (click)="openRejectModal(req)" title="Reject">
+                              <i class="ri-close-line"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" (click)="openReturnModal(req)" title="Return for correction">
+                              <i class="ri-arrow-go-back-line"></i>
+                            </button>
+                          } @else {
+                            <span class="badge bg-secondary-subtle text-secondary"
+                                  [title]="req.cannotDecideReason">
+                              <i class="ri-user-shared-line me-1"></i>Another approver
+                            </span>
+                          }
                         }
                         @if (req.approvalState === 'Submitted' || req.approvalState === 'PendingReview' || req.approvalState === 'Draft') {
                           <button class="btn btn-sm btn-outline-secondary" (click)="openCancelModal(req)" title="Cancel">

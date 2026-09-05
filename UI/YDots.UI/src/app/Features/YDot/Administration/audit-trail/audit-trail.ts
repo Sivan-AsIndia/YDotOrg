@@ -75,9 +75,16 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
   readonly canSeeDetail = computed(() => this.tokens.hasPermission('iam.audit.view-sensitive'));
   readonly organisationName = computed(() => this.tokens.organisationName());
 
-  /** The record types worth filtering on, in the order somebody would look for them. */
-  readonly targetTypes = ['User', 'Role', 'Tenant', 'Permission', 'MfaMethod', 'AccessRequest',
-    'AccessReview', 'UserInvitation', 'MenuDefinition', 'Department', 'OrganisationUnit'];
+  /**
+   * The record types to offer, fetched from the trail itself.
+   *
+   * THIS USED TO BE A LITERAL LIST of eleven entity names typed into the component. A hardcoded
+   * filter list can only be wrong two ways and is silent in both: a type the platform began
+   * writing later could never be filtered for, and a type that had never once occurred was
+   * offered as a filter that quietly returns nothing. The server answers from DISTINCT over the
+   * caller's own Organisation, so the dropdown always matches what is actually there.
+   */
+  readonly targetTypes = signal<string[]>([]);
 
   readonly results = [
     { value: 'succeeded', label: 'Succeeded' },
@@ -86,6 +93,15 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
   ];
 
   ngOnInit(): void {
+    // Fetched once. A failure here costs the dropdown its options and nothing else, so it must
+    // not take the page down with it - the trail itself is the thing somebody came for.
+    this.api.getAuditTargetTypes()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (types) => this.targetTypes.set(types),
+        error: () => this.targetTypes.set([]),
+      });
+
     this.searchInput$
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
       .subscribe((term) => {

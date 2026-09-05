@@ -108,6 +108,48 @@ export class IamAdminApiService {
       .pipe(map((response) => response.data!));
   }
 
+  /**
+   * The permission codes a catalogue node may be gated on.
+   *
+   * Not GET /permissions: that is gated on the TENANT permission iam.permissions.view, which a
+   * SuperAdmin at platform level does not hold - so the picker rendered empty for the only
+   * person who authors the catalogue.
+   */
+  getMenuPermissionCodes(): Observable<{ code: string; name: string; moduleCode: string }[]> {
+    return this.http
+      .get<ApiResponse<{ code: string; name: string; moduleCode: string }[]>>(
+        `${this.base}/menus/definitions/permission-codes`)
+      .pipe(map((response) => response.data ?? []));
+  }
+
+  /**
+   * The catalogue in full, for the authoring screen.
+   *
+   * Not the same as getMenuCatalogue(): that returns what the SIDEBAR needs and carries no
+   * version, status, description, parent id or flags, so nothing could be edited against it.
+   */
+  getMenuDefinitions(includeRetired = false): Observable<MenuDefinitionResponse[]> {
+    return this.http
+      .get<ApiResponse<MenuDefinitionResponse[]>>(`${this.base}/menus/definitions`, {
+        params: new HttpParams().set('includeRetired', includeRetired),
+      })
+      .pipe(map((response) => response.data ?? []));
+  }
+
+  /**
+   * Removes a node from the catalogue.
+   *
+   * Refused by the server the moment anything depends on it. Retiring through
+   * updateMenuDefinition({ status: 'retired' }) is the usual answer.
+   */
+  deleteMenuDefinition(menuId: string, expectedVersion: number): Observable<OutcomeResponse> {
+    return this.http
+      .delete<ApiResponse<OutcomeResponse>>(`${this.base}/menus/definitions/${menuId}`, {
+        params: new HttpParams().set('expectedVersion', expectedVersion),
+      })
+      .pipe(map((response) => response.data!));
+  }
+
   /** Adds a node to the PLATFORM catalogue: a new product feature, for every Organisation. */
   createMenuDefinition(request: CreateMenuDefinitionRequest): Observable<MenuDefinitionResponse> {
     return this.http
@@ -236,6 +278,18 @@ export class IamAdminApiService {
    * `iam.audit.view-sensitive` the before/after payloads are withheld and only the envelope is
    * returned. Knowing a colleague's password was reset is routine; seeing the contents is not.
    */
+  /**
+   * The record types this Organisation's trail actually holds, for the filter dropdown.
+   *
+   * The screen used to carry its own list of eleven entity names. See the note on the endpoint:
+   * a hardcoded list can only be wrong in two directions, and is silent in both.
+   */
+  getAuditTargetTypes(): Observable<string[]> {
+    return this.http
+      .get<ApiResponse<string[]>>(`${this.base}/audit-events/target-types`)
+      .pipe(map((response) => response.data ?? []));
+  }
+
   searchAuditEvents(filter: AuditSearchFilter): Observable<PagedResponse<AuditEventResponse>> {
     return this.http
       .get<ApiResponse<PagedResponse<AuditEventResponse>>>(`${this.base}/audit-events`, {
