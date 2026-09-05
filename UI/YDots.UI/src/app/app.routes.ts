@@ -40,8 +40,6 @@ import { MakerCheckerReviewComponent } from './Features/YDot/Finance/maker-check
 import { FinancialCorrectionOrReversalComponent } from './Features/YDot/Finance/financial-correction-or-reversal/financial-correction-or-reversal';
 import { PaymentEventQueueComponent } from './Features/YDot/Donations and Payments/payment-event-queue/payment-event-queue';
 import { PublicDonationInitiationComponent } from './Features/YDot/Donations and Payments/public-donation-initiation/public-donation-initiation';
-import { PaymentSupportAndSafeRetryComponent } from './Features/YDot/Donations and Payments/payment-support-and-safe-retry/payment-support-and-safe-retry';
-import { ReceiptRegisterComponent } from './Features/YDot/Donations and Payments/receipt-register/receipt-register';
 import { PaymentResultComponent } from './Features/YDot/Donations and Payments/payment-result/payment-result';
 import { UnifiedInboxComponent } from './Features/YDot/Communications/unified-inbox/unified-inbox';
 import { CommunicationExceptionQueueComponent } from './Features/YDot/Communications/communication-exception-queue/communication-exception-queue';
@@ -484,17 +482,17 @@ export const routes: Routes = [
 
       // WHERE A FAILED RETRY GOES. Safe retry is the permission because retrying an attempt whose
       // outcome is unknown is what can charge a donor twice.
-      {
-        path: 'donations/payment-support-and-safe-retry',
-        component: PaymentSupportAndSafeRetryComponent,
-        canActivate: [requirePermission('pay.payments.safe-retry')],
-      },
+      // {
+      //   path: 'donations/payment-support-and-safe-retry',
+      //   component: PaymentSupportAndSafeRetryComponent,
+      //   canActivate: [requirePermission('pay.payments.safe-retry')],
+      // },
 
-      {
-        path: 'donations/receipt-register',
-        component: ReceiptRegisterComponent,
-        canActivate: [requirePermission('pay.receipts.view')],
-      },
+      // {
+      //   path: 'donations/receipt-register',
+      //   component: ReceiptRegisterComponent,
+      //   canActivate: [requirePermission('pay.receipts.view')],
+      // },
 
       // ===== Communications pages =====
       { path: 'communications/unified-inbox', component: UnifiedInboxComponent },
