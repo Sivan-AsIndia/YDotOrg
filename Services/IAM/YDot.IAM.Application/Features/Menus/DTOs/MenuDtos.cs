@@ -20,6 +20,9 @@ public sealed record CreateMenuDefinitionRequest(
     bool OpensInNewTab = false,
     string? BadgeKey = null);
 
+/// <summary>One permission a catalogue node may be gated on, for the authoring picker.</summary>
+public sealed record MenuPermissionOptionResponse(string Code, string Name, string ModuleCode);
+
 /// <summary>Editing a catalogue node.</summary>
 public sealed record UpdateMenuDefinitionRequest(
     long ExpectedVersion,
@@ -122,9 +125,19 @@ public sealed record RoleMenuMappingResponse(
 /// <summary>
 /// One node in the role mapping.
 ///
-/// <c>IsPermitted</c> says whether the role holds the permission the node needs. When it is
+/// TWO DIFFERENT REASONS A MAPPING CAN COME TO NOTHING, and the screen has to tell them apart
+/// or the administrator has no idea which lever to pull:
+///
+/// <c>IsPermitted</c> says whether the ROLE holds the permission the node needs. When it is
 /// false the checkbox is shown disabled, because ticking it would achieve nothing — the
-/// endpoint behind the screen would still answer 403.
+/// endpoint behind the screen would still answer 403. The fix is to grant the permission.
+///
+/// <c>IsEnabledForOrganisation</c> says whether the ORGANISATION offers the node at all — the
+/// decision made on the other tab of this screen. A node the organisation has switched off is
+/// removed from everybody's navigation before role mapping is even consulted, so a mapping
+/// against it is stored faithfully and still shows nobody anything. The mapping is kept rather
+/// than refused, because it takes effect the moment the organisation switches the node on; the
+/// screen says so rather than leaving somebody to wonder why their save did nothing.
 /// </summary>
 public sealed record RoleMenuNodeResponse(
     Guid MenuDefinitionId,
@@ -137,6 +150,7 @@ public sealed record RoleMenuNodeResponse(
     bool IsVisible,
     bool IsPermitted,
     bool IsLandingPage,
+    bool IsEnabledForOrganisation,
     IReadOnlyList<RoleMenuNodeResponse> Children);
 
 /// <summary>

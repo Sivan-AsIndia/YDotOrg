@@ -109,6 +109,35 @@ public sealed class MenusController(
     // ---- Platform catalogue authoring (SuperAdmin) --------------------------------------------
 
     /// <summary>
+    /// The catalogue in full, for the authoring screen.
+    ///
+    /// Separate from <c>GET catalogue</c> because that one returns what the SIDEBAR needs and
+    /// carries no version, status, description, parent id or flags — nothing you could edit
+    /// against. Gated on the platform manage permission rather than the view permission,
+    /// because the fields it adds are only useful to somebody authoring.
+    /// </summary>
+    [HttpGet("definitions")]
+    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuDefinitionResponse>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDefinitionsAsync(
+        [FromQuery] bool includeRetired, CancellationToken cancellationToken) =>
+        FromResult(await queries.HandleAsync(
+            new GetMenuDefinitionsQuery(includeRetired), cancellationToken));
+
+    /// <summary>
+    /// The permission codes a node may be gated on, for the authoring picker.
+    ///
+    /// <c>GET /permissions</c> would be the obvious home for this and cannot be: it is gated on
+    /// the TENANT permission <c>iam.permissions.view</c>, which a SuperAdmin at platform level
+    /// does not hold — leaving the picker empty for the only person who uses this screen.
+    /// </summary>
+    [HttpGet("definitions/permission-codes")]
+    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuPermissionOptionResponse>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPermissionCodesAsync(CancellationToken cancellationToken) =>
+        FromResult(await queries.HandleAsync(new GetMenuPermissionCodesQuery(), cancellationToken));
+
+    /// <summary>
     /// Adds a node to the PLATFORM catalogue — a new product feature, available to every
     /// Organisation. Not a per-Organisation setting; that is <c>PUT configuration</c>.
     /// </summary>
@@ -126,4 +155,22 @@ public sealed class MenusController(
         Guid menuId, [FromBody] UpdateMenuDefinitionRequest request, CancellationToken cancellationToken) =>
         FromResult(await commands.HandleAsync(
             new UpdateMenuDefinitionCommand(menuId, request), cancellationToken));
+
+    /// <summary>
+    /// Removes a node from the catalogue.
+    ///
+    /// REFUSED THE MOMENT ANYTHING DEPENDS ON IT — children, or any Organisation configuration
+    /// or role mapping that points at it — because deleting the row those point at leaves
+    /// orphans across every Organisation. The answer in that case is to RETIRE it through the
+    /// update endpoint, which hides it everywhere, keeps the history and can be undone.
+    ///
+    /// This is for the node somebody added by mistake and nothing has touched yet.
+    /// </summary>
+    [HttpDelete("definitions/{menuId:guid}")]
+    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteDefinitionAsync(
+        Guid menuId, [FromQuery] long expectedVersion, CancellationToken cancellationToken) =>
+        FromResult(await commands.HandleAsync(
+            new DeleteMenuDefinitionCommand(menuId, expectedVersion), cancellationToken));
 }

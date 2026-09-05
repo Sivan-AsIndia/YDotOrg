@@ -46,6 +46,27 @@ public sealed class SecurityRepository(IamDbContext context) : ISecurityReposito
             .Include(session => session.User)
             .FirstOrDefaultAsync(session => session.Id == sessionId, cancellationToken);
 
+    /// <summary>
+    /// The per-request session check.
+    ///
+    /// FILTERS BYPASSED, and necessarily so: this runs while the token is being validated, which
+    /// is BEFORE the Organisation has been resolved onto the request. A tenant-filtered read here
+    /// would match nothing and every request in the system would answer 401.
+    ///
+    /// Untracked and projected to a boolean: the change tracker must not be given a session it
+    /// was never asked to save, and nothing here needs the row itself.
+    /// </summary>
+    public Task<bool> IsSessionActiveAsync(
+        Guid sessionId, DateTimeOffset asOf, CancellationToken cancellationToken) =>
+        context.UserSessions
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .AnyAsync(
+                session => session.Id == sessionId
+                           && session.RevokedAtUtc == null
+                           && session.ExpiresAtUtc > asOf,
+                cancellationToken);
+
     public Task<UserSession?> GetSessionByHashAsync(
         string sessionTokenHash, CancellationToken cancellationToken) =>
         context.UserSessions

@@ -9,6 +9,7 @@ using YDot.IAM.Application.Common.Constants;
 using YDot.IAM.Application.Common.Services;
 using YDot.IAM.Application.Common.Settings;
 using YDot.IAM.Infrastructure.Authorization;
+using YDot.IAM.Infrastructure.Configuration;
 using YDot.IAM.Infrastructure.Multitenancy;
 using YDot.IAM.Infrastructure.Persistence;
 using YDot.IAM.Infrastructure.Persistence.ReadServices;
@@ -107,6 +108,11 @@ public static class DependencyInjection
         // every master gets the same scope rule with no per-entity copy to get wrong.
         services.AddScoped<IGlobalMasterRepository, GlobalMasterRepository>();
 
+        // Where an Organisation's donations settle. See PaymentGatewayConfiguration for why the
+        // credential columns are sealed and what that does and does not buy.
+        services.AddScoped<IPaymentGatewayConfigurationRepository,
+            PaymentGatewayConfigurationRepository>();
+
         // ---- Read services -----------------------------------------------------------------------------
         services.AddScoped<IUserReadService, UserReadService>();
         services.AddScoped<IOrganisationReadService, OrganisationReadService>();
@@ -115,6 +121,8 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceReadService, GovernanceReadService>();
         services.AddScoped<IBulkOperationReadService, BulkOperationReadService>();
         services.AddScoped<IGlobalMasterReadService, GlobalMasterReadService>();
+        services.AddScoped<IPaymentGatewayConfigurationReadService,
+            PaymentGatewayConfigurationReadService>();
 
         // ---- Security ------------------------------------------------------------------------------------
         services.AddHttpContextAccessor();
@@ -129,6 +137,11 @@ public static class DependencyInjection
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<IExportService, CsvExportService>();
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
+
+        // SINGLETON, and it has to be: it derives its AES key once at construction, and doing
+        // that per request would run an HKDF on every save for no benefit. It holds the key and
+        // no per-request state.
+        services.AddSingleton<IPaymentSecretProtector, PaymentSecretProtector>();
 
         // ---- Application services ---------------------------------------------------------------------------
         services.AddScoped<IAuditService, AuditService>();
@@ -176,6 +189,19 @@ public static class DependencyInjection
         services.AddScoped<IAuthorizationHandler, RecentReauthenticationHandler>();
         services.AddScoped<IAuthorizationHandler, FullAccessTokenHandler>();
         services.AddScoped<IAuthorizationHandler, IndependentActorHandler>();
+
+        // ---- Payment gateway configuration ------------------------------------------------------------------------
+        //
+        // THE TEST BUTTON IS THE ONLY THING IN IAM THAT CALLS OUT TO THE INTERNET, which is why
+        // it gets a NAMED client with its own handler lifetime rather than sharing one. The
+        // lifetime is short because a payment provider's DNS is one of the few this service
+        // cannot afford to hold a stale answer for.
+        services.AddHttpClient(
+            PaymentGatewayConnectivityTester.HttpClientName,
+            client => client.DefaultRequestHeaders.UserAgent.ParseAdd("YDot-IAM/1.0"))
+            .SetHandlerLifetime(TimeSpan.FromMinutes(2));
+
+        services.AddScoped<IPaymentGatewayConnectivityTester, PaymentGatewayConnectivityTester>();
 
         // ---- Seeder ------------------------------------------------------------------------------------------------
         services.AddScoped<IamDbSeeder>();

@@ -153,6 +153,30 @@ public sealed class MenuRepository(IamDbContext context) : IMenuRepository
         await context.RoleMenus.AddAsync(roleMenu, cancellationToken);
 
     public void RemoveRoleMenus(IEnumerable<RoleMenu> roleMenus) => context.RoleMenus.RemoveRange(roleMenus);
+
+    /// <summary>
+    /// Dependants of one catalogue node, across every Organisation.
+    ///
+    /// FILTERS BYPASSED DELIBERATELY. This is a platform-level question asked by a SuperAdmin
+    /// about a global node: "is anybody, anywhere, using this?" A tenant-filtered count would
+    /// answer only for whichever Organisation happened to be selected and would cheerfully
+    /// report zero while another Organisation depended on the node.
+    /// </summary>
+    public async Task<int> CountDefinitionReferencesAsync(
+        Guid menuDefinitionId, CancellationToken cancellationToken)
+    {
+        var tenantMenus = await context.TenantMenus
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .CountAsync(item => item.MenuDefinitionId == menuDefinitionId, cancellationToken);
+
+        var roleMenus = await context.RoleMenus
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .CountAsync(item => item.MenuDefinitionId == menuDefinitionId, cancellationToken);
+
+        return tenantMenus + roleMenus;
+    }
 }
 
 /// <summary>Departments and organisation units.</summary>
@@ -226,7 +250,10 @@ public sealed class GovernanceRepository(IamDbContext context) : IGovernanceRepo
 
     public Task<string> NextRequestNumberAsync(Guid tenantId, CancellationToken cancellationToken) =>
         NextNumberAsync(
-            context.AccessRequests.IgnoreQueryFilters().Where(request => request.TenantId == tenantId),
+            context.AccessRequests
+                .IgnoreQueryFilters()
+                .Where(request => request.TenantId == tenantId)
+                .Select(request => request.RequestNumber),
             "AR", cancellationToken);
 
     public async Task AddAccessRequestAsync(AccessRequest request, CancellationToken cancellationToken) =>
@@ -258,9 +285,28 @@ public sealed class GovernanceRepository(IamDbContext context) : IGovernanceRepo
             .FirstOrDefaultAsync(review => review.Id == id, cancellationToken);
 
     public Task<string> NextReviewNumberAsync(Guid tenantId, CancellationToken cancellationToken) =>
-        NextNumberAsync(
-            context.AccessReviews.IgnoreQueryFilters().Where(review => review.TenantId == tenantId),
-            "REV", cancellationToken);
+        NextNumberAsync(ReviewNumbersFor(tenantId), "REV", cancellationToken);
+
+    /// <summary>
+    /// A whole block of review numbers at once, for raising a campaign.
+    ///
+    /// THIS IS WHAT MAKES A CAMPAIGN POSSIBLE. Raising one creates a review per person in a
+    /// single unit of work, and asking for the next number inside that loop asked the DATABASE
+    /// each time - which had not changed, because nothing is saved until the end. Every review
+    /// in the campaign was therefore handed REV-yyyy-00001, and the unique index refused the
+    /// batch. Creating a campaign covering two or more people failed outright with a 500.
+    ///
+    /// Reserving the block up front means the numbers are decided once, in order, from one read.
+    /// </summary>
+    public Task<IReadOnlyList<string>> NextReviewNumbersAsync(
+        Guid tenantId, int count, CancellationToken cancellationToken) =>
+        NextNumbersAsync(ReviewNumbersFor(tenantId), "REV", count, cancellationToken);
+
+    private IQueryable<string> ReviewNumbersFor(Guid tenantId) =>
+        context.AccessReviews
+            .IgnoreQueryFilters()
+            .Where(review => review.TenantId == tenantId)
+            .Select(review => review.ReviewNumber);
 
     public async Task AddAccessReviewAsync(AccessReview review, CancellationToken cancellationToken) =>
         await context.AccessReviews.AddAsync(review, cancellationToken);
@@ -354,14 +400,54 @@ public sealed class GovernanceRepository(IamDbContext context) : IGovernanceRepo
     /// recognisable at a glance. Counted per Organisation, so two Organisations never share
     /// one.
     /// </summary>
-    private static async Task<string> NextNumberAsync<TEntity>(
-        IQueryable<TEntity> scope, string prefix, CancellationToken cancellationToken)
+    /// <summary>
+    /// The next reference number in a per-Organisation, per-year series.
+    ///
+    /// MAX OF WHAT EXISTS, NOT COUNT OF IT. Counting was wrong in two ways. Delete a row and the
+    /// count goes down, so the next number repeats one already issued - and these numbers are
+    /// quoted in e-mails and audit rows, where two records sharing a reference is worse than a
+    /// gap. Counting also says nothing about the numbers actually in use, which is the only
+    /// question being asked.
+    ///
+    /// The suffix is zero-padded to a fixed width, so the lexical maximum IS the numeric
+    /// maximum and the database can answer with one row rather than handing over the series.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> NextNumbersAsync(
+        IQueryable<string> existingNumbers, string prefix, int count,
+        CancellationToken cancellationToken)
     {
-        var year = DateTimeOffset.UtcNow.Year;
-        var existing = await scope.CountAsync(cancellationToken);
+        if (count <= 0)
+        {
+            return [];
+        }
 
-        return string.Create(CultureInfo.InvariantCulture, $"{prefix}-{year}-{existing + 1:D5}");
+        var stem = string.Create(
+            CultureInfo.InvariantCulture, $"{prefix}-{DateTimeOffset.UtcNow.Year}-");
+
+        var highest = await existingNumbers
+            .Where(number => number.StartsWith(stem))
+            .OrderByDescending(number => number)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var next = 0;
+
+        if (highest is not null
+            && int.TryParse(
+                highest[stem.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            next = parsed;
+        }
+
+        return
+        [
+            .. Enumerable.Range(next + 1, count)
+                .Select(value => string.Create(CultureInfo.InvariantCulture, $"{stem}{value:D5}"))
+        ];
     }
+
+    private static async Task<string> NextNumberAsync(
+        IQueryable<string> existingNumbers, string prefix, CancellationToken cancellationToken) =>
+        (await NextNumbersAsync(existingNumbers, prefix, 1, cancellationToken))[0];
 }
 
 /// <summary>Bulk user administration jobs.</summary>
@@ -375,15 +461,32 @@ public sealed class BulkOperationRepository(IamDbContext context) : IBulkOperati
             .Include(operation => operation.Items.OrderBy(item => item.RowNumber))
             .FirstOrDefaultAsync(operation => operation.Id == id, cancellationToken);
 
+    /// <summary>
+    /// The next bulk-operation reference.
+    ///
+    /// MAX, not COUNT, for the same reason as the governance numbers: a count goes down when a
+    /// row is deleted and hands the next operation a reference already in use. The suffix is
+    /// zero-padded to a fixed width, so the lexical maximum is the numeric one.
+    /// </summary>
     public async Task<string> NextOperationNumberAsync(Guid tenantId, CancellationToken cancellationToken)
     {
-        var year = DateTimeOffset.UtcNow.Year;
+        var stem = string.Create(CultureInfo.InvariantCulture, $"BLK-{DateTimeOffset.UtcNow.Year}-");
 
-        var existing = await context.BulkOperations
+        var highest = await context.BulkOperations
             .IgnoreQueryFilters()
-            .CountAsync(operation => operation.TenantId == tenantId, cancellationToken);
+            .Where(operation => operation.TenantId == tenantId)
+            .Select(operation => operation.OperationNumber)
+            .Where(number => number.StartsWith(stem))
+            .OrderByDescending(number => number)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        return string.Create(CultureInfo.InvariantCulture, $"BLK-{year}-{existing + 1:D5}");
+        var next = highest is not null
+                   && int.TryParse(
+                       highest[stem.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
+
+        return string.Create(CultureInfo.InvariantCulture, $"{stem}{next + 1:D5}");
     }
 
     public async Task AddAsync(BulkOperation operation, CancellationToken cancellationToken) =>

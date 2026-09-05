@@ -16,6 +16,16 @@ public interface ISecurityRepository
 
     Task<UserSession?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Whether a session is still good: it exists, nobody has revoked it, and it has not run out.
+    ///
+    /// ASKED ON EVERY AUTHENTICATED REQUEST, which is why it is its own method rather than a
+    /// caller inspecting <see cref="GetSessionAsync"/>. That one Includes the User and tracks
+    /// what it loads; this needs one boolean off an indexed primary key and should cost that.
+    /// </summary>
+    Task<bool> IsSessionActiveAsync(
+        Guid sessionId, DateTimeOffset asOf, CancellationToken cancellationToken);
+
     Task<UserSession?> GetSessionByHashAsync(string sessionTokenHash, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<UserSession>> GetActiveSessionsAsync(Guid userId, CancellationToken cancellationToken);

@@ -58,7 +58,7 @@
                     [ngModel]="targetType()"
                     (ngModelChange)="targetType.set($event); applyFilters()">
               <option value="">All records</option>
-              @for (type of targetTypes; track type) {
+              @for (type of targetTypes(); track type) {
                 <option [value]="type">{{ type }}</option>
               }
             </select>

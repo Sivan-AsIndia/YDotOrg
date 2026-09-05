@@ -54,6 +54,9 @@ public sealed record GetAuditTrailForTargetQuery(string TargetType, Guid TargetI
 /// <summary>CSV export of the audit trail.</summary>
 public sealed record ExportAuditEventsQuery(AuditEventSearchFilter Filter);
 
+/// <summary>The record types present in this Organisation's trail, for the filter dropdown.</summary>
+public sealed record GetAuditTargetTypesQuery;
+
 /// <summary>
 /// The read side of governance, bulk jobs and the audit trail.
 ///
@@ -175,6 +178,20 @@ public sealed class GovernanceQueryHandler(
         return detail is null
             ? Result.Failure<BulkOperationDetailResponse>(Error.NotFound("That job was not found."))
             : Result.Success(detail);
+    }
+
+    /// <summary>
+    /// What the audit filter should offer, taken from what the trail holds.
+    ///
+    /// No permission of its own beyond the one on the endpoint: the answer is a list of type
+    /// NAMES already visible in every row the caller can read.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<string>>> HandleAsync(
+        GetAuditTargetTypesQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return Result.Success(await auditRead.GetTargetTypesAsync(cancellationToken));
     }
 
     public async Task<Result<PagedResponse<AuditEventResponse>>> HandleAsync(

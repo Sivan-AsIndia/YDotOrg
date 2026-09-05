@@ -14,6 +14,29 @@ public sealed record GetNavigationQuery;
 /// <summary>The whole catalogue as a tree, for the configuration screens.</summary>
 public sealed record GetMenuCatalogueQuery(bool IncludePlatformNodes = false);
 
+/// <summary>
+/// The catalogue as the AUTHORING screen needs it.
+///
+/// <see cref="GetMenuCatalogueQuery"/> answers with <c>MenuNode</c>, which is what the sidebar
+/// renders: a label, a route, an icon. That is deliberately not enough to edit with - it carries
+/// no version to save against, no status, no description, no parent id and none of the
+/// mandatory / platform-only / enabled-by-default flags. Editing through it would mean guessing
+/// at half the record, so authoring gets its own read.
+/// </summary>
+public sealed record GetMenuDefinitionsQuery(bool IncludeRetired = false);
+
+/// <summary>
+/// The permission codes a catalogue node may be gated on, for the authoring picker.
+///
+/// WHY THIS IS NOT <c>GET /permissions</c>. That endpoint is gated on
+/// <c>iam.permissions.view</c>, which is a TENANT permission - and a SuperAdmin standing at
+/// platform level holds no tenant permissions at all, because there is no Organisation whose
+/// permissions they would be viewing. So the one person who authors the catalogue was the one
+/// person the picker could not load for, and it silently rendered empty. Same data, gated on
+/// the permission the authoring screen actually requires.
+/// </summary>
+public sealed record GetMenuPermissionCodesQuery;
+
 /// <summary>The Organisation menu configuration screen.</summary>
 public sealed record GetTenantMenuConfigurationQuery;
 
@@ -32,6 +55,7 @@ public sealed class NavigationQueryHandler(
     IMenuBuilderService menuBuilder,
     IMenuRepository menus,
     IRoleRepository roles,
+    IPermissionRepository permissions,
     ITenantRepository tenants,
     ITenantContext tenantContext,
     ICurrentUser currentUser)
@@ -54,6 +78,52 @@ public sealed class NavigationQueryHandler(
             tenantContext.Scope,
             tenantContext.IsTenantMode,
             currentUser.IsSuperAdmin));
+    }
+
+    /// <summary>
+    /// Every permission code, for the catalogue authoring picker.
+    ///
+    /// Codes and names only. The permission catalogue is global rather than Organisation-owned,
+    /// so there is nothing here that belongs to one customer.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<MenuPermissionOptionResponse>>> HandleAsync(
+        GetMenuPermissionCodesQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var all = await permissions.GetAllAsync(cancellationToken);
+
+        return Result.Success<IReadOnlyList<MenuPermissionOptionResponse>>(
+        [
+            .. all
+                .OrderBy(permission => permission.Code, StringComparer.Ordinal)
+                .Select(permission => new MenuPermissionOptionResponse(
+                    permission.Code, permission.Name, permission.ModuleCode))
+        ]);
+    }
+
+    /// <summary>
+    /// Every catalogue node, in full, as a tree.
+    ///
+    /// Gated by the platform manage permission on the endpoint. Retired nodes are excluded by
+    /// default and available on request, because the only reason to look at one is to bring it
+    /// back.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<MenuDefinitionResponse>>> HandleAsync(
+        GetMenuDefinitionsQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var catalogue = await menus.GetCatalogueAsync(cancellationToken);
+
+        var nodes = query.IncludeRetired
+            ? catalogue
+            : catalogue.Where(node => node.Status != MenuStatus.Retired).ToList();
+
+        var namesById = catalogue.ToDictionary(node => node.Id, node => node.Name);
+
+        return Result.Success<IReadOnlyList<MenuDefinitionResponse>>(
+            BuildDefinitionTree(nodes, namesById, parentId: null));
     }
 
     public async Task<Result<IReadOnlyList<MenuNode>>> HandleAsync(
@@ -112,6 +182,13 @@ public sealed class NavigationQueryHandler(
     /// <c>IsPermitted</c> is what makes this screen honest: a node whose permission the role
     /// does not hold is shown with the checkbox disabled, because ticking it would achieve
     /// nothing — the endpoint behind the screen would still answer 403.
+    ///
+    /// <c>IsEnabledForOrganisation</c> is the other half of that honesty, and it was missing.
+    /// A node this Organisation has switched off on the OTHER tab of the same screen is
+    /// removed from everybody's navigation before role mapping is consulted, so mapping it saved
+    /// perfectly and still showed nobody anything — which, from the administrator seat, is
+    /// indistinguishable from the save having been thrown away. The flag travels with the node
+    /// so the screen can say which of the two levers is the one to pull.
     /// </summary>
     public async Task<Result<RoleMenuMappingResponse>> HandleAsync(
         GetRoleMenuMappingQuery query, CancellationToken cancellationToken)
@@ -124,9 +201,30 @@ public sealed class NavigationQueryHandler(
             return Result.Failure<RoleMenuMappingResponse>(Error.NotFound("That role was not found."));
         }
 
+        // A PLATFORM ROLE BELONGS TO NO ORGANISATION, so no Organisation may shape its
+        // navigation. The role query filter deliberately lets a null-Tenant role through —
+        // that is what keeps SuperAdmin loadable from inside an Organisation — which meant
+        // this endpoint answered for SUPER_ADMIN to any TenantAdmin who typed its id. The
+        // lookup feeding the dropdown already excludes platform roles; this is the same rule,
+        // applied where it is actually enforceable.
+        if (role.IsPlatformRole)
+        {
+            return Result.Failure<RoleMenuMappingResponse>(Error.Forbidden(
+                "A platform role's navigation is not an organisation's to configure."));
+        }
+
         var catalogue = await menus.GetCatalogueAsync(cancellationToken);
         var roleMenus = await menus.GetRoleMenusAsync(role.Id, cancellationToken);
         var mappingsById = roleMenus.ToDictionary(mapping => mapping.MenuDefinitionId);
+
+        // What the Organisation that owns this role has switched on. Read from the role's own
+        // Organisation rather than the caller's, so the answer matches what the people holding
+        // the role will actually be shown.
+        var tenantMenus = role.TenantId.HasValue
+            ? await menus.GetTenantMenusAsync(role.TenantId.Value, cancellationToken)
+            : [];
+
+        var overridesById = tenantMenus.ToDictionary(item => item.MenuDefinitionId);
 
         var held = role.GrantsAllTenantPermissions
             ? null
@@ -148,7 +246,42 @@ public sealed class NavigationQueryHandler(
             role.Id,
             role.Name ?? role.Code,
             landingMenuId,
-            BuildMappingTree(configurable, mappingsById, held, parentId: null)));
+            BuildMappingTree(configurable, mappingsById, overridesById, held, parentId: null)));
+    }
+
+    private static List<MenuDefinitionResponse> BuildDefinitionTree(
+        IReadOnlyList<Domain.Entities.MenuDefinition> nodes,
+        IReadOnlyDictionary<Guid, string> namesById,
+        Guid? parentId)
+    {
+        var result = new List<MenuDefinitionResponse>();
+
+        foreach (var node in nodes.Where(item => item.ParentMenuId == parentId))
+        {
+            result.Add(new MenuDefinitionResponse(
+                node.Id,
+                node.Code,
+                node.Name,
+                node.Description,
+                node.ParentMenuId,
+                node.ParentMenuId is { } id && namesById.TryGetValue(id, out var name) ? name : null,
+                node.Level,
+                node.ModuleCode,
+                node.Route,
+                node.Icon,
+                node.RequiredPermissionCode,
+                node.DisplayOrder,
+                node.Status,
+                node.IsPlatformOnly,
+                node.IsEnabledByDefault,
+                node.IsMandatory,
+                node.OpensInNewTab,
+                node.BadgeKey,
+                node.Version,
+                BuildDefinitionTree(nodes, namesById, node.Id)));
+        }
+
+        return [.. result.OrderBy(node => node.DisplayOrder).ThenBy(node => node.Name, StringComparer.Ordinal)];
     }
 
     private static List<TenantMenuNodeResponse> BuildConfigurationTree(
@@ -193,10 +326,11 @@ public sealed class NavigationQueryHandler(
     private static List<RoleMenuNodeResponse> BuildMappingTree(
         IReadOnlyList<Domain.Entities.MenuDefinition> nodes,
         IReadOnlyDictionary<Guid, Domain.Entities.RoleMenu> mappingsById,
+        IReadOnlyDictionary<Guid, Domain.Entities.TenantMenu> overridesById,
         IReadOnlySet<string>? heldPermissions,
         Guid? parentId)
     {
-        var result = new List<RoleMenuNodeResponse>();
+        var result = new List<(Domain.Entities.MenuDefinition Definition, RoleMenuNodeResponse Node)>();
 
         foreach (var node in nodes.Where(item => item.ParentMenuId == parentId))
         {
@@ -206,7 +340,14 @@ public sealed class NavigationQueryHandler(
                             || string.IsNullOrWhiteSpace(node.RequiredPermissionCode)
                             || heldPermissions.Contains(node.RequiredPermissionCode);
 
-            result.Add(new RoleMenuNodeResponse(
+            // The same rule the navigation build applies: no row means "inherit the catalogue
+            // default", and a mandatory node is on whatever the row says.
+            var enabledForOrganisation = node.IsMandatory
+                                         || (overridesById.TryGetValue(node.Id, out var tenantMenu)
+                                             ? tenantMenu.IsVisible
+                                             : node.IsEnabledByDefault);
+
+            result.Add((node, new RoleMenuNodeResponse(
                 node.Id,
                 node.Code,
                 node.Name,
@@ -220,9 +361,21 @@ public sealed class NavigationQueryHandler(
                 mapping?.IsVisible ?? true,
                 permitted,
                 mapping?.IsLandingPage ?? false,
-                BuildMappingTree(nodes, mappingsById, heldPermissions, node.Id)));
+                enabledForOrganisation,
+                BuildMappingTree(nodes, mappingsById, overridesById, heldPermissions, node.Id))));
         }
 
-        return [.. result.OrderBy(node => node.Name, StringComparer.Ordinal)];
+        // THE SAME ORDER AS THE OTHER TAB, AND AS THE SIDEBAR. This sorted by name alone, so
+        // the two tabs of one screen listed one menu in two different orders and neither
+        // matched the navigation they describe. Display order first, name only to break a tie.
+        return
+        [
+            .. result
+                .OrderBy(entry => overridesById.TryGetValue(entry.Definition.Id, out var item)
+                    ? item.ResolvedOrder
+                    : entry.Definition.DisplayOrder)
+                .ThenBy(entry => entry.Node.Name, StringComparer.Ordinal)
+                .Select(entry => entry.Node)
+        ];
     }
 }

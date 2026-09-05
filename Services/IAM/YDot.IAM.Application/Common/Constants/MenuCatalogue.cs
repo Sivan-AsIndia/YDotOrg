@@ -166,9 +166,27 @@ public static class MenuCatalogue
         new("ADMIN_AUDIT", "Audit Trail", "ADMIN_GOVERNANCE", MenuLevel.ChildSubMenu, "IAM",
             "/app/administration/audit", "file-text", PermissionCodes.AuditView, 40),
 
+        // ---- Configuration -------------------------------------------------------------------------
+        //
+        // THE PARENT CARRIES THE VIEW CODE OF ITS ONLY CHILD, deliberately. A grouping header with
+        // a null permission appears in every sidebar and expands onto a single item nobody in that
+        // sidebar may open - which is worse than not showing the branch at all, because the person
+        // raises a ticket about a broken screen instead of asking for access.
+        //
+        // ONLY SUPER_ADMIN AND TENANT_ADMIN EVER SEE THIS. `iam.payment-gateways.view` is in
+        // RoleAccessProfiles.AdministratorOnlyCodes, so INITIATOR and APPROVER hold none of it.
+        new("ADMIN_CONFIGURATION", "Configuration", Administration, MenuLevel.SubMenu, "IAM",
+            null, "settings", PermissionCodes.PaymentGatewaysView, 30),
+
+        // Where the money goes. See PermissionCodes for why this is an administrator's screen.
+        new("ADMIN_PAYMENT_GATEWAYS", "Payment Gateways", "ADMIN_CONFIGURATION",
+            MenuLevel.ChildSubMenu, "IAM",
+            "/app/configuration/payment/gateways", "credit-card",
+            PermissionCodes.PaymentGatewaysView, 10),
+
         // ---- My account. Mandatory: everybody needs somewhere to manage their own security. ----
         new("ADMIN_MY_SECURITY", "My Security", Administration, MenuLevel.SubMenu, "IAM",
-            "/app/administration/access/my-security", "lock", null, 30, IsMandatory: true),
+            "/app/administration/access/my-security", "lock", null, 40, IsMandatory: true),
 
         // ============ Organisation (the Tenant own profile) =======================================
         new(Organisation, "Organisation", null, MenuLevel.Menu, "IAM",

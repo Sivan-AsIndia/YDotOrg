@@ -105,6 +105,16 @@ public interface IAuditReadService
 
     Task<IReadOnlyList<AuditEventResponse>> GetForTargetAsync(
         string targetType, Guid targetId, int take, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The record types this Organisation's trail actually contains, for the filter dropdown.
+    ///
+    /// READ FROM THE DATA, not from a list of the entity names somebody remembered. The screen
+    /// carried eleven hardcoded types; a type the platform started writing after that list was
+    /// typed could never be filtered for, and a type that had never occurred was offered as a
+    /// filter that returns nothing. Both failures are silent.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetTargetTypesAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>Read side for access requests, reviews and identifier changes.</summary>

@@ -8,6 +8,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using YDot.IAM.Api.Filters;
 using YDot.IAM.Api.Security;
+using YDot.IAM.Application.Common.Abstractions.Persistence;
+using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.Common.Settings;
@@ -123,6 +125,52 @@ public static class DependencyInjection
 
                 options.Events = new JwtBearerEvents
                 {
+                    // ---------------------------------------------------------------------
+                    // SIGNING OUT HAS TO ACTUALLY SIGN YOU OUT.
+                    //
+                    // A JWT is self-contained: valid signature plus unexpired "exp" and the
+                    // framework lets it through. Nothing above consults the session the token
+                    // was issued against, so revoking that session - which is exactly what
+                    // "Sign out" and "Sign out everywhere" do - changed a database row and
+                    // nothing else. The token kept working for the rest of its life.
+                    //
+                    // WHAT THAT MEANT IN PRACTICE. Somebody whose laptop is stolen presses
+                    // "Sign out everywhere", is told every session has ended, and the thief
+                    // keeps full API access - reading the user directory, the audit trail, the
+                    // donor records - for up to AccessTokenMinutes afterwards. That is 15
+                    // minutes in the shipped configuration and 60 in Development. The one
+                    // control offered for a compromised device did not do the thing its name
+                    // promises, which is worse than not offering it.
+                    //
+                    // THE COST is one indexed primary-key lookup per authenticated request,
+                    // paid so that revocation is immediate rather than eventual. If that ever
+                    // shows up in a profile, cache the POSITIVE answer for a few seconds - but
+                    // never the negative one, because a revoked session must stay revoked.
+                    OnTokenValidated = async context =>
+                    {
+                        var raw = context.Principal?.FindFirst(ClaimTypeNames.SessionId)?.Value;
+
+                        // Every token this service issues carries a session id. One without it
+                        // was not issued here, whatever its signature says.
+                        if (!Guid.TryParse(raw, out var sessionId))
+                        {
+                            context.Fail("The token names no session.");
+                            return;
+                        }
+
+                        var services = context.HttpContext.RequestServices;
+                        var security = services.GetRequiredService<ISecurityRepository>();
+                        var clock = services.GetRequiredService<IDateTimeProvider>();
+
+                        var active = await security.IsSessionActiveAsync(
+                            sessionId, clock.UtcNow, context.HttpContext.RequestAborted);
+
+                        if (!active)
+                        {
+                            context.Fail("That session has ended.");
+                        }
+                    },
+
                     // Both failure paths return the SAME envelope as every other response.
                     // The default handler writes an empty body with a WWW-Authenticate header,
                     // which the Angular error interceptor cannot read a message out of.
