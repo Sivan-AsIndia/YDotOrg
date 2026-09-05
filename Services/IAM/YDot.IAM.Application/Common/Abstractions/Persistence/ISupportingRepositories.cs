@@ -59,6 +59,17 @@ public interface IMenuRepository
     Task AddRoleMenuAsync(RoleMenu roleMenu, CancellationToken cancellationToken);
 
     void RemoveRoleMenus(IEnumerable<RoleMenu> roleMenus);
+
+    /// <summary>
+    /// How many Organisation configurations and role mappings point at one catalogue node.
+    ///
+    /// Asked before deleting a node. A definition with dependants cannot simply be removed -
+    /// the rows referencing it would be orphaned - so the delete is refused and the caller is
+    /// told to retire it instead, which is the reversible operation that has the same effect
+    /// on what people see.
+    /// </summary>
+    Task<int> CountDefinitionReferencesAsync(
+        Guid menuDefinitionId, CancellationToken cancellationToken);
 }
 
 /// <summary>Departments and organisation units, the Tenant-owned structural masters.</summary>
@@ -103,6 +114,16 @@ public interface IGovernanceRepository
     Task<AccessReview?> GetAccessReviewAsync(Guid id, CancellationToken cancellationToken);
 
     Task<string> NextReviewNumberAsync(Guid tenantId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A contiguous block of review numbers, reserved in one read.
+    ///
+    /// Raising a campaign creates every review in a single unit of work, so asking for the next
+    /// number inside that loop asks a database that has not changed yet and returns the same
+    /// number every time. The block is decided up front instead.
+    /// </summary>
+    Task<IReadOnlyList<string>> NextReviewNumbersAsync(
+        Guid tenantId, int count, CancellationToken cancellationToken);
 
     Task AddAccessReviewAsync(AccessReview review, CancellationToken cancellationToken);
 

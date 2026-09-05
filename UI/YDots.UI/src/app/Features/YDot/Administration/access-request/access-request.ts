@@ -11,6 +11,7 @@ import {
   AccessRequestSearchFilter,
   CreateAccessRequestRequest,
 } from '../../../../Shared/models/access-request-api.model';
+import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 import { UserSearchFilter } from '../../../../Shared/models/user-directory.model';
 import { LookupItem } from '../../../../Shared/models/api-response.model';
 
@@ -38,6 +39,19 @@ interface AccessRequestView {
   decisionTime?: string;
   version: number;
   permittedActions: string[];
+
+  /**
+   * The server's answer to the independence rule, for THIS caller and THIS request.
+   *
+   * Carried onto the row because the buttons have to obey it. It was already being computed
+   * into `permittedActions` and then read by nothing, so the queue offered Approve and Reject
+   * on every submitted request - including the ones the caller had raised themselves, which
+   * the server refuses outright.
+   */
+  canDecide: boolean;
+
+  /** Why the decision buttons are absent, when they are. Empty when they are offered. */
+  cannotDecideReason: string;
 }
 
 @Component({
@@ -52,6 +66,12 @@ export class AccessRequestComponent {
   private readonly toast = inject(ToastService);
   private readonly api = inject(AccessRequestApiService);
   private readonly userApi = inject(UserDirectoryApiService);
+  private readonly tokens = inject(AuthTokenService);
+
+  /** Who is looking, so a row can say "you raised this" rather than a vaguer refusal. */
+  private currentUserName(): string {
+    return this.tokens.user()?.displayName ?? '';
+  }
 
   data = signal<AccessRequestListResponse | null>(null);
   userOptions = signal<{ id: string; reference: string; displayName: string; orgUnit: string }[]>([]);
@@ -243,6 +263,17 @@ export class AccessRequestComponent {
       // false on a request they raised themselves, whatever permissions they hold. Deriving it
       // here would mean re-implementing the rule and eventually disagreeing with it.
       permittedActions: r.canDecide ? ['Approve', 'Reject', 'Return'] : ['View'],
+      canDecide: r.canDecide === true,
+
+      // NAMED, NOT JUST WITHHELD. An approver who finds no Approve button and no explanation
+      // has no idea whether the queue is broken, their permissions are wrong, or the rule is
+      // working as intended. The overwhelmingly common reason is the independence rule, and
+      // the row already knows who raised it.
+      cannotDecideReason: r.canDecide === true
+        ? ''
+        : (r.requestedByName && r.requestedByName === this.currentUserName())
+          ? 'You raised this request, so somebody else has to decide it.'
+          : 'You are not an eligible approver for this request.',
     };
   }
 

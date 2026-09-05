@@ -158,6 +158,23 @@ public sealed class AuditReadService(IamDbContext context) : IAuditReadService
         return [.. rows.Select(row => ToResponse(row, null, canSeeSensitive: false))];
     }
 
+    /// <summary>
+    /// The distinct record types in this Organisation's trail.
+    ///
+    /// The global query filter scopes it to the caller's Organisation, exactly like the search
+    /// above, so this never reveals that another Organisation has records of a type yours does
+    /// not. DISTINCT on an indexed column over a table that is only ever appended to, ordered so
+    /// the dropdown is stable between loads rather than reordering as new rows arrive.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetTargetTypesAsync(CancellationToken cancellationToken) =>
+        await context.AuditEvents
+            .AsNoTracking()
+            .Where(item => item.TargetType != null && item.TargetType != "")
+            .Select(item => item.TargetType)
+            .Distinct()
+            .OrderBy(targetType => targetType)
+            .ToListAsync(cancellationToken);
+
     private static AuditEventResponse ToResponse(
         Domain.Entities.AuditEvent auditEvent, string? tenantName, bool canSeeSensitive) =>
         new(

@@ -146,12 +146,12 @@
               <label class="rc-filter-group__label" for="functionFilterSelect">Owning Function</label>
               <div class="rc-select">
                 <i class="ri-building-2-line" aria-hidden="true"></i>
+                <!-- Options come from the roles the API returned: see owningFunctions(). -->
                 <select id="functionFilterSelect" [ngModel]="filterFunction()" (ngModelChange)="filterFunction.set($event)">
                   <option value="">All functions</option>
-                  <option value="Donation Operations">Donation Operations</option>
-                  <option value="Fundraising">Fundraising</option>
-                  <option value="Finance">Finance</option>
-                  <option value="Compliance">Compliance</option>
+                  @for (fn of owningFunctions(); track fn) {
+                    <option [value]="fn">{{ fn }}</option>
+                  }
                 </select>
                 <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
               </div>
@@ -502,15 +502,22 @@
             </div>
             <div class="col-md-6">
               <label class="form-label small fw-semibold" for="owningFunctionSelect">Owning Function</label>
-              <select id="owningFunctionSelect" class="form-select rc-input" [ngModel]="createRoleForm().displayTag" (ngModelChange)="createRoleForm.set({...createRoleForm(), displayTag: $event})">
-                <option value="">Select function</option>
-                <option value="Donation Operations">Donation Operations</option>
-                <option value="Fundraising">Fundraising</option>
-                <option value="Finance">Finance</option>
-                <option value="Compliance">Compliance</option>
-                <option value="Inventory">Inventory</option>
-                <option value="Communications">Communications</option>
-              </select>
+              <!--
+                A TEXT BOX WITH SUGGESTIONS, NOT A FIXED LIST. `displayTag` is free text on the
+                server - there is no enum and no catalogue endpoint - so a six-item <select>
+                presented a closed choice the API never enforced, while quietly making every
+                other function unreachable from this screen. The suggestions are the functions
+                already in use, so the common case is still one click.
+              -->
+              <input id="owningFunctionSelect" type="text" class="form-control rc-input"
+                     list="owningFunctionOptions" placeholder="e.g. Fundraising" maxlength="80"
+                     [ngModel]="createRoleForm().displayTag"
+                     (ngModelChange)="createRoleForm.set({...createRoleForm(), displayTag: $event})">
+              <datalist id="owningFunctionOptions">
+                @for (fn of owningFunctions(); track fn) {
+                  <option [value]="fn"></option>
+                }
+              </datalist>
             </div>
             <div class="col-md-6">
               <div class="form-label small fw-semibold" id="permissionBundleLabel">Permission Bundle</div>
