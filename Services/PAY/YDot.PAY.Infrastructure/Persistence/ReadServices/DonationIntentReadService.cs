@@ -75,6 +75,13 @@ public sealed class DonationIntentReadService(
         var intent = await DetailQuery()
             .Where(candidate => candidate.Id == id)
             .Where(candidate => !scope.IsOwnRecordsOnly || candidate.CreatedByUserId == scope.UserId)
+
+            // A DONOR READS THEIR OWN DONATION AND NO OTHER. Fetching by id would otherwise let
+            // anybody holding pay.intents.view open any intent in the Organisation by walking
+            // identifiers - the one hole a list filter alone would leave open.
+            .Where(candidate => !scope.IsDonorSelfService
+                                || (scope.HasDonorIdentity
+                                    && candidate.NormalisedEmail == scope.DonorEmail))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (intent is null)
@@ -175,6 +182,8 @@ public sealed class DonationIntentReadService(
         {
             query = query.Where(intent => intent.CreatedByUserId == scope.UserId);
         }
+
+        query = ApplyDonorScope(query, scope);
 
         if (!string.IsNullOrWhiteSpace(pagination.Search))
         {
@@ -315,6 +324,29 @@ public sealed class DonationIntentReadService(
             permittedActions);
     }
 
+    /// <summary>
+    /// Narrows a query to the signed-in donor's own donations.
+    ///
+    /// IT MATCHES ON <c>NormalisedEmail</c>, which is written lower-cased when the intent is
+    /// created, so this is an index-friendly equality rather than a function over every row.
+    ///
+    /// NO IDENTITY MEANS NO ROWS. A donor whose token carries no e-mail cannot have a filter
+    /// built for them, and the safe resolution of "I cannot tell whose these are" is to return
+    /// none - never to fall through and return everybody's.
+    /// </summary>
+    private static IQueryable<DonationIntent> ApplyDonorScope(
+        IQueryable<DonationIntent> query, AccessScope scope)
+    {
+        if (!scope.IsDonorSelfService)
+        {
+            return query;
+        }
+
+        return scope.HasDonorIdentity
+            ? query.Where(intent => intent.NormalisedEmail == scope.DonorEmail)
+            : query.Where(_ => false);
+    }
+
     private static IQueryable<DonationIntent> ApplyFilter(
         IQueryable<DonationIntent> query, DonationIntentSearchFilter filter, AccessScope scope)
     {
@@ -322,6 +354,8 @@ public sealed class DonationIntentReadService(
         {
             query = query.Where(intent => intent.CreatedByUserId == scope.UserId);
         }
+
+        query = ApplyDonorScope(query, scope);
 
         if (filter.Status.HasValue)
         {

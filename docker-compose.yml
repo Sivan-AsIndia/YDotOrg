@@ -120,7 +120,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: sivan67906/ydot-iam:9.1.3
+    image: sivan67906/ydot-iam:9.1.8
     build:
       context: .
       dockerfile: Services/IAM/YDot.IAM.Api/Dockerfile
@@ -318,7 +318,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: sivan67906/ydot-cam:9.1.3
+    image: sivan67906/ydot-cam:9.1.8
     build:
       context: .
       dockerfile: Services/CAM/YDots.CAM.API/Dockerfile
@@ -339,12 +339,35 @@ services:
       JwtSettings__Issuer: "YDot.IAM"
       JwtSettings__Audience: "YDot.Clients"
 
-      # The host a printed QR code resolves through. Getting this wrong is not recoverable once
-      # the poster is printed, which is why it is configuration rather than a default.
-      CampaignSettings__TrackingBaseUrl: "http://localhost:6700/give"
+      # The page a printed QR code resolves to. Getting this wrong is not recoverable once the
+      # poster is printed, which is why it is configuration rather than a default.
+      #
+      # IT NAMES THE PUBLIC DONOR FORM, and it has to name a route that exists. It read
+      # "/give", and no such route was ever registered - the client has /donate,
+      # /donations/public-donation-initiation, /auth/donor-form and /give/RESULT, but nothing at
+      # /give itself. Every QR code generated since therefore encoded a URL that fell through to
+      # the wildcard route, so a donor who scanned a poster reached a not-found page with their
+      # tracking reference still in the query string.
+      #
+      # The generator appends ?utm_campaign=...&utm_source=...&utm_medium=...&ref=<reference>,
+      # and the donor form reads `ref` on arrival to resolve the campaign and the organisation.
+      CampaignSettings__TrackingBaseUrl: "http://localhost:6700/auth/donor-form"
       # AutoApproveSuperAdminSubmissions removed: it made a platform administrator both
       # submitter and approver of the same campaign. Segregation of duties is not a setting.
       CampaignSettings__AllowLaunchWithOutstandingChecks: "false"
+
+      # THE DEMONSTRATION CAMPAIGN, AND THE ORGANISATION IT BELONGS TO.
+      #
+      # THE SAME GUID AS ydot-iam's SeedSettings__SampleOrganisationId AND ydot-don's
+      # SeedSettings__OrganisationId, from one variable so the three cannot drift. Every
+      # Tenant-owned row in CAM is filtered to the Organisation on the caller's token: a campaign
+      # stamped with anything else is in the database and visible to nobody, which is exactly the
+      # failure that had the previous sample campaigns removed from the seeder.
+      SeedSettings__OrganisationId: "${SAMPLE_ORGANISATION_ID:-9fb11890-a08e-4adc-95ca-8e4d71f4dd21}"
+
+      # Set false for a deployment that must contain only real campaigns. The seeder is
+      # idempotent by fixed id either way, so leaving it on inserts once and then does nothing.
+      SeedSettings__CreateSampleData: "${CAM_SEED_SAMPLE_DATA:-true}"
 
       ClientAppSettings__BaseUrl: "http://localhost:6700"
       ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
@@ -368,7 +391,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: sivan67906/ydot-don:9.1.3
+    image: sivan67906/ydot-don:9.1.8
     build:
       context: .
       dockerfile: Services/DON/YDots.DON.Api/Dockerfile
@@ -419,7 +442,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: sivan67906/ydot-pay:9.1.3
+    image: sivan67906/ydot-pay:9.1.8
     build:
       context: .
       dockerfile: Services/PAY/YDot.PAY.Api/Dockerfile
@@ -477,6 +500,14 @@ services:
       # Set it to "false" once the per-organisation Payment Gateway configuration screen exists.
       PaymentSettings__SeedGatewayAccountsFromConfiguration: "${PAY_SEED_GATEWAY_ACCOUNTS:-true}"
       PaymentSettings__SeedGatewayName: "Razorpay"
+
+      # THE DEMONSTRATION DONATIONS: one Success with a receipt, one Pending, one Failed.
+      #
+      # Same Organisation guid as ydot-iam, ydot-cam and ydot-don, from one variable. Payments
+      # are filtered to the Organisation on the caller's token, so donations stamped with any
+      # other value would be in the database and visible to nobody.
+      PaymentSettings__SampleOrganisationId: "${SAMPLE_ORGANISATION_ID:-9fb11890-a08e-4adc-95ca-8e4d71f4dd21}"
+      PaymentSettings__SeedSampleDonations: "${PAY_SEED_SAMPLE_DONATIONS:-true}"
       PaymentSettings__SeedGatewaySettlementCurrency: "INR"
 
       # ---- Donor portal accounts ---------------------------------------------------------------
@@ -613,7 +644,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: sivan67906/ydot-ui:9.1.3
+    image: sivan67906/ydot-ui:9.1.8
     build:
       context: UI/YDots.UI
       dockerfile: Dockerfile

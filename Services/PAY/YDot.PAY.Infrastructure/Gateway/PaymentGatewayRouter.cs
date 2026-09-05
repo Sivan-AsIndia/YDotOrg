@@ -15,8 +15,21 @@ namespace YDot.PAY.Infrastructure.Gateway;
 /// has never implemented, and every one of them answered 404.
 ///
 /// THE ACCOUNT DECIDES. <c>PaymentGatewayAccount.GatewayName</c> already exists and already says
-/// which provider an organisation uses; this reads it and dispatches. Adding a provider is
-/// therefore a new adapter and one line of registration, and none of the handlers change.
+/// which provider an organisation uses - and where the Organisation has filled in IAM's payment
+/// gateway configuration screen, that name is the <c>Provider</c> column of
+/// <c>PaymentGatewayConfig</c>, written over the account by
+/// <see cref="ConfiguredGatewayAccountRepository"/>. This reads it and dispatches.
+///
+/// THE TABLE IS BUILT FROM WHATEVER IS REGISTERED, which is the change that makes "add Stripe"
+/// a one-line job. Every <see cref="IPaymentGatewayAdapter"/> in the container is indexed by its
+/// own <c>GatewayName</c>, so a new provider is a new adapter class plus its registration - this
+/// file does not change, no handler changes, and no administrator has to wait for a deployment
+/// that names their provider in a constructor.
+///
+/// WHY A SEPARATE MARKER INTERFACE. The router is itself an <see cref="IPaymentGateway"/>, so
+/// asking the container for every <c>IPaymentGateway</c> would ask it to build this class while
+/// building this class. Adapters are registered under <see cref="IPaymentGatewayAdapter"/>
+/// instead, and the cycle cannot form.
 ///
 /// AN UNRECOGNISED NAME FALLS BACK rather than failing. <see cref="HostedCheckoutGateway"/> speaks
 /// the generic hosted-checkout shape, which is what a deployment pointing at its own payment
@@ -30,26 +43,51 @@ public sealed class PaymentGatewayRouter : IPaymentGateway
     private readonly ILogger<PaymentGatewayRouter> _logger;
 
     public PaymentGatewayRouter(
-        RazorpayGateway razorpay,
+        IEnumerable<IPaymentGatewayAdapter> adapters,
         HostedCheckoutGateway hostedCheckout,
         ILogger<PaymentGatewayRouter> logger)
     {
-        ArgumentNullException.ThrowIfNull(razorpay);
+        ArgumentNullException.ThrowIfNull(adapters);
         ArgumentNullException.ThrowIfNull(hostedCheckout);
 
         _logger = logger;
         _fallback = hostedCheckout;
 
-        _byName = new Dictionary<string, IPaymentGateway>(StringComparer.OrdinalIgnoreCase)
-        {
-            [RazorpayGateway.ProviderName] = razorpay,
-            [hostedCheckout.GatewayName] = hostedCheckout
-        };
+        var registered = adapters.ToList();
 
-        // The order webhook parsing is attempted in. Razorpay first because its envelope is
-        // unmistakable - `entity: "event"` with a named `event` - so it either recognises a body
-        // or declines it cleanly, and the generic parser is the one that accepts most shapes.
-        _parsersInOrder = [razorpay, hostedCheckout];
+        // LAST REGISTRATION WINS for a duplicated name, which is what lets a deployment replace a
+        // built-in adapter without removing it. An adapter with no name at all is skipped rather
+        // than indexed under the empty string, where it would be selected by every account whose
+        // GatewayName had been left blank.
+        var byName = new Dictionary<string, IPaymentGateway>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var adapter in registered.Where(a => !string.IsNullOrWhiteSpace(a.GatewayName)))
+        {
+            byName[adapter.GatewayName.Trim()] = adapter;
+        }
+
+        // The fallback is always reachable by name too, even if it was never registered as an
+        // adapter, so an account naming it explicitly resolves rather than falling through.
+        byName.TryAdd(hostedCheckout.GatewayName, hostedCheckout);
+
+        _byName = byName;
+
+        // The order webhook parsing is attempted in. THE SPECIFIC PARSERS RUN BEFORE THE GENERIC
+        // ONE: Razorpay's envelope is unmistakable - `entity: "event"` with a named `event` - so
+        // it either recognises a body or declines it cleanly, whereas the hosted-checkout parser
+        // accepts most shapes and would swallow a body that belongs to somebody else. Ordering by
+        // "is this the fallback" keeps that true however many providers are added later.
+        _parsersInOrder =
+        [
+            .. registered.Where(adapter => !ReferenceEquals(adapter, hostedCheckout)),
+            hostedCheckout
+        ];
+
+        _logger.LogInformation(
+            "Payment gateway router initialised with {ProviderCount} provider(s): {Providers}. "
+            + "An Organisation is routed by the Provider column of its gateway configuration.",
+            _byName.Count,
+            string.Join(", ", _byName.Keys.Order()));
     }
 
     private readonly IReadOnlyList<IPaymentGateway> _parsersInOrder;

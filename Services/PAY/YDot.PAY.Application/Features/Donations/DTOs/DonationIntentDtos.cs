@@ -90,7 +90,24 @@ public sealed record DonationIntentResponse(
     long Version,
 
     /// <summary>What the donor or the operator may do next, decided by the server.</summary>
-    IReadOnlyList<string> PermittedActions);
+    IReadOnlyList<string> PermittedActions,
+
+    /// <summary>
+    /// True when this e-mail can already sign in to this Organisation.
+    ///
+    /// SEPARATE FROM <see cref="ExistingDonorMatched"/> BECAUSE IT ANSWERS A DIFFERENT QUESTION.
+    /// That one is "has this person given before"; this is "does this address have a login". A
+    /// member of staff - a fundraiser, an approver, an administrator - has a login and no donor
+    /// record, so the donor flag is false for them and the public form let them give anonymously
+    /// under an address that already belongs to somebody.
+    ///
+    /// WHAT THE CLIENT DOES WITH IT: sends them to sign in, and brings them back to the same
+    /// donation afterwards. Section 3 of the flow document.
+    ///
+    /// FALSE IS THE SAFE DEFAULT. It means "carry on and pay", which is what an unrecognised
+    /// donor does anyway.
+    /// </summary>
+    bool RequiresSignIn = false);
 
 /// <summary>
 /// The answer to section 12's existing-donor check, on its own.

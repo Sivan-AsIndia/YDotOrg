@@ -76,6 +76,19 @@
           You have not been charged. You can try again, and nothing you entered has been lost.
         </p>
         <a class="pr-btn pr-btn-primary" href="/donate">Try again</a>
+
+        <!-- THE FAILURE BRANCH MOVES ON TOO, and says so. It used to end at the button above,
+             which left a donor whose card was declined on a page whose only other exit was the
+             browser's Back button - and Back leads to the checkout they have just failed. Where
+             they go is decided by who they are, not by this template: a donor is taken to the
+             payments queue to retry the donation, a lead back to the donation form. Same markup
+             and same class as the confirmed branch, so the two read identically. -->
+        @if (redirectIn() > 0) {
+          <p class="pr-redirect" aria-live="polite">
+            Taking you back in {{ redirectIn() }}
+            {{ redirectIn() === 1 ? 'second' : 'seconds' }}…
+          </p>
+        }
       }
 
       @case ('unknown') {

@@ -135,6 +135,63 @@ public sealed class DonationIntentCommandHandler(
             trackingAssetId: null,
             now);
 
+        // WHO THIS IS, DECIDED NOW RATHER THAN NEVER.
+        //
+        // `ExistingDonorMatched` was set in exactly one place - the separate /check-donor
+        // endpoint - and the client only called that endpoint when the CREATE response already
+        // said the donor was matched. It never did, because nothing set it on create. So the flag
+        // was false on every intent the platform has ever produced, and everything downstream
+        // that reads it was reading a constant:
+        //
+        //   - The result page classifies the payer from it, so every donor - including one
+        //     signed in, with an account and a password - was treated as a lead and redirected
+        //     to the public donor form after paying.
+        //   - The donation form's "welcome back" branch could not fire.
+        //
+        // IT IS THE SAME LOOKUP /check-donor RUNS, on the same rule the flow document states:
+        // organisation AND normalised e-mail, never e-mail alone, because the same person may
+        // give to two charities here and be known to one and a stranger to the other.
+        //
+        // IT NEVER FAILS THE DONATION. Recognising the donor is a courtesy that decides where
+        // they are sent afterwards; losing a gift because a lookup timed out is the worse outcome
+        // by a distance, and an unrecognised donor is simply treated as new.
+        // TWO QUESTIONS, NOT ONE, AND THEY COME APART FOR EVERYBODY WHO WORKS HERE.
+        //
+        //   "Has this person given before?"   -> the DONOR record. Decides the welcome-back copy.
+        //   "Can this address sign in?"       -> an IAM ACCOUNT. Decides whether they are sent to
+        //                                        sign in before paying.
+        //
+        // A fundraiser, an approver or an administrator has a login and no donor record. Asking
+        // only the first question answered "no" for all of them, so somebody typing their own
+        // work address into the public form was treated as a stranger and taken straight to
+        // payment - recording the gift against a second, unlinked identity in an organisation
+        // where they already exist.
+        var requiresSignIn = false;
+
+        try
+        {
+            var match = await donorDirectory.FindByEmailAsync(
+                tenantId, normalisedEmail, cancellationToken);
+
+            intent.ExistingDonorMatched = match is not null;
+            intent.ExistingDonorCheckedAtUtc = now;
+            intent.DonorId = match?.DonorId;
+
+            // A DONOR WITH AN ACTIVE ACCOUNT ALREADY ANSWERS THIS, so the second lookup is only
+            // needed when the first found nothing - which is the staff case.
+            requiresSignIn = match?.HasActiveAccount
+                             ?? await donorDirectory.HasLoginAccountAsync(
+                                 tenantId, normalisedEmail, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "The existing-donor check could not run for intent {IntentReference}. The "
+                + "donation proceeds and the donor is treated as new.",
+                intent.IntentReference);
+        }
+
         await donations.AddIntentAsync(intent, cancellationToken);
 
         await audit.WriteAnonymousAsync(
@@ -158,7 +215,10 @@ public sealed class DonationIntentCommandHandler(
             "Donation intent {IntentReference} created for organisation {TenantId} from {Source}.",
             intent.IntentReference, tenantId, intent.SourceType);
 
-        return intent.ToResponse(campaignName: null, PermittedActions(intent, now));
+        return intent.ToResponse(campaignName: null, PermittedActions(intent, now)) with
+        {
+            RequiresSignIn = requiresSignIn
+        };
     }
 
     // =====================================================================================

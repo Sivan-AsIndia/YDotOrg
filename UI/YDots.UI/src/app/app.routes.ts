@@ -495,19 +495,14 @@ export const routes: Routes = [
         canActivate: [requirePermission('pay.payments.view-events')],
       },
 
-      // WHERE A FAILED RETRY GOES. Safe retry is the permission because retrying an attempt whose
-      // outcome is unknown is what can charge a donor twice.
-      // {
-      //   path: 'donations/payment-support-and-safe-retry',
-      //   component: PaymentSupportAndSafeRetryComponent,
-      //   canActivate: [requirePermission('pay.payments.safe-retry')],
-      // },
-
-      // {
-      //   path: 'donations/receipt-register',
-      //   component: ReceiptRegisterComponent,
-      //   canActivate: [requirePermission('pay.receipts.view')],
-      // },
+      // PAYMENT SUPPORT AND SAFE RETRY, AND THE RECEIPT REGISTER, ARE NOT ROUTES ANY MORE.
+      //
+      // Both were folded into the queue above, which is the single Payments and Receipts page the
+      // flow document describes: one row per donation attempt carrying both its payment status
+      // and its receipt status, with retry and continue-to-payment offered from the detail panel
+      // rather than from a screen of their own. Their components have been deleted; the stubs
+      // that used to sit here are gone with them so nothing re-adds a menu entry pointing at a
+      // page that no longer exists.
 
       // ===== Communications pages =====
       { path: 'communications/unified-inbox', component: UnifiedInboxComponent },
@@ -651,7 +646,25 @@ export const routes: Routes = [
       // dashboard instead of showing them a sign-in form they do not need.
       { path: 'login', redirectTo: 'auth/sign-in', pathMatch: 'full' },
       { path: 'auth/sign-in', component: LoginComponent, canActivate: [anonymousOnlyGuard] },
- { path: 'Donor-form', component: DonorformComponent},
+
+      // THE PUBLIC DONOR FORM - anonymous, and it has to be.
+      //
+      // WHY IT SITS HERE, UNDER /auth, RATHER THAN UNDER /app. This is the screen a LEAD lands on:
+      // somebody with no account, no token and no session, who is converted to a Donor by the
+      // payment they are about to make and only receives their activation e-mail afterwards.
+      // Every route under /app carries authGuard, so a copy placed there would bounce the one
+      // person this page exists for. MainlayoutComponent draws no sidebar and loads no menu, so
+      // nothing on the way in makes an authenticated call either.
+      //
+      // NO anonymousOnlyGuard, DELIBERATELY, and it is the difference from the sign-in route
+      // above. A signed-in fundraiser capturing a donation on a lead's behalf must be able to
+      // open this form; bouncing them to the dashboard would break that.
+      //
+      // THE OLD PATH REDIRECTS RATHER THAN BEING DELETED. '/Donor-form' is what the form was
+      // registered as, so any link already sent out keeps working and arrives at the canonical
+      // address.
+      { path: 'auth/donor-form', component: DonorformComponent },
+      { path: 'Donor-form', redirectTo: 'auth/donor-form', pathMatch: 'full' },
       // Where sign-in ends for a root user. They are properly authenticated — the token is real
       // — but they belong to no organisation, so every organisation-scoped screen has nothing to
       // show until they say which one they mean. authGuard, not anonymousOnlyGuard: they ARE

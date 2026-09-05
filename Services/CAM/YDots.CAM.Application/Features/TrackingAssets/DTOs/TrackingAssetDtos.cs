@@ -96,6 +96,22 @@ public sealed record TrackingAssetListItemResponse(
     Guid TenantId,
     string Code,
     string? TrackingReference,
+
+    /// <summary>
+    /// The full URL a donor actually follows, built by the server when the asset was generated.
+    ///
+    /// WHY IT IS ON THE LIST AND NOT ONLY ON THE DETAIL, which is where it used to be alone. The
+    /// tracking asset manager is a LIST screen, and copying a link, printing a QR code and
+    /// sharing an asset all happen from its rows. With no URL on the row, the client had nothing
+    /// to render and composed one from the bare tracking reference instead - so Copy link put a
+    /// string like "https://K7M2QX9BTHDW" on the clipboard and every generated QR code encoded
+    /// the same. A printed QR containing that is not recoverable.
+    ///
+    /// NULL UNTIL GENERATED, and a draft asset should show nothing rather than a plausible link
+    /// to nowhere.
+    /// </summary>
+    string? GeneratedUrl,
+
     Guid CampaignId,
     string CampaignCode,
     string CampaignName,

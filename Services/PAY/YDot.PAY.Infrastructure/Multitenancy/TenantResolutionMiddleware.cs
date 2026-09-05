@@ -394,8 +394,21 @@ public sealed class TenantResolutionMiddleware(
     /// Kept as a list rather than inferred, so adding a public action is a deliberate edit here
     /// instead of a silent change in what counts as a reference.
     /// </summary>
+    /// <summary>
+    /// Segments that are the NAME OF A ROUTE rather than a donation reference.
+    ///
+    /// "initiate" was here first, and the note on the call site explains why: it is eight ASCII
+    /// letters, which is exactly the shape a reference has, so the shape test accepted it and the
+    /// call that STARTS a donation went looking for an intent called "initiate".
+    ///
+    /// "campaigns" is the same trap and was found the same way - nine ASCII letters, accepted as
+    /// a reference, no intent found, Organisation left unresolved, and the public donation form's
+    /// campaign picker silently empty. A route added under /api/public/donations/ whose next
+    /// segment is a literal has to be listed here, and the failure when it is not is quiet: the
+    /// endpoint answers 200 with nothing in it.
+    /// </summary>
     private static readonly HashSet<string> ActionSegments =
-        new(StringComparer.OrdinalIgnoreCase) { "initiate" };
+        new(StringComparer.OrdinalIgnoreCase) { "initiate", "campaigns" };
 
     private static bool IsAction(string segment) => ActionSegments.Contains(segment);
 

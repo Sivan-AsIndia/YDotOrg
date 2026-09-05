@@ -211,25 +211,47 @@
               </div>
 
 
-            <!-- Full name — text; Conditional (4.2.2) -->
+            <!-- Full name — text; Conditional (4.2.2).
+                 LOCKED FOR A SIGNED-IN DONOR, along with the two contact fields below: their
+                 identity is on their account, and a donation recorded against a name they typed
+                 over it would not be theirs. -->
               <label class="field">
                 <span class="field-label">Full name</span>
                 <input id="fld-fullName" type="text" class="input" maxlength="120" autocomplete="off"
-                       placeholder="Enter your full name" [disabled]="formLocked()"
+                       placeholder="Enter your full name" [disabled]="formLocked() || identityLocked()"
                        [ngModel]="fullName()" (ngModelChange)="fullName.set($event)" name="fullName" />
               </label>
 
-              <!-- Email or mobile — email input; Required; Restricted (4.2.2 / 4.2.5) -->
+              <!-- Email — Required; Restricted (4.2.2 / 4.2.5).
+                   IT WAS "Email or mobile", ONE FIELD FOR TWO THINGS. The receipt and the account
+                   invitation both go by e-mail, so a donor who typed a mobile number into it got
+                   neither and nothing said so. Mobile has its own field below. -->
               <label class="field">
-                <span class="field-label">Email or mobile <span class="req-star">*</span></span>
+                <span class="field-label">Email <span class="req-star">*</span></span>
                 <input id="fld-emailOrMobile" type="email" class="input" autocomplete="off"
-                       placeholder="Enter email or mobile" [disabled]="formLocked()"
+                       placeholder="Enter email address" [disabled]="formLocked() || identityLocked()"
                        [ngModel]="emailOrMobile()" (ngModelChange)="emailOrMobile.set($event)" name="emailOrMobile"
                        [attr.aria-invalid]="(!emailOrMobile().trim() || !emailValid()) && uiState() === 'validation'" />
                 @if (!emailOrMobile().trim() && uiState() === 'validation') {
-                  <span class="field-error">Enter Email or mobile.</span>
+                  <span class="field-error">Enter Email.</span>
                 } @else if (!emailValid()) {
-                  <span class="field-error">Review Email or mobile. The value does not meet the stated format or range.</span>
+                  <span class="field-error">Review Email. The value does not meet the stated format or range.</span>
+                }
+                @if (identityLocked()) {
+                  <span class="field-hint">From your account. Your receipt is sent here.</span>
+                }
+              </label>
+
+              <!-- Mobile number — optional, and validated only when given. -->
+              <label class="field">
+                <span class="field-label">Mobile No</span>
+                <input id="fld-mobileNumber" type="tel" inputmode="tel" class="input" maxlength="20"
+                       autocomplete="off" placeholder="Enter mobile number"
+                       [disabled]="formLocked()"
+                       [ngModel]="mobileNumber()" (ngModelChange)="mobileNumber.set($event)" name="mobileNumber"
+                       [attr.aria-invalid]="mobileInvalid() && uiState() === 'validation'" />
+                @if (mobileInvalid()) {
+                  <span class="field-error">Review Mobile No. Enter 10 to 15 digits.</span>
                 }
               </label>
 

@@ -46,7 +46,7 @@ public class HostedCheckoutGateway(
     IHttpClientFactory httpClientFactory,
     IOptions<PaymentSettings> paymentSettings,
     IGatewayCredentialResolver credentials,
-    ILogger<HostedCheckoutGateway> logger) : IPaymentGateway
+    ILogger<HostedCheckoutGateway> logger) : IPaymentGatewayAdapter
 {
     internal const string HttpClientName = "payment-gateway";
 

@@ -22,6 +22,30 @@ public interface IDonorDirectory
     /// Returns null when no donor matches, which is section 14's "continue without signing in"
     /// branch. A match is section 13's "sign in first" branch.
     /// </summary>
+    /// <summary>
+    /// Does this e-mail already have a USER ACCOUNT in this Organisation?
+    ///
+    /// A DIFFERENT QUESTION FROM <see cref="FindByEmailAsync"/>, and the difference is the point.
+    /// That one asks whether the address belongs to a DONOR RECORD; this asks whether it can sign
+    /// in. The two come apart for everybody who works at the charity: a fundraiser, an approver or
+    /// an administrator has a login and is not a donor, so the donor lookup answers "no" for them
+    /// and the public form let them start a fresh anonymous donation under an address that already
+    /// has an account behind it.
+    ///
+    /// WHAT IT IS FOR. Section 3 of the flow document: "If the email matches an existing Donor
+    /// the person is redirected to Login. After logging in, the donor is taken to the Payment
+    /// page." That redirect has to fire for anybody who can sign in, not only for people who have
+    /// given before - otherwise a member of staff typing their own address is quietly treated as
+    /// a stranger and the donation is recorded against a second, unlinked identity.
+    ///
+    /// IT IS NOT AN ORACLE. The answer never leaves the server as a bare yes for an address the
+    /// caller chose at random: it is attached to an intent they have just created and reaches
+    /// them only as "sign in to continue this donation", which is the same thing they would learn
+    /// by trying to sign in.
+    /// </summary>
+    Task<bool> HasLoginAccountAsync(
+        Guid tenantId, string normalisedEmail, CancellationToken cancellationToken);
+
     Task<DonorMatch?> FindByEmailAsync(
         Guid tenantId, string normalisedEmail, CancellationToken cancellationToken);
 

@@ -163,6 +163,20 @@ export interface PaginationRequest {
  * from the tracking reference or the campaign; a field here would let anybody create donations
  * against any charity on the platform.
  */
+/**
+ * One appeal as a donor may see it, from the anonymous campaigns endpoint.
+ *
+ * EVERYTHING HERE IS PUBLIC BY CONSTRUCTION - an id, a code, a name, the description the
+ * organisation wrote for donors, and the currency. No target, no raised figure, no owner.
+ */
+export interface PublicCampaignSummary {
+  id: string;
+  code: string;
+  name: string;
+  publicDescription: string | null;
+  currencyCode: string;
+}
+
 export interface CreateDonationIntentRequest {
   donorName: string;
   email: string;
@@ -248,6 +262,15 @@ export interface ConfirmCheckoutRequest {
 export interface DonationIntentResponse {
   id: string;
   intentReference: string;
+  /**
+   * True when this e-mail can already sign in to this organisation.
+   *
+   * DIFFERENT FROM `existingDonorMatched`, which asks whether the person has GIVEN before. A
+   * fundraiser, approver or administrator has a login and no donor record, so the donor flag is
+   * false for them while this one is true - and they are the case the sign-in redirect was
+   * missing.
+   */
+  requiresSignIn?: boolean;
   status: DonationIntentStatus;
   statusDescription: string;
   amount: MoneyResponse;
@@ -577,6 +600,21 @@ export interface PaymentVerification {
   supportCorrelationReference: string;
   history: PaymentVerificationHistoryRow[];
   permittedActions: string[];
+
+  /**
+   * The provider that actually took this payment, as the attempt recorded it.
+   *
+   * NOT THE ORGANISATION'S CURRENT SETTING. An administrator who switches provider between the
+   * payment and the donor pressing Check again must not make this page claim the money went
+   * somewhere it did not.
+   */
+  gatewayName: string;
+
+  /** True when this donation was started by a Lead rather than by a Donor. */
+  originatedFromLead: boolean;
+
+  /** True when the pre-payment check recognised the payer as an existing Donor. */
+  existingDonorMatched: boolean;
 }
 
 export interface VerifyPaymentRequest {
@@ -1178,6 +1216,8 @@ export interface ReceiptRegisterRow {
   receiptDateUtc: string | null;
   /** The donor AS PRINTED on the receipt, not as they are today. */
   donorSnapshot: string;
+  /** Masked unless the caller holds pay.donations.view-sensitive-donor. */
+  donorEmail: string | null;
   amount: MoneyResponse;
   status: 'Success' | 'Failed';
   campaignOrFundName: string | null;

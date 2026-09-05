@@ -32,6 +32,16 @@ public sealed record ReceiptRegisterRowResponse(
     /// <summary>The donor AS PRINTED, for a receipt. As recorded on the intent, for a failure.</summary>
     string DonorSnapshot,
 
+    /// <summary>
+    /// The donor's e-mail, masked unless the caller may see unmasked donor detail.
+    ///
+    /// IT WAS NOT ON THIS ROW AT ALL, which is why the register's e-mail column rendered a dash
+    /// for every successful donation while the failed half - which comes from the payment event
+    /// queue and does carry one - showed a real address. The two halves of one page disagreed
+    /// about whether an e-mail existed.
+    /// </summary>
+    string? DonorEmail,
+
     MoneyResponse Amount,
 
     /// <summary>Success or Failed - the document's own two words.</summary>

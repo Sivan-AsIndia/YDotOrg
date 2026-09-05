@@ -15,6 +15,7 @@ export type CampaignRole =
   | 'Organisation Administrator'
   | 'Approver'
   | 'Initiator'
+  | 'Donor'
   | 'User';
 
 /**
@@ -187,6 +188,14 @@ export class CurrentUserService {
       return 'Initiator';
     }
 
+    // LAST, AND BELOW EVERY STAFF ROLE. Somebody who gives AND works here - a volunteer, an
+    // employee - is labelled by the authority they carry over the Organisation's records, not by
+    // the fact that they have also donated. Holding both is legitimate; only the order of these
+    // checks decides which one a screen shows.
+    if (roles.includes('DONOR')) {
+      return 'Donor';
+    }
+
     return 'User';
   });
 
@@ -196,6 +205,16 @@ export class CurrentUserService {
   );
 
   readonly isSuperAdmin = computed(() => this.tokens.isSuperAdmin());
+
+  /**
+   * The signed-in person's own name and address, for a form that should not ask them again.
+   *
+   * FROM THE TOKEN, so they cost nothing and cannot fail halfway. Empty strings for an anonymous
+   * visitor, which is what the donation form checks before it prefills anything.
+   */
+  readonly displayName = computed(() => this.tokens.displayName());
+
+  readonly email = computed(() => this.tokens.email());
 
   /**
    * The organisation this session is operating in.

@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<CampaignSettings>(configuration.GetSection(CampaignSettings.SectionName));
         services.Configure<ClientAppSettings>(configuration.GetSection(ClientAppSettings.SectionName));
+        services.Configure<SeedSettings>(configuration.GetSection(SeedSettings.SectionName));
 
         // ---- FluentValidation ---------------------------------------------------------------
         //

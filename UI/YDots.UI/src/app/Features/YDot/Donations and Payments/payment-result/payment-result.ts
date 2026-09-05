@@ -5,6 +5,10 @@ import { CurrentUserService } from '../../../../Service/current-user.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { PaymentVerification } from '../../../../Shared/models/payment.model';
+import {
+  destinationAfterPayment,
+  payerKind,
+} from '../../../../Shared/services/donation-redirect.policy';
 
 type ResultState = 'checking' | 'confirmed' | 'pending' | 'failed' | 'unknown';
 
@@ -96,6 +100,16 @@ export class PaymentResultComponent implements OnDestroy {
    */
   private static readonly RedirectSeconds = 5;
 
+  /**
+   * The same, for a payment that did not go through.
+   *
+   * TWICE AS LONG, AND FOR A REASON. The confirmed page says "thank you" and there is nothing to
+   * decide; this one says a payment failed and offers Try again, so five seconds is long enough
+   * to read the headline and not long enough to act on it. Ten leaves room to press the button
+   * before the page moves on by itself.
+   */
+  private static readonly FailedRedirectSeconds = 10;
+
   private attempts = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -166,11 +180,19 @@ export class PaymentResultComponent implements OnDestroy {
         switch (result.backendPaymentState) {
           case 'Confirmed':
             this.state.set('confirmed');
-            this.startCountdown();
+            this.startCountdown(PaymentResultComponent.RedirectSeconds);
             return;
 
           case 'Failed':
             this.state.set('failed');
+
+            // A FAILURE NOW LEADS SOMEWHERE, which it did not before. The failed branch rendered
+            // its message and stopped: a donor whose card was declined was left on a dead-end
+            // page with the browser's Back button as their only way out, and Back leads to the
+            // checkout they have already tried. The destination differs by who they are - see
+            // `leave` - which is why it is on the same countdown as the confirmed branch rather
+            // than being a hard-coded navigation here.
+            this.startCountdown(PaymentResultComponent.FailedRedirectSeconds);
             return;
 
           default:
@@ -214,12 +236,12 @@ export class PaymentResultComponent implements OnDestroy {
    * retry poll may already have a pass in flight when Check again is pressed — and a second
    * interval over the same signal would count down at double speed and navigate early.
    */
-  private startCountdown(): void {
+  private startCountdown(seconds: number): void {
     if (this.countdownTimer !== null) {
       return;
     }
 
-    this.redirectIn.set(PaymentResultComponent.RedirectSeconds);
+    this.redirectIn.set(seconds);
 
     this.countdownTimer = setInterval(() => {
       const remaining = this.redirectIn() - 1;
@@ -244,22 +266,58 @@ export class PaymentResultComponent implements OnDestroy {
   }
 
   /**
-   * Back to the donation screen.
+   * Out of this page, to wherever this person belongs next.
    *
-   * NO `intent` ON THE WAY BACK, deliberately. The donation form reads that parameter on load and
-   * reopens the intent it names, offering Continue to payment — which, for an intent that has just
-   * been confirmed, is an invitation to pay for the same gift a second time. Arriving clean gives
-   * an empty form, which is the only correct next state after a completed donation.
+   * THE RULE IS NOT THIS PAGE'S TO INVENT, so it does not. `destinationAfterPayment` holds the
+   * four-way rule the payment-flow specification states - donor or lead, paid or not - and both
+   * donation forms ask the same function. This page supplies the two facts only it has: WHO paid,
+   * which comes from the verification rather than from anything the browser was handed, and
+   * WHETHER it was paid.
+   *
+   * WHERE THE TWO FACTS COME FROM. The SESSION is this browser's own and is the primary
+   * decision; `originatedFromLead` is on the verification because only the server knows it - a
+   * lead is converted to a Donor by the very payment being verified.
+   *
+   * `existingDonorMatched` IS NO LONGER CONSULTED, and removing it was a correction rather than a
+   * simplification. It is true only when the payer's e-mail matches a donor record, so a
+   * signed-in member of staff - an IAM user, not a donor - came back false and was routed to the
+   * public donor form having been signed in the whole time.
+   *
+   * NO `intent` ON THE WAY BACK, deliberately. A donation form reads that parameter on load and
+   * reopens the intent it names, offering Continue to payment - which, for an intent that has
+   * just been confirmed, is an invitation to pay for the same gift a second time. Arriving clean
+   * gives an empty form, which is the only correct next state after a completed donation.
    */
   private leave(): void {
     this.stopCountdown();
 
-    // The /app copy is behind authGuard; the anonymous donor gets the public one. See the comment
-    // on `currentUser` above for why this is not a cosmetic difference.
-    const destination = this.currentUser.reference()
-      ? '/app/donations/public-donation-initiation'
-      : '/donate';
+    const verification = this.verification();
 
-    this.router.navigate([destination]);
+    // NO VERIFICATION MEANS NO INFORMED DESTINATION. Nothing came back - the endpoint was
+    // unreachable, or this ran before the first answer - so the donor is treated as the flow
+    // treats anybody it cannot identify: back to the public form, which is open to everyone and
+    // where they can see and retry their donation.
+    const kind = payerKind({
+      // THE SESSION IS THE DECIDING FACT. Both signed-in destinations sit under /app behind the
+      // authentication guard, and the lead's is public - so "does this browser hold a session"
+      // answers exactly the question the three destinations pose.
+      hasSession: this.currentUser.reference() !== '',
+
+      // A DONATION STARTED FROM A LEAD'S OWN LINK STAYS THE LEAD'S, even when a signed-in
+      // fundraiser completed it: the lead is the one being converted and invited.
+      originatedFromLead: verification?.originatedFromLead,
+    });
+
+    const destination = destinationAfterPayment(
+      kind,
+      this.state() === 'confirmed',
+
+      // ONLY EVER READ ON A LEAD'S FAILURE - see the policy. Passing it unconditionally is safe
+      // because the policy is what decides whether it travels, and keeping that decision in one
+      // place is the reason this page does not make it.
+      this.reference(),
+    );
+
+    void this.router.navigate([...destination.commands], destination.extras);
   }
 }

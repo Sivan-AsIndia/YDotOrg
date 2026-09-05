@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -53,7 +54,8 @@ public sealed class CreateUserCommandHandler(
     IUnitOfWork unitOfWork,
     IOptions<SecuritySettings> securityOptions,
     IOptions<EmailSettings> emailOptions,
-    IOptions<ClientAppSettings> clientOptions)
+    IOptions<ClientAppSettings> clientOptions,
+    ILogger<CreateUserCommandHandler> logger)
 {
     /// <summary>
     /// Whether an e-mail address or username is free INSIDE THIS ORGANISATION.
@@ -338,7 +340,8 @@ public sealed class CreateUserCommandHandler(
         await users.AddAsync(user, cancellationToken);
 
         // ---- Roles ------------------------------------------------------------------------------
-        var assigned = await AssignRolesAsync(user, tenant, request.RoleIds, now, cancellationToken);
+        var assigned = await AssignRolesAsync(
+            user, tenant, request.RoleIds, request.AccountCategory, now, cancellationToken);
         if (assigned.IsFailure)
         {
             return Result.Failure<CreateUserResponse>(assigned.Error!);
@@ -581,8 +584,19 @@ public sealed class CreateUserCommandHandler(
     /// Refuses a combination that breaks a blocking segregation-of-duties rule, at the point
     /// somebody tries to create it rather than at the next audit.
     /// </summary>
+    /// <summary>
+    /// Gives the new account its roles, or works out which one it should have.
+    ///
+    /// THE FALLBACK IS THE INTERESTING PART. It takes the account CATEGORY because the answer to
+    /// "what should an account with no roles get" is not the same for staff and for a donor, and
+    /// the category is the only thing on the request that distinguishes them.
+    /// </summary>
     private async Task<Result> AssignRolesAsync(
-        User user, Tenant tenant, IReadOnlyList<Guid>? roleIds, DateTimeOffset now,
+        User user,
+        Tenant tenant,
+        IReadOnlyList<Guid>? roleIds,
+        UserAccountCategory accountCategory,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var requested = roleIds is { Count: > 0 }
@@ -596,14 +610,43 @@ public sealed class CreateUserCommandHandler(
                 [new ValidationError("RoleIds", "Choose roles from this organisation.")]));
         }
 
-        // Fall back to the default, so a new user is not created able to sign in and see
-        // nothing — which reads as a broken account rather than a missing role.
+        // Fall back to a role, so a new user is not created able to sign in and see nothing —
+        // which reads as a broken account rather than a missing role.
+        //
+        // WHICH ROLE DEPENDS ON WHAT KIND OF ACCOUNT THIS IS, and it did not used to. Every
+        // account with no roles fell through to the Organisation's DEFAULT role, which is
+        // INITIATOR — and the donor portal creates exactly such an account. A lead who scanned a
+        // QR code, paid, and activated the invitation in their e-mail was therefore given maker
+        // rights across IAM, Campaigns, Donors and Payments: the campaign register, the donor
+        // list, the user directory. Nobody chose that. It is what "the default role" means when
+        // the account being created is not a member of staff.
+        //
+        // A DonorPortal account gets DONOR: their own giving, and nothing else.
+        //
+        // IF DONOR IS MISSING THE ACCOUNT GETS NOTHING, and that is the right way to fail. The
+        // seeder creates the role in every Organisation, so its absence means a database that
+        // has not been reconciled — and on that database an account with no roles sees an empty
+        // application, which somebody reports, whereas an account quietly holding INITIATOR is a
+        // member of the public inside the staff screens and nobody finds out.
         if (requested.Count == 0)
         {
-            var fallback = await roles.GetDefaultRoleAsync(tenant.Id, cancellationToken);
+            var fallback = accountCategory == UserAccountCategory.DonorPortal
+                ? await roles.GetByCodeAsync(RoleCodes.Donor, tenant.Id, cancellationToken)
+                : await roles.GetDefaultRoleAsync(tenant.Id, cancellationToken);
+
             if (fallback is not null)
             {
                 requested = [fallback];
+            }
+            else if (accountCategory == UserAccountCategory.DonorPortal)
+            {
+                logger.LogWarning(
+                    "The {RoleCode} role does not exist in Organisation {TenantId}, so donor "
+                    + "account {UserId} was created with no role at all. It will sign in and see "
+                    + "nothing until the role seeder has run.",
+                    RoleCodes.Donor,
+                    tenant.Id,
+                    user.Id);
             }
         }
 

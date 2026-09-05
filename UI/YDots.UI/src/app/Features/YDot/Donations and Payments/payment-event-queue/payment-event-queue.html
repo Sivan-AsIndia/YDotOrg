@@ -273,13 +273,18 @@
 
           <!-- Contextual action: exactly one of Retry / Continue payment / Resend, or none. -->
           <div class="pr-detail-actions">
-            @if (e.paymentStatus === 'Fail') {
+            <!-- RETRY IS THE DONOR/INITIATOR'S ACTION, NOT THE ADMINISTRATOR'S. The role
+                 table gives Tenant Admin "view Details" on a failed payment and nothing
+                 more, because retrying charges somebody else's card. A caller without the
+                 permission sees no button rather than a disabled one. -->
+            @if (e.paymentStatus === 'Fail' && canRetry()) {
               <button type="button" class="pr-btn pr-btn-danger pr-btn-block" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
                 {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry' }}
               </button>
               <p class="pr-hint">Retries the same payment. A second failure sends this to Payment Support &amp; Safe Retry.</p>
             }
-            @if (e.paymentStatus === 'Pending') {
+            <!-- CONTINUE TO PAY, likewise: the table gives it to Donor/Initiator only. -->
+            @if (e.paymentStatus === 'Pending' && canContinuePayment()) {
               <button type="button" class="pr-btn pr-btn-primary btn-sm pr-btn-block" (click)="continuePaymentFromQueue(e)">
                 Continue payment
               </button>

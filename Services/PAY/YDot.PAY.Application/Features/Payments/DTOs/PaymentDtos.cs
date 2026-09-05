@@ -34,7 +34,37 @@ public sealed record PaymentVerificationResponse(
     /// <summary>The attempt history, newest first.</summary>
     IReadOnlyList<PaymentVerificationHistoryRow> History,
 
-    IReadOnlyList<string> PermittedActions);
+    IReadOnlyList<string> PermittedActions,
+
+    /// <summary>
+    /// Which provider actually took this payment, as the attempt recorded it.
+    ///
+    /// IT IS THE ATTEMPT'S NAME, NOT THE ORGANISATION'S CURRENT SETTING. An administrator who
+    /// switches from Razorpay to Stripe between the payment and the donor pressing Check again
+    /// must not make the result page claim the money went through Stripe. The attempt holds
+    /// what was true when it ran, and that is what a support call needs.
+    /// </summary>
+    string GatewayName,
+
+    /// <summary>
+    /// True when this donation was started by somebody who was a LEAD rather than a Donor.
+    ///
+    /// WHY THE RESULT PAGE NEEDS IT. A confirmed lead donation ends differently from a confirmed
+    /// donor donation: the lead has just been converted, given a Donor login and e-mailed an
+    /// activation link, so they have no session and no password yet. Sending them to a screen
+    /// under /app would put them through the authentication guard and land them on a sign-in
+    /// form no password of theirs opens. They go back to the public donor form instead.
+    /// </summary>
+    bool OriginatedFromLead,
+
+    /// <summary>
+    /// True when the existing-donor check recognised this person before they paid.
+    ///
+    /// NULL ON THE INTENT MEANS "NEVER ASKED", which reads here as false. It is the other half
+    /// of the redirect decision: a recognised Donor goes back to the in-app donation screen, and
+    /// everybody else is treated as new.
+    /// </summary>
+    bool ExistingDonorMatched);
 
 /// <summary>One row of the verification history.</summary>
 public sealed record PaymentVerificationHistoryRow(string Primary, string Secondary, string Meta);

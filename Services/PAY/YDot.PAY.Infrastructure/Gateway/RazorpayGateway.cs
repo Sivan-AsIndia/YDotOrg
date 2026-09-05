@@ -48,7 +48,7 @@ public sealed class RazorpayGateway(
     IOptions<PaymentSettings> paymentSettings,
     IOptions<ClientAppSettings> clientSettings,
     IGatewayCredentialResolver credentials,
-    ILogger<RazorpayGateway> logger) : IPaymentGateway
+    ILogger<RazorpayGateway> logger) : IPaymentGatewayAdapter
 {
     /// <summary>The value a gateway account's <c>GatewayName</c> must hold to reach this adapter.</summary>
     public const string ProviderName = "Razorpay";

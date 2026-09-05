@@ -1,4 +1,4 @@
-﻿using YDot.IAM.Domain.Enums;
+using YDot.IAM.Domain.Enums;
 
 namespace YDot.IAM.Application.Common.Constants;
 
@@ -448,21 +448,22 @@ public static class MenuCatalogue
         new("MN_PUBLIC_DONATION", "Public Donation Initiation", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
             "/app/donations/public-donation-initiation", "heart", "pay.intents.create", 10),
 
-        // STEP 3. Fail and Pending only - a success goes straight to its receipt and never
-        // appears here, which is what makes this a work list rather than a log.
-        new("MN_PAYMENT_QUEUE", "Payment Queue", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
+        // STEP 3, AND THE ONLY REMAINING ONE. Payments and Receipts: every payment event with
+        // both its payment status and its receipt status, on one page.
+        //
+        // THREE MENU ENTRIES BECAME ONE, and the two that went are the point of the change.
+        // "Support & Retry" (/app/donations/payment-support-and-safe-retry) and "Receipt
+        // Register" (/app/donations/receipt-register) were separate screens and separate
+        // entries; both have been folded into this page, where retry and continue-to-payment are
+        // offered from a row's detail panel and the receipt sits beside the payment that
+        // produced it. Their components have been deleted from the client.
+        //
+        // LEAVING THE ENTRIES BEHIND WOULD HAVE BEEN WORSE THAN USELESS. This catalogue is what
+        // the sidebar is built from, so every administrator holding pay.payments.safe-retry or
+        // pay.receipts.view would still have been shown two menu items that route to nothing -
+        // an application that looks broken to precisely the people who would report it.
+        new("MN_PAYMENT_QUEUE", "Payments & Receipts", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
             "/app/donations/payment-event-queue", "inbox", "pay.payments.view-events", 20),
-
-        // STEP 4. Where a retry that failed a second time goes. Safe-retry is the permission
-        // because retrying an attempt whose outcome nobody has confirmed is what charges a donor
-        // twice.
-        new("MN_PAYMENT_SUPPORT", "Support & Retry", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/payment-support-and-safe-retry", "life-buoy", "pay.payments.safe-retry", 30),
-
-        // STEP 5. Every receipt this organisation has issued, with the running totals the
-        // document shows across the top of Fig 5.
-        new("MN_RECEIPT_REGISTER", "Receipt Register", "MN_DONATIONS", MenuLevel.ChildSubMenu, "PAY",
-            "/app/donations/receipt-register", "file-text", "pay.receipts.view", 50),
 
         // ============ Communications =========================================================================
         new(Communications, "Communications", null, MenuLevel.Menu, "COM", null, "message-circle", null, 80, IsEnabledByDefault: false),

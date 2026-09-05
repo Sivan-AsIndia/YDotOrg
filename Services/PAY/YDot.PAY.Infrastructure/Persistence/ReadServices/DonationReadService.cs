@@ -72,6 +72,11 @@ public sealed class DonationReadService(
                 .ThenInclude(receipt => receipt.Deliveries)
             .Where(candidate => candidate.Id == id)
             .Where(candidate => !scope.IsOwnRecordsOnly || candidate.CreatedByUserId == scope.UserId)
+
+            // A DONOR READS THEIR OWN DONATION AND NO OTHER - see the note on the list filter.
+            .Where(candidate => !scope.IsDonorSelfService
+                                || (scope.HasDonorIdentity
+                                    && candidate.DonorEmail.ToLower() == scope.DonorEmail))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (donation is null)
@@ -166,6 +171,10 @@ public sealed class DonationReadService(
         {
             query = query.Where(donation => donation.CreatedByUserId == scope.UserId);
         }
+
+        // THE STATISTICS ARE SCOPED TOO. A donor's totals must be their own giving, not the
+        // Organisation's - a summary card is a disclosure like any other row.
+        query = ApplyDonorScope(query, scope);
 
         var counts = await query
             .GroupBy(_ => 1)
@@ -279,6 +288,29 @@ public sealed class DonationReadService(
             .Select(receipt => receipt.ReceiptNumber)
             .FirstOrDefault();
 
+    /// <summary>
+    /// Narrows a query to the signed-in donor's own donations.
+    ///
+    /// <c>Donation.DonorEmail</c> IS A SNAPSHOT OF WHAT THE DONOR TYPED and has no normalised
+    /// twin, so the comparison lowers the column. It is the correct source even so: the donation
+    /// is deliberately a snapshot of the gift as it was made, which is what a receipt must show
+    /// years later.
+    ///
+    /// NO IDENTITY MEANS NO ROWS, never all rows.
+    /// </summary>
+    private static IQueryable<Donation> ApplyDonorScope(
+        IQueryable<Donation> query, AccessScope scope)
+    {
+        if (!scope.IsDonorSelfService)
+        {
+            return query;
+        }
+
+        return scope.HasDonorIdentity
+            ? query.Where(donation => donation.DonorEmail.ToLower() == scope.DonorEmail)
+            : query.Where(_ => false);
+    }
+
     private static IQueryable<Donation> ApplyFilter(
         IQueryable<Donation> query, DonationSearchFilter filter, AccessScope scope)
     {
@@ -286,6 +318,8 @@ public sealed class DonationReadService(
         {
             query = query.Where(donation => donation.CreatedByUserId == scope.UserId);
         }
+
+        query = ApplyDonorScope(query, scope);
 
         if (filter.Status.HasValue)
         {

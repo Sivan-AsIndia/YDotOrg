@@ -133,6 +133,28 @@ public sealed class PaymentSettings
     public string SeedGatewayName { get; set; } = "Razorpay";
 
     /// <summary>
+    /// The Organisation the demonstration donations belong to.
+    ///
+    /// MATCHES IAM's SeedSettings:SampleOrganisationId, DON's SeedSettings:OrganisationId and
+    /// CAM's SeedSettings:OrganisationId. Every Tenant-owned row in PAY is filtered to the
+    /// Organisation on the caller's token, so donations stamped with anything else are in the
+    /// database and visible to nobody.
+    /// </summary>
+    public Guid SampleOrganisationId { get; set; } =
+        Guid.Parse("9fb11890-a08e-4adc-95ca-8e4d71f4dd21");
+
+    /// <summary>The IAM system user, recorded as the actor on every seeded row.</summary>
+    public Guid SystemUserId { get; set; } = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+    /// <summary>
+    /// Insert one donation in each payment status - Success, Pending and Failed.
+    ///
+    /// Off for a deployment that must contain only real donations. The seeder is idempotent by
+    /// fixed id either way, so leaving it on inserts once and then does nothing.
+    /// </summary>
+    public bool SeedSampleDonations { get; set; } = true;
+
+    /// <summary>
     /// The currency the seeded account settles in.
     ///
     /// MUST MATCH THE CURRENCY DONATIONS ARE RAISED IN or the payment link is refused before it is

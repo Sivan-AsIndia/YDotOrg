@@ -152,11 +152,45 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICur
         return IsSuperAdmin || permissionCodes.Any(code => Permissions.Contains(code));
     }
 
-    public AccessScope Scope => new(
-        ParseGuid(FindFirst(ClaimTypeNames.TenantId) ?? FindFirst(ClaimTypeNames.OrganisationId))
-        ?? Guid.Empty,
-        UserId,
-        DataScopes);
+    /// <summary>
+    /// The narrowing every read service applies inside the Organisation.
+    ///
+    /// THE DONOR BRANCH IS DECIDED HERE, ONCE, so no read service has to reason about roles. A
+    /// caller is a self-service donor when they hold DONOR and hold neither administrator flag:
+    /// a member of staff who also gives - a volunteer, an employee - keeps the staff view their
+    /// staff role grants, because holding both roles is legitimate and the wider one is the
+    /// point of having it.
+    /// </summary>
+    public AccessScope Scope
+    {
+        get
+        {
+            var donorSelfService = !IsSuperAdmin
+                                   && !IsTenantAdmin
+                                   && Roles.Contains(DonorRoleCode, StringComparer.OrdinalIgnoreCase)
+                                   && !Roles.Any(role =>
+                                       StaffRoleCodes.Contains(role, StringComparer.OrdinalIgnoreCase));
+
+            return new AccessScope(
+                ParseGuid(FindFirst(ClaimTypeNames.TenantId) ?? FindFirst(ClaimTypeNames.OrganisationId))
+                ?? Guid.Empty,
+                UserId,
+                DataScopes,
+                donorSelfService ? Email?.Trim().ToLowerInvariant() : null,
+                donorSelfService);
+        }
+    }
+
+    /// <summary>IAM's code for the donor role. A cross-service string, so it is named once.</summary>
+    private const string DonorRoleCode = "DONOR";
+
+    /// <summary>
+    /// The roles that mean "this person is staff", whatever else they also hold.
+    ///
+    /// SUPER_ADMIN AND TENANT_ADMIN ARE NOT LISTED because their own claims are checked directly
+    /// above - the token carries a boolean for each, which is the authoritative form.
+    /// </summary>
+    private static readonly string[] StaffRoleCodes = ["INITIATOR", "APPROVER"];
 
     private string? FindFirst(string claimType) => Principal?.FindFirst(claimType)?.Value;
 

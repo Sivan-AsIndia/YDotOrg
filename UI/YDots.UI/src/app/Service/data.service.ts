@@ -2,9 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 import { PaymentVerificationRecord } from '../Shared/models/payment-verification.model';
 import { PaymentEventRecord, PaymentStatus } from '../Shared/models/payment-event-queue.model';
-import { ReceiptRecord } from '../Shared/models/receipt-register.model';
 import { RccRefundCaseRecord } from '../Shared/models/refund-chargeback-case.model';
-import { PsrRecoveryRecord } from '../Shared/models/payment-support-safe-retry.model';
 import {
   DonationIntentListItem,
   DonationIntentSearchFilter,
@@ -16,8 +14,6 @@ import {
   toChargebackCaseRecord,
   toIntentScreenRecord,
   toPaymentEventRecord,
-  toReceiptRecord,
-  toRecoveryRecord,
   toRefundCaseRecord,
 } from '../Shared/models/payment-adapters';
 import { PaymentApiService } from './payment-api.service';
@@ -351,21 +347,6 @@ export class DataService {
     this.pendingDonationForPayment = null;
   }
 
-  /** The record carried from the intent detail screen into safe retry. */
-  private pendingSafeRetryRecord: PaymentEventRecord | null = null;
-
-  setPendingSafeRetryRecord(record: PaymentEventRecord): void {
-    this.pendingSafeRetryRecord = record;
-  }
-
-  getPendingSafeRetryRecord(): PaymentEventRecord | null {
-    return this.pendingSafeRetryRecord;
-  }
-
-  clearPendingSafeRetryRecord(): void {
-    this.pendingSafeRetryRecord = null;
-  }
-
   /** The record carried from the event queue into the verification page. */
   private pendingVerificationRecord: PaymentEventRecord | null = null;
 
@@ -382,36 +363,21 @@ export class DataService {
   }
 
   // =========================================================================================
-  // Receipt register - SCR-PAY-005
+  // THE RECEIPT REGISTER AND THE PAYMENT SUPPORT / SAFE RETRY READS ARE GONE.
+  //
+  // Both screens have been withdrawn and folded into Payments & Receipts, which reads the
+  // payments API directly rather than through this service. What was left here were four
+  // register accessors and three support-queue accessors that nothing called - and a read method
+  // for a deleted page is not harmless: it is the thing somebody finds when they go looking for
+  // how to bring the page back, and it keeps a model file alive that describes a screen that no
+  // longer exists.
+  //
+  // WHAT REPLACED THEM. `PaymentEventQueueComponent` calls `getReceiptRegister` and
+  // `searchPaymentEvents` on `PaymentApiService` and merges the two, so a donation's payment
+  // status and its receipt status arrive together on one row. Safe retry survives as the
+  // `safeRetry` ACTION on that page's detail panel, which is what it always was - a recovery
+  // step on a failed payment rather than a screen of its own.
   // =========================================================================================
-
-  getReceiptRegisterData(): Observable<ReceiptRecord[]> {
-    return this.payments
-      .searchReceipts({ pageSize: DataService.WorkingSetSize })
-      .pipe(map((page) => page.items.map(toReceiptRecord)));
-  }
-
-  /**
-   * NO LONGER ADDS A LOCAL ROW.
-   *
-   * A receipt exists when the API has issued it and allocated its number, and not before. The
-   * previous version pushed a browser-made record onto the register, where it sat looking exactly
-   * like a real one until the next refresh removed it.
-   *
-   * The register re-fetches after issuing, so the real receipt - with its real number - appears
-   * a moment later.
-   */
-  addReceiptToRegister(_record: ReceiptRecord): void {
-    // Intentionally empty. See the comment above.
-  }
-
-  updateReceiptRegisterData(_data: ReceiptRecord[]): void {
-    // Intentionally empty.
-  }
-
-  getReceiptRegisterCache(): ReceiptRecord[] | null {
-    return null;
-  }
 
   // =========================================================================================
   // Refunds and chargebacks - SCR-PAY-006 and SCR-PAY-008
@@ -455,24 +421,6 @@ export class DataService {
   }
 
   getRefundChargebackCache(): RccRefundCaseRecord[] | null {
-    return null;
-  }
-
-  // =========================================================================================
-  // Payment support and safe retry - SCR-PAY-007
-  // =========================================================================================
-
-  getPaymentSupportRetryData(): Observable<PsrRecoveryRecord[]> {
-    return this.payments
-      .getSupportQueue({ pageSize: DataService.WorkingSetSize })
-      .pipe(map((page) => page.items.map(toRecoveryRecord)));
-  }
-
-  updatePaymentSupportRetryData(_data: PsrRecoveryRecord[]): void {
-    // Intentionally empty.
-  }
-
-  getPaymentSupportRetryCache(): PsrRecoveryRecord[] | null {
     return null;
   }
 }

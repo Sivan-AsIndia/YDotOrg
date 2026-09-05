@@ -58,6 +58,13 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             .Include(candidate => candidate.Supersedes)
             .Where(candidate => candidate.Id == id)
             .Where(candidate => !scope.IsOwnRecordsOnly || candidate.CreatedByUserId == scope.UserId)
+
+            // A DONOR READS THEIR OWN RECEIPT AND NO OTHER. A receipt carries a name, an address
+            // and a tax identifier, so an unscoped fetch by id is the most disclosing hole of
+            // the three.
+            .Where(candidate => !scope.IsDonorSelfService
+                                || (scope.HasDonorIdentity
+                                    && candidate.DonorEmail.ToLower() == scope.DonorEmail))
             .FirstOrDefaultAsync(cancellationToken);
 
         return receipt?.ToDetailResponse(
@@ -105,6 +112,22 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             .Include(receipt => receipt.Deliveries)
             .Include(receipt => receipt.Donation);
 
+    /// <summary>
+    /// Narrows a query to the signed-in donor's own receipts. No identity means no rows.
+    /// </summary>
+    private static IQueryable<Receipt> ApplyDonorScope(
+        IQueryable<Receipt> query, AccessScope scope)
+    {
+        if (!scope.IsDonorSelfService)
+        {
+            return query;
+        }
+
+        return scope.HasDonorIdentity
+            ? query.Where(receipt => receipt.DonorEmail.ToLower() == scope.DonorEmail)
+            : query.Where(_ => false);
+    }
+
     private static IQueryable<Receipt> ApplyFilter(
         IQueryable<Receipt> query, ReceiptSearchFilter filter, AccessScope scope)
     {
@@ -112,6 +135,8 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
         {
             query = query.Where(receipt => receipt.CreatedByUserId == scope.UserId);
         }
+
+        query = ApplyDonorScope(query, scope);
 
         if (filter.IssueState.HasValue)
         {
@@ -294,6 +319,8 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             query = query.Where(receipt => receipt.CreatedByUserId == scope.UserId);
         }
 
+        query = ApplyDonorScope(query, scope);
+
         if (filter.FromUtc.HasValue)
         {
             query = query.Where(receipt => receipt.IssuedAtUtc >= filter.FromUtc.Value);
@@ -334,6 +361,15 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             query = query.Where(intent => intent.CreatedByUserId == scope.UserId);
         }
 
+        // THE FAILED-PAYMENT HALF OF THE REGISTER, scoped the same way. Missing this one would
+        // show a donor every other donor's failed gifts on the same page as their own.
+        if (scope.IsDonorSelfService)
+        {
+            query = scope.HasDonorIdentity
+                ? query.Where(intent => intent.NormalisedEmail == scope.DonorEmail)
+                : query.Where(_ => false);
+        }
+
         if (filter.CampaignId.HasValue)
         {
             query = query.Where(intent => intent.CampaignId == filter.CampaignId.Value);
@@ -362,6 +398,27 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
         return query;
     }
 
+    /// <summary>
+    /// An e-mail address as a register may show it.
+    ///
+    /// "jo***@example.org" CONFIRMS RECOGNITION WITHOUT CONFIRMING THE ADDRESS, which is the
+    /// same rule the existing-donor check follows. An empty address stays empty rather than
+    /// becoming a row of asterisks that looks like data.
+    /// </summary>
+    private static string? Mask(string? email, bool canSeeSensitiveDonor)
+    {
+        if (string.IsNullOrWhiteSpace(email) || canSeeSensitiveDonor)
+        {
+            return email;
+        }
+
+        var at = email.IndexOf('@');
+
+        return at <= 0
+            ? "***"
+            : string.Concat(email.AsSpan(0, Math.Min(2, at)), "***", email.AsSpan(at));
+    }
+
     private static ReceiptRegisterRowResponse ToRegisterRow(Receipt receipt, bool canSeeSensitiveDonor) =>
         new(receipt.Id,
             receipt.ReceiptNumber,
@@ -372,6 +429,11 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             // donor details beside a two-year-old receipt number would disagree with the paper
             // the donor is holding.
             receipt.DonorName,
+
+            // MASKED UNLESS THE CALLER MAY SEE OTHERWISE, exactly as the donor name beside it.
+            // A register is a list, and a list is where a bulk read of donor contact details
+            // would happen if one were going to.
+            Mask(receipt.DonorEmail, canSeeSensitiveDonor),
 
             PaymentMappingConfig.ToResponse(receipt.Amount),
             "Success",
@@ -390,9 +452,16 @@ public sealed class ReceiptReadService(PaymentDbContext context, ICurrentUser cu
             intent.IntentReference,
             intent.LastAttemptAtUtc ?? intent.CreatedAtUtc,
             intent.DonorName,
+            Mask(intent.Email, canSeeSensitiveDonor),
             PaymentMappingConfig.ToResponse(intent.Amount),
             "Failed",
+
+            // THE CAMPAIGN NAME IS NOT ON THE INTENT - only its id is, and the name lives in
+            // another service - so the failed half names nothing here. The queue half of the
+            // Payments & Receipts page resolves campaign names for its own rows, and a failed
+            // payment appears there.
             null,
+
             null,
             "Not sent");
 

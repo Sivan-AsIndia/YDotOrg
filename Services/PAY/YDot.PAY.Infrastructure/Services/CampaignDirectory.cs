@@ -197,6 +197,83 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
     /// "campaign status is PendingApproval" is an internal detail that tells them nothing and
     /// leaks how the organisation works.
     /// </summary>
+    /// <summary>
+    /// The Organisation's donatable campaigns, for the public donation form's picker.
+    ///
+    /// THE STATUS IS TEXT, NOT A NUMBER. CAM persists CampaignStatus as its name - the column is
+    /// `character varying` holding 'Approved', 'Active' and so on - so an IN clause over the
+    /// enum's integer values matches nothing at all and the picker comes back silently empty.
+    /// The three names are written as literals because this is raw SQL against another module's
+    /// table and PAY does not reference CAM's enum, the same reason every column here is spelled
+    /// out.
+    ///
+    /// THE DATE WINDOW IS CHECKED HERE TOO, not only the status. A campaign approved for next
+    /// quarter is legitimately Approved and not yet open for giving, and one whose run ended
+    /// yesterday is still Active until somebody closes it.
+    /// </summary>
+    public async Task<IReadOnlyList<PublicCampaignSummary>> GetDonatableCampaignsAsync(
+        Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (tenantId == Guid.Empty)
+        {
+            return [];
+        }
+
+        const string Sql = """
+            SELECT campaign.id, campaign.code, campaign.name, campaign.public_description,
+                   COALESCE(currency.code, 'INR')
+            FROM cam_campaigns AS campaign
+            LEFT JOIN gm_currencies AS currency ON currency.id = campaign.currency_id
+            WHERE campaign.tenant_id = @tenant_id
+              AND campaign.status IN ('Approved', 'Scheduled', 'Active')
+              AND campaign.start_date <= @today
+              AND campaign.end_date >= @today
+            ORDER BY campaign.name
+            LIMIT 200
+            """;
+
+        try
+        {
+            await using var command = await CreateCommandAsync(Sql, cancellationToken);
+
+            command.Parameters.Add(new NpgsqlParameter("tenant_id", NpgsqlDbType.Uuid) { Value = tenantId });
+            command.Parameters.Add(new NpgsqlParameter("today", NpgsqlDbType.Date)
+            {
+                Value = DateOnly.FromDateTime(DateTime.UtcNow)
+            });
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            var rows = new List<PublicCampaignSummary>();
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new PublicCampaignSummary(
+                    reader.GetGuid(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.GetString(4)));
+            }
+
+            return rows;
+        }
+        catch (Exception exception)
+        {
+            // AN EMPTY LIST, NEVER AN ERROR. The picker is a convenience; a donor who arrived
+            // with a tracking reference or a campaign on their link can still give without it,
+            // and failing the page over a list that could not be read would stop donations that
+            // did not need it.
+            logger.LogWarning(
+                exception,
+                "The donatable campaigns for organisation {TenantId} could not be read. The "
+                + "public donation form will show no picker.",
+                tenantId);
+
+            return [];
+        }
+    }
+
     public async Task<CampaignDonationEligibility> GetDonationEligibilityAsync(
         Guid tenantId, Guid campaignId, CancellationToken cancellationToken)
     {

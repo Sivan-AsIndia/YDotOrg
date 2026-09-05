@@ -17,6 +17,11 @@ namespace YDot.IAM.Application.Common.Constants;
 ///   INITIATOR     does the work and approves none of it
 ///   APPROVER      decides the work and creates none of it
 ///
+/// A FOURTH ROLE, DONOR, IS SEEDED ALONGSIDE THEM AND IS NOT ONE OF THE THREE. It is not a level
+/// of authority over the Organisation's records; it is a member of the public with a login,
+/// scoped to their own giving. It exists because a donation converts a lead into an account
+/// holder, and that account has to land somewhere other than the staff default.
+///
 /// An Organisation that wants job-shaped roles builds them itself, in Roles and Permissions, from
 /// the same catalogue. That is the right place for a decision about how one charity is staffed.
 ///
@@ -93,6 +98,32 @@ public static class TenantRoleDefinitions
             + "operations that follow a decision. Creates and deletes nothing.",
             Priority: 75,
             PermissionCodes: RoleAccessProfiles.Approver,
-            IsPrivileged: true)
+            IsPrivileged: true),
+
+        // ============ DONOR =================================================================
+        //
+        // The person who gives, once they have an account. Not staff, and not a reduced member
+        // of staff either - see RoleCodes.Donor for why it is not on the authority ladder.
+        //
+        // NOT THE DEFAULT ROLE, and it must never become one: the default is what an account
+        // created with no roles falls back to, and a staff account that quietly became a donor
+        // would lose every screen it needs. CreateUserCommand picks this one from the account
+        // CATEGORY instead, which is the fact that actually distinguishes the two.
+        //
+        // NOT PRIVILEGED. The flag drives enhanced audit and periodic access review, and both
+        // exist for authority somebody could misuse against the Organisation. A donor can reach
+        // one person's records - their own - so reviewing them quarterly would bury the reviews
+        // that matter under a list of every donor who has ever given.
+        //
+        // LOWEST PRIORITY, so a donor who is also a member of staff - a volunteer who gives, an
+        // employee who gives - is labelled and sorted by the staff role they hold. Holding both
+        // is legitimate and neither role takes anything away from the other.
+        new(
+            RoleCodes.Donor,
+            "Donor",
+            "Views and pays their own donations and views their own receipts. Sees no other "
+            + "donor's records and no staff screens.",
+            Priority: 10,
+            PermissionCodes: RoleAccessProfiles.Donor)
     ];
 }

@@ -1,39 +1,24 @@
 import { CommonModule } from '@angular/common';
-import { Component, Injector, NgZone, computed, inject, signal } from '@angular/core';
+import { Component, Injector, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { DataService } from '../../../../Service/data.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { CurrentUserService } from '../../../../Service/current-user.service';
 import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
+import { GatewayCheckoutService } from '../../../../Shared/services/gateway-checkout.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import {
   CheckoutSession,
+  ConfirmCheckoutRequest,
+  PublicCampaignSummary,
   CreateDonationIntentRequest,
   DonationIntentResponse,
   ExistingDonorCheckResponse,
 } from '../../../../Shared/models/payment.model';
 
-/**
- * The shape of Razorpay Checkout, as much of it as this screen uses.
- *
- * DECLARED RATHER THAN INSTALLED. The script is loaded from Razorpay's own CDN at the moment it
- * is needed - it must be, because it has to be the copy Razorpay is serving - so there is no
- * package to take types from and no version of it to pin.
- */
-interface RazorpayCheckoutResponse {
-  readonly razorpay_payment_id: string;
-  readonly razorpay_order_id: string;
-  readonly razorpay_signature: string;
-}
-
-interface RazorpayInstance {
-  open(): void;
-  on(event: string, handler: (payload: unknown) => void): void;
-}
-
-type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
 
 /**
  * THE BROWSER NEVER HOLDS A RAZORPAY KEY, and that is the change that matters most on this
@@ -101,6 +86,15 @@ interface PublicDonationInitiationConfig {
   readonly maxDonationAmount: number;
 }
 
+
+/**
+ * The campaign states that may receive a donation.
+ *
+ * See the note on `campaignOptions`. Kept as one list so the two donation forms cannot drift
+ * apart about what "an approved campaign" means.
+ */
+const DonatableCampaignStatuses: readonly string[] = ['Approved', 'Scheduled', 'Active'];
+
 @Component({
   selector: 'app-public-donation-initiation',
   imports: [CommonModule, FormsModule],
@@ -115,13 +109,6 @@ export class PublicDonationInitiationComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
-
-  /**
-   * Razorpay's script calls back from outside Angular, so the work it triggers is run back
-   * inside. Without this the signals set in those callbacks change and the screen does not
-   * repaint - the donation completes and the donor watches a spinner that never stops.
-   */
-  private readonly zone = inject(NgZone);
 
   /**
    * The campaign store, resolved only for a signed-in caller.
@@ -194,12 +181,19 @@ export class PublicDonationInitiationComponent {
    */
   protected readonly campaignOptions = computed<readonly ScopeOption[]>(() => {
     const store = this.campaignStoreOrNull();
+
+    // ANONYMOUS: the public endpoint. See loadPublicCampaigns.
     if (!store) {
-      return [];
+      return this.publicCampaigns().map((campaign) => ({
+        reference: campaign.code,
+        name: campaign.name,
+        context: 'Open for donations',
+      }));
     }
+
     return store
       .all()
-      .filter((c) => c.status !== 'Cancelled' && c.status !== 'Closed')
+      .filter((c) => DonatableCampaignStatuses.includes(c.status))
       .map((c) => ({
         reference: c.code,
         name: c.name,
@@ -227,6 +221,12 @@ export class PublicDonationInitiationComponent {
     this.campaignQuery.set('');
   }
   protected toggleCampaignPicker(): void {
+    // LOCKED BY THE LINK IS ALSO LOCKED. A link that names the campaign has already decided
+    // which appeal this gift belongs to.
+    if (this.campaignLockedByLink()) {
+      return;
+    }
+
     if (this.formLocked()) {
       return;
     }
@@ -236,6 +236,25 @@ export class PublicDonationInitiationComponent {
   protected readonly fullName = signal('');
 
   protected readonly emailOrMobile = signal('');
+
+  /**
+   * The donor's mobile number. Its own field now, not half of a shared one.
+   *
+   * OPTIONAL, AND THAT IS DELIBERATE. E-mail carries the receipt and the account invitation, so
+   * it is required; a mobile number is how a fundraiser follows somebody up, which is useful and
+   * not a reason to refuse a gift.
+   *
+   * VALIDATED ONLY WHEN GIVEN. Ten to fifteen digits after punctuation is stripped, which admits
+   * an Indian ten-digit number, the same number written +91 XXXXX XXXXX, and international
+   * numbers, while rejecting the four digits somebody types when they mean to leave it blank.
+   */
+  protected readonly mobileNumber = signal('');
+
+  protected readonly mobileInvalid = computed(() => {
+    const digits = this.mobileNumber().replace(/\D+/g, '');
+    return digits.length > 0 && (digits.length < 10 || digits.length > 15);
+  });
+
   protected readonly emailValid = computed(() => {
     const v = this.emailOrMobile().trim();
     if (!v) {
@@ -415,11 +434,18 @@ export class PublicDonationInitiationComponent {
     // REQUIRED ONLY WHEN THERE IS SOMETHING TO PICK. A donor who scanned a QR code has no
     // campaign list - the link itself carries the attribution - so demanding a selection here
     // would make the public form impossible to submit, which is precisely what it used to do.
-    if (!this.selectedCampaign() && !this.trackingReference()) {
+    if (!this.selectedCampaign() && !this.trackingReference() && !this.campaignIdFromLink()) {
       errors.push({ field: 'campaign', label: 'Campaign or appeal', message: 'Enter Campaign or appeal.' });
     }
+    if (this.mobileInvalid()) {
+      errors.push({
+        field: 'mobileNumber',
+        label: 'Mobile No',
+        message: 'Review Mobile No. Enter 10 to 15 digits.',
+      });
+    }
     if (!this.emailOrMobile().trim()) {
-      errors.push({ field: 'emailOrMobile', label: 'Email or mobile', message: 'Enter Email or mobile.' });
+      errors.push({ field: 'emailOrMobile', label: 'Email', message: 'Enter Email.' });
     } else if (!this.emailValid()) {
       errors.push({
         field: 'emailOrMobile',
@@ -494,21 +520,27 @@ export class PublicDonationInitiationComponent {
    * server's job; doing it here was how a client-side edit could decide what a donor paid.
    */
   private buildIntentRequest(): CreateDonationIntentRequest {
-    const contact = this.emailOrMobile().trim();
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
     const campaignRef = this.selectedCampaign()?.reference ?? '';
 
     return {
       donorName: this.fullName().trim() || 'Donor',
-      email: isEmail ? contact : '',
-      mobile: isEmail ? null : contact,
+
+      // TWO FIELDS, TWO VALUES. This used to sniff one field with a regular expression and send
+      // the result as an e-mail or a mobile depending on what it looked like - so a mistyped
+      // address travelled as a phone number and the donor got no receipt and no invitation.
+      email: this.emailOrMobile().trim(),
+      mobile: this.mobileNumber().trim() || null,
       amount: Number(this.donationAmount()),
       currencyCode: this.currency(),
 
       // THE ID, NOT THE CODE. The API's campaignId is a Guid; sending 'CMP-2026-004' returns a
       // 400 before the handler runs. `apiId` is the store's map from the code a person reads to
       // the identifier the API requires.
-      campaignId: campaignRef ? this.campaignStoreOrNull()?.apiId(campaignRef) ?? null : null,
+      // THE LINK'S OWN ID WINS. It is already the identifier the API wants, and it is the only
+      // one available to a donor with no session - see `campaignIdFromLink`.
+      campaignId:
+        this.campaignIdFromLink()
+        ?? (campaignRef ? this.campaignStoreOrNull()?.apiId(campaignRef) ?? null : null),
       trackingReference: this.trackingReference() || null,
       taxIdentifier: this.panOrTaxId().trim() || null,
       addressLine1: this.addressText().trim() || null,
@@ -656,33 +688,31 @@ export class PublicDonationInitiationComponent {
   // ===========================================================================================
 
   /**
-   * Where Razorpay Checkout is loaded from.
+   * Opens whichever provider the ORGANISATION is configured for.
    *
-   * FROM RAZORPAY, NOT FROM US, AND THAT IS NOT NEGOTIABLE. The script has to be the copy
-   * Razorpay is serving right now - it is what draws the card form, and a stale local copy is a
-   * payment form running code nobody is maintaining. It is also why there is no npm package to
-   * pin here.
+   * THIS SCREEN NO LONGER NAMES A PROVIDER, and that is the change. It used to hold Razorpay's
+   * script URL, Razorpay's constructor shape and Razorpay's option names, so an organisation
+   * configured for anything else had its order opened against that provider on the server and a
+   * Razorpay card form drawn over it in the browser. Provider selection was tenant-wise on one
+   * side of the wire only.
+   *
+   * `CheckoutSession.gatewayName` DECIDES, and it is the provider the server actually opened the
+   * order against - which comes from that organisation's payment gateway configuration.
    */
-  private static readonly CheckoutScriptUrl = 'https://checkout.razorpay.com/v1/checkout.js';
-
-  /** Resolves once the script is on the page; kept so a second payment does not re-fetch it. */
-  private checkoutScript: Promise<void> | null = null;
+  private readonly checkout = inject(GatewayCheckoutService);
 
   /**
    * Submit's real destination: open the provider's checkout over this page.
    *
-   * WHY THIS REPLACED "SEND THEM A LINK". Pressing Submit used to ask the server for a Razorpay
-   * PAYMENT LINK and then navigate the whole browser to it. Two things followed and both were
-   * wrong for somebody sitting in front of the form. Razorpay E-MAILS a payment link to the
-   * donor, so a staff member entering a donation with the donor on the phone had just sent that
-   * donor an e-mail asking them to go and pay - which is not what the button says it does. And
-   * the browser left our application for rzp.io, so everything after that depended on a callback
-   * URL coming back to a host Razorpay could reach - fine in production, and on a development
-   * machine it stranded the donor on a page that would not load.
+   * WHY THIS REPLACED "SEND THEM A LINK". Pressing Submit used to ask the server for a PAYMENT
+   * LINK and then navigate the whole browser to it. Two things followed and both were wrong for
+   * somebody sitting in front of the form. The provider e-mails a payment link to the donor,
+   * which is a second message nobody asked for; and coming back afterwards depends on a callback
+   * URL reaching a host the provider can see - fine in production, and on a development machine
+   * a donor who has paid is left on the provider's own page.
    *
-   * WHAT HAPPENS INSTEAD. The server creates an ORDER, this opens Razorpay's own checkout over
-   * the page the donor is already on, they pay, and we take them to our result page. Nobody
-   * leaves the application and nobody is e-mailed a bill.
+   * WHAT HAPPENS INSTEAD. The server creates an ORDER against the organisation's configured
+   * gateway, and this opens that provider's own checkout over this page.
    *
    * IT FALLS BACK RATHER THAN FAILING. An organisation whose provider cannot draw an in-page
    * checkout still gets the link flow - the server says so explicitly, and the version is re-read
@@ -711,110 +741,54 @@ export class PublicDonationInitiationComponent {
   }
 
   /**
-   * Puts Razorpay's script on the page, once.
+   * Draws the configured provider's payment form over this page.
    *
-   * LOADED WHEN IT IS NEEDED rather than in index.html. A donor-facing form should not fetch a
-   * payment provider's JavaScript - and hand that provider a page view - before anybody has
-   * decided to give anything.
+   * IT FALLS BACK RATHER THAN FAILING, and both fallbacks end in the same place. An organisation
+   * whose provider has no in-page checkout at all is refused by the server, before this; one
+   * whose provider has a server adapter but no browser SDK here is refused by the checkout
+   * service, which reports it as unsupported rather than as an error. Either way the donor gets
+   * a payment link, which every provider supports.
    */
-  private loadCheckoutScript(): Promise<void> {
-    this.checkoutScript ??= new Promise<void>((resolve, reject) => {
-      if ((window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = PublicDonationInitiationComponent.CheckoutScriptUrl;
-      script.async = true;
-      script.onload = () => resolve();
-
-      script.onerror = () => {
-        // FORGOTTEN ON FAILURE, so a donor whose first attempt was blocked by a dropped
-        // connection or an ad blocker can press the button again and have it genuinely retried
-        // rather than handed the same rejected promise for the rest of the session.
-        this.checkoutScript = null;
-        reject(new Error('The payment form could not be loaded.'));
-      };
-
-      document.body.appendChild(script);
-    });
-
-    return this.checkoutScript;
-  }
-
-  /** Opens the provider's payment form over this page. */
   private openCheckout(session: CheckoutSession): void {
-    this.loadCheckoutScript()
-      .then(() => {
-        const Razorpay = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay;
-
-        if (!Razorpay) {
-          throw new Error('The payment form could not be loaded.');
+    void this.checkout
+      .open(session, this.selectedCampaign()?.name || 'Donation', {
+        onSucceeded: (confirmation) => this.confirmCheckout(session, confirmation),
+        onFailed: () => this.onCheckoutFailed(session.intentReference),
+        onDismissed: () => this.onCheckoutDismissed(),
+      })
+      .then((outcome) => {
+        if (outcome === 'opened') {
+          this.lifecycleState.set('Awaiting payment');
+          this.uiState.set('success');
+          this.pushActivity(
+            'Checkout opened via ' + session.gatewayName + ' (attempt ' + session.attemptNumber + ').',
+          );
+          return;
         }
 
-        const checkout = new Razorpay({
-          key: session.publicKey,
-
-          // THE ORDER, AND NO PRICE OF OUR OWN. `amount` and `currency` are here because Razorpay
-          // renders them; what is CHARGED is whatever the order says, which is why it does not
-          // matter that this object is readable and editable in a browser.
-          order_id: session.orderReference,
-          amount: session.amountMinorUnits,
-          currency: session.currencyCode,
-
-          name: this.selectedCampaign()?.name || 'Donation',
-          description: session.description,
-
-          // What we already know, so nobody retypes it. Razorpay rejects a malformed contact
-          // outright, so an empty string is sent rather than a half-remembered one.
-          prefill: {
-            name: session.donorName,
-            email: session.email ?? '',
-            contact: session.mobile ?? '',
-          },
-
-          notes: { intent_reference: session.intentReference },
-
-          handler: (response: RazorpayCheckoutResponse) =>
-            this.zone.run(() => this.confirmCheckout(session, response)),
-
-          modal: {
-            // CLOSING THE FORM IS NOT A FAILURE AND IS NOT REPORTED AS ONE. The intent stays
-            // awaiting payment, which is exactly where the flow document puts a donor who
-            // cancels mid-way: visible in the Payment Queue as Pending, recoverable from there.
-            ondismiss: () => this.zone.run(() => this.onCheckoutDismissed()),
-            escape: true,
-          },
-        });
-
-        // A DECLINE IS A REAL OUTCOME AND THE DONOR IS SHOWN IT. Without this the form simply
-        // closes on a failed card and the page behind it looks as though nothing happened.
-        checkout.on('payment.failed', () =>
-          this.zone.run(() => this.onCheckoutFailed(session.intentReference)),
-        );
-
-        this.lifecycleState.set('Awaiting payment');
-        this.uiState.set('success');
-        this.pushActivity(
-          'Checkout opened via ' + session.gatewayName + ' (attempt ' + session.attemptNumber + ').',
-        );
-
-        checkout.open();
-      })
-      .catch(() => {
-        this.zone.run(() => {
-          // THE DONATION SURVIVES. It is recorded and awaiting payment, so it appears in the
-          // Payment Queue for recovery rather than vanishing with the error toast, and Continue
-          // to payment on this screen will try again.
-          this.uiState.set('success');
-          this.lifecycleState.set('Awaiting payment');
-          this.pushActivity('The payment form could not be opened; the donation is awaiting payment.');
-          this.toast.show(
-            'Payment form unavailable',
-            'We could not open the payment form. Select Continue to payment to try again.',
-            'error',
+        if (outcome === 'unsupported') {
+          this.pushActivity(
+            session.gatewayName + ' has no in-page checkout; requesting a payment link instead.',
           );
+        } else {
+          this.pushActivity('The payment form could not be opened; requesting a payment link instead.');
+        }
+
+        // THE DONATION SURVIVES EITHER WAY. It is recorded and awaiting payment, so a link that
+        // cannot be issued still leaves a row on the payments queue for recovery rather than a
+        // gift that vanished with an error toast.
+        this.payments.getPublicIntent(session.intentReference).subscribe({
+          next: (detail) => this.requestPaymentLink(detail.intentReference, detail.version),
+          error: () => {
+            this.uiState.set('success');
+            this.lifecycleState.set('Awaiting payment');
+            this.pushActivity('The payment form could not be opened; the donation is awaiting payment.');
+            this.toast.show(
+              'Payment form unavailable',
+              'We could not open the payment form. Select Continue to payment to try again.',
+              'error',
+            );
+          },
         });
       });
   }
@@ -822,22 +796,18 @@ export class PublicDonationInitiationComponent {
   /**
    * Hands the signed result back to the server, then shows the donor where they stand.
    *
-   * THE PAGE DOES NOT DECIDE THE OUTCOME AND MUST NOT. What Razorpay hands the browser is a
+   * THE PAGE DOES NOT DECIDE THE OUTCOME AND MUST NOT. What the provider hands the browser is a
    * payment id and a signature over it; only the server holds the secret that proves the
-   * signature, and only the server can ask Razorpay whether the money actually moved. So this
-   * posts the three values and goes to the result page either way - the result page reads the
-   * answer from our own API, which is the only account of this worth showing anybody.
+   * signature, and only the server can ask the provider whether the money actually moved. So
+   * this posts the three values and goes to the result page either way - the result page reads
+   * the answer from our own API, which is the only account of this worth showing anybody.
    */
-  private confirmCheckout(session: CheckoutSession, response: RazorpayCheckoutResponse): void {
+  private confirmCheckout(session: CheckoutSession, confirmation: ConfirmCheckoutRequest): void {
     this.uiState.set('loading');
     this.pushActivity('Payment completed at the gateway; confirming.');
 
     this.payments
-      .confirmCheckout(session.intentReference, {
-        paymentReference: response.razorpay_payment_id,
-        orderReference: response.razorpay_order_id,
-        signature: response.razorpay_signature,
-      })
+      .confirmCheckout(session.intentReference, confirmation)
       .subscribe({
         next: () => this.goToResult(session.intentReference),
 
@@ -1015,7 +985,183 @@ export class PublicDonationInitiationComponent {
     const params = this.route.snapshot.queryParamMap;
     this.trackingReference.set(params.get('ref') ?? params.get('tracking') ?? '');
 
+    // A CAMPAIGN NAMED ON THE LINK BINDS THE PICKER AND LOCKS IT. See `campaignLockedByLink`.
+    const campaignParam = (params.get('campaign') ?? '').trim();
+
+    if (campaignParam) {
+      this.campaignLockedByLink.set(true);
+
+      if (PublicDonationInitiationComponent.isGuid(campaignParam)) {
+        this.campaignIdFromLink.set(campaignParam);
+      }
+    }
+
+    // NOTHING FROM A PREVIOUS GIFT, whatever the router did with this component. See below.
+    if (!params.get('intent') && !params.get('intentReference')) {
+      this.resetDonationFields();
+    }
+
+    this.prefillFromAccount();
+    this.loadPublicCampaigns();
     this.loadConfig();
+
+    // AND AGAIN ON EVERY LATER ARRIVAL. The constructor runs once; a donor sent back here after
+    // paying may reach this route without the component being rebuilt, and that navigation is
+    // the one that has a finished donation still on screen.
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((current) => {
+      if (this.intentReference() && !current.get('intent') && !current.get('intentReference')) {
+        this.resetDonationFields();
+        this.prefillFromAccount();
+      }
+    });
+  }
+
+  /**
+   * Clears the gift, and keeps who the donor is.
+   *
+   * WHY IT RUNS ON ARRIVAL RATHER THAN ON DEPARTURE. A donor returning from a completed payment
+   * lands on this route, and where they were already on it - which is exactly the confirmed-donor
+   * case, since the destination is this page - Angular treats the navigation as one to the same
+   * URL and does not rebuild the component. Every signal keeps its value, so the campaign, the
+   * amount and the ticked consent from the gift just made are all still on screen, and the page
+   * reads as though the donation never went through.
+   *
+   * WHAT IT CLEARS IS THE DECISION, NOT THE PERSON. Campaign, amount, consent, the reference and
+   * the lifecycle all go. Name, e-mail and mobile stay: for a signed-in donor they come from the
+   * account and clearing them would only mean re-prefilling them a line later, and for an
+   * anonymous one they are the only things worth keeping if they choose to give again.
+   */
+  private resetDonationFields(): void {
+    this.selectedCampaign.set(null);
+    this.campaignQuery.set('');
+    this.campaignPickerOpen.set(false);
+    this.donationAmount.set('');
+    this.consentChecked.set(false);
+    this.consentEffectiveTime.set('');
+    this.intentReference.set('');
+    this.paymentLinkDestination.set('');
+    this.lifecycleState.set('No record');
+    this.lastOutcome.set(null);
+    this.uiState.set('ready');
+  }
+
+
+  /**
+   * True when a link named the campaign, so the picker is bound and cannot be changed.
+   *
+   * THE FLOW DOCUMENT ASKS FOR EXACTLY THIS: "If the shared link carries a campaign name, that
+   * campaign is auto-bound as the default on the donation form and cannot be edited or changed
+   * by the donor." A donor who could re-point a link from a poster would be giving to a cause
+   * the poster did not advertise.
+   */
+  protected readonly campaignLockedByLink = signal(false);
+
+  /**
+   * A campaign id taken straight from the link, when the link carries one.
+   *
+   * WHY BOTH A CODE AND AN ID ARE ACCEPTED IN `?campaign=`. A code - CMP-2026-004 - is what a
+   * person reads off the campaign register and the friendlier thing to put in a link, but turning
+   * it into the identifier the API needs requires the campaign register, and the register is
+   * authenticated. An anonymous donor is offered no campaign list at all, so a code alone is
+   * unresolvable for exactly the visitor a public donation link exists to serve.
+   *
+   * AN ID RESOLVES FOR EVERYBODY. It is what the create call takes, and the API resolves the
+   * ORGANISATION from it too - so a link carrying one works with no session, no tracking asset
+   * and no lookup in the browser. The donor sees no campaign name until the server confirms it,
+   * which is the honest state: nothing here can name a campaign it cannot read.
+   *
+   * IT IS NOT A SECRET AND DOES NOT NEED TO BE. A campaign identifier authorises nothing; the
+   * API refuses a donation against a campaign that is not open, whoever names it.
+   */
+  protected readonly campaignIdFromLink = signal<string | null>(null);
+
+  /** Whether a string is a GUID, and therefore a campaign id rather than a campaign code. */
+  private static isGuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+
+
+  /**
+   * Whether the donor's own details are fixed by their account rather than typed.
+   *
+   * IT IS THE SIGNED-IN CASE, AND ONLY THAT. Somebody with a session has a name and an e-mail on
+   * their account, and a donation recorded against something they typed over the top would not
+   * be theirs - the receipt, the donor record and the giving history would all attach to a
+   * different person. An anonymous donor types everything, because there is nothing to take.
+   *
+   * IT DOES NOT LOCK THE GIFT. Campaign, amount, currency and consent stay editable: those are
+   * the decisions the donor is here to make. Only who they are is settled.
+   */
+  protected readonly identityLocked = computed(
+    () => this.isInternalView() && this.currentUser.email() !== '',
+  );
+
+  /**
+   * Fills name, e-mail and mobile from the signed-in user.
+   *
+   * FROM THE TOKEN, NOT FROM A LOOKUP. The three values are claims the session already carries,
+   * so this costs nothing and cannot fail halfway - and an anonymous visitor simply has none of
+   * them, which leaves the form empty and typeable, exactly as it should be.
+   */
+
+  /**
+   * The appeals an anonymous donor may choose from.
+   *
+   * WHY THERE ARE TWO SOURCES FOR ONE PICKER. A signed-in fundraiser has the campaign register,
+   * which carries status, dates and everything else a staff screen needs. A donor who scanned a
+   * QR code has no token, so the register answers them 401 - and the picker they were shown was
+   * therefore always empty, reading "No eligible campaign or appeal matches inside your scope"
+   * to somebody who has no scope at all and is simply trying to give money.
+   *
+   * The anonymous endpoint returns the same appeals filtered to the ones actually open for
+   * giving, resolved from the host rather than from anything the browser can choose.
+   */
+  protected readonly publicCampaigns = signal<readonly PublicCampaignSummary[]>([]);
+
+  /**
+   * Loads the anonymous picker, for a visitor with no session.
+   *
+   * SIGNED-IN CALLERS SKIP IT. They have the register, which is richer and already loaded, and
+   * asking for both would show every campaign twice.
+   *
+   * A FAILURE LEAVES AN EMPTY PICKER AND NOTHING ELSE. A donor who arrived with a tracking
+   * reference or a campaign on their link can still give without it.
+   */
+  private loadPublicCampaigns(): void {
+    if (this.isInternalView()) {
+      return;
+    }
+
+    this.payments.getPublicCampaigns().subscribe({
+      next: (rows) => {
+        this.publicCampaigns.set(rows);
+
+        // RE-MATCHED NOW THE LIST EXISTS - a link naming a campaign arrives before this returns.
+        this.bindCampaignFromLink();
+      },
+      error: () => this.publicCampaigns.set([]),
+    });
+  }
+
+  private prefillFromAccount(): void {
+    if (!this.isInternalView()) {
+      return;
+    }
+
+    const email = this.currentUser.email();
+    const name = this.currentUser.displayName();
+
+    if (name) {
+      this.fullName.set(name);
+    }
+
+    if (email) {
+      this.emailOrMobile.set(email);
+    }
+
+    // NO MOBILE TO TAKE. The authenticated-user response carries a name and an e-mail and not a
+    // telephone number, so this one field stays typeable for a signed-in donor rather than being
+    // locked empty - which would be a required-looking control nobody could fill in.
   }
 
   private loadConfig(): void {
@@ -1031,6 +1177,10 @@ export class PublicDonationInitiationComponent {
         this.permissions.set(config.permissions);
         this.maxDonationAmount.set(config.maxDonationAmount);
         this.uiState.set('ready');
+
+        // THE REGISTER HAS ANSWERED BY NOW, so a campaign named on the link can be matched.
+        this.bindCampaignFromLink();
+
         this.bindIntentFromQueryString();
       },
       error: () => {
@@ -1038,6 +1188,37 @@ export class PublicDonationInitiationComponent {
         this.toast.show('Error', 'Failed to load public donation initiation configuration.', 'error');
       },
     });
+  }
+
+  /**
+   * Selects the campaign a link named.
+   *
+   * BY CODE OR BY NAME, because a link may reasonably carry either - the code is what the
+   * register shows and what a person would copy, and the name is what somebody hand-building a
+   * link is likeliest to type.
+   *
+   * A CAMPAIGN THAT DOES NOT MATCH LEAVES THE PICKER OPEN rather than locking it empty. That is
+   * the state an anonymous donor is in on every visit - the register is authenticated, so they
+   * are offered no list - and their campaign comes from the tracking reference instead.
+   */
+  private bindCampaignFromLink(): void {
+    const code = (this.route.snapshot.queryParamMap.get('campaign') ?? '').trim().toLowerCase();
+
+    if (!code) {
+      return;
+    }
+
+    const match = this.campaignOptions().find(
+      (option) => option.reference.toLowerCase() === code || option.name.toLowerCase() === code,
+    );
+
+    if (match) {
+      this.selectedCampaign.set(match);
+      this.campaignPickerOpen.set(false);
+    } else if (!this.campaignIdFromLink()) {
+      this.campaignLockedByLink.set(false);
+      this.pushActivity('The campaign named on the link is not open for donations.');
+    }
   }
 
   /**
@@ -1059,7 +1240,8 @@ export class PublicDonationInitiationComponent {
       next: (intent) => {
         this.intentReference.set(intent.intentReference);
         this.fullName.set(intent.donorName);
-        this.emailOrMobile.set(intent.email || intent.mobile || '');
+        this.emailOrMobile.set(intent.email ?? '');
+        this.mobileNumber.set(intent.mobile ?? '');
         this.donationAmount.set(String(intent.amount.amount));
         this.currency.set(intent.amount.currencyCode);
         this.paymentLinkDestination.set(intent.paymentLinkUrl ?? '');

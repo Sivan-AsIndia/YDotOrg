@@ -82,7 +82,12 @@
 <!-- Auth init -->
 <script src="assets/js/auth/auth.init.js"></script>
 
-<!-- Razorpay Checkout -->
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<!-- NO PAYMENT PROVIDER SCRIPT HERE, DELIBERATELY.
+     This used to load Razorpay Checkout on every page of the application. Two things were wrong
+     with that. It named ONE provider in a platform where each organisation configures its own,
+     so an organisation on any other gateway still paid the download; and it handed Razorpay a
+     page view from every visitor to every screen, most of whom are never going to donate.
+     GatewayCheckoutService loads whichever provider the checkout session names, at the moment
+     the donor is actually about to pay, and caches it for the rest of the session. -->
 </body>
 </html>

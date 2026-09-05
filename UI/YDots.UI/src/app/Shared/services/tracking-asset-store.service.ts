@@ -500,8 +500,16 @@ export class TrackingAssetStoreService {
       activeFrom: item.activeFrom.slice(0, 10),
       activeTo: item.activeTo.slice(0, 10),
 
-      // BLANK UNTIL APPROVED. See buildGeneratedUrl for why that matters.
-      generatedUrl: item.trackingReference ? `${item.trackingReference}` : '',
+      // THE SERVER'S URL, NOT A RECONSTRUCTION OF IT. This line read
+      // `item.trackingReference ? \`${item.trackingReference}\` : ''`, which put the bare
+      // reference where a URL was expected - so the manager rendered "https://K7M2QX9BTHDW",
+      // Copy link copied it, and every QR code generated from a row encoded it. The server has
+      // built the real URL since the asset was activated, complete with its campaign, source,
+      // medium and `ref` parameters; it simply was not on the list row until now.
+      //
+      // BLANK UNTIL GENERATED. A draft asset has no URL, and showing nothing is the honest
+      // state - see buildGeneratedUrl for why a plausible link to nowhere is worse.
+      generatedUrl: item.generatedUrl ?? '',
 
       isQr: item.assetType === 'qrCode',
 

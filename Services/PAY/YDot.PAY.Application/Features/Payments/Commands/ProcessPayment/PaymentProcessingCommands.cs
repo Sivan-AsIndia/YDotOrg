@@ -70,6 +70,7 @@ public sealed class PaymentProcessingCommandHandler(
     IReceiptRepository receipts,
     IReceiptDocumentService receiptDocuments,
     IDonorDirectory donorDirectory,
+    ICampaignDirectory campaignDirectory,
     IPaymentGateway paymentGateway,
     IReferenceGenerator references,
     IAuditWriter audit,
@@ -722,6 +723,17 @@ public sealed class PaymentProcessingCommandHandler(
                 DonorEmail = donation.DonorEmail,
                 DonorAddress = donation.DonorAddress,
                 DonorTaxIdentifier = donation.DonorTaxIdentifier,
+
+                // THE CAMPAIGN THE GIFT WAS GIVEN TO, resolved once and snapshotted onto the
+                // receipt. It was never set at all, so every auto-issued receipt carried a null
+                // here - which is why the register and the Payments & Receipts page showed a
+                // dash in the campaign column for every successful donation, and why a printed
+                // receipt could not say what the money was for.
+                //
+                // A NAME, NOT AN ID, AND A SNAPSHOT. The receipt is a statement about a moment:
+                // a campaign renamed next year must not change what the donor's copy says.
+                CampaignOrFundName = await ResolveCampaignNameAsync(donation, cancellationToken),
+
                 IssuedAtUtc = clock.UtcNow
             };
 
@@ -746,6 +758,39 @@ public sealed class PaymentProcessingCommandHandler(
                 exception,
                 "The receipt for donation {DonationReference} could not be issued. The donation "
                 + "stands and this needs following up.", donation.DonationReference);
+        }
+    }
+
+    /// <summary>
+    /// The campaign's name for the receipt, or null when there is nothing to name.
+    ///
+    /// IT NEVER FAILS THE RECEIPT. Campaigns live in another service, so this is a call that can
+    /// time out - and a receipt is a tax document that must be issued whether or not a display
+    /// name could be fetched. A null campaign line on a receipt is a cosmetic loss; a receipt
+    /// that was not issued because a lookup was slow is a compliance one.
+    /// </summary>
+    private async Task<string?> ResolveCampaignNameAsync(
+        Donation donation, CancellationToken cancellationToken)
+    {
+        if (donation.CampaignId is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await campaignDirectory.GetCampaignNameAsync(
+                donation.TenantId, donation.CampaignId.Value, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "The campaign name for donation {DonationReference} could not be resolved. The "
+                + "receipt is issued without it.",
+                donation.DonationReference);
+
+            return null;
         }
     }
 
@@ -1390,7 +1435,17 @@ public sealed class PaymentProcessingCommandHandler(
             currentUser.CorrelationId,
 
             history,
-            PermittedActions(intent)));
+            PermittedActions(intent),
+
+            // THE ATTEMPT'S PROVIDER, not the organisation's current one - see the DTO. An
+            // attempt that never reached a provider carries no name, and the result page shows
+            // nothing rather than inventing one.
+            attempt.GatewayName,
+
+            // WHERE THE DONOR GOES NEXT IS DECIDED FROM THESE TWO. A lead is converted on the
+            // confirming payment and has no password yet; a recognised donor already has one.
+            intent.OriginatedFromLead,
+            intent.ExistingDonorMatched ?? false));
     }
 
     private async Task<Result<string>> MintDonationReferenceAsync(CancellationToken cancellationToken)

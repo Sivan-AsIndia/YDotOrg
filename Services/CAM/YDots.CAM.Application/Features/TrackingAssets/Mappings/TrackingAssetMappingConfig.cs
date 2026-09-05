@@ -166,6 +166,7 @@ public static class TrackingAssetMappingConfig
             asset.TenantId,
             asset.Code,
             asset.TrackingReference,
+            asset.GeneratedUrl,
             asset.CampaignId,
             campaignCode,
             campaignName,

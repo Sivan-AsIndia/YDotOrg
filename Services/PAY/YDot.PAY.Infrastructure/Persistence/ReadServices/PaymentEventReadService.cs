@@ -36,12 +36,14 @@ public sealed class PaymentEventReadService(
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var query = ApplyFilter(
-            context.PaymentEvents
-                .AsNoTracking()
-                .Include(paymentEvent => paymentEvent.PaymentAttempt)
-                    .ThenInclude(attempt => attempt!.DonationIntent),
-            filter);
+        var query = ApplyDonorScope(
+            ApplyFilter(
+                context.PaymentEvents
+                    .AsNoTracking()
+                    .Include(paymentEvent => paymentEvent.PaymentAttempt)
+                        .ThenInclude(attempt => attempt!.DonationIntent),
+                filter),
+            currentUser.Scope);
 
         var totalCount = await query.CountAsync(cancellationToken);
 
@@ -80,10 +82,12 @@ public sealed class PaymentEventReadService(
     public async Task<PaymentEventDetailResponse?> GetDetailAsync(
         Guid id, CancellationToken cancellationToken)
     {
-        var paymentEvent = await context.PaymentEvents
-            .AsNoTracking()
-            .Include(candidate => candidate.PaymentAttempt)
-                .ThenInclude(attempt => attempt!.DonationIntent)
+        var paymentEvent = await ApplyDonorScope(
+                context.PaymentEvents
+                    .AsNoTracking()
+                    .Include(candidate => candidate.PaymentAttempt)
+                        .ThenInclude(attempt => attempt!.DonationIntent),
+                currentUser.Scope)
             .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
         if (paymentEvent is null)
@@ -219,6 +223,43 @@ public sealed class PaymentEventReadService(
         }
 
         return actions;
+    }
+
+    /// <summary>
+    /// Narrows the queue to the signed-in donor's own events.
+    ///
+    /// THIS READ SERVICE TOOK NO <see cref="AccessScope"/> AT ALL, and that was defensible while
+    /// every caller was a member of staff: the Organisation filter on the DbContext was the only
+    /// boundary the queue needed. The donor role changes that. Payments and Receipts is on the
+    /// donor's own menu, so without this a donor opening it would page through every donation
+    /// every other donor in the Organisation has ever attempted, with names and masked contact
+    /// details attached.
+    ///
+    /// IT READS THE SCOPE FROM <c>ICurrentUser</c> RATHER THAN TAKING A PARAMETER, which keeps
+    /// the interface and its three call sites unchanged. The service already injects the current
+    /// user for the two permission checks below, so the scope is not a new dependency - and a
+    /// narrowing that cannot be forgotten at a call site is the one that holds.
+    ///
+    /// THE E-MAIL IS ON THE INTENT, reached through the attempt. An event that never matched an
+    /// attempt - an unrecognised webhook - therefore belongs to nobody and is correctly invisible
+    /// to a donor; those are exactly the rows that are staff's to investigate.
+    ///
+    /// NO IDENTITY MEANS NO ROWS, never all rows.
+    /// </summary>
+    private static IQueryable<PaymentEvent> ApplyDonorScope(
+        IQueryable<PaymentEvent> query, AccessScope scope)
+    {
+        if (!scope.IsDonorSelfService)
+        {
+            return query;
+        }
+
+        return scope.HasDonorIdentity
+            ? query.Where(paymentEvent =>
+                paymentEvent.PaymentAttempt != null
+                && paymentEvent.PaymentAttempt.DonationIntent != null
+                && paymentEvent.PaymentAttempt.DonationIntent.NormalisedEmail == scope.DonorEmail)
+            : query.Where(_ => false);
     }
 
     private static IQueryable<PaymentEvent> ApplyFilter(

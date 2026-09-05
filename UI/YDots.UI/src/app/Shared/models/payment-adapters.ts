@@ -25,16 +25,9 @@ import {
   MoneyResponse,
   PaymentAttemptStatus,
   PaymentEventListItem,
-  PaymentSupportCase,
   PaymentVerification,
-  ReceiptListItem,
   RefundCaseListItem,
 } from './payment.model';
-import {
-  DeliveryState,
-  IssueState,
-  ReceiptRecord,
-} from './receipt-register.model';
 import {
   BackendPaymentState,
   PaymentVerificationRecord,
@@ -49,11 +42,6 @@ import {
   SequenceStatus,
   SignatureResult,
 } from './payment-event-queue.model';
-import {
-  PsrLifecycleState,
-  PsrRecoveryRecord,
-  PsrVerifiedPaymentState,
-} from './payment-support-safe-retry.model';
 import {
   RccCaseState,
   RccCaseType,
@@ -98,86 +86,13 @@ export function moneyCurrency(money: MoneyResponse | null | undefined): string {
 }
 
 // =============================================================================================
-// Receipt register - SCR-PAY-005
+// THE RECEIPT REGISTER ADAPTER IS GONE, with the screen it fed.
+//
+// Receipts are no longer a page of their own: every receipt now appears against the payment that
+// produced it, on Payments & Receipts, which reads `ReceiptRegisterRow` straight from the API
+// and needs no view model of its own. `toReceiptRecord`, `toIssueState` and `toDeliveryState`
+// existed only to fill the withdrawn register's row shape.
 // =============================================================================================
-
-/**
- * The API's receipt status to the register's "Issue state".
- *
- * `corrected` BECOMES "Correction" rather than a state of its own. On the API a corrected receipt
- * is one that has been superseded by a newer version; on the register the same row is what a
- * finance officer looks at to find the correction chain. The two mean the same thing under
- * different names.
- */
-function toIssueState(status: ReceiptListItem['issueState']): IssueState {
-  switch (status) {
-    case 'draft':
-      return 'Draft';
-    case 'submitted':
-      return 'Submitted';
-    case 'pendingReview':
-      return 'Pending review';
-    case 'issued':
-      return 'Issued';
-    case 'corrected':
-      return 'Correction';
-    case 'voided':
-      return 'Voided';
-    default:
-      return 'Draft';
-  }
-}
-
-function toDeliveryState(status: ReceiptListItem['deliveryState']): DeliveryState {
-  switch (status) {
-    case 'notSent':
-      return 'Not sent';
-    case 'pending':
-      return 'Pending';
-    case 'delivered':
-      return 'Delivered';
-    case 'failed':
-      return 'Failed';
-    default:
-      return 'Not sent';
-  }
-}
-
-/**
- * One receipt register row.
- *
- * `inScope` IS ALWAYS TRUE, and that is not a simplification. The API's query filter means a row
- * from outside the caller's organisation is not merely hidden, it is unreachable - so anything
- * that arrives here is by construction in scope. The flag stays on the view model because the
- * template renders an out-of-scope state, and a screen that never sets it simply never shows it.
- *
- * `hasConflict` and `dependencyBroken` are likewise set by the WRITE path, from a 409 or a
- * dependency failure the server reported, rather than guessed at read time.
- */
-export function toReceiptRecord(item: ReceiptListItem): ReceiptRecord {
-  return {
-    key: item.id,
-    donationReference: item.donationReference,
-    issueState: toIssueState(item.issueState),
-    deliveryState: toDeliveryState(item.deliveryState),
-    receiptReference: item.receiptNumber,
-    receiptVersion: `v${item.versionNumber}`,
-    donorSnapshot: item.donorSnapshot,
-    amount: moneyAmount(item.amount),
-    currency: moneyCurrency(item.amount),
-    campaignOrFund: item.campaignOrFundName ?? '',
-    issuedTime: item.issuedAtUtc ? formatMoment(item.issuedAtUtc) : null,
-    deliveryHistory: item.deliveryHistory.map((delivery) => ({
-      channel: delivery.channel,
-      time: formatMoment(delivery.attemptedAtUtc),
-      status: delivery.statusDescription,
-    })),
-    voidOrCorrectionLink: item.supersedesReceiptId,
-    inScope: true,
-    hasConflict: false,
-    dependencyBroken: false,
-  };
-}
 
 // =============================================================================================
 // Payment verification - SCR-PAY-002
@@ -359,132 +274,13 @@ export function toPaymentEventRecord(event: PaymentEventListItem): PaymentEventR
 }
 
 // =============================================================================================
-// Payment support and safe retry - SCR-PAY-007
+// THE SAFE-RETRY ADAPTER IS GONE, with the screen it fed.
+//
+// Safe retry survives as an ACTION - the Retry button on a failed row's detail panel, which
+// calls `safeRetry` on the payments API and reports what came back. What went is the separate
+// Payment Support and Safe Retry PAGE, and with it the recovery-case view model that
+// `toRecoveryRecord`, `toVerifiedPaymentState` and `toLifecycleState` built.
 // =============================================================================================
-
-/**
- * The screen's "verified payment state".
- *
- * `requiresVerification` MAPS TO "Uncertain", and that is the most important line in this file.
- * It means the gateway's answer is unknown and the donor may already have been charged - so the
- * screen must offer Verify and not Retry. Collapsing it into "Failed" would put a retry button in
- * front of an operator on exactly the case where a retry charges somebody twice.
- */
-function toVerifiedPaymentState(item: PaymentSupportCase): PsrVerifiedPaymentState {
-  if (item.requiresVerification) {
-    return 'Uncertain';
-  }
-
-  switch (item.status) {
-    case 'paid':
-      return 'Confirmed';
-    case 'cancelled':
-      return 'Cancelled';
-    case 'failed':
-      return 'Failed';
-    default:
-      return 'Pending';
-  }
-}
-
-function toLifecycleState(item: PaymentSupportCase): PsrLifecycleState {
-  if (item.requiresVerification) {
-    return 'Needs verification';
-  }
-
-  switch (item.status) {
-    case 'paid':
-      return 'Confirmed';
-    case 'cancelled':
-      return 'Cancelled';
-    case 'expired':
-      return 'Link expired';
-    case 'failed':
-      return 'Failed';
-    default:
-      return 'Awaiting donor';
-  }
-}
-
-export function toRecoveryRecord(item: PaymentSupportCase): PsrRecoveryRecord {
-  const lastAttempt = item.lastAttemptAtUtc ?? item.createdAtUtc;
-
-  return {
-    intentId: item.intentId,
-    donationIntentReference: item.intentReference,
-
-    // ALREADY MASKED BY THE SERVER unless the caller holds the sensitive-donor permission. The
-    // preview is the same string: masking twice on the way through would show "jo***@ex***".
-    maskedDonorContact: item.donorEmail,
-    donorContactPreview: item.donorEmail,
-
-    // The screen works in MINOR UNITS - paise - because its own arithmetic predates the API's
-    // formatted amounts. Converting once here is what keeps its totals correct.
-    requestedAmountMinor: Math.round(moneyAmount(item.amount) * 100),
-
-    currency: moneyCurrency(item.amount),
-    verifiedPaymentState: toVerifiedPaymentState(item),
-    lifecycleState: toLifecycleState(item),
-    lastAttemptIso: lastAttempt,
-    lastAttemptLabel: formatMoment(lastAttempt),
-
-    retryEligibility: item.requiresVerification
-      ? 'Verify with the gateway before retrying'
-      : 'Eligible for a safe retry',
-
-    existingActiveLink: '',
-    linkExpiryIso: '',
-    linkExpiryLabel: '',
-    linkCondition: item.status === 'expired' ? 'Expired' : 'None',
-
-    // The support reference a donor quotes. It is the intent reference rather than a separate
-    // case number, because the donor already has it - it is in the payment link they followed.
-    supportCorrelationReference: item.intentReference,
-
-    preferredDeliveryChannel: 'Email',
-    preferredDeliveryChannelRef: item.donorEmail,
-    owner: item.campaignName ?? '',
-
-    // The version is not on the support projection - it is read from the intent when a case is
-    // opened, which is also when it is needed for the safe-retry call.
-    version: 0,
-
-    hasDownstreamReference: !!item.campaignId,
-
-    history: [
-      {
-        label: 'Intent created',
-        detail: item.intentReference,
-        meta: formatMoment(item.createdAtUtc),
-      },
-      ...(item.lastAttemptAtUtc
-        ? [
-            {
-              label: `Attempt ${item.attemptCount}`,
-              detail: item.lastFailureReason ?? item.lastGatewayResultCode ?? 'No further detail',
-              meta: formatMoment(item.lastAttemptAtUtc),
-            },
-          ]
-        : []),
-    ],
-
-    linkedRecords: item.campaignId
-      ? [{ reference: item.campaignName ?? item.campaignId, kind: 'Campaign' }]
-      : [],
-
-    documents: [],
-
-    integrationStatus: {
-      provider: 'Payment gateway',
-      state: item.requiresVerification ? 'Outcome unknown' : 'Reachable',
-    },
-
-    supportCorrelation: {
-      reference: item.intentReference,
-      state: item.requiresVerification ? 'Needs verification' : 'Open',
-    },
-  };
-}
 
 // =============================================================================================
 // Refund and chargeback cases - SCR-PAY-006 and SCR-PAY-008

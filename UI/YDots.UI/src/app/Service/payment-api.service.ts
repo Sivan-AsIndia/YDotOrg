@@ -11,6 +11,7 @@ import {
   ChargebackSearchFilter,
   CorrectReceiptRequest,
   CreateDonationIntentRequest,
+  PublicCampaignSummary,
   CheckoutSession,
   ConfirmCheckoutRequest,
   CreateCheckoutSessionRequest,
@@ -107,6 +108,20 @@ export class PaymentApiService {
     return this.http
       .post<ApiResponse<DonationIntentResponse>>(`${this.publicApi}/initiate`, request)
       .pipe(map((response) => response.data!));
+  }
+
+  /**
+   * The appeals this organisation is currently taking donations for.
+   *
+   * ANONYMOUS, AND THE ORGANISATION IS NOT A PARAMETER. The server resolves it from the request's
+   * own host, so a donor on one charity's page cannot ask for another's appeals. This is what
+   * fills the public donation form's campaign picker - which was previously fed from the
+   * authenticated campaign register and therefore empty for every donor who scanned a QR code.
+   */
+  getPublicCampaigns(): Observable<PublicCampaignSummary[]> {
+    return this.http
+      .get<ApiResponse<PublicCampaignSummary[]>>(`${this.publicApi}/campaigns`)
+      .pipe(map((response) => response.data ?? []));
   }
 
   /**

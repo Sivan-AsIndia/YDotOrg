@@ -54,6 +54,47 @@ public sealed class DonorDirectory(
     /// The primary e-mail is checked as well as the business key, because a donor created through
     /// DON's own screens may have been keyed on a phone number instead.
     /// </summary>
+    /// <summary>
+    /// Whether the address can already sign in here. See the interface for why this is separate
+    /// from the donor lookup.
+    ///
+    /// IT ASKS IAM, NOT THE DONOR TABLE. <c>FindDonorAccountAsync</c> matches on tenant and
+    /// normalised e-mail across <c>iam_users</c> with no account-category filter, so it finds a
+    /// fundraiser and an administrator as readily as a donor-portal account - which is exactly
+    /// the population that was being missed.
+    ///
+    /// A FAILURE ANSWERS FALSE. The consequence of a false negative is that a donor who could
+    /// have signed in gives anonymously instead, and their gift is still recorded and still
+    /// reconciled to them by e-mail afterwards. The consequence of failing the request would be a
+    /// donation that did not happen.
+    /// </summary>
+    public async Task<bool> HasLoginAccountAsync(
+        Guid tenantId, string normalisedEmail, CancellationToken cancellationToken)
+    {
+        if (tenantId == Guid.Empty || string.IsNullOrWhiteSpace(normalisedEmail))
+        {
+            return false;
+        }
+
+        try
+        {
+            var account = await accounts.FindDonorAccountAsync(
+                tenantId, normalisedEmail, cancellationToken);
+
+            return account is not null;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Could not check whether an account exists for a donation on organisation "
+                + "{TenantId}. The donor continues as an anonymous giver.",
+                tenantId);
+
+            return false;
+        }
+    }
+
     public async Task<DonorMatch?> FindByEmailAsync(
         Guid tenantId, string normalisedEmail, CancellationToken cancellationToken)
     {

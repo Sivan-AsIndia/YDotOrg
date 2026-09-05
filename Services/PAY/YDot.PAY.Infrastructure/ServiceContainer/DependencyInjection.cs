@@ -184,11 +184,31 @@ public static class DependencyInjection
         });
         // ONE INTERFACE, SEVERAL PROVIDERS, CHOSEN PER ORGANISATION. The concrete adapters are
         // registered by their own type and the ROUTER is what the handlers receive; it reads
-        // `PaymentGatewayAccount.GatewayName` and dispatches. Registering a provider directly as
-        // IPaymentGateway - which is what this line used to do - makes every organisation on the
-        // platform speak that one provider's protocol whatever their account says.
+        // `PaymentGatewayAccount.GatewayName` - which, for an Organisation that has filled in
+        // IAM's payment gateway configuration screen, is the `Provider` column of that screen's
+        // row - and dispatches. Registering a provider directly as IPaymentGateway, which is what
+        // this used to do, makes every organisation on the platform speak that one provider's
+        // protocol whatever their configuration says.
+        //
+        // THIS IS THE WHOLE EXTENSION POINT. To add Stripe, PayPal or anything else:
+        //
+        //   1. Write an adapter implementing IPaymentGatewayAdapter whose `GatewayName` is
+        //      exactly the string administrators pick on the configuration screen.
+        //   2. Add the two lines below for it - the concrete registration and the adapter one.
+        //
+        // Nothing else changes. Not the router, not a handler, not the screen. An Organisation
+        // that switches provider then does so by saving a form, with no deployment.
         services.AddScoped<HostedCheckoutGateway>();
         services.AddScoped<RazorpayGateway>();
+
+        // The adapter set the router indexes. Registered through the concrete type rather than
+        // as separate instances so that one request resolves ONE of each - the router's
+        // fallback comparison and the credential memo both depend on that being true.
+        services.AddScoped<IPaymentGatewayAdapter>(
+            provider => provider.GetRequiredService<RazorpayGateway>());
+        services.AddScoped<IPaymentGatewayAdapter>(
+            provider => provider.GetRequiredService<HostedCheckoutGateway>());
+
         services.AddScoped<IPaymentGateway, PaymentGatewayRouter>();
 
         // ---- Authorization -----------------------------------------------------------------------------------

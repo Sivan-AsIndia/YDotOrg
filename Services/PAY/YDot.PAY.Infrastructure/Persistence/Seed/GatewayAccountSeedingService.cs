@@ -63,6 +63,26 @@ public sealed class GatewayAccountSeedingService(
                 var seeder = scope.ServiceProvider.GetRequiredService<PaymentDbSeeder>();
 
                 outcome = await seeder.SeedConfiguredGatewayAccountsAsync(stoppingToken);
+
+                // THE DEMONSTRATION DONATIONS RIDE ALONG HERE, and for exactly the reason this
+                // service exists at all: they are stamped with the sample Organisation, which
+                // IAM creates on its own schedule. Seeding them from Program.cs would run while
+                // IAM was still starting, find no organisation, and - because startup seeding
+                // happens once - never run again. This loop keeps looking until the row appears.
+                //
+                // ITS OWN TRY/CATCH. A failure to seed sample donations must not stop the
+                // gateway-account loop, which is the part a real donation depends on.
+                try
+                {
+                    await seeder.SeedSampleDonationsAsync(stoppingToken);
+                }
+                catch (Exception donationException)
+                {
+                    logger.LogWarning(
+                        donationException,
+                        "The demonstration donations could not be seeded. Gateway account "
+                        + "seeding is unaffected.");
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

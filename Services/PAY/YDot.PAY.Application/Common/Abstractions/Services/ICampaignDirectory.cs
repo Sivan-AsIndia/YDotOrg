@@ -57,7 +57,46 @@ public interface ICampaignDirectory
     /// </summary>
     Task<CampaignDonationEligibility> GetDonationEligibilityAsync(
         Guid tenantId, Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The campaigns an Organisation is currently willing to take donations for.
+    ///
+    /// WHY THE PUBLIC DONATION FORM NEEDS THIS. Its campaign picker was fed from the campaign
+    /// REGISTER, which is authenticated - so a donor who scanned a QR code, the one person the
+    /// form exists for, was offered an empty list and told "no eligible campaign or appeal
+    /// matches inside your scope". The only campaigns they could give to were ones named by a
+    /// tracking reference or a link parameter, which is not a picker.
+    ///
+    /// IT IS SAFE TO SERVE ANONYMOUSLY, and that is a property of what it returns rather than a
+    /// judgement call. Every field here is already public: these are appeals the Organisation is
+    /// actively soliciting donations for, printed on posters and shared as links. There is no
+    /// target, no raised figure, no owner and no internal state - only what a donor needs to
+    /// choose which appeal their gift belongs to.
+    ///
+    /// THE ORGANISATION IS NOT A PARAMETER THE CALLER CHOOSES. It is resolved from the request's
+    /// own host, so a visitor on one charity's donation page cannot list another's appeals.
+    ///
+    /// APPROVED, SCHEDULED AND ACTIVE ONLY, and inside their own dates. A draft or unapproved
+    /// campaign has not been signed off, and one that is paused, closing or closed has been
+    /// stopped on purpose - taking money for any of them leaves income with nowhere legitimate to
+    /// be reported.
+    /// </summary>
+    Task<IReadOnlyList<PublicCampaignSummary>> GetDonatableCampaignsAsync(
+        Guid tenantId, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// One campaign as a donor may see it, and deliberately nothing more.
+///
+/// NO TARGET AND NO RAISED FIGURE. A donor choosing an appeal does not need them, and how much a
+/// charity has raised against a goal is its own business to publish or not.
+/// </summary>
+public sealed record PublicCampaignSummary(
+    Guid Id,
+    string Code,
+    string Name,
+    string? PublicDescription,
+    string CurrencyCode);
 
 /// <summary>
 /// What a tracking reference resolves to.

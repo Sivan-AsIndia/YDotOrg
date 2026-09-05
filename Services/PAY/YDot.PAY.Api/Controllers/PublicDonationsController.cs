@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YDot.PAY.Application.Common.Abstractions.Security;
+using YDot.PAY.Application.Common.Abstractions.Services;
 using YDot.PAY.Application.Common.Results;
 using YDot.PAY.Application.Features.Donations.Commands.ManageIntent;
 using YDot.PAY.Application.Features.Donations.DTOs;
@@ -43,8 +45,46 @@ namespace YDot.PAY.Api.Controllers;
 public sealed class PublicDonationsController(
     DonationIntentCommandHandler intents,
     DonationQueryHandler queries,
-    PaymentProcessingCommandHandler payments) : ApiControllerBase
+    PaymentProcessingCommandHandler payments,
+    ICampaignDirectory campaigns,
+    ITenantContext tenantContext) : ApiControllerBase
 {
+    /// <summary>
+    /// The appeals this Organisation is currently taking donations for.
+    ///
+    /// WHY IT EXISTS. The public donation form's campaign picker was fed from the campaign
+    /// REGISTER, which requires a token and a permission - so the one visitor the form is built
+    /// for, a donor who scanned a QR code, opened it to an empty dropdown reading "No eligible
+    /// campaign or appeal matches inside your scope". They could only give to a campaign named
+    /// by a tracking reference or a link parameter, and could not choose one at all.
+    ///
+    /// THE ORGANISATION COMES FROM THE REQUEST'S HOST, never from the caller. A visitor on one
+    /// charity's donation page cannot ask for another's appeals, because there is no parameter
+    /// with which to name one - which is the same property that makes every other route on this
+    /// controller safe to serve anonymously.
+    ///
+    /// AN UNRESOLVED HOST RETURNS AN EMPTY LIST rather than an error. A donation form reached
+    /// through a route that carries no Organisation - a bare localhost, an IP address - still
+    /// works for a donor who arrived with a tracking reference, and failing the page would stop
+    /// a donation that did not need the picker.
+    ///
+    /// WHAT COMES BACK IS PUBLIC BY CONSTRUCTION: an id, a code, a name, the public description
+    /// the Organisation wrote for donors to read, and the currency. No target, no raised figure,
+    /// no owner, no internal state.
+    /// </summary>
+    [HttpGet("campaigns")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<PublicCampaignSummary>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCampaignsAsync(CancellationToken cancellationToken)
+    {
+        var tenantId = tenantContext.TenantId ?? Guid.Empty;
+
+        var rows = tenantId == Guid.Empty
+            ? []
+            : await campaigns.GetDonatableCampaignsAsync(tenantId, cancellationToken);
+
+        return Ok(ApiResponse<IReadOnlyList<PublicCampaignSummary>>.Ok(rows));
+    }
+
     /// <summary>
     /// Starts a donation. Section 11 and section 22's nine entry channels.
     ///

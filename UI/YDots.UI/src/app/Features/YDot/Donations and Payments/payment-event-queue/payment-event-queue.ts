@@ -7,6 +7,7 @@ import { ToastService } from '../../../../Shared/services/toast.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { PaymentEventListItem, ReceiptRegisterRow } from '../../../../Shared/models/payment.model';
+import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
 
 /**
  * The three outcomes a payment event can settle in. Unlike the old Payment Event Queue (which
@@ -16,8 +17,18 @@ import { PaymentEventListItem, ReceiptRegisterRow } from '../../../../Shared/mod
  */
 export type PaymentOutcome = 'Success' | 'Pending' | 'Fail';
 
-/** Whether a tax receipt exists for the row yet. Never invented - only ever what the server says. */
-export type ReceiptStatus = 'Sent' | 'Not generated';
+/**
+ * What actually happened to the donor's copy of the receipt.
+ *
+ * IT USED TO BE TWO WORDS AND ONE OF THEM WAS A GUESS. The row showed "Sent" whenever a receipt
+ * NUMBER existed - so a receipt whose e-mail bounced, or whose delivery threw, or that was never
+ * attempted because the donor had no address, all read as Sent. The register knew better the
+ * whole time: `deliveryState` comes back on every row and was being thrown away.
+ *
+ * The distinction matters because "no receipt arrived" is the single most common thing a donor
+ * telephones about, and the page an administrator opens to check was answering Sent regardless.
+ */
+export type ReceiptStatus = 'Sent' | 'Pending' | 'Failed' | 'Not sent' | 'Not generated';
 
 export type UiState =
   | 'ready'
@@ -121,6 +132,42 @@ export class PaymentEventQueueComponent {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly payments = inject(PaymentApiService);
+
+  /**
+   * The token's own permissions, for the two actions the role table restricts.
+   *
+   * WHY THE PERMISSION AND NOT THE ROLE NAME, given that the flow document writes its access
+   * rules as a table of roles. The platform's roles are a per-organisation catalogue - an
+   * organisation may call its initiators anything it likes - and every endpoint behind these
+   * buttons checks a PERMISSION. Comparing a role string here would put the screen and the
+   * server on different rules, and the screen would be the one that was wrong.
+   *
+   * WHAT THE TABLE SAYS, AND HOW IT MAPS. "For Tenant Admin: in Failed, view Details. In
+   * Pending, view Details" - no Retry and no Continue to pay, which an administrator does not
+   * hold because retrying somebody else's payment charges their card, and continuing one means
+   * paying it. "For Donor/initiator: In Failed, view Details, Retry. In Pending, view Details,
+   * Continue to pay." Those two capabilities are pay.payments.safe-retry and pay.intents.create,
+   * and the server issues them to exactly the roles the table names.
+   */
+  private readonly tokens = inject(AuthTokenService);
+
+  /**
+   * Whether this caller may retry a failed payment.
+   *
+   * SAFE RETRY IS THE PERMISSION because retrying an attempt whose outcome is unknown is what
+   * can charge a donor twice - which is also why it is not an administrator's button.
+   */
+  protected readonly canRetry = computed(() => this.tokens.hasAnyPermission('pay.payments.safe-retry'));
+
+  /**
+   * Whether this caller may carry a pending payment on to the gateway.
+   *
+   * IT IS THE INTENT-CREATE PERMISSION because that is what continuing actually does: it opens
+   * the donation form on the existing reference and takes a payment against it.
+   */
+  protected readonly canContinuePayment = computed(() =>
+    this.tokens.hasAnyPermission('pay.intents.create'),
+  );
 
   protected readonly pageTitle = 'Payments & Receipts';
   protected readonly pageSubtitle = 'One place to track every payment event and the receipt it generated.';
@@ -355,6 +402,33 @@ export class PaymentEventQueueComponent {
     };
   }
 
+  /**
+   * What to show in the receipt column, from what the server says rather than from whether a
+   * number exists.
+   *
+   * THE SERVER'S WORDS ARE THE DELIVERY ENUM'S - NotSent, Pending, Delivered, Failed - and they
+   * are mapped here rather than rendered raw, because "Delivered" beside a payment status of
+   * "Success" reads as a second payment state to somebody scanning the column.
+   */
+  private toReceiptStatus(row: ReceiptRegisterRow): ReceiptStatus {
+    if (!row.receiptNumber) {
+      return 'Not generated';
+    }
+
+    switch ((row.deliveryState ?? '').trim().toLowerCase()) {
+      case 'delivered':
+        return 'Sent';
+      case 'pending':
+        return 'Pending';
+      case 'failed':
+        return 'Failed';
+      default:
+        // NotSent, or anything the server adds later. The receipt exists; nothing has reached
+        // the donor. Saying so is the point of this function.
+        return 'Not sent';
+    }
+  }
+
   /** A Success row - only ever built from an issued receipt, so receiptReference is always real. */
   private fromReceiptRow(row: ReceiptRegisterRow): PaymentReceiptRow {
     return {
@@ -363,12 +437,16 @@ export class PaymentEventQueueComponent {
       receiptOrIntentRef: row.receiptNumber ?? '—',
       donationIntentId: null,
       donorName: row.donorSnapshot ?? '—',
-      donorEmail: '—',
+
+      // THE REGISTER RETURNS ONE NOW. This was hard-coded to a dash, so the e-mail column was
+      // empty for every successful donation while the failed rows beside it showed an address.
+      donorEmail: row.donorEmail ?? '—',
+
       campaignName: row.campaignOrFundName ?? '—',
       amount: row.amount?.amount ?? null,
       currency: row.amount?.currencyCode ?? '',
       paymentStatus: 'Success',
-      receiptStatus: row.receiptNumber ? 'Sent' : 'Not generated',
+      receiptStatus: this.toReceiptStatus(row),
       receiptReference: row.receiptNumber ?? null,
       receivedTime: row.receiptDateUtc ? this.formatDateTime(row.receiptDateUtc) : '—',
       sortKey: row.receiptDateUtc ?? '',
@@ -406,10 +484,17 @@ export class PaymentEventQueueComponent {
   protected readonly retryingRef = signal<string | null>(null);
 
   protected retryPaymentFromQueue(row: PaymentReceiptRow): void {
+    // GUARDED HERE AS WELL AS IN THE TEMPLATE. The button is not drawn without the permission,
+    // but a method reachable from a template is reachable from a console, and this one takes a
+    // payment. The API refuses it too; this is the layer that keeps the screen honest about it.
+    if (!this.canRetry()) {
+      return;
+    }
+
     if (!row.donationIntentId) {
       this.toast.show(
         'Nothing to retry',
-        'This event was never matched to a donation, so there is no payment to retry. Open Payment Support and Safe Retry to investigate it.',
+        'This event was never matched to a donation, so there is no payment to retry.',
         'warning',
       );
       return;
@@ -460,7 +545,7 @@ export class PaymentEventQueueComponent {
       case 'AlreadyPaid':
         this.toast.show(
           'Already paid',
-          `${row.donorName} has already been charged for ${row.receiptOrIntentRef}. No second payment was taken; the receipt is in the Receipt Register.`,
+          `${row.donorName} has already been charged for ${row.receiptOrIntentRef}. No second payment was taken; the receipt appears against this donation as soon as it is issued.`,
           'info',
         );
         break;
@@ -474,7 +559,7 @@ export class PaymentEventQueueComponent {
       default:
         this.toast.show(
           'Sent to Payment Support',
-          message || 'This payment could not be retried safely. It is now on the Payment Support and Safe Retry page.',
+          message || 'This payment could not be retried safely. It stays on this page as a failed event for support to investigate.',
           'warning',
         );
         break;
@@ -486,6 +571,10 @@ export class PaymentEventQueueComponent {
   // ===========================================================================================
 
   protected continuePaymentFromQueue(row: PaymentReceiptRow): void {
+    if (!this.canContinuePayment()) {
+      return;
+    }
+
     if (row.receiptOrIntentRef === '—') {
       this.toast.show('No donation to continue', 'This event was never matched to a donation.', 'warning');
       return;
@@ -504,7 +593,12 @@ export class PaymentEventQueueComponent {
     return (
       !!current &&
       current.paymentStatus === 'Success' &&
-      current.receiptStatus === 'Sent' &&
+
+      // ANY ISSUED RECEIPT MAY BE RE-SENT, not only one already delivered. This required
+      // 'Sent', which offered the button in the one case where it was least needed and withheld
+      // it in the three where it was most: a delivery that failed, one still pending, and one
+      // never attempted. Resend is the recovery for exactly those.
+      current.receiptStatus !== 'Not generated' &&
       this.permittedActions().includes('Resend')
     );
   });
@@ -576,7 +670,17 @@ export class PaymentEventQueueComponent {
   }
 
   protected receiptStatusClass(status: ReceiptStatus): string {
-    return status === 'Sent' ? 'pr-badge-blue' : 'pr-badge-muted';
+    switch (status) {
+      case 'Sent': return 'pr-badge-blue';
+
+      // A RECEIPT THAT DID NOT REACH THE DONOR READS AS A PROBLEM, because it is one - the
+      // donation succeeded and the donor has nothing to claim tax relief with. It shared the
+      // muted grey of "Not generated" while the column said Sent regardless, so a failed
+      // delivery was invisible twice over.
+      case 'Failed': return 'pr-badge-danger';
+      case 'Pending': return 'pr-badge-gold';
+      default: return 'pr-badge-muted';
+    }
   }
 
   protected formatAmount(amount: number | null): string {

@@ -305,6 +305,58 @@ public static class RoleAccessProfiles
         };
 
     /// <summary>
+    /// DONOR: their own giving, and nothing else.
+    ///
+    /// THE ONLY PROFILE IN THIS FILE THAT IS LISTED RATHER THAN COMPUTED, and the reason is worth
+    /// stating because the rest of the class argues hard for computing. INITIATOR and APPROVER
+    /// are computed because their boundary is a VERB - one approves and the other does not - so
+    /// a permission added tomorrow lands in the right role by itself, which is exactly what the
+    /// fourteen-role catalogue failed at.
+    ///
+    /// A DONOR'S BOUNDARY IS NOT A VERB. It is whose records they are, and no action name encodes
+    /// that: <c>pay.donations.view</c> is a donor looking at their own gift and a fundraiser
+    /// looking at everybody's, and the difference is enforced by the data scope rather than the
+    /// code. So a computed profile would be wrong in the one direction that matters - every new
+    /// PAY permission would land in DONOR automatically, and a role held by members of the public
+    /// must never grow by default. Adding a capability here is a decision somebody makes on
+    /// purpose.
+    ///
+    /// WHAT EACH ONE IS FOR:
+    ///
+    ///   PAY.View                  the Donations and Payments section itself, or the menu shows
+    ///                             nothing and the account reads as broken.
+    ///   pay.intents.view          their own donations, in progress and finished.
+    ///   pay.intents.create        starting a donation, and continuing a pending one - which is
+    ///                             the "Continue to pay" the flow document gives them.
+    ///   pay.donations.view        the settled gift behind a successful payment.
+    ///   pay.payments.view-events  the Payments and Receipts page.
+    ///   pay.payments.verify       asking what happened to a payment they are unsure about,
+    ///                             without telephoning somebody to ask the same question.
+    ///   pay.payments.safe-retry   the "Retry" on a failed payment. Safe retry, specifically:
+    ///                             it verifies before it re-attempts, so a donor pressing it on
+    ///                             a payment that actually succeeded is not charged twice.
+    ///   pay.receipts.view         their receipts.
+    ///   pay.receipts.resend       sending their own receipt to themselves again.
+    ///
+    /// WHAT IS DELIBERATELY ABSENT: every Create, Edit, Approve and Export in IAM, CAM and DON;
+    /// <c>pay.donations.view-sensitive-donor</c>, which unmasks OTHER donors; refunds and
+    /// chargebacks, which are a decision about money that staff make; and every export, because
+    /// an export is a bulk extract and a donor has one record.
+    /// </summary>
+    public static IReadOnlyList<string> Donor { get; } =
+    [
+        "PAY.View",
+        "pay.donations.view",
+        "pay.intents.create",
+        "pay.intents.view",
+        "pay.payments.safe-retry",
+        "pay.payments.verify",
+        "pay.payments.view-events",
+        "pay.receipts.resend",
+        "pay.receipts.view"
+    ];
+
+    /// <summary>
     /// INITIATOR: create, view, edit, submit, operate and export across every module - and no
     /// approval of any kind.
     /// </summary>
