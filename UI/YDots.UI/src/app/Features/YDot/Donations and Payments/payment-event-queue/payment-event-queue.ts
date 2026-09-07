@@ -669,6 +669,18 @@ export class PaymentEventQueueComponent {
     }
   }
 
+  /**
+   * THE DETAILS-DRAWER BANNER TINTS ITSELF WITH THE EVENT'S PAYMENT STATUS:
+   * green artwork for a success, amber while pending, red for a failure.
+   */
+  protected detailArtClass(): string {
+    switch (this.selectedEvent()?.paymentStatus) {
+      case 'Pending': return 'art-pending';
+      case 'Fail': return 'art-fail';
+      default: return 'art-success';
+    }
+  }
+
   protected receiptStatusClass(status: ReceiptStatus): string {
     switch (status) {
       case 'Sent': return 'pr-badge-blue';
@@ -680,6 +692,20 @@ export class PaymentEventQueueComponent {
       case 'Failed': return 'pr-badge-danger';
       case 'Pending': return 'pr-badge-gold';
       default: return 'pr-badge-muted';
+    }
+  }
+
+  /**
+   * THE REFERENCE CHIP AT THE START OF EACH ROW TAKES ITS TINT FROM THE ROW'S RECEIPT STATUS,
+   * so the colour language the receipt-status column used to carry (blue sent, gold pending,
+   * red failed, grey otherwise) still reads at a glance on the row itself.
+   */
+  protected receiptDocClass(status: ReceiptStatus): string {
+    switch (status) {
+      case 'Sent': return 'pr-doc-blue';
+      case 'Pending': return 'pr-doc-gold';
+      case 'Failed': return 'pr-doc-danger';
+      default: return 'pr-doc-muted';
     }
   }
 

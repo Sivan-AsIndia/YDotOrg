@@ -10,114 +10,117 @@
       <p class="pr-subtitle">{{ pageSubtitle }}</p>
     </div>
 
-    <div class="pr-header-actions">
-      <button type="button" class="pr-btn pr-btn-outline pr-btn-sm" (click)="toggleFiltersVisible()"
-              [attr.aria-expanded]="filtersVisible()">
-        <svg class="pr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
-        Filters
-        @if (activeFilterSummary().length) { <span class="pr-count">{{ activeFilterSummary().length }}</span> }
-      </button>
+    <!-- DECORATIVE ILLUSTRATION, after the reference image: the receipt, its confirmation
+         check, a sprig of leaves and the rupee coin. Purely presentational - hidden from
+         assistive technology and dropped on small screens where it only costs height. -->
+    <div class="pr-header-art" aria-hidden="true">
+      <svg viewBox="0 0 240 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- soft halo behind everything -->
+        <circle class="t-halo" cx="98" cy="74" r="47"/>
+        <!-- sparkle stars + dots -->
+        <path class="t-star" d="M34 13Q34 22 43 22Q34 22 34 31Q34 22 25 22Q34 22 34 13Z"/>
+        <path class="t-star" style="animation-delay:-1.6s" d="M212 32Q212 39 219 39Q212 39 212 46Q212 39 205 39Q212 39 212 32Z"/>
+        <circle class="t-dot" cx="62" cy="30" r="2.6"/>
+        <circle class="t-spark-dot" cx="196" cy="10" r="2.6"/>
+        <!-- wavy ground line under the sprout -->
+        <path class="t-ground" d="M30 138C55 134 82 141 114 137"/>
+        <!-- two-leaf sprout -->
+        <path class="t-leaf2-stem" d="M68 137C65 126 62 113 61 102M68 137C70 126 70 113 69 101"/>
+        <g transform="translate(61 102) rotate(-30)"><g class="leaf-sway">
+          <path class="t-leaf2" d="M0 0C-6 -2 -10 -9 -10 -17C-10 -26 -6 -34 0 -38C6 -34 10 -26 10 -17C10 -9 6 -2 0 0Z"/>
+          <path class="t-leaf2-vein" d="M0 -2C-1 -10 1 -24 0 -35"/>
+          <path class="t-leaf2-vein-sm" d="M0 -10Q-4 -12 -7 -15M0 -16Q-4 -18 -7 -21M0 -10Q4 -12 7 -15M0 -16Q4 -18 7 -21"/>
+        </g></g>
+        <g transform="translate(69 101) rotate(18)"><g class="leaf-sway leaf-sway-alt">
+          <path class="t-leaf2" d="M0 0C-7 -2 -12 -10 -12 -20C-12 -30 -7 -39 0 -44C7 -39 12 -30 12 -20C12 -10 7 -2 0 0Z"/>
+          <path class="t-leaf2-vein" d="M0 -2C-1 -13 1 -29 0 -42"/>
+          <path class="t-leaf2-vein-sm" d="M0 -11Q-5 -13 -9 -17M0 -18Q-5 -20 -9 -23M0 -11Q5 -13 9 -17M0 -18Q5 -20 9 -23"/>
+        </g></g>
+        <!-- scroll paper with rolled corners -->
+        <rect class="t-paper" x="96" y="20" width="72" height="100" rx="10" fill="#ffffff" stroke-width="2"/>
+        <path class="t-curl" d="M154 20c14 2 20 10 20 24-6-1-9-6-10-12-1-5-5-9-10-12z"/>
+        <path class="t-curl" d="M168 120c-14-2-20-10-20-24 6 1 9 6 10 12 1 5 5 9 10 12z"/>
+        <!-- rupee badge + text lines -->
+        <circle class="t-rupee-badge" cx="108" cy="35" r="8"/>
+        <text class="t-rupee-badge-text" x="108" y="38.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="700">₹</text>
+        <path class="t-line-strong" d="M124 33h32" stroke-width="4" stroke-linecap="round"/>
+        <path class="t-line" d="M112 48h46M112 60h46M112 72h32M112 84h40" stroke-width="4.2" stroke-linecap="round"/>
+        <!-- signature squiggle -->
+        <path class="t-sign" d="M112 106c-1 5 1 8 4 6 4-3 5-9 8-9s1 7 4 7 5-5 9-3" stroke-width="1.8" stroke-linecap="round"/>
+        <!-- confirmation check on the right edge -->
+        <g class="t-check-pop">
+          <circle class="t-check" cx="170" cy="76" r="16"/>
+          <path d="m162.5 76 5.5 5.5 11-11.5" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+        <!-- rupee coin -->
+        <g class="t-coin-float">
+          <circle class="t-coin" cx="190" cy="124" r="13" stroke-width="2.2"/>
+          <text class="t-coin-text" x="190" y="129" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700">₹</text>
+        </g>
+      </svg>
     </div>
   </header>
 
   <!-- ============ TOTALS: 5 tiles, scope-wide, server-counted ============ -->
   <section class="pr-totals" aria-label="Totals in scope">
-    <div class="pr-tile">
+    <div class="pr-tile pr-tile-neutral">
       <span class="pr-tile-icon pr-tile-icon-neutral">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10l2 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7l2-4Z"/><path d="M9 11h6M9 15h6"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="m9 14.8 2.1 2.1 3.9-4.3"/></svg>
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Total Events</span>
-        <span class="pr-tile-value">{{ totalEvents() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-neutral))">{{ totalEvents() }}</span>
         <span class="pr-tile-note">In selected scope</span>
       </div>
+      <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V14C40 2 80 24 120 18 160 12 190 20 220 8V30Z" fill="currentColor"/></svg>
     </div>
-    <div class="pr-tile">
+    <div class="pr-tile pr-tile-gold">
       <span class="pr-tile-icon pr-tile-icon-gold">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a1.8 1.8 0 0 1 0 3.6H10a1.8 1.8 0 0 0 0 3.6H15"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.6 6.8 7.8 3.5h8.4l-1.8 3.3"/><path d="M9.6 6.8h4.8c3.3 2.1 5.2 5.1 5.2 8.1 0 3.8-3.2 6.6-7.6 6.6s-7.6-2.8-7.6-6.6c0-3 1.9-6 5.2-8.1Z"/><path d="M9.7 11.9h4.6M9.7 15.1h4.6M12.7 11.9c1.1 0 1.9.7 1.9 1.6s-.8 1.6-1.9 1.6H9.7"/></svg>
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Total Amount</span>
-        <span class="pr-tile-value">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-gold))">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
         <span class="pr-tile-note">In selected scope</span>
       </div>
+      <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V20C26 6 54 4 86 14 118 24 146 22 174 12 194 5 210 12 220 16V30Z" fill="currentColor"/></svg>
     </div>
-    <div class="pr-tile">
+    <div class="pr-tile pr-tile-good">
       <span class="pr-tile-icon pr-tile-icon-good">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.5 2.5-7 19-3.5-8.5-8.5-3.5 19-7Z"/><path d="M21.5 2.5 11 13"/></svg>
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Successful</span>
-        <span class="pr-tile-value">{{ successfulCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-meadow))">{{ successfulCount() }}</span>
         <span class="pr-tile-note">Receipt sent</span>
       </div>
+      <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V22C44 26 78 10 114 12 150 14 182 2 220 14V30Z" fill="currentColor"/></svg>
     </div>
-    <div class="pr-tile">
-      <span class="pr-tile-icon pr-tile-icon-gold">
+    <div class="pr-tile pr-tile-blue">
+      <span class="pr-tile-icon pr-tile-icon-blue">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Pending</span>
-        <span class="pr-tile-value">{{ pendingCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-blue))">{{ pendingCount() }}</span>
         <span class="pr-tile-note">Awaiting payment</span>
       </div>
+      <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V12C38 6 68 12 102 17 136 22 168 19 220 15V30Z" fill="currentColor"/></svg>
     </div>
-    <div class="pr-tile">
+    <div class="pr-tile pr-tile-danger">
       <span class="pr-tile-icon pr-tile-icon-danger">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Failed</span>
-        <span class="pr-tile-value">{{ failedCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-danger))">{{ failedCount() }}</span>
         <span class="pr-tile-note">Needs retry</span>
       </div>
+      <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V16C20 6 36 24 54 18 72 12 88 24 106 18 124 12 140 24 158 18 176 12 194 22 220 14V30Z" fill="currentColor"/></svg>
     </div>
   </section>
 
-  <!-- ============ FILTERS ============ -->
-  @if (filtersVisible()) {
-    <section class="pr-filters-card" aria-label="Search and filters">
-      <div class="pr-filter-grid">
-        <label class="pr-field pr-field-search">
-          <span class="pr-field-label">Search</span>
-          <span class="pr-input-wrap">
-            <input type="search" class="pr-input" placeholder="Search by event reference, donor name, email or campaign…"
-                   [ngModel]="searchTerm()" (ngModelChange)="onSearchChange($event)"
-                   aria-label="Search payments and receipts" />
-            <svg class="pr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          </span>
-        </label>
-
-        <label class="pr-field">
-          <span class="pr-field-label">Payment status</span>
-          <span class="pr-select-wrap">
-            <select class="pr-select" [ngModel]="paymentStatusFilter()" (ngModelChange)="onStatusChange($event)" aria-label="Payment status">
-              <option value="">All statuses</option>
-              @for (s of paymentStatusOptions; track s) { <option [value]="s">{{ s }}</option> }
-            </select>
-            <svg class="pr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-          </span>
-        </label>
-      </div>
-
-      <div class="pr-active-row">
-        <span class="pr-active-label">Active filters:</span>
-        @for (chip of activeFilterSummary(); track chip.key) {
-          <span class="pr-chip">
-            {{ chip.label }}
-            <button type="button" class="pr-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-            </button>
-          </span>
-        } @empty {
-          <span class="pr-active-none">None applied</span>
-        }
-        <span class="pr-active-spacer"></span>
-        <button type="button" class="pr-link" (click)="clearFilters()">Clear all</button>
-        <button type="button" class="pr-btn pr-btn-primary pr-btn-sm" (click)="applyFilters()">Apply</button>
-      </div>
-    </section>
-  }
+  <!-- FILTERS now open inside the Receipt History card, under its header (see pr-history-head). -->
 
   <!-- ============ SITUATIONAL BANNERS ============ -->
   @if (uiState() === 'conflict') {
@@ -136,7 +139,66 @@
   <!-- ============ MAIN WORK: index + overlay detail drawer ============ -->
   <div class="pr-work">
     <section class="pr-main" aria-labelledby="pr-records-heading">
-      <h2 id="pr-records-heading" class="pr-visually-hidden">Payment events and receipts</h2>
+      <!-- ============ CARD HEADER: list glyph + title + Filters toggle ============ -->
+      <div class="pr-history-head">
+        <span class="pr-history-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h14v18.5l-2.33-1.4-2.34 1.4-2.33-1.4-2.33 1.4-2.34-1.4-2.33 1.4z"/><path d="M9 8h6M9 12h6"/></svg>
+        </span>
+        <h2 id="pr-records-heading" class="pr-history-title">Receipt History</h2>
+        <span class="pr-history-spacer"></span>
+        <button type="button" class="pr-btn pr-btn-filter pr-btn-sm" (click)="toggleFiltersVisible()"
+                [attr.aria-expanded]="filtersVisible()">
+          <svg class="pr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h17l-6.5 7.5v5.5l-4 2v-7.5z"/></svg>
+          Filters
+          @if (activeFilterSummary().length) { <span class="pr-count">{{ activeFilterSummary().length }}</span> }
+          <svg class="pr-ic pr-chev-btn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+
+      <!-- ============ SEARCH & FILTERS PANEL: opens flat inside the card ============ -->
+      @if (filtersVisible()) {
+        <section class="pr-filters-card" aria-label="Search and filters">
+          <div class="pr-filter-grid">
+            <label class="pr-field pr-field-search">
+              <span class="pr-field-label">Search</span>
+              <span class="pr-input-wrap">
+                <input type="search" class="pr-input" placeholder="Search by event reference, donor name, email or campaign…"
+                       [ngModel]="searchTerm()" (ngModelChange)="onSearchChange($event)"
+                       aria-label="Search payments and receipts" />
+                <svg class="pr-input-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              </span>
+            </label>
+
+            <label class="pr-field">
+              <span class="pr-field-label">Payment status</span>
+              <span class="pr-select-wrap">
+                <select class="pr-select" [ngModel]="paymentStatusFilter()" (ngModelChange)="onStatusChange($event)" aria-label="Payment status">
+                  <option value="">All statuses</option>
+                  @for (s of paymentStatusOptions; track s) { <option [value]="s">{{ s }}</option> }
+                </select>
+                <svg class="pr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </span>
+            </label>
+          </div>
+
+          <div class="pr-active-row">
+            <span class="pr-active-label">Active filters:</span>
+            @for (chip of activeFilterSummary(); track chip.key) {
+              <span class="pr-chip">
+                {{ chip.label }}
+                <button type="button" class="pr-chip-x" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove filter ' + chip.label">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+              </span>
+            } @empty {
+              <span class="pr-active-none">None applied</span>
+            }
+            <span class="pr-active-spacer"></span>
+            <button type="button" class="pr-link" (click)="clearFilters()">Clear all</button>
+            <button type="button" class="pr-btn pr-btn-primary pr-btn-sm" (click)="applyFilters()">Apply</button>
+          </div>
+        </section>
+      }
 
       <!-- LOADING -->
       @if (uiState() === 'loading') {
@@ -184,35 +246,52 @@
           <table class="pr-table">
             <thead>
               <tr>
-                <th scope="col">Event / Receipt ref</th>
-                <th scope="col">Donor name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Campaign</th>
-                <th scope="col" class="pr-col-num">Amount</th>
-                <th scope="col">Payment status</th>
-                <th scope="col">Receipt status</th>
-                <th scope="col">Received at</th>
+                <th scope="col" class="pr-col-event">Event / Receipt ref</th>
+                <th scope="col" class="pr-col-center">Donor name</th>
+                <th scope="col" class="pr-col-center">Email</th>
+                <th scope="col" class="pr-col-center">Campaign</th>
+                <th scope="col" class="pr-col-center">Amount</th>
+                <th scope="col" class="pr-col-center">Payment status</th>
+                <th scope="col" class="pr-col-center">Received at</th>
                 <th scope="col" class="pr-col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
               @for (r of pagedRecords(); track r.eventReference) {
-                <tr [class.pr-row-selected]="isSelected(r.eventReference)" >
+                <tr >
                   <td class="pr-cell-event" data-label="Event / Receipt ref">
-                    <span class="pr-event-ref">{{ r.eventReference }}</span>
-                    <span class="pr-event-sub">{{ r.receiptOrIntentRef }}</span>
+                    <span class="pr-event-doc" [class]="receiptDocClass(r.receiptStatus)" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg>
+                    </span>
+                    <span class="pr-event-text">
+                      <span class="pr-event-ref">{{ r.eventReference }}</span>
+                      <span class="pr-event-sub">{{ r.receiptOrIntentRef }}</span>
+                    </span>
                   </td>
-                  <td data-label="Donor name">{{ r.donorName }}</td>
-                  <td data-label="Email">{{ r.donorEmail }}</td>
-                  <td data-label="Campaign">{{ r.campaignName }}</td>
-                  <td class="pr-col-num" data-label="Amount">{{ r.currency }} {{ formatAmount(r.amount) }}</td>
-                  <td data-label="Payment status">
-                    <span class="pr-badge" [class]="paymentStatusClass(r.paymentStatus)">{{ r.paymentStatus }}</span>
+                  <td class="pr-col-center" data-label="Donor name">{{ r.donorName }}</td>
+                  <td class="pr-col-center" data-label="Email">{{ r.donorEmail || '—' }}</td>
+                  <td class="pr-col-center" data-label="Campaign">{{ r.campaignName || '—' }}</td>
+                  <td class="pr-col-center" data-label="Amount">{{ r.currency }} {{ formatAmount(r.amount) }}</td>
+                  <td class="pr-col-center" data-label="Payment status">
+                    @switch (r.paymentStatus) {
+                      @case ('Success') {
+                        <span class="pr-status pr-status-good pr-tip pr-tip-good" data-tip="Payment successful" role="img" aria-label="Payment successful">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.2 12.3 2.6 2.6 5-5.5"/></svg>
+                        </span>
+                      }
+                      @case ('Pending') {
+                        <span class="pr-status pr-status-gold pr-tip pr-tip-gold" data-tip="Payment pending" role="img" aria-label="Payment pending">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+                        </span>
+                      }
+                      @case ('Fail') {
+                        <span class="pr-status pr-status-danger pr-tip pr-tip-danger" data-tip="Payment failed" role="img" aria-label="Payment failed">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9.2 9.2 5.6 5.6M14.8 9.2l-5.6 5.6"/></svg>
+                        </span>
+                      }
+                    }
                   </td>
-                  <td data-label="Receipt status">
-                    <span class="pr-badge" [class]="receiptStatusClass(r.receiptStatus)">{{ r.receiptStatus }}</span>
-                  </td>
-                  <td data-label="Received at">{{ r.receivedTime }}</td>
+                  <td class="pr-col-center" data-label="Received at">{{ r.receivedTime }}</td>
                   <td class="pr-col-actions" (click)="$event.stopPropagation()">
                     <button type="button" class="pr-icon-btn" (click)="inspect(r.eventReference)"
                             [attr.aria-label]="'View ' + r.eventReference" title="View details">
@@ -221,7 +300,7 @@
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="9" class="pr-table-empty">No payments or receipts match this scope and filter.</td></tr>
+                <tr><td colspan="8" class="pr-table-empty">No payments or receipts match this scope and filter.</td></tr>
               }
             </tbody>
           </table>
@@ -251,6 +330,30 @@
             <p class="pr-detail-sub">{{ e.receiptOrIntentRef }}</p>
           </div>
           <button type="button" class="pr-detail-close" (click)="closeDetail()" aria-label="Close event details">✕</button>
+        </div>
+
+        <!-- DECORATIVE BANNER, after the reference image: the receipt with its confirmation
+             check, a sprig of leaves either side, on the soft meadow wave. Purely
+             presentational - hidden from assistive technology. -->
+        <div class="pr-detail-art" [class]="detailArtClass()" aria-hidden="true">
+          <svg viewBox="0 0 500 170" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
+            <!-- soft hills -->
+            <path class="t-ribbon1" d="M0 148C85 132 185 154 285 144 390 134 452 148 500 138V170H0Z"/>
+            <path class="t-ribbon2" d="M0 158C90 146 200 164 310 154 410 146 460 156 500 148V170H0Z"/>
+            <!-- pling stars -->
+            <path class="t-star" d="M162 82Q162 90 170 90Q162 90 162 98Q162 90 154 90Q162 90 162 82Z"/>
+            <path class="t-star" style="animation-delay:-1.8s" d="M452.5 142Q452.5 148 458.5 148Q452.5 148 452.5 154Q452.5 148 446.5 148Q452.5 148 452.5 142Z"/>
+            <!-- receipt paper with wavy bottom edge -->
+            <path class="t-receipt" d="M200 48q0-10 10-10h100q10 0 10 10v76q-7 9-15 0t-15 0t-15 0t-15 0t-15 0t-15 0t-15 0t-15 0z"/>
+            <circle class="t-rupee-badge" cx="226" cy="52" r="8"/>
+            <path class="t-line-strong" d="M242 48h30" stroke-width="4" stroke-linecap="round"/>
+            <path class="t-line" d="M222 68h76M222 80h62M222 92h76M222 104h48M222 116h64" stroke-width="5" stroke-linecap="round"/>
+            <!-- confirmation check on right edge -->
+            <g class="t-check-pop">
+              <circle class="t-check" cx="320" cy="98" r="24"/>
+              <path d="m309 98 8 8 16-16" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+          </svg>
         </div>
 
         <div class="pr-detail-body">
@@ -289,11 +392,7 @@
                 Continue payment
               </button>
             }
-            @if (resendAllowed()) {
-              <button type="button" class="btn btn-outline-secondary pr-btn-block" (click)="openResendDialog()">
-                Resend receipt
-              </button>
-            }
+          
           </div>
         </div>
       </aside>
