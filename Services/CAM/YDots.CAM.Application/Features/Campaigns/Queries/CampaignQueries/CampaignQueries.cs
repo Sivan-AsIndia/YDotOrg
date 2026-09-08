@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -43,7 +44,8 @@ public sealed class CampaignQueryHandler(
     ICsvExportService exports,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<CampaignQueryHandler> logger)
 {
     /// <summary>
     /// The most pages an export walks. At 100 rows a page that is 50,000 campaigns - far more
@@ -59,8 +61,16 @@ public sealed class CampaignQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.SearchAsync(query.Filter, currentUser.Scope, cancellationToken));
+        logger.LogInformation("Searching campaigns. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page, query.Filter.PageSize);
+
+        var result = await readService.SearchAsync(
+            query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Campaign search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<CampaignDetailResponse>> HandleAsync(
@@ -68,18 +78,34 @@ public sealed class CampaignQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving campaign detail. CampaignId: {CampaignId}.",
+            query.CampaignId);
+
         var campaign = await readService.GetDetailAsync(
             query.CampaignId, currentUser.Scope, cancellationToken);
 
-        return campaign is null
-            ? Result.Failure<CampaignDetailResponse>(Error.NotFound("That campaign was not found."))
-            : Result.Success(campaign);
+        if (campaign is null)
+        {
+            logger.LogWarning("Campaign not found. CampaignId: {CampaignId}.",
+                query.CampaignId);
+
+            return Result.Failure<CampaignDetailResponse>(
+                Error.NotFound("That campaign was not found."));
+        }
+
+        logger.LogInformation("Campaign detail retrieved. CampaignId: {CampaignId}.",
+            query.CampaignId);
+
+        return Result.Success(campaign);
     }
 
     public async Task<Result<PagedResponse<CampaignHistoryResponse>>> HandleAsync(
         GetCampaignHistoryQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Retrieving campaign history. CampaignId: {CampaignId}, Page: {Page}, PageSize: {PageSize}.",
+            query.CampaignId, query.Pagination.Page, query.Pagination.PageSize);
 
         // The campaign is resolved first, so a history request for another Organisation's
         // campaign answers 404 rather than an empty page. An empty page would be ambiguous:
@@ -89,12 +115,20 @@ public sealed class CampaignQueryHandler(
 
         if (campaign is null)
         {
+            logger.LogWarning("Campaign history requested for a campaign that was not found. CampaignId: {CampaignId}.",
+                query.CampaignId);
+
             return Result.Failure<PagedResponse<CampaignHistoryResponse>>(
                 Error.NotFound("That campaign was not found."));
         }
 
-        return Result.Success(
-            await readService.GetHistoryAsync(query.CampaignId, query.Pagination, cancellationToken));
+        var history = await readService.GetHistoryAsync(
+            query.CampaignId, query.Pagination, cancellationToken);
+
+        logger.LogInformation("Campaign history retrieved. CampaignId: {CampaignId}, TotalCount: {TotalCount}.",
+            query.CampaignId, history.TotalCount);
+
+        return Result.Success(history);
     }
 
     public async Task<Result<CampaignStatisticsResponse>> HandleAsync(
@@ -102,7 +136,14 @@ public sealed class CampaignQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.GetStatisticsAsync(currentUser.Scope, cancellationToken));
+        logger.LogInformation("Retrieving campaign statistics.");
+
+        var statistics = await readService.GetStatisticsAsync(
+            currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Campaign statistics retrieved.");
+
+        return Result.Success(statistics);
     }
 
     public async Task<Result<IReadOnlyList<LookupItem>>> HandleAsync(
@@ -110,7 +151,16 @@ public sealed class CampaignQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.LookupAsync(query.Search, query.Take, cancellationToken));
+        logger.LogInformation("Looking up campaigns. SearchProvided: {SearchProvided}, Take: {Take}.",
+            !string.IsNullOrWhiteSpace(query.Search), query.Take);
+
+        var campaigns = await readService.LookupAsync(
+            query.Search, query.Take, cancellationToken);
+
+        logger.LogInformation("Campaign lookup completed. Count: {Count}.",
+            campaigns.Count);
+
+        return Result.Success(campaigns);
     }
 
     /// <summary>
@@ -126,6 +176,8 @@ public sealed class CampaignQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Starting campaign export.");
+
         var filter = query.Filter;
         filter.PageSize = ExportPageSize;
         filter.Page = 1;
@@ -134,7 +186,11 @@ public sealed class CampaignQueryHandler(
 
         while (filter.Page <= MaximumExportPages)
         {
-            var page = await readService.GetExportRowsAsync(filter, currentUser.Scope, cancellationToken);
+            logger.LogInformation("Retrieving campaign export page. Page: {Page}, PageSize: {PageSize}.",
+                filter.Page, filter.PageSize);
+
+            var page = await readService.GetExportRowsAsync(
+                filter, currentUser.Scope, cancellationToken);
 
             if (page.Count == 0)
             {
@@ -160,6 +216,9 @@ public sealed class CampaignQueryHandler(
             $"Exported {rows.Count} campaign(s) as {file.Reference}.", cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Campaign export completed. RowCount: {RowCount}, Reference: {Reference}.",
+            rows.Count, file.Reference);
 
         return Result.Success(file);
     }

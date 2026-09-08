@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Models;
@@ -34,7 +35,8 @@ public sealed record SearchPaymentGatewayAuditQuery(PaymentGatewayAuditFilter Fi
 public sealed class PaymentGatewayConfigurationQueryHandler(
     IPaymentGatewayConfigurationReadService reader,
     PaymentGatewayScope scope,
-    IOptions<ClientAppSettings> clientSettings)
+    IOptions<ClientAppSettings> clientSettings,
+    ILogger<PaymentGatewayConfigurationQueryHandler> logger)
 {
     /// <summary>
     /// The providers, events and methods the form offers, plus the webhook URL to paste into the
@@ -51,8 +53,13 @@ public sealed class PaymentGatewayConfigurationQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
         _ = cancellationToken;
 
-        return Task.FromResult<Result<PaymentGatewayCatalogueResponse>>(
-            PaymentGatewayMappingConfig.ToCatalogueResponse(SuggestedWebhookUrl()));
+        logger.LogInformation("Retrieving payment gateway catalogue.");
+
+        var response = PaymentGatewayMappingConfig.ToCatalogueResponse(SuggestedWebhookUrl());
+
+        logger.LogInformation("Payment gateway catalogue retrieved.");
+
+        return Task.FromResult<Result<PaymentGatewayCatalogueResponse>>(response);
     }
 
     public async Task<Result<PagedResponse<PaymentGatewayConfigurationResponse>>> HandleAsync(
@@ -60,24 +67,39 @@ public sealed class PaymentGatewayConfigurationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Searching payment gateway configurations. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page, query.Filter.PageSize);
+
         var tenantId = scope.ResolveReadTenant(query.Filter.TenantId);
 
         // A non-root caller with no resolved Organisation has nothing to show, and returning an
         // empty page says so without an error - there is no fault here, only no context yet.
         if (tenantId is null && !scope.CanReadAllOrganisations)
         {
+            logger.LogDebug(
+                "Payment gateway configuration search returned an empty page because no tenant "
+                + "could be resolved for the current scope.");
+
             return PagedResponse<PaymentGatewayConfigurationResponse>.Empty(
                 query.Filter.Page, query.Filter.PageSize);
         }
 
-        return await reader.SearchAsync(
+        var result = await reader.SearchAsync(
             query.Filter, tenantId, scope.PermittedActions, cancellationToken);
+
+        logger.LogInformation("Payment gateway configuration search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return result;
     }
 
     public async Task<Result<PaymentGatewayConfigurationResponse>> HandleAsync(
         GetPaymentGatewayConfigurationQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Retrieving payment gateway configuration. ConfigurationId: {ConfigurationId}.",
+            query.ConfigurationId);
 
         // NULL MEANS "EVERY ORGANISATION" TO THE READ SERVICE, so it may only ever be passed for
         // a root user. A TenantAdmin whose Organisation has not resolved would otherwise fetch
@@ -95,6 +117,10 @@ public sealed class PaymentGatewayConfigurationQueryHandler(
 
             if (tenantId is null)
             {
+                logger.LogWarning("Payment gateway configuration could not be retrieved because no tenant "
+                    + "could be resolved. ConfigurationId: {ConfigurationId}.",
+                    query.ConfigurationId);
+
                 return Result.Failure<PaymentGatewayConfigurationResponse>(
                     Error.NotFound("That gateway configuration was not found."));
             }
@@ -103,10 +129,19 @@ public sealed class PaymentGatewayConfigurationQueryHandler(
         var configuration = await reader.GetAsync(
             query.ConfigurationId, tenantId, scope.PermittedActions, cancellationToken);
 
-        return configuration is null
-            ? Result.Failure<PaymentGatewayConfigurationResponse>(
-                Error.NotFound("That gateway configuration was not found."))
-            : configuration;
+        if (configuration is null)
+        {
+            logger.LogWarning("Payment gateway configuration not found. ConfigurationId: {ConfigurationId}.",
+                query.ConfigurationId);
+
+            return Result.Failure<PaymentGatewayConfigurationResponse>(
+                Error.NotFound("That gateway configuration was not found."));
+        }
+
+        logger.LogInformation("Payment gateway configuration retrieved. ConfigurationId: {ConfigurationId}.",
+            query.ConfigurationId);
+
+        return configuration;
     }
 
     public async Task<Result<PagedResponse<PaymentGatewayConfigurationAuditResponse>>> HandleAsync(
@@ -114,15 +149,28 @@ public sealed class PaymentGatewayConfigurationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogDebug("Searching payment gateway audit records. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page, query.Filter.PageSize);
+
         var tenantId = scope.ResolveReadTenant(query.Filter.TenantId);
 
         if (tenantId is null && !scope.CanReadAllOrganisations)
         {
+            logger.LogDebug(
+                "Payment gateway audit search returned an empty page because no tenant could be "
+                + "resolved for the current scope.");
+
             return PagedResponse<PaymentGatewayConfigurationAuditResponse>.Empty(
                 query.Filter.Page, query.Filter.PageSize);
         }
 
-        return await reader.SearchAuditAsync(query.Filter, tenantId, cancellationToken);
+        var result = await reader.SearchAuditAsync(
+            query.Filter, tenantId, cancellationToken);
+
+        logger.LogInformation("Payment gateway audit search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return result;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -54,8 +55,8 @@ public sealed record DeleteReadinessCheckCommand(Guid CheckId, ReadinessVerdictR
 /// Approved from inside the readiness feature - a second, parallel approval path with its own
 /// copy of the status rules and NO segregation-of-duties check. Campaign approval now happens
 /// in one place, <c>CampaignLifecycleCommandHandler</c>, which checks the readiness gate as
-/// part of activation. What remains here is returning a campaign to Draft, which is genuinely a
-/// readiness decision.
+/// part of activation. What remains here is returning a campaign to Draft, which is genuinely
+/// a readiness decision.
 /// </summary>
 public sealed class ReadinessCommandHandler(
     ICampaignReadinessRepository readiness,
@@ -63,16 +64,21 @@ public sealed class ReadinessCommandHandler(
     IAuditWriter audit,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<ReadinessCommandHandler> logger)
 {
     public async Task<Result<ReadinessCheckDetailResponse>> HandleAsync(
         CreateReadinessCheckCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating readiness check for campaign {CampaignId}.", command.CampaignId);
+
         var campaign = await campaigns.GetByIdAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Cannot create readiness check because campaign {CampaignId} was not found.", command.CampaignId);
+
             return Result.Failure<ReadinessCheckDetailResponse>(
                 Error.NotFound("That campaign was not found."));
         }
@@ -83,6 +89,8 @@ public sealed class ReadinessCommandHandler(
         // make "has the payment check passed?" ambiguous.
         if (await readiness.CheckNameExistsAsync(campaign.Id, name, null, cancellationToken))
         {
+            logger.LogWarning("Cannot create readiness check for campaign {CampaignId} because the check name already exists.", campaign.Id);
+
             return Result.Failure<ReadinessCheckDetailResponse>(
                 Error.Duplicate($"A check named '{name}' already exists on this campaign."));
         }
@@ -97,6 +105,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness check {CheckId} created for campaign {CampaignId}.", check.Id, campaign.Id);
+
         return check.ToDetailResponse(clock.TodayUtc, PermittedActions(check));
     }
 
@@ -105,11 +115,15 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating readiness check {CheckId}.", command.CheckId);
+
         var loaded = await LoadCheckAsync(
             command.CheckId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Cannot update readiness check {CheckId} because the check could not be loaded or the version was stale.", command.CheckId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -117,6 +131,8 @@ public sealed class ReadinessCommandHandler(
 
         if (check.Status != ReadinessCheckStatus.Pending)
         {
+            logger.LogWarning("Cannot update readiness check {CheckId} because its current status is {Status}.", check.Id, check.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Pending check can be edited. This one is {check.Status}."));
         }
@@ -125,6 +141,8 @@ public sealed class ReadinessCommandHandler(
 
         if (await readiness.CheckNameExistsAsync(check.CampaignId, name, check.Id, cancellationToken))
         {
+            logger.LogWarning("Cannot update readiness check {CheckId} because the check name already exists on campaign {CampaignId}.", check.Id, check.CampaignId);
+
             return Result.Failure<OutcomeResponse>(
                 Error.Duplicate($"A check named '{name}' already exists on this campaign."));
         }
@@ -136,6 +154,8 @@ public sealed class ReadinessCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Readiness check {CheckId} updated successfully.", check.Id);
 
         return BuildOutcome(check, "Readiness check updated.");
     }
@@ -151,11 +171,15 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Passing readiness check {CheckId}.", command.CheckId);
+
         var loaded = await LoadCheckAsync(
             command.CheckId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Cannot pass readiness check {CheckId} because the check could not be loaded or the version was stale.", command.CheckId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -182,12 +206,16 @@ public sealed class ReadinessCommandHandler(
         // still impossible; the blocker has to be resolved first, on the record, by somebody.
         if (check.Status == ReadinessCheckStatus.Passed)
         {
+            logger.LogWarning("Cannot pass readiness check {CheckId} because it has already been passed.", check.Id);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This check has already been passed."));
         }
 
         if (check.HasOpenBlockers)
         {
+            logger.LogWarning("Cannot pass readiness check {CheckId} because it has an unresolved blocker.", check.Id);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This check has an unresolved blocker. Clear it before signing the check off."));
         }
@@ -205,6 +233,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness check {CheckId} passed successfully.", check.Id);
+
         return BuildOutcome(check, "Readiness check passed.");
     }
 
@@ -213,11 +243,15 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Failing readiness check {CheckId}.", command.CheckId);
+
         var loaded = await LoadCheckAsync(
             command.CheckId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Cannot fail readiness check {CheckId} because the check could not be loaded or the version was stale.", command.CheckId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -225,6 +259,8 @@ public sealed class ReadinessCommandHandler(
 
         if (check.Status != ReadinessCheckStatus.Pending)
         {
+            logger.LogWarning("Cannot fail readiness check {CheckId} because its current status is {Status}.", check.Id, check.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Pending check can be failed. This one is {check.Status}."));
         }
@@ -242,6 +278,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness check {CheckId} recorded as failed.", check.Id);
+
         return BuildOutcome(check, "Readiness check recorded as failed.");
     }
 
@@ -258,11 +296,15 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Assigning readiness blocker to check {CheckId}.", command.CheckId);
+
         var loaded = await LoadCheckAsync(
             command.CheckId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Cannot assign blocker to readiness check {CheckId} because the check could not be loaded or the version was stale.", command.CheckId);
+
             return Result.Failure<ReadinessBlockerResponse>(loaded.Error!);
         }
 
@@ -272,6 +314,8 @@ public sealed class ReadinessCommandHandler(
         // rather than a yes or no, and nothing downstream wants the count.
         if (check.HasOpenBlockers)
         {
+            logger.LogWarning("Cannot assign blocker to readiness check {CheckId} because it already has an unresolved blocker.", check.Id);
+
             return Result.Failure<ReadinessBlockerResponse>(
                 Error.Duplicate("This check already has an unresolved blocker."));
         }
@@ -294,6 +338,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness blocker {BlockerId} assigned to check {CheckId}.", blocker.Id, check.Id);
+
         return blocker.ToResponse();
     }
 
@@ -310,14 +356,20 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Resolving readiness blocker {BlockerId}.", command.BlockerId);
+
         var blocker = await readiness.GetBlockerAsync(command.BlockerId, cancellationToken);
         if (blocker is null)
         {
+            logger.LogWarning("Cannot resolve readiness blocker {BlockerId} because it was not found.", command.BlockerId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That blocker was not found."));
         }
 
         if (blocker.IsResolved)
         {
+            logger.LogWarning("Cannot resolve readiness blocker {BlockerId} because it has already been resolved.", command.BlockerId);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition("That blocker has already been resolved."));
         }
@@ -342,6 +394,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness blocker {BlockerId} resolved successfully.", blocker.Id);
+
         return check is null
             ? new OutcomeResponse(blocker.Id, "Resolved", 0, "Blocker resolved.", [])
             : BuildOutcome(check, "Blocker resolved. The check is pending verification again.");
@@ -359,14 +413,20 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Returning campaign {CampaignId} to Draft.", command.CampaignId);
+
         var campaign = await campaigns.GetByIdAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Cannot return campaign {CampaignId} to Draft because it was not found.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That campaign was not found."));
         }
 
         if (campaign.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Cannot return campaign {CampaignId} to Draft because of a stale version.", campaign.Id);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -382,6 +442,8 @@ public sealed class ReadinessCommandHandler(
                                     or CampaignStatus.Approved
                                     or CampaignStatus.Scheduled))
         {
+            logger.LogWarning("Cannot return campaign {CampaignId} to Draft because its current status is {Status}.", campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Only a Submitted, Approved or Scheduled campaign can be returned to Draft. "
                 + $"This one is {campaign.Status}."));
@@ -416,6 +478,8 @@ public sealed class ReadinessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Campaign {CampaignId} returned to Draft successfully.", campaign.Id);
+
         return new OutcomeResponse(
             campaign.Id, campaign.Status.ToString(), campaign.Version,
             "Campaign returned to Draft.", []);
@@ -443,11 +507,15 @@ public sealed class ReadinessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting readiness check {CheckId}.", command.CheckId);
+
         var loaded = await LoadCheckAsync(
             command.CheckId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Cannot delete readiness check {CheckId} because the check could not be loaded or the version was stale.", command.CheckId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -455,6 +523,8 @@ public sealed class ReadinessCommandHandler(
 
         if (check.Status != ReadinessCheckStatus.Pending)
         {
+            logger.LogWarning("Cannot delete readiness check {CheckId} because its current status is {Status}.", check.Id, check.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Pending check can be deleted. This one is {check.Status}, so it carries "
                 + "a verdict that would be destroyed with it."));
@@ -462,6 +532,8 @@ public sealed class ReadinessCommandHandler(
 
         if (check.Blockers.Count > 0)
         {
+            logger.LogWarning("Cannot delete readiness check {CheckId} because it has blockers.", check.Id);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This check has blockers raised against it. Resolve them before removing it."));
         }
@@ -476,6 +548,8 @@ public sealed class ReadinessCommandHandler(
         readiness.Remove(check);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Readiness check {CheckId} deleted successfully.", check.Id);
+
         return outcome;
     }
 
@@ -486,13 +560,20 @@ public sealed class ReadinessCommandHandler(
 
         if (check is null)
         {
+            logger.LogWarning("Readiness check {CheckId} was not found.", checkId);
+
             return Result.Failure<CampaignReadinessCheck>(
                 Error.NotFound("That readiness check was not found."));
         }
 
-        return check.Version == expectedVersion
-            ? check
-            : Result.Failure<CampaignReadinessCheck>(Error.Concurrency());
+        if (check.Version != expectedVersion)
+        {
+            logger.LogWarning("Readiness check {CheckId} has a version conflict. Expected version {ExpectedVersion}.", checkId, expectedVersion);
+
+            return Result.Failure<CampaignReadinessCheck>(Error.Concurrency());
+        }
+
+        return check;
     }
 
     private OutcomeResponse BuildOutcome(CampaignReadinessCheck check, string message) =>

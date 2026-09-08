@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -120,7 +121,8 @@ public sealed class GlobalMasterQueryHandler(
     IExportService exports,
     ITokenHasher tokenHasher,
     IAuditService audit,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<GlobalMasterQueryHandler> logger)
 {
     /// <summary>
     /// The most pages an export will walk.
@@ -140,7 +142,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchCountriesAsync(query.Filter, cancellationToken));
+        logger.LogInformation(
+            "Searching countries. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page,
+            query.Filter.PageSize);
+
+        var result = await readService.SearchCountriesAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation(
+            "Country search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<CountryDetailResponse>> HandleAsync(
@@ -148,17 +161,34 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving country. CountryId: {CountryId}.",
+            query.CountryId);
+
         var country = await readService.GetCountryDetailAsync(query.CountryId, cancellationToken);
 
-        return country is null
-            ? Result.Failure<CountryDetailResponse>(Error.NotFound("That country was not found."))
-            : Result.Success(country);
+        if (country is null)
+        {
+            logger.LogWarning(
+                "Country was not found. CountryId: {CountryId}.",
+                query.CountryId);
+
+            return Result.Failure<CountryDetailResponse>(Error.NotFound("That country was not found."));
+        }
+
+        logger.LogInformation(
+            "Country retrieved successfully. CountryId: {CountryId}.",
+            query.CountryId);
+
+        return Result.Success(country);
     }
 
     public Task<Result<ExportFile>> HandleAsync(
         ExportCountriesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting country catalogue export.");
 
         return ExportAsync(
             query.Filter,
@@ -175,7 +205,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchStateProvincesAsync(query.Filter, cancellationToken));
+        logger.LogInformation(
+            "Searching states and provinces. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page,
+            query.Filter.PageSize);
+
+        var result = await readService.SearchStateProvincesAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation(
+            "State and province search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<StateProvinceDetailResponse>> HandleAsync(
@@ -183,17 +224,34 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving state or province. StateProvinceId: {StateProvinceId}.",
+            query.StateProvinceId);
+
         var state = await readService.GetStateProvinceDetailAsync(query.StateProvinceId, cancellationToken);
 
-        return state is null
-            ? Result.Failure<StateProvinceDetailResponse>(Error.NotFound("That state was not found."))
-            : Result.Success(state);
+        if (state is null)
+        {
+            logger.LogWarning(
+                "State or province was not found. StateProvinceId: {StateProvinceId}.",
+                query.StateProvinceId);
+
+            return Result.Failure<StateProvinceDetailResponse>(Error.NotFound("That state was not found."));
+        }
+
+        logger.LogInformation(
+            "State or province retrieved successfully. StateProvinceId: {StateProvinceId}.",
+            query.StateProvinceId);
+
+        return Result.Success(state);
     }
 
     public Task<Result<ExportFile>> HandleAsync(
         ExportStateProvincesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting state and province catalogue export.");
 
         return ExportAsync(
             query.Filter,
@@ -210,7 +268,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchCitiesAsync(query.Filter, cancellationToken));
+        logger.LogInformation(
+            "Searching cities. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page,
+            query.Filter.PageSize);
+
+        var result = await readService.SearchCitiesAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation(
+            "City search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<CityDetailResponse>> HandleAsync(
@@ -218,17 +287,34 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving city. CityId: {CityId}.",
+            query.CityId);
+
         var city = await readService.GetCityDetailAsync(query.CityId, cancellationToken);
 
-        return city is null
-            ? Result.Failure<CityDetailResponse>(Error.NotFound("That city was not found."))
-            : Result.Success(city);
+        if (city is null)
+        {
+            logger.LogWarning(
+                "City was not found. CityId: {CityId}.",
+                query.CityId);
+
+            return Result.Failure<CityDetailResponse>(Error.NotFound("That city was not found."));
+        }
+
+        logger.LogInformation(
+            "City retrieved successfully. CityId: {CityId}.",
+            query.CityId);
+
+        return Result.Success(city);
     }
 
     public Task<Result<ExportFile>> HandleAsync(
         ExportCitiesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting city catalogue export.");
 
         return ExportAsync(
             query.Filter,
@@ -245,7 +331,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchCurrenciesAsync(query.Filter, cancellationToken));
+        logger.LogInformation(
+            "Searching currencies. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page,
+            query.Filter.PageSize);
+
+        var result = await readService.SearchCurrenciesAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation(
+            "Currency search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<CurrencyDetailResponse>> HandleAsync(
@@ -253,17 +350,34 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving currency. CurrencyId: {CurrencyId}.",
+            query.CurrencyId);
+
         var currency = await readService.GetCurrencyDetailAsync(query.CurrencyId, cancellationToken);
 
-        return currency is null
-            ? Result.Failure<CurrencyDetailResponse>(Error.NotFound("That currency was not found."))
-            : Result.Success(currency);
+        if (currency is null)
+        {
+            logger.LogWarning(
+                "Currency was not found. CurrencyId: {CurrencyId}.",
+                query.CurrencyId);
+
+            return Result.Failure<CurrencyDetailResponse>(Error.NotFound("That currency was not found."));
+        }
+
+        logger.LogInformation(
+            "Currency retrieved successfully. CurrencyId: {CurrencyId}.",
+            query.CurrencyId);
+
+        return Result.Success(currency);
     }
 
     public Task<Result<ExportFile>> HandleAsync(
         ExportCurrenciesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting currency catalogue export.");
 
         return ExportAsync(
             query.Filter,
@@ -280,7 +394,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchTimeZonesAsync(query.Filter, cancellationToken));
+        logger.LogInformation(
+            "Searching time zones. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page,
+            query.Filter.PageSize);
+
+        var result = await readService.SearchTimeZonesAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation(
+            "Time zone search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<TimeZoneDetailResponse>> HandleAsync(
@@ -288,17 +413,34 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving time zone. TimeZoneId: {TimeZoneId}.",
+            query.TimeZoneId);
+
         var timeZone = await readService.GetTimeZoneDetailAsync(query.TimeZoneId, cancellationToken);
 
-        return timeZone is null
-            ? Result.Failure<TimeZoneDetailResponse>(Error.NotFound("That time zone was not found."))
-            : Result.Success(timeZone);
+        if (timeZone is null)
+        {
+            logger.LogWarning(
+                "Time zone was not found. TimeZoneId: {TimeZoneId}.",
+                query.TimeZoneId);
+
+            return Result.Failure<TimeZoneDetailResponse>(Error.NotFound("That time zone was not found."));
+        }
+
+        logger.LogInformation(
+            "Time zone retrieved successfully. TimeZoneId: {TimeZoneId}.",
+            query.TimeZoneId);
+
+        return Result.Success(timeZone);
     }
 
     public Task<Result<ExportFile>> HandleAsync(
         ExportTimeZonesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting time-zone catalogue export.");
 
         return ExportAsync(
             query.Filter,
@@ -315,7 +457,15 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.GetReferenceDataAsync(query.CountryId, cancellationToken));
+        logger.LogInformation(
+            "Retrieving global master reference data. CountryId: {CountryId}.",
+            query.CountryId);
+
+        var result = await readService.GetReferenceDataAsync(query.CountryId, cancellationToken);
+
+        logger.LogInformation("Global master reference data retrieved successfully.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<IReadOnlyList<MasterLookupResponse>>> HandleAsync(
@@ -323,8 +473,17 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.LookupStateProvincesAsync(query.CountryId, cancellationToken));
+        logger.LogInformation(
+            "Looking up states and provinces. CountryId: {CountryId}.",
+            query.CountryId);
+
+        var result = await readService.LookupStateProvincesAsync(query.CountryId, cancellationToken);
+
+        logger.LogInformation(
+            "State and province lookup completed. Count: {Count}.",
+            result.Count);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<IReadOnlyList<MasterLookupResponse>>> HandleAsync(
@@ -332,7 +491,17 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.LookupCitiesAsync(query.StateProvinceId, cancellationToken));
+        logger.LogInformation(
+            "Looking up cities. StateProvinceId: {StateProvinceId}.",
+            query.StateProvinceId);
+
+        var result = await readService.LookupCitiesAsync(query.StateProvinceId, cancellationToken);
+
+        logger.LogInformation(
+            "City lookup completed. Count: {Count}.",
+            result.Count);
+
+        return Result.Success(result);
     }
 
     // ---- The address-form pickers ---------------------------------------------------------
@@ -342,7 +511,15 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.LookupCountriesAsync(cancellationToken));
+        logger.LogInformation("Looking up active countries.");
+
+        var result = await readService.LookupCountriesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Active country lookup completed. Count: {Count}.",
+            result.Count);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<IReadOnlyList<MasterLookupResponse>>> HandleAsync(
@@ -350,8 +527,18 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.LookupCitiesAsync(query.CountryId, query.StateProvinceId, cancellationToken));
+        logger.LogInformation(
+            "Looking up geographic cities. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}.",
+            query.CountryId,
+            query.StateProvinceId);
+
+        var result = await readService.LookupCitiesAsync(query.CountryId, query.StateProvinceId, cancellationToken);
+
+        logger.LogInformation(
+            "Geographic city lookup completed. Count: {Count}.",
+            result.Count);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<IReadOnlyList<CurrencyLookupResponse>>> HandleAsync(
@@ -359,7 +546,17 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.LookupCurrenciesAsync(query.CountryId, cancellationToken));
+        logger.LogInformation(
+            "Looking up currencies. CountryId: {CountryId}.",
+            query.CountryId);
+
+        var result = await readService.LookupCurrenciesAsync(query.CountryId, cancellationToken);
+
+        logger.LogInformation(
+            "Currency lookup completed. Count: {Count}.",
+            result.Count);
+
+        return Result.Success(result);
     }
 
     /// <summary>
@@ -376,8 +573,17 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Looking up time zones. CountryId: {CountryId}.",
+            query.CountryId);
+
         var (zones, isCountryFiltered) =
             await readService.LookupTimeZonesAsync(query.CountryId, cancellationToken);
+
+        logger.LogInformation(
+            "Time zone lookup completed. Count: {Count}, IsCountryFiltered: {IsCountryFiltered}.",
+            zones.Count,
+            isCountryFiltered);
 
         return Result.Success(new TimeZoneLookupListResponse(zones, isCountryFiltered));
     }
@@ -395,8 +601,17 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Looking up languages. CountryId: {CountryId}.",
+            query.CountryId);
+
         var (languages, isCountryFiltered) =
             await readService.LookupLanguagesAsync(query.CountryId, cancellationToken);
+
+        logger.LogInformation(
+            "Language lookup completed. Count: {Count}, IsCountryFiltered: {IsCountryFiltered}.",
+            languages.Count,
+            isCountryFiltered);
 
         return Result.Success(new LanguageLookupListResponse(languages, isCountryFiltered));
     }
@@ -406,8 +621,16 @@ public sealed class GlobalMasterQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.GetGeoLookupAsync(query.CountryId, query.StateProvinceId, cancellationToken));
+        logger.LogInformation(
+            "Retrieving geographic lookup. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}.",
+            query.CountryId,
+            query.StateProvinceId);
+
+        var result = await readService.GetGeoLookupAsync(query.CountryId, query.StateProvinceId, cancellationToken);
+
+        logger.LogInformation("Geographic lookup retrieved successfully.");
+
+        return Result.Success(result);
     }
 
     // ---- The shared export ---------------------------------------------------------------------------------
@@ -434,11 +657,22 @@ public sealed class GlobalMasterQueryHandler(
         filter.PageSize = ExportPageSize;
         filter.Page = 1;
 
+        logger.LogInformation(
+            "Starting master catalogue export. TargetType: {TargetType}, FileName: {FileName}.",
+            targetType,
+            fileName);
+
         var rows = new List<TRow>();
 
         while (filter.Page <= MaximumExportPages)
         {
             var page = await fetchPage(filter, cancellationToken);
+
+            logger.LogInformation(
+                "Master catalogue export page retrieved. TargetType: {TargetType}, Page: {Page}, RowCount: {RowCount}.",
+                targetType,
+                filter.Page,
+                page.Count);
 
             if (page.Count == 0)
             {
@@ -469,6 +703,11 @@ public sealed class GlobalMasterQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Master catalogue export completed successfully. TargetType: {TargetType}, RowCount: {RowCount}.",
+            targetType,
+            rows.Count);
 
         return Result.Success(file);
     }

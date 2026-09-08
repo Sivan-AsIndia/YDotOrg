@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -45,12 +46,15 @@ public sealed class OrganisationQueryHandler(
     IUserRepository users,
     ITenantContext tenantContext,
     IAuditService audit,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<OrganisationQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<OrganisationListItemResponse>>> HandleAsync(
         SearchOrganisationsQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Searching organisations.");
 
         // Defaulted rather than trusted from the query string: a caller naming a different
         // BusinessUnit would be reaching outside their own platform.
@@ -61,6 +65,8 @@ public sealed class OrganisationQueryHandler(
 
         var page = await readService.SearchAsync(filter, cancellationToken);
 
+        logger.LogInformation("Organisation search completed successfully.");
+
         return Result.Success(page);
     }
 
@@ -69,40 +75,62 @@ public sealed class OrganisationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving organisation detail for TenantId {TenantId}.", query.TenantId);
+
         var detail = await readService.GetDetailAsync(query.TenantId, cancellationToken);
 
-        return detail is null
-            ? Result.Failure<OrganisationDetailResponse>(Error.TenantNotFound())
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Organisation detail not found for TenantId {TenantId}.", query.TenantId);
+            return Result.Failure<OrganisationDetailResponse>(Error.TenantNotFound());
+        }
+
+        logger.LogInformation("Organisation detail retrieved successfully for TenantId {TenantId}.", query.TenantId);
+
+        return Result.Success(detail);
     }
 
     public async Task<Result<OrganisationDetailResponse>> HandleAsync(
         GetMyOrganisationQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving current organisation.");
+
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Current organisation cannot be retrieved because tenant selection is required.");
             return Result.Failure<OrganisationDetailResponse>(Error.TenantSelectionRequired());
         }
 
         var detail = await readService.GetCurrentAsync(cancellationToken);
 
-        return detail is null
-            ? Result.Failure<OrganisationDetailResponse>(Error.TenantNotFound())
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Current organisation was not found.");
+            return Result.Failure<OrganisationDetailResponse>(Error.TenantNotFound());
+        }
+
+        logger.LogInformation("Current organisation retrieved successfully.");
+
+        return Result.Success(detail);
     }
 
     public async Task<Result<OrganisationStatisticsResponse>> HandleAsync(
         GetOrganisationStatisticsQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving organisation statistics.");
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
 
         if (businessUnit is null)
         {
+            logger.LogError("Organisation statistics cannot be retrieved because the platform business unit is not configured.");
             return Result.Failure<OrganisationStatisticsResponse>(
                 Error.Dependency("The platform is not configured."));
         }
 
         var statistics = await readService.GetStatisticsAsync(businessUnit.Id, cancellationToken);
+
+        logger.LogInformation("Organisation statistics retrieved successfully.");
 
         return Result.Success(statistics);
     }
@@ -110,14 +138,19 @@ public sealed class OrganisationQueryHandler(
     public async Task<Result<IReadOnlyList<OrganisationListItemResponse>>> HandleAsync(
         GetOrganisationsAwaitingReviewQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving organisations awaiting review.");
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
 
         if (businessUnit is null)
         {
+            logger.LogWarning("Organisations awaiting review could not be retrieved because the platform business unit is not configured.");
             return Result.Success<IReadOnlyList<OrganisationListItemResponse>>([]);
         }
 
         var awaiting = await readService.GetAwaitingReviewAsync(businessUnit.Id, cancellationToken);
+
+        logger.LogInformation("Organisations awaiting review retrieved successfully. Count {Count}.", awaiting.Count);
 
         return Result.Success(awaiting);
     }
@@ -125,14 +158,19 @@ public sealed class OrganisationQueryHandler(
     public async Task<Result<BusinessUnitResponse>> HandleAsync(
         GetBusinessUnitQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving platform business unit.");
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
 
         if (businessUnit is null)
         {
+            logger.LogError("Platform business unit could not be retrieved because the platform is not configured.");
             return Result.Failure<BusinessUnitResponse>(Error.Dependency("The platform is not configured."));
         }
 
         var tenantCount = await tenants.CountAsync(businessUnit.Id, cancellationToken);
+
+        logger.LogInformation("Platform business unit retrieved successfully. TenantCount {TenantCount}.", tenantCount);
 
         return Result.Success(businessUnit.ToResponse(tenantCount));
     }
@@ -146,10 +184,13 @@ public sealed class OrganisationQueryHandler(
     public async Task<Result<IReadOnlyList<OrganisationDocumentResponse>>> GetDocumentsAsync(
         Guid tenantId, DateTimeOffset asOf, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving organisation documents for TenantId {TenantId}.", tenantId);
+
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
 
         if (tenant is null)
         {
+            logger.LogWarning("Organisation documents could not be retrieved because TenantId {TenantId} was not found.", tenantId);
             return Result.Failure<IReadOnlyList<OrganisationDocumentResponse>>(Error.TenantNotFound());
         }
 
@@ -162,6 +203,8 @@ public sealed class OrganisationQueryHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Organisation documents retrieved successfully for TenantId {TenantId}. Count {Count}.", tenantId, documents.Count);
+
         return Result.Success<IReadOnlyList<OrganisationDocumentResponse>>(
             [.. documents.Select(document => document.ToDocumentResponse(asOf))]);
     }
@@ -170,14 +213,19 @@ public sealed class OrganisationQueryHandler(
     public async Task<Result<IReadOnlyList<OrganisationDomainResponse>>> GetDomainsAsync(
         Guid tenantId, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving organisation domains for TenantId {TenantId}.", tenantId);
+
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
 
         if (tenant is null)
         {
+            logger.LogWarning("Organisation domains could not be retrieved because TenantId {TenantId} was not found.", tenantId);
             return Result.Failure<IReadOnlyList<OrganisationDomainResponse>>(Error.TenantNotFound());
         }
 
         var domains = await tenants.GetDomainsAsync(tenantId, cancellationToken);
+
+        logger.LogInformation("Organisation domains retrieved successfully for TenantId {TenantId}. Count {Count}.", tenantId, domains.Count);
 
         return Result.Success<IReadOnlyList<OrganisationDomainResponse>>(
             [.. domains.Select(OrganisationMappingConfig.ToDomainResponse)]);
@@ -193,13 +241,25 @@ public sealed class OrganisationQueryHandler(
     public async Task<Result<IReadOnlyList<OrganisationTimelineResponse>>> GetTimelineAsync(
         Guid tenantId, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving organisation timeline for TenantId {TenantId}.", tenantId);
+
         var history = await tenants.GetStatusHistoryAsync(tenantId, cancellationToken);
+
+        logger.LogInformation("Organisation timeline retrieved successfully for TenantId {TenantId}. Count {Count}.", tenantId, history.Count);
 
         return Result.Success<IReadOnlyList<OrganisationTimelineResponse>>(
             [.. history.Select(item => item.ToTimelineResponse(includeInternalNotes: true))]);
     }
 
     /// <summary>How many users an Organisation has, for the licence display.</summary>
-    public async Task<Result<int>> GetUserCountAsync(Guid tenantId, CancellationToken cancellationToken) =>
-        Result.Success(await users.CountForTenantAsync(tenantId, cancellationToken));
+    public async Task<Result<int>> GetUserCountAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Retrieving user count for TenantId {TenantId}.", tenantId);
+
+        var count = await users.CountForTenantAsync(tenantId, cancellationToken);
+
+        logger.LogInformation("User count retrieved successfully for TenantId {TenantId}. Count {Count}.", tenantId, count);
+
+        return Result.Success(count);
+    }
 }

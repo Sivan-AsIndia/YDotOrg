@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -62,7 +63,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
     ICurrentUser currentUser,
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
-    IOptions<SecuritySettings> securityOptions)
+    IOptions<SecuritySettings> securityOptions,
+    ILogger<LoginIdentifierChangeCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
 
@@ -73,10 +75,12 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Login identifier change request started for user {UserId}. ChangeType={ChangeType}", command.UserId, request.IsEmailChange ? "Email" : "Username");
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Login identifier change request rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
@@ -84,6 +88,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
         if (user.Id != currentUser.UserId
             && !currentUser.HasPermission(PermissionCodes.UsersChangeLoginIdentifier))
         {
+            logger.LogWarning("Login identifier change request forbidden for user {UserId} by current user {CurrentUserId}.", user.Id, currentUser.UserId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden());
         }
 
@@ -91,6 +96,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
         var existing = await governance.GetOpenIdentifierChangeAsync(user.Id, cancellationToken);
         if (existing is not null)
         {
+            logger.LogWarning("Login identifier change request rejected for user {UserId} because an open request already exists.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "There is already an open request to change the sign-in details for this account."));
         }
@@ -104,6 +110,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
             var email = EmailValue.TryParse(request.RequestedValue);
             if (email is null)
             {
+                logger.LogWarning("Login identifier change request rejected for user {UserId} because the requested email value is invalid.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Validation("Enter a valid e-mail address.",
                         [new ValidationError(nameof(request.RequestedValue), "That e-mail address is not valid.")]));
@@ -117,6 +124,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
             // conflict - it is the documented behaviour.
             if (await users.EmailExistsAsync(normalised, user.TenantId, user.Id, cancellationToken))
             {
+                logger.LogWarning("Login identifier change request rejected for user {UserId} because the requested email is already in use within the organisation.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Duplicate("Somebody in this organisation already uses that e-mail address."));
             }
@@ -126,6 +134,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
             var username = UsernameValue.TryParse(request.RequestedValue);
             if (username is null)
             {
+                logger.LogWarning("Login identifier change request rejected for user {UserId} because the requested username is invalid.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Validation("That username is not valid.",
                         [new ValidationError(nameof(request.RequestedValue),
@@ -138,6 +147,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
             if (await users.UsernameExistsAsync(normalised, user.TenantId, user.Id, cancellationToken))
             {
+                logger.LogWarning("Login identifier change request rejected for user {UserId} because the requested username is already in use within the organisation.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Duplicate("Somebody in this organisation already uses that username."));
             }
@@ -145,6 +155,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         if (string.Equals(currentValue, requestedValue, StringComparison.OrdinalIgnoreCase))
         {
+            logger.LogWarning("Login identifier change request rejected for user {UserId} because the requested value matches the current value.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("That is already the current value.",
                     [new ValidationError(nameof(request.RequestedValue), "Enter a different value.")]));
@@ -180,11 +191,17 @@ public sealed class LoginIdentifierChangeCommandHandler(
         };
 
         await governance.AddIdentifierChangeAsync(changeRequest, cancellationToken);
+        logger.LogInformation("Login identifier change request {RequestId} created for user {UserId}. Status={Status}, RequiresApproval={RequiresApproval}", changeRequest.Id, user.Id, changeRequest.Status, requiresApproval);
 
         var businessUnit = await businessUnits.GetByIdAsync(user.BusinessUnitId, cancellationToken);
         var tenant = user.TenantId.HasValue
             ? await tenants.GetByIdAsync(user.TenantId.Value, cancellationToken)
             : null;
+
+        if (businessUnit is null)
+        {
+            logger.LogWarning("Login identifier change request {RequestId} created without a business unit; notifications and email verification cannot be sent.", changeRequest.Id);
+        }
 
         await audit.WriteAsync(
             AuditActionCodes.UserLoginIdentifierChanged, nameof(LoginIdentifierChangeRequest),
@@ -205,8 +222,13 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
                 if (challenge.IsSuccess)
                 {
+                    logger.LogInformation("Verification challenge issued for login identifier change request {RequestId}.", changeRequest.Id);
                     changeRequest.VerificationChallengeId = null;
                     await unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                else
+                {
+                    logger.LogWarning("Verification challenge could not be issued for login identifier change request {RequestId}.", changeRequest.Id);
                 }
             }
 
@@ -214,10 +236,13 @@ public sealed class LoginIdentifierChangeCommandHandler(
             // lets a real owner notice a takeover in progress.
             await notifications.SendLoginIdentifierChangeNoticeAsync(
                 user, tenant, businessUnit, currentValue, requestedValue, cancellationToken);
+            logger.LogInformation("Login identifier change notice sent for request {RequestId}.", changeRequest.Id);
 
             changeRequest.PreviousOwnerNotifiedAtUtc = now;
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
+
+        logger.LogInformation("Login identifier change request {RequestId} completed initial processing. Status={Status}.", changeRequest.Id, changeRequest.Status);
 
         return Result.Success(new OutcomeResponse(
             changeRequest.Id,
@@ -238,22 +263,27 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         var now = clock.UtcNow;
 
+        logger.LogInformation("Login identifier change verification started for request {RequestId}.", command.Request.RequestId);
+
         var changeRequest = await governance.GetIdentifierChangeAsync(
             command.Request.RequestId, cancellationToken);
 
         if (changeRequest is null)
         {
+            logger.LogWarning("Login identifier change verification rejected because request {RequestId} was not found.", command.Request.RequestId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (changeRequest.Status != LoginIdentifierChangeStatus.PendingVerification)
         {
+            logger.LogWarning("Login identifier change verification rejected for request {RequestId} because status is {Status}.", changeRequest.Id, changeRequest.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A request that is {changeRequest.Status} does not need verification."));
         }
 
         if (!changeRequest.IsActionable(now))
         {
+            logger.LogWarning("Login identifier change verification rejected because request {RequestId} has expired.", changeRequest.Id);
             changeRequest.Status = LoginIdentifierChangeStatus.Expired;
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -272,6 +302,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         if (!verified)
         {
+            logger.LogWarning("Login identifier change verification failed for request {RequestId}.", changeRequest.Id);
             return Result.Failure<OutcomeResponse>(Error.MfaFailed(0));
         }
 
@@ -288,6 +319,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Login identifier change verification succeeded for request {RequestId}. Status={Status}.", changeRequest.Id, changeRequest.Status);
 
         return Result.Success(new OutcomeResponse(
             changeRequest.Id, changeRequest.Status.ToString(), changeRequest.Version,
@@ -308,11 +341,13 @@ public sealed class LoginIdentifierChangeCommandHandler(
         var changeRequest = await governance.GetIdentifierChangeAsync(request.RequestId, cancellationToken);
         if (changeRequest is null)
         {
+            logger.LogWarning("Login identifier change verification rejected because request {RequestId} was not found.", command.Request.RequestId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (changeRequest.Status != LoginIdentifierChangeStatus.PendingApproval)
         {
+            logger.LogWarning("Login identifier change decision rejected for request {RequestId} because status is {Status}.", changeRequest.Id, changeRequest.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A request that is {changeRequest.Status} cannot be decided."));
         }
@@ -322,12 +357,14 @@ public sealed class LoginIdentifierChangeCommandHandler(
         if (changeRequest.RequestedByUserId == currentUser.UserId
             || changeRequest.UserId == currentUser.UserId)
         {
+            logger.LogWarning("Login identifier change decision rejected for request {RequestId} due to segregation-of-duties rules.", changeRequest.Id);
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "You cannot approve a change to your own sign-in details, or one you raised."));
         }
 
         if (!request.Approved && string.IsNullOrWhiteSpace(request.Reason))
         {
+            logger.LogWarning("Login identifier change decision rejected for request {RequestId} because a rejection reason was not supplied.", changeRequest.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("Give a reason for refusing the change.",
                     [new ValidationError(nameof(request.Reason), "A reason is required when rejecting.")]));
@@ -354,6 +391,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Login identifier change request {RequestId} decision completed. Status={Status}.", changeRequest.Id, changeRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             changeRequest.Id, changeRequest.Status.ToString(), changeRequest.Version,
             request.Approved ? "Change approved." : "Change rejected.",
@@ -374,6 +413,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         var now = clock.UtcNow;
 
+        logger.LogInformation("Applying login identifier change request {RequestId}.", command.RequestId);
+
         var changeRequest = await governance.GetIdentifierChangeAsync(command.RequestId, cancellationToken);
         if (changeRequest is null)
         {
@@ -382,6 +423,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         if (changeRequest.Status != LoginIdentifierChangeStatus.Approved)
         {
+            logger.LogWarning("Login identifier change apply rejected for request {RequestId} because status is {Status}.", changeRequest.Id, changeRequest.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A request that is {changeRequest.Status} cannot be applied."));
         }
@@ -402,6 +444,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         if (!stillFree)
         {
+            logger.LogWarning("Login identifier change apply rejected for request {RequestId} because the requested value is no longer available.", changeRequest.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Duplicate("That value has been taken since the request was made."));
         }
@@ -444,6 +487,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Login identifier change request {RequestId} applied successfully for user {UserId}. SessionsRevoked={SessionsRevoked}.", changeRequest.Id, user.Id, revoked);
+
         return Result.Success(new OutcomeResponse(
             changeRequest.Id, changeRequest.Status.ToString(), changeRequest.Version,
             $"Sign-in details updated. {revoked} session(s) were signed out.",
@@ -455,6 +500,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Cancelling login identifier change request {RequestId}.", command.RequestId);
+
         var changeRequest = await governance.GetIdentifierChangeAsync(command.RequestId, cancellationToken);
         if (changeRequest is null)
         {
@@ -464,6 +511,7 @@ public sealed class LoginIdentifierChangeCommandHandler(
         if (changeRequest.Status is LoginIdentifierChangeStatus.Applied
             or LoginIdentifierChangeStatus.Cancelled)
         {
+            logger.LogWarning("Login identifier change cancellation rejected for request {RequestId} because status is {Status}.", changeRequest.Id, changeRequest.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A request that is {changeRequest.Status} cannot be cancelled."));
         }
@@ -477,6 +525,8 @@ public sealed class LoginIdentifierChangeCommandHandler(
             new { Cancelled = true, command.Reason }, command.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Login identifier change request {RequestId} cancelled successfully.", changeRequest.Id);
 
         return Result.Success(new OutcomeResponse(
             changeRequest.Id, changeRequest.Status.ToString(), changeRequest.Version,

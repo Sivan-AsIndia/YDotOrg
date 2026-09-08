@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -52,7 +53,8 @@ public sealed class BudgetPlanCommandHandler(
     IAuditWriter audit,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<BudgetPlanCommandHandler> logger)
 {
     // =============================================================================================
     // Allocate
@@ -63,11 +65,17 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Allocating a new budget plan.");
+
         var request = command.Request;
 
         var campaign = await campaigns.GetByIdAsync(request.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning(
+                "Budget plan allocation failed because campaign {CampaignId} was not found.",
+                request.CampaignId);
+
             return Result.Failure<BudgetPlanDetailResponse>(
                 Error.NotFound("That campaign was not found."));
         }
@@ -76,6 +84,11 @@ public sealed class BudgetPlanCommandHandler(
         // either a mistake or an attempt to move figures into a period that is already reported.
         if (campaign.Status is CampaignStatus.Closed or CampaignStatus.Cancelled)
         {
+            logger.LogWarning(
+                "Budget plan allocation rejected because campaign {CampaignId} is {CampaignStatus}.",
+                campaign.Id,
+                campaign.Status);
+
             return Result.Failure<BudgetPlanDetailResponse>(Error.InvalidTransition(
                 $"A budget plan cannot be allocated to a {campaign.Status} campaign."));
         }
@@ -88,6 +101,10 @@ public sealed class BudgetPlanCommandHandler(
 
         if (duplicate is not null)
         {
+            logger.LogWarning(
+                "Budget plan allocation rejected because a duplicate plan already exists for campaign {CampaignId}.",
+                campaign.Id);
+
             return Result.Failure<BudgetPlanDetailResponse>(Error.Duplicate(
                 $"Plan {duplicate.Code} already covers {period} for {dimension} on this campaign. "
                 + "Revise that plan rather than allocating a second one."));
@@ -111,6 +128,11 @@ public sealed class BudgetPlanCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Budget plan {BudgetPlanId} allocated successfully for campaign {CampaignId}.",
+            plan.Id,
+            campaign.Id);
+
         return plan.ToDetailResponse(
             campaign.Code, campaign.Name, string.Empty, 0m, PermittedActions(plan));
     }
@@ -131,15 +153,27 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Creating a new revision for budget plan {BudgetPlanId}.",
+            command.PlanId);
+
         var plan = await plans.GetByIdAsync(command.PlanId, cancellationToken);
         if (plan is null)
         {
+            logger.LogWarning(
+                "Budget plan revision failed because budget plan {BudgetPlanId} was not found.",
+                command.PlanId);
+
             return Result.Failure<BudgetPlanDetailResponse>(
                 Error.NotFound("That budget plan was not found."));
         }
 
         if (plan.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Budget plan revision failed concurrency validation for budget plan {BudgetPlanId}.",
+                command.PlanId);
+
             return Result.Failure<BudgetPlanDetailResponse>(Error.Concurrency());
         }
 
@@ -148,6 +182,12 @@ public sealed class BudgetPlanCommandHandler(
 
         if (pending is not null)
         {
+            logger.LogWarning(
+                "Budget plan revision rejected because budget plan {BudgetPlanId} has pending version {VersionNumber} in state {ApprovalState}.",
+                command.PlanId,
+                pending.VersionNumber,
+                pending.ApprovalState);
+
             return Result.Failure<BudgetPlanDetailResponse>(Error.InvalidTransition(
                 $"Version v{pending.VersionNumber} is still {pending.ApprovalState}. "
                 + "Finish or withdraw it before revising the plan again."));
@@ -156,6 +196,10 @@ public sealed class BudgetPlanCommandHandler(
         var campaign = await campaigns.GetByIdAsync(plan.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning(
+                "Budget plan revision failed because campaign {CampaignId} was not found.",
+                plan.CampaignId);
+
             return Result.Failure<BudgetPlanDetailResponse>(
                 Error.NotFound("The campaign behind this plan was not found."));
         }
@@ -175,6 +219,11 @@ public sealed class BudgetPlanCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Budget plan version {BudgetPlanVersionId} created successfully as a revision of budget plan {BudgetPlanId}.",
+            version.Id,
+            plan.Id);
+
         return plan.ToDetailResponse(
             campaign.Code, campaign.Name, string.Empty, 0m, PermittedActions(plan));
     }
@@ -188,11 +237,19 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Updating budget plan version {BudgetPlanVersionId}.",
+            command.VersionId);
+
         var loaded = await LoadVersionAsync(
             command.VersionId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning(
+                "Failed to load budget plan version {BudgetPlanVersionId} for update.",
+                command.VersionId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -200,6 +257,11 @@ public sealed class BudgetPlanCommandHandler(
 
         if (!version.IsEditable)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} cannot be updated because it is {ApprovalState}.",
+                version.Id,
+                version.ApprovalState);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft version can be edited. Version v{version.VersionNumber} is "
                 + $"{version.ApprovalState}. Revise the plan to change the figures."));
@@ -219,6 +281,10 @@ public sealed class BudgetPlanCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Budget plan version {BudgetPlanVersionId} updated successfully.",
+            version.Id);
+
         return BuildOutcome(version, "Budget plan version updated.");
     }
 
@@ -231,11 +297,19 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Submitting budget plan version {BudgetPlanVersionId}.",
+            command.VersionId);
+
         var loaded = await LoadVersionAsync(
             command.VersionId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning(
+                "Failed to load budget plan version {BudgetPlanVersionId} for submission.",
+                command.VersionId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -243,6 +317,11 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version.ApprovalState != PlanApprovalState.Draft)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} cannot be submitted because it is {ApprovalState}.",
+                version.Id,
+                version.ApprovalState);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft version can be submitted. Version v{version.VersionNumber} is "
                 + $"{version.ApprovalState}."));
@@ -252,6 +331,10 @@ public sealed class BudgetPlanCommandHandler(
         // than at allocation, because a half-filled draft is a legitimate work in progress.
         if (version.TargetAmount == 0m && version.BudgetAmount == 0m)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} cannot be submitted because it has no target or budget.",
+                version.Id);
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "A plan with no target and no budget has nothing to approve. "
                 + "Enter the figures before submitting it."));
@@ -268,6 +351,10 @@ public sealed class BudgetPlanCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Budget plan version {BudgetPlanVersionId} submitted successfully for approval.",
+            version.Id);
 
         return BuildOutcome(version, $"Version v{version.VersionNumber} submitted for approval.");
     }
@@ -288,11 +375,19 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Approving budget plan version {BudgetPlanVersionId}.",
+            command.VersionId);
+
         var loaded = await LoadVersionAsync(
             command.VersionId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning(
+                "Failed to load budget plan version {BudgetPlanVersionId} for approval.",
+                command.VersionId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -300,6 +395,11 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version.ApprovalState != PlanApprovalState.Submitted)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} cannot be approved because it is {ApprovalState}.",
+                version.Id,
+                version.ApprovalState);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Submitted version can be approved. Version v{version.VersionNumber} is "
                 + $"{version.ApprovalState}."));
@@ -307,6 +407,10 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version.SubmittedByUserId == currentUser.UserId)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} approval rejected due to segregation of duties.",
+                version.Id);
+
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "You submitted this version, so it needs somebody else to approve it."));
         }
@@ -324,6 +428,11 @@ public sealed class BudgetPlanCommandHandler(
             await audit.WriteAsync(
                 BudgetPlanAuditActionCodes.Superseded, nameof(BudgetTargetPlanVersion), superseded.Id,
                 cancellationToken: cancellationToken);
+
+            logger.LogInformation(
+                "Budget plan version {SupersededVersionId} superseded by budget plan version {BudgetPlanVersionId}.",
+                superseded.Id,
+                version.Id);
         }
 
         version.ApprovalState = PlanApprovalState.Approved;
@@ -337,6 +446,10 @@ public sealed class BudgetPlanCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Budget plan version {BudgetPlanVersionId} approved successfully.",
+            version.Id);
 
         var message = superseded is null
             ? $"Version v{version.VersionNumber} approved and now in force."
@@ -355,10 +468,18 @@ public sealed class BudgetPlanCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Rejecting budget plan version {BudgetPlanVersionId}.",
+            command.VersionId);
+
         // A REASON IS REQUIRED. Without one the submitter has nothing to act on and resubmits the
         // same figures, which wastes the approver's time as much as theirs.
         if (string.IsNullOrWhiteSpace(command.Request.Reason))
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} rejection failed because a reason was not provided.",
+                command.VersionId);
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "Say why the version is being rejected, so it can be revised."));
         }
@@ -368,6 +489,10 @@ public sealed class BudgetPlanCommandHandler(
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning(
+                "Failed to load budget plan version {BudgetPlanVersionId} for rejection.",
+                command.VersionId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -375,6 +500,11 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version.ApprovalState != PlanApprovalState.Submitted)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} cannot be rejected because it is {ApprovalState}.",
+                version.Id,
+                version.ApprovalState);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Submitted version can be rejected. Version v{version.VersionNumber} is "
                 + $"{version.ApprovalState}."));
@@ -382,6 +512,10 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version.SubmittedByUserId == currentUser.UserId)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} rejection rejected due to segregation of duties.",
+                version.Id);
+
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "You submitted this version, so somebody else has to decide on it."));
         }
@@ -399,6 +533,10 @@ public sealed class BudgetPlanCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Budget plan version {BudgetPlanVersionId} rejected successfully.",
+            version.Id);
+
         return BuildOutcome(
             version, $"Version v{version.VersionNumber} rejected and returned for revision.");
     }
@@ -414,12 +552,20 @@ public sealed class BudgetPlanCommandHandler(
 
         if (version is null)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} was not found.",
+                versionId);
+
             return Result.Failure<BudgetTargetPlanVersion>(
                 Error.NotFound("That budget plan version was not found."));
         }
 
         if (version.Version != expectedVersion)
         {
+            logger.LogWarning(
+                "Budget plan version {BudgetPlanVersionId} failed concurrency validation.",
+                versionId);
+
             return Result.Failure<BudgetTargetPlanVersion>(Error.Concurrency());
         }
 

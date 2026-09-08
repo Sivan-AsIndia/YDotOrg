@@ -2,6 +2,7 @@
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.DTOs;
 using YDot.IAM.Application.Features.Menus.DTOs;
@@ -50,6 +51,7 @@ public sealed class MenuCommandHandler(
     ITenantContext tenantContext,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
+    ILogger<MenuCommandHandler> logger,
     IUnitOfWork unitOfWork)
 {
     public async Task<Result<MenuDefinitionResponse>> HandleAsync(
@@ -57,11 +59,14 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating menu definition. Code: {Code}.", command.Request.Code);
+
         var request = command.Request;
 
         var code = CodeValue.TryParse(request.Code)?.Value;
         if (string.IsNullOrWhiteSpace(code))
         {
+            logger.LogWarning("Menu definition creation rejected because the menu code is invalid.");
             return Result.Failure<MenuDefinitionResponse>(
                 Error.Validation("That menu code is not valid.",
                     [new ValidationError(nameof(request.Code),
@@ -70,6 +75,7 @@ public sealed class MenuCommandHandler(
 
         if (await menus.DefinitionCodeExistsAsync(code, null, cancellationToken))
         {
+            logger.LogWarning("Menu definition creation rejected because the code already exists. Code: {Code}.", code);
             return Result.Failure<MenuDefinitionResponse>(
                 Error.Duplicate($"A menu node with code {code} already exists."));
         }
@@ -81,6 +87,7 @@ public sealed class MenuCommandHandler(
             var parent = await menus.GetDefinitionAsync(request.ParentMenuId.Value, cancellationToken);
             if (parent is null)
             {
+                logger.LogWarning("Menu definition creation rejected because the parent was not found. ParentMenuId: {ParentMenuId}.", request.ParentMenuId);
                 return Result.Failure<MenuDefinitionResponse>(
                     Error.NotFound("That parent menu was not found."));
             }
@@ -103,6 +110,7 @@ public sealed class MenuCommandHandler(
         }
         else if (request.Level != MenuLevel.Menu)
         {
+            logger.LogWarning("Menu definition creation rejected because a root node was not a Menu.");
             return Result.Failure<MenuDefinitionResponse>(Error.Validation(
                 "A node with no parent must be a top-level Menu.",
                 [new ValidationError(nameof(request.Level), "Choose Menu, or give it a parent.")]));
@@ -115,6 +123,7 @@ public sealed class MenuCommandHandler(
             var permission = await permissions.GetByCodeAsync(request.RequiredPermissionCode, cancellationToken);
             if (permission is null)
             {
+                logger.LogWarning("Menu definition creation rejected because the required permission was not found. PermissionCode: {PermissionCode}.", request.RequiredPermissionCode);
                 return Result.Failure<MenuDefinitionResponse>(Error.Validation(
                     "That permission code was not recognised.",
                     [new ValidationError(nameof(request.RequiredPermissionCode),
@@ -151,6 +160,8 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Menu definition created successfully. MenuId: {MenuId}.", definition.Id);
+
         return Result.Success(new MenuDefinitionResponse(
             definition.Id, definition.Code, definition.Name, definition.Description,
             definition.ParentMenuId, null, definition.Level, definition.ModuleCode,
@@ -165,16 +176,20 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating menu definition. MenuId: {MenuId}.", command.MenuId);
+
         var request = command.Request;
 
         var definition = await menus.GetDefinitionAsync(command.MenuId, cancellationToken);
         if (definition is null)
         {
+            logger.LogWarning("Menu node not found. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That menu node was not found."));
         }
 
         if (definition.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Menu definition update rejected due to version conflict. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -252,6 +267,8 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Menu definition updated successfully. MenuId: {MenuId}.", definition.Id);
+
         return Result.Success(new OutcomeResponse(
             definition.Id, definition.Status.ToString(), definition.Version, "Menu node saved.", []));
     }
@@ -278,6 +295,8 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting menu definition. MenuId: {MenuId}.", command.MenuId);
+
         var definition = await menus.GetDefinitionAsync(command.MenuId, cancellationToken);
         if (definition is null)
         {
@@ -286,6 +305,7 @@ public sealed class MenuCommandHandler(
 
         if (definition.Version != command.ExpectedVersion)
         {
+            logger.LogWarning("Menu definition deletion rejected due to version conflict. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -294,6 +314,7 @@ public sealed class MenuCommandHandler(
         var children = catalogue.Count(node => node.ParentMenuId == definition.Id);
         if (children > 0)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node has children. MenuId: {MenuId}, Children: {Children}.", command.MenuId, children);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 $"{definition.Name} has {children} item(s) beneath it.",
                 [new ValidationError(nameof(command.MenuId),
@@ -302,6 +323,7 @@ public sealed class MenuCommandHandler(
 
         if (definition.IsMandatory)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node is mandatory. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 $"{definition.Name} is required and cannot be removed."));
         }
@@ -309,6 +331,7 @@ public sealed class MenuCommandHandler(
         var references = await menus.CountDefinitionReferencesAsync(definition.Id, cancellationToken);
         if (references > 0)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node is in use. MenuId: {MenuId}, References: {References}.", command.MenuId, references);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 $"{definition.Name} is in use: {references} organisation setting(s) and role "
                 + "mapping(s) refer to it.",
@@ -324,6 +347,8 @@ public sealed class MenuCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Menu definition deleted successfully. MenuId: {MenuId}.", definition.Id);
 
         return Result.Success(new OutcomeResponse(
             definition.Id, "Deleted", definition.Version,
@@ -349,8 +374,11 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Configuring tenant menu.");
+
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Tenant menu configuration requires a tenant context.");
             return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
         }
 
@@ -358,6 +386,7 @@ public sealed class MenuCommandHandler(
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Tenant not found while configuring tenant menu. TenantId: {TenantId}.", tenantId);
             return Result.Failure<OutcomeResponse>(Error.TenantNotFound());
         }
 
@@ -434,6 +463,7 @@ public sealed class MenuCommandHandler(
 
             if (mustStayEnabled.Contains(definition.Id) && !item.IsEnabled)
             {
+                logger.LogWarning("Tenant menu configuration rejected because a mandatory menu item was disabled. MenuId: {MenuId}.", definition.Id);
                 return Result.Failure<OutcomeResponse>(Error.Forbidden(definition.IsMandatory
                     ? $"{definition.Name} is required and cannot be switched off."
                     : $"{definition.Name} cannot be switched off: a required item sits under it."));
@@ -486,6 +516,8 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tenant menu configuration saved. TenantId: {TenantId}, Changed: {Changed}, HeldBackByParent: {HeldBackByParent}.", tenantId, changed, heldBackByParent);
+
         return Result.Success(new OutcomeResponse(
             tenantId, tenant.Status.ToString(), tenant.Version,
             heldBackByParent == 0
@@ -508,6 +540,8 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Mapping menus to role. RoleId: {RoleId}.", command.RoleId);
+
         var request = command.Request;
         var now = clock.UtcNow;
 
@@ -523,12 +557,14 @@ public sealed class MenuCommandHandler(
         // their own Organisation. The dropdown never offered it; nor should the endpoint.
         if (role.IsPlatformRole)
         {
+            logger.LogWarning("Platform role menu mapping rejected. RoleId: {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 "A platform role's navigation is not an organisation's to configure."));
         }
 
         if (role.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Role menu mapping rejected due to version conflict. RoleId: {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -700,6 +736,8 @@ public sealed class MenuCommandHandler(
         {
             message += $" {unknown} were not recognised.";
         }
+
+        logger.LogInformation("Role menu mapping saved. RoleId: {RoleId}, Mapped: {Mapped}, Hidden: {Hidden}, Skipped: {Skipped}, HeldBackByParent: {HeldBackByParent}, Unrecognised: {Unrecognised}.", role.Id, mapped, hidden, skipped, heldBackByParent, unknown);
 
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version, message, []));

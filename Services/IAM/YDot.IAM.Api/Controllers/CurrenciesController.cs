@@ -23,29 +23,57 @@ namespace YDot.IAM.Api.Controllers;
 [Authorize(Policy = PolicyNames.ActiveUserOnly)]
 public sealed class CurrenciesController(
     CurrencyCommandHandler commands,
-    GlobalMasterQueryHandler queries) : ApiControllerBase
+    GlobalMasterQueryHandler queries,
+    ILogger<CurrenciesController> logger) : ApiControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesView)]
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<CurrencyListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] CurrencySearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchCurrenciesQuery(filter), cancellationToken));
+        [FromQuery] CurrencySearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching currencies.");
+
+        var result = await queries.HandleAsync(new SearchCurrenciesQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency search failed.");
+
+        return FromResult(result);
+    }
 
     [HttpGet("{id:guid}", Name = nameof(GetCurrencyAsync))]
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesView)]
     [ProducesResponseType(typeof(ApiResponse<CurrencyDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCurrencyAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetCurrencyQuery(id), cancellationToken));
+    public async Task<IActionResult> GetCurrencyAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting currency. CurrencyId: {CurrencyId}", id);
+
+        var result = await queries.HandleAsync(new GetCurrencyQuery(id), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get currency. CurrencyId: {CurrencyId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpGet("export")]
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] CurrencySearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportCurrenciesQuery(filter), cancellationToken));
+        [FromQuery] CurrencySearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting currencies.");
+
+        var result = await queries.HandleAsync(new ExportCurrenciesQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency export failed.");
+
+        return FileFromResult(result);
+    }
 
     [HttpPost]
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesCreate)]
@@ -54,12 +82,20 @@ public sealed class CurrenciesController(
     public async Task<IActionResult> CreateAsync(
         [FromBody] CreateCurrencyRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Creating currency.");
+
         var result = await commands.HandleAsync(new CreateCurrencyCommand(request), cancellationToken);
 
-        return result.IsFailure
-            ? FromResult(result)
-            : CreatedFromResult(
-                result, nameof(GetCurrencyAsync), new { id = result.Value!.Id }, "Currency created.");
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Currency creation failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Currency created successfully. CurrencyId: {CurrencyId}", result.Value!.Id);
+
+        return CreatedFromResult(
+            result, nameof(GetCurrencyAsync), new { id = result.Value!.Id }, "Currency created.");
     }
 
     /// <summary>
@@ -75,17 +111,39 @@ public sealed class CurrenciesController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateAsync(
-        Guid id, [FromBody] UpdateCurrencyRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new UpdateCurrencyCommand(id, request), cancellationToken));
+        Guid id, [FromBody] UpdateCurrencyRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Updating currency. CurrencyId: {CurrencyId}", id);
+
+        var result = await commands.HandleAsync(new UpdateCurrencyCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency update failed. CurrencyId: {CurrencyId}", id);
+        else
+            logger.LogInformation("Currency updated successfully. CurrencyId: {CurrencyId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpPost("{id:guid}/activate")]
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesActivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ActivateAsync(
-        Guid id, [FromBody] MasterStatusChangeRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
+        Guid id, [FromBody] MasterStatusChangeRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Activating currency. CurrencyId: {CurrencyId}", id);
+
+        var result = await commands.HandleAsync(
             new ChangeCurrencyStatusCommand(id, request.ToCommandRequest(MasterDataStatus.Active)),
-            cancellationToken));
+            cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency activation failed. CurrencyId: {CurrencyId}", id);
+        else
+            logger.LogInformation("Currency activated successfully. CurrencyId: {CurrencyId}", id);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Retires a currency.
@@ -99,10 +157,21 @@ public sealed class CurrenciesController(
     [HasPermission(PermissionCodes.GlobalMaster.CurrenciesDeactivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateAsync(
-        Guid id, [FromBody] MasterStatusChangeRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
+        Guid id, [FromBody] MasterStatusChangeRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deactivating currency. CurrencyId: {CurrencyId}", id);
+
+        var result = await commands.HandleAsync(
             new ChangeCurrencyStatusCommand(id, request.ToCommandRequest(MasterDataStatus.Inactive)),
-            cancellationToken));
+            cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency deactivation failed. CurrencyId: {CurrencyId}", id);
+        else
+            logger.LogInformation("Currency deactivated successfully. CurrencyId: {CurrencyId}", id);
+
+        return FromResult(result);
+    }
 
     /// <summary>Deletes a currency. Refused while any country names it as their default.</summary>
     [HttpDelete("{id:guid}")]
@@ -110,6 +179,17 @@ public sealed class CurrenciesController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteAsync(
-        Guid id, [FromBody] DeleteMasterRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new DeleteCurrencyCommand(id, request), cancellationToken));
+        Guid id, [FromBody] DeleteMasterRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deleting currency. CurrencyId: {CurrencyId}", id);
+
+        var result = await commands.HandleAsync(new DeleteCurrencyCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency deletion failed. CurrencyId: {CurrencyId}", id);
+        else
+            logger.LogInformation("Currency deleted successfully. CurrencyId: {CurrencyId}", id);
+
+        return FromResult(result);
+    }
 }

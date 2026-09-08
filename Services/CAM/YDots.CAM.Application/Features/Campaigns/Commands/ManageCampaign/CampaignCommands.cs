@@ -58,12 +58,16 @@ public sealed class CampaignCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating campaign.");
+
         var request = command.Request;
 
         // A Tenant-owned write with no Organisation resolved would produce a row nobody can
         // ever read back. Refused up front rather than saved and lost.
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Cannot create campaign because no tenant is selected.");
+
             return Result.Failure<CampaignDetailResponse>(Error.TenantSelectionRequired());
         }
 
@@ -71,6 +75,8 @@ public sealed class CampaignCommandHandler(
 
         if (await campaigns.CodeExistsAsync(code, null, cancellationToken))
         {
+            logger.LogWarning("Cannot create campaign because campaign code {CampaignCode} already exists.", code);
+
             return Result.Failure<CampaignDetailResponse>(
                 Error.Duplicate($"A campaign with code {code} already exists in this organisation."));
         }
@@ -125,16 +131,24 @@ public sealed class CampaignCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating campaign {CampaignId}.", command.CampaignId);
+
         var request = command.Request;
 
         var campaign = await campaigns.GetByIdAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Cannot update campaign {CampaignId} because it was not found.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That campaign was not found."));
         }
 
         if (campaign.Version != request.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Cannot update campaign {CampaignId} because of a version conflict. Expected version {ExpectedVersion}.",
+                campaign.Id, request.ExpectedVersion);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -142,6 +156,10 @@ public sealed class CampaignCommandHandler(
         // target or the dates underneath them would make the approval meaningless.
         if (!campaign.IsDraft)
         {
+            logger.LogWarning(
+                "Cannot update campaign {CampaignId} because its current status is {Status}.",
+                campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft campaign can be edited. This one is {campaign.Status}."));
         }
@@ -154,6 +172,10 @@ public sealed class CampaignCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Campaign {CampaignId} with code {CampaignCode} updated successfully.",
+            campaign.Id, campaign.Code);
+
         return await BuildOutcomeAsync(campaign, "Campaign updated.", cancellationToken);
     }
 
@@ -162,19 +184,31 @@ public sealed class CampaignCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting draft campaign {CampaignId}.", command.CampaignId);
+
         var campaign = await campaigns.GetByIdAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Cannot delete draft campaign {CampaignId} because it was not found.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That campaign was not found."));
         }
 
         if (campaign.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Cannot delete draft campaign {CampaignId} because of a version conflict. Expected version {ExpectedVersion}.",
+                campaign.Id, command.Request.ExpectedVersion);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (!campaign.IsDraft)
         {
+            logger.LogWarning(
+                "Cannot delete campaign {CampaignId} because its current status is {Status}.",
+                campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft campaign can be deleted. This one is {campaign.Status}. "
                 + "Close it instead."));
@@ -187,6 +221,10 @@ public sealed class CampaignCommandHandler(
 
         if (trackingAssetCount > 0)
         {
+            logger.LogWarning(
+                "Cannot delete draft campaign {CampaignId} because it has {TrackingAssetCount} tracking asset(s).",
+                campaign.Id, trackingAssetCount);
+
             return Result.Failure<OutcomeResponse>(Error.InUse(
                 $"This campaign has {trackingAssetCount} tracking asset(s). Remove them first."));
         }
@@ -202,7 +240,8 @@ public sealed class CampaignCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Draft campaign {CampaignId} ({CampaignCode}) deleted.", campaign.Id, snapshot.Code);
+            "Draft campaign {CampaignId} ({CampaignCode}) deleted.",
+            campaign.Id, snapshot.Code);
 
         return new OutcomeResponse(
             campaign.Id, campaign.Status.ToString(), campaign.Version, "Draft campaign deleted.", []);
@@ -221,6 +260,10 @@ public sealed class CampaignCommandHandler(
     {
         var outstanding = await campaigns.GetOutstandingRequiredChecksAsync(campaign.Id, cancellationToken);
         var pendingClose = await campaigns.GetPendingCloseRequestAsync(campaign.Id, cancellationToken);
+
+        logger.LogInformation(
+            "Built campaign outcome for {CampaignId}. Status: {Status}, OutstandingChecks: {OutstandingCheckCount}, PendingClose: {HasPendingClose}.",
+            campaign.Id, campaign.Status, outstanding.Count, pendingClose is not null);
 
         return new OutcomeResponse(
             campaign.Id,

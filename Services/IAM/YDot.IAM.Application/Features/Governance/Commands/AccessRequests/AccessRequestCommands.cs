@@ -9,6 +9,7 @@ using YDot.IAM.Application.Features.Governance.DTOs;
 using YDot.IAM.Application.Features.Governance.Mappings;
 using YDot.IAM.Domain.Entities;
 using YDot.IAM.Domain.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Settings;
 
@@ -59,18 +60,22 @@ public sealed class AccessRequestCommandHandler(
     ICurrentUser currentUser,
     IDateTimeProvider clock,
     IOptions<ClientAppSettings> clientApp,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<AccessRequestCommandHandler> logger)
 {
     public async Task<Result<OutcomeResponse>> HandleAsync(
         CreateAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Creating access request.");
+
 
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Access request creation attempted without a selected tenant.");
             return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
         }
 
@@ -79,6 +84,7 @@ public sealed class AccessRequestCommandHandler(
         var subject = await users.GetByIdAsync(request.RequestedForUserId, cancellationToken);
         if (subject is null)
         {
+            logger.LogWarning("Requested subject user not found. UserId: {UserId}.", request.RequestedForUserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
@@ -88,6 +94,7 @@ public sealed class AccessRequestCommandHandler(
             role = await roles.GetByIdAsync(request.RoleId.Value, cancellationToken);
             if (role is null)
             {
+                logger.LogWarning("Requested role not found. RoleId: {RoleId}.", request.RoleId.Value);
                 return Result.Failure<OutcomeResponse>(
                     Error.NotFound("That role was not found in this organisation."));
             }
@@ -155,6 +162,8 @@ public sealed class AccessRequestCommandHandler(
             await NotifyApproversAsync(accessRequest, subject, cancellationToken);
         }
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             request.SubmitImmediately
@@ -167,15 +176,19 @@ public sealed class AccessRequestCommandHandler(
         UpdateAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Updating access request. AccessRequestId: {AccessRequestId}.", command.Id);
+
 
         var accessRequest = await governance.GetAccessRequestAsync(command.Id, cancellationToken);
         if (accessRequest is null)
         {
+            logger.LogWarning("Access request not found. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (accessRequest.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access request version conflict. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -215,6 +228,8 @@ public sealed class AccessRequestCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             "Request saved.", GovernanceMappingConfig.PermittedActionsFor(accessRequest, currentUser.UserId)));
@@ -224,17 +239,21 @@ public sealed class AccessRequestCommandHandler(
         SubmitAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Submitting access request. AccessRequestId: {AccessRequestId}.", command.Id);
+
 
         var now = clock.UtcNow;
 
         var accessRequest = await governance.GetAccessRequestAsync(command.Id, cancellationToken);
         if (accessRequest is null)
         {
+            logger.LogWarning("Access request not found. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (accessRequest.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access request version conflict. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -260,6 +279,8 @@ public sealed class AccessRequestCommandHandler(
             await NotifyApproversAsync(accessRequest, subject, cancellationToken);
         }
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             $"Request {accessRequest.RequestNumber} submitted for approval.",
@@ -277,6 +298,8 @@ public sealed class AccessRequestCommandHandler(
         DecideAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Deciding access request. AccessRequestId: {AccessRequestId}.", command.Id);
+
 
         var request = command.Request;
         var now = clock.UtcNow;
@@ -284,11 +307,13 @@ public sealed class AccessRequestCommandHandler(
         var accessRequest = await governance.GetAccessRequestAsync(command.Id, cancellationToken);
         if (accessRequest is null)
         {
+            logger.LogWarning("Access request not found. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (accessRequest.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Access request version conflict. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -356,6 +381,8 @@ public sealed class AccessRequestCommandHandler(
             await NotifyRequesterAsync(accessRequest, request.Approved, request.Notes, cancellationToken);
         }
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             request.Approved
@@ -378,17 +405,21 @@ public sealed class AccessRequestCommandHandler(
         ReturnAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Returning access request for more information. AccessRequestId: {AccessRequestId}.", command.Id);
+
 
         var now = clock.UtcNow;
 
         var accessRequest = await governance.GetAccessRequestAsync(command.Id, cancellationToken);
         if (accessRequest is null)
         {
+            logger.LogWarning("Access request not found. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That access request was not found."));
         }
 
         if (accessRequest.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access request version conflict. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -428,6 +459,8 @@ public sealed class AccessRequestCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             "Sent back to the requester with your note.",
@@ -438,15 +471,19 @@ public sealed class AccessRequestCommandHandler(
         WithdrawAccessRequestCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Withdrawing access request. AccessRequestId: {AccessRequestId}.", command.Id);
+
 
         var accessRequest = await governance.GetAccessRequestAsync(command.Id, cancellationToken);
         if (accessRequest is null)
         {
+            logger.LogWarning("Access request not found. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That request was not found."));
         }
 
         if (accessRequest.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access request version conflict. AccessRequestId: {AccessRequestId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -474,6 +511,8 @@ public sealed class AccessRequestCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access request operation completed. AccessRequestId: {AccessRequestId}, Status: {Status}.", accessRequest.Id, accessRequest.Status);
+
         return Result.Success(new OutcomeResponse(
             accessRequest.Id, accessRequest.Status.ToString(), accessRequest.Version,
             "Request withdrawn.", GovernanceMappingConfig.PermittedActionsFor(accessRequest, currentUser.UserId)));
@@ -492,84 +531,85 @@ public sealed class AccessRequestCommandHandler(
         {
             case AccessRequestType.RoleAssignment or AccessRequestType.TemporaryElevation
                 when accessRequest.RoleId.HasValue:
-            {
-                // Re-check the conflict rules at APPROVAL time, not only at request time. The
-                // person may have picked up another role in between.
-                var conflicts = await effectiveAccess.CheckSegregationOfDutiesAsync(
-                    subject.Id, [accessRequest.RoleId.Value], cancellationToken);
-
-                if (conflicts.Count > 0)
                 {
-                    return Result.Failure(Error.SegregationOfDuties(
-                        "This role now conflicts with one the person already holds: "
-                        + string.Join("; ", conflicts)));
+                    // Re-check the conflict rules at APPROVAL time, not only at request time. The
+                    // person may have picked up another role in between.
+                    var conflicts = await effectiveAccess.CheckSegregationOfDutiesAsync(
+                        subject.Id, [accessRequest.RoleId.Value], cancellationToken);
+
+                    if (conflicts.Count > 0)
+                    {
+                        logger.LogWarning("Access request approval blocked by segregation-of-duties conflict. AccessRequestId: {AccessRequestId}, UserId: {UserId}, RoleId: {RoleId}.", accessRequest.Id, subject.Id, accessRequest.RoleId.Value);
+                        return Result.Failure(Error.SegregationOfDuties(
+                            "This role now conflicts with one the person already holds: "
+                            + string.Join("; ", conflicts)));
+                    }
+
+                    var existing = await roles.GetActiveAssignmentAsync(
+                        subject.Id, accessRequest.RoleId.Value, cancellationToken);
+
+                    if (existing is null)
+                    {
+                        var assignment = new UserRole
+                        {
+                            TenantId = subject.TenantId,
+                            BusinessUnitId = subject.BusinessUnitId,
+                            UserId = subject.Id,
+                            RoleId = accessRequest.RoleId.Value,
+                            Status = UserRoleAssignmentStatus.Active,
+                            AssignedAtUtc = now,
+                            AssignedByUserId = currentUser.UserId,
+                            EffectiveFromUtc = accessRequest.AccessStartsAtUtc,
+                            EffectiveToUtc = accessRequest.AccessEndsAtUtc,
+                            SourceAccessRequestId = accessRequest.Id,
+                            Justification = accessRequest.BusinessJustification
+                        };
+
+                        await roles.AddUserRoleAsync(assignment, cancellationToken);
+                        accessRequest.GrantedUserRoleId = assignment.Id;
+                    }
+
+                    break;
                 }
 
-                var existing = await roles.GetActiveAssignmentAsync(
-                    subject.Id, accessRequest.RoleId.Value, cancellationToken);
-
-                if (existing is null)
+            case AccessRequestType.DataScopeGrant
+                when accessRequest.ScopeType.HasValue && !string.IsNullOrWhiteSpace(accessRequest.ScopeValue):
                 {
-                    var assignment = new UserRole
+                    await governance.AddDataScopeAsync(new UserDataScope
+                    {
+                        TenantId = subject.TenantId ?? accessRequest.TenantId,
+                        BusinessUnitId = subject.BusinessUnitId,
+                        UserId = subject.Id,
+                        ScopeType = accessRequest.ScopeType.Value,
+                        ScopeValue = accessRequest.ScopeValue!,
+                        GrantedAtUtc = now,
+                        GrantedByUserId = currentUser.UserId,
+                        EffectiveFromUtc = accessRequest.AccessStartsAtUtc,
+                        EffectiveToUtc = accessRequest.AccessEndsAtUtc,
+                        SourceAccessRequestId = accessRequest.Id
+                    }, cancellationToken);
+
+                    break;
+                }
+
+            case AccessRequestType.PermissionGrant when !string.IsNullOrWhiteSpace(accessRequest.PermissionCode):
+                {
+                    // A single permission with no role behind it becomes a direct user claim.
+                    await governance.AddUserClaimAsync(new UserClaimEntry
                     {
                         TenantId = subject.TenantId,
                         BusinessUnitId = subject.BusinessUnitId,
                         UserId = subject.Id,
-                        RoleId = accessRequest.RoleId.Value,
-                        Status = UserRoleAssignmentStatus.Active,
-                        AssignedAtUtc = now,
-                        AssignedByUserId = currentUser.UserId,
-                        EffectiveFromUtc = accessRequest.AccessStartsAtUtc,
-                        EffectiveToUtc = accessRequest.AccessEndsAtUtc,
-                        SourceAccessRequestId = accessRequest.Id,
+                        ClaimType = ClaimTypeNames.Permission,
+                        ClaimValue = accessRequest.PermissionCode!,
+                        GrantedAtUtc = now,
+                        GrantedByUserId = currentUser.UserId,
+                        ExpiresAtUtc = accessRequest.AccessEndsAtUtc,
                         Justification = accessRequest.BusinessJustification
-                    };
+                    }, cancellationToken);
 
-                    await roles.AddUserRoleAsync(assignment, cancellationToken);
-                    accessRequest.GrantedUserRoleId = assignment.Id;
+                    break;
                 }
-
-                break;
-            }
-
-            case AccessRequestType.DataScopeGrant
-                when accessRequest.ScopeType.HasValue && !string.IsNullOrWhiteSpace(accessRequest.ScopeValue):
-            {
-                await governance.AddDataScopeAsync(new UserDataScope
-                {
-                    TenantId = subject.TenantId ?? accessRequest.TenantId,
-                    BusinessUnitId = subject.BusinessUnitId,
-                    UserId = subject.Id,
-                    ScopeType = accessRequest.ScopeType.Value,
-                    ScopeValue = accessRequest.ScopeValue!,
-                    GrantedAtUtc = now,
-                    GrantedByUserId = currentUser.UserId,
-                    EffectiveFromUtc = accessRequest.AccessStartsAtUtc,
-                    EffectiveToUtc = accessRequest.AccessEndsAtUtc,
-                    SourceAccessRequestId = accessRequest.Id
-                }, cancellationToken);
-
-                break;
-            }
-
-            case AccessRequestType.PermissionGrant when !string.IsNullOrWhiteSpace(accessRequest.PermissionCode):
-            {
-                // A single permission with no role behind it becomes a direct user claim.
-                await governance.AddUserClaimAsync(new UserClaimEntry
-                {
-                    TenantId = subject.TenantId,
-                    BusinessUnitId = subject.BusinessUnitId,
-                    UserId = subject.Id,
-                    ClaimType = ClaimTypeNames.Permission,
-                    ClaimValue = accessRequest.PermissionCode!,
-                    GrantedAtUtc = now,
-                    GrantedByUserId = currentUser.UserId,
-                    ExpiresAtUtc = accessRequest.AccessEndsAtUtc,
-                    Justification = accessRequest.BusinessJustification
-                }, cancellationToken);
-
-                break;
-            }
         }
 
         // The grant changes what the person may do, so their existing tokens must stop being
@@ -585,6 +625,7 @@ public sealed class AccessRequestCommandHandler(
         var businessUnit = await businessUnits.GetByIdAsync(accessRequest.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogWarning("Access request notification skipped because business unit was not found. BusinessUnitId: {BusinessUnitId}.", accessRequest.BusinessUnitId);
             return;
         }
 
@@ -599,6 +640,7 @@ public sealed class AccessRequestCommandHandler(
 
         if (approverRole is null)
         {
+            logger.LogWarning("Access request notification skipped because approver role was not found. TenantId: {TenantId}.", accessRequest.TenantId);
             return;
         }
 
@@ -647,5 +689,5 @@ public sealed class AccessRequestCommandHandler(
             requester, tenant, businessUnit, accessRequest.RequestNumber, approved, reason, cancellationToken);
     }
 
-// Permitted actions live in GovernanceMappingConfig, shared with the read service.
+    // Permitted actions live in GovernanceMappingConfig, shared with the read service.
 }

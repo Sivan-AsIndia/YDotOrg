@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -72,7 +73,8 @@ public sealed class UserSecurityCommandHandler(
     IAuditService audit,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<UserSecurityCommandHandler> logger)
 {
     // =========================================================================================
     // Sessions
@@ -83,9 +85,12 @@ public sealed class UserSecurityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoke user session started for user {UserId}, session {SessionId}.", command.UserId, command.SessionId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Revoke user session rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
@@ -95,11 +100,13 @@ public sealed class UserSecurityCommandHandler(
         // ended through this route by putting a user id the caller can see in front of it.
         if (session is null || session.UserId != user.Id)
         {
+            logger.LogWarning("Revoke user session rejected because session {SessionId} was not found for user {UserId}.", command.SessionId, user.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That session was not found."));
         }
 
         if (session.RevokedAtUtc is not null)
         {
+            logger.LogWarning("Revoke user session rejected because session {SessionId} is already revoked.", session.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "That session has already ended."));
         }
@@ -117,6 +124,8 @@ public sealed class UserSecurityCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("User session {SessionId} revoked successfully for user {UserId}.", session.Id, user.Id);
+
         return Result.Success(new OutcomeResponse(
             session.Id, "Revoked", session.Version,
             $"The session on {session.DeviceName ?? "that device"} has ended.", ["View"]));
@@ -131,9 +140,12 @@ public sealed class UserSecurityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoke trusted device started for user {UserId}, device {DeviceId}.", command.UserId, command.DeviceId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Revoke trusted device rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
@@ -141,11 +153,13 @@ public sealed class UserSecurityCommandHandler(
 
         if (device is null || device.UserId != user.Id)
         {
+            logger.LogWarning("Revoke trusted device rejected because device {DeviceId} was not found for user {UserId}.", command.DeviceId, user.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That device was not found."));
         }
 
         if (device.RevokedAtUtc is not null)
         {
+            logger.LogWarning("Revoke trusted device rejected because device {DeviceId} is already revoked.", device.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "That device has already been forgotten."));
         }
@@ -164,6 +178,8 @@ public sealed class UserSecurityCommandHandler(
             reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Trusted device {DeviceId} revoked successfully for user {UserId}.", device.Id, user.Id);
 
         return Result.Success(new OutcomeResponse(
             device.Id, "Revoked", device.Version,
@@ -191,10 +207,12 @@ public sealed class UserSecurityCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var now = clock.UtcNow;
+        logger.LogInformation("Reset user MFA started for user {UserId}.", command.UserId);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Reset user MFA rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
@@ -203,6 +221,7 @@ public sealed class UserSecurityCommandHandler(
 
         if (usable.Count == 0 && !user.MfaEnabled)
         {
+            logger.LogWarning("Reset user MFA rejected for user {UserId} because no verification methods are enrolled.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "There is nothing to reset: this account has no verification methods."));
         }
@@ -252,6 +271,8 @@ public sealed class UserSecurityCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("User MFA reset completed successfully for user {UserId}. MethodsRemoved={MethodsRemoved}, SessionsRevoked={SessionsRevoked}, StillRequired={StillRequired}.", user.Id, usable.Count, revokedSessions, stillRequired);
+
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version,
             stillRequired
@@ -281,9 +302,12 @@ public sealed class UserSecurityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Export user security evidence started for user {UserId}.", query.UserId);
+
         var user = await users.GetByIdAsync(query.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Export user security evidence rejected because user {UserId} was not found.", query.UserId);
             return Result.Failure<ExportFile>(Error.UserNotFound());
         }
 
@@ -291,6 +315,7 @@ public sealed class UserSecurityCommandHandler(
 
         if (snapshot is null)
         {
+            logger.LogWarning("Export user security evidence rejected because security snapshot was unavailable for user {UserId}.", user.Id);
             return Result.Failure<ExportFile>(Error.UserNotFound());
         }
 
@@ -359,6 +384,8 @@ public sealed class UserSecurityCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("User security evidence export completed for user {UserId}. RowCount={RowCount}.", user.Id, rows.Count);
 
         return Result.Success(file);
     }

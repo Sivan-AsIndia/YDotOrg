@@ -27,13 +27,22 @@ namespace YDot.IAM.Api.Controllers;
 // password and manage their own second factor. Locking somebody out of their own account while
 // their Organisation waits for approval helps nobody.
 [AllowedWhileOnboarding]
-public sealed class MySecurityController(MySecurityFeatureHandler handler) : ApiControllerBase
+public sealed class MySecurityController(MySecurityFeatureHandler handler, ILogger<MySecurityController> logger) : ApiControllerBase
 {
     /// <summary>Sessions, devices, factors and recent sign-in activity for the caller.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<UserSecurityResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetMySecurityQuery(), cancellationToken));
+    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting current user's security information.");
+
+        var result = await handler.HandleAsync(new GetMySecurityQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get current user's security information.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Starts enrolling a second factor.
@@ -50,8 +59,17 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return FromResult(await handler.HandleAsync(
-            new BeginMfaEnrolmentCommand(request.MethodType, request.Label), cancellationToken));
+        logger.LogInformation("Starting MFA enrolment for current user.");
+
+        var result = await handler.HandleAsync(
+            new BeginMfaEnrolmentCommand(request.MethodType, request.Label), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA enrolment failed for current user.");
+        else
+            logger.LogInformation("MFA enrolment started successfully for current user.");
+
+        return FromResult(result);
     }
 
     [HttpPost("mfa/{methodId:guid}/confirm")]
@@ -62,8 +80,17 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return FromResult(await handler.HandleAsync(
-            new ConfirmMfaEnrolmentCommand(methodId, request.Code), cancellationToken));
+        logger.LogInformation("Confirming MFA enrolment. MethodId: {MethodId}", methodId);
+
+        var result = await handler.HandleAsync(
+            new ConfirmMfaEnrolmentCommand(methodId, request.Code), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA enrolment confirmation failed. MethodId: {MethodId}", methodId);
+        else
+            logger.LogInformation("MFA enrolment confirmed successfully. MethodId: {MethodId}", methodId);
+
+        return FromResult(result);
     }
 
     /// <summary>
@@ -76,9 +103,20 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> RevokeMfaMethodAsync(
-        Guid methodId, [FromBody] RevokeMfaMethodRequest? request, CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(
-            new RevokeMfaMethodCommand(methodId, request?.Reason), cancellationToken));
+        Guid methodId, [FromBody] RevokeMfaMethodRequest? request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Revoking MFA method. MethodId: {MethodId}", methodId);
+
+        var result = await handler.HandleAsync(
+            new RevokeMfaMethodCommand(methodId, request?.Reason), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA method revocation failed. MethodId: {MethodId}", methodId);
+        else
+            logger.LogInformation("MFA method revoked successfully. MethodId: {MethodId}", methodId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Issues a fresh batch of backup codes and INVALIDATES every earlier one.
@@ -88,8 +126,19 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     /// </summary>
     [HttpPost("recovery-codes")]
     [ProducesResponseType(typeof(ApiResponse<RecoveryCodesResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GenerateRecoveryCodesAsync(CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GenerateRecoveryCodesCommand(), cancellationToken));
+    public async Task<IActionResult> GenerateRecoveryCodesAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Generating new recovery codes for current user.");
+
+        var result = await handler.HandleAsync(new GenerateRecoveryCodesCommand(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Recovery code generation failed for current user.");
+        else
+            logger.LogInformation("New recovery codes generated successfully for current user.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Ends one session and leaves the rest alone.
@@ -101,9 +150,20 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     [HttpDelete("sessions/{sessionId:guid}")]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeSessionAsync(
-        Guid sessionId, [FromBody] RevokeMySessionRequest? request, CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(
-            new RevokeMySessionCommand(sessionId, request?.Reason), cancellationToken));
+        Guid sessionId, [FromBody] RevokeMySessionRequest? request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Revoking session for current user. SessionId: {SessionId}", sessionId);
+
+        var result = await handler.HandleAsync(
+            new RevokeMySessionCommand(sessionId, request?.Reason), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Session revocation failed. SessionId: {SessionId}", sessionId);
+        else
+            logger.LogInformation("Session revoked successfully. SessionId: {SessionId}", sessionId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Forgets a remembered device, so it must pass MFA again next time.
@@ -114,7 +174,18 @@ public sealed class MySecurityController(MySecurityFeatureHandler handler) : Api
     [HttpDelete("trusted-devices/{deviceId:guid}")]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeTrustedDeviceAsync(
-        Guid deviceId, [FromBody] RevokeTrustedDeviceRequest? request, CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(
-            new RevokeTrustedDeviceCommand(deviceId, request?.Reason), cancellationToken));
+        Guid deviceId, [FromBody] RevokeTrustedDeviceRequest? request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Revoking trusted device for current user. DeviceId: {DeviceId}", deviceId);
+
+        var result = await handler.HandleAsync(
+            new RevokeTrustedDeviceCommand(deviceId, request?.Reason), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Trusted device revocation failed. DeviceId: {DeviceId}", deviceId);
+        else
+            logger.LogInformation("Trusted device revoked successfully. DeviceId: {DeviceId}", deviceId);
+
+        return FromResult(result);
+    }
 }

@@ -73,12 +73,15 @@ public sealed class CreateUserCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Checking user identity availability.");
+
         var request = query.Request;
         var email = request.Email?.Trim();
         var username = request.Username?.Trim();
 
         if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(username))
         {
+            logger.LogInformation("User identity availability check completed with no identity values supplied.");
             return Result.Success(new CheckUserIdentityResponse(
                 IsAvailable: true, EmailAvailable: true, UsernameAvailable: true,
                 Message: "Enter an e-mail address or a username to check.",
@@ -94,6 +97,7 @@ public sealed class CreateUserCommandHandler(
 
             if (parsed is null)
             {
+                logger.LogWarning("User identity availability check rejected an invalid email value.");
                 return Result.Success(new CheckUserIdentityResponse(
                     IsAvailable: false, EmailAvailable: false, UsernameAvailable: true,
                     Message: "That is not a valid e-mail address.",
@@ -110,6 +114,7 @@ public sealed class CreateUserCommandHandler(
 
             if (parsed is null)
             {
+                logger.LogWarning("User identity availability check rejected an invalid username value.");
                 return Result.Success(new CheckUserIdentityResponse(
                     IsAvailable: false, EmailAvailable: emailAvailable, UsernameAvailable: false,
                     Message: "A username may use letters, digits, dots, hyphens and underscores.",
@@ -127,6 +132,8 @@ public sealed class CreateUserCommandHandler(
             : await BuildUsernameSuggestionsAsync(username, cancellationToken);
 
         var available = emailAvailable && usernameAvailable;
+
+        logger.LogInformation("User identity availability check completed. EmailAvailable {EmailAvailable}, UsernameAvailable {UsernameAvailable}.", emailAvailable, usernameAvailable);
 
         return Result.Success(new CheckUserIdentityResponse(
             available,
@@ -185,12 +192,15 @@ public sealed class CreateUserCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating user.");
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         // The Organisation comes from the request context, never from the body.
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("User creation failed because tenant selection is required.");
             return Result.Failure<CreateUserResponse>(Error.TenantSelectionRequired());
         }
 
@@ -198,12 +208,14 @@ public sealed class CreateUserCommandHandler(
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("User creation failed because TenantId {TenantId} was not found.", tenantId);
             return Result.Failure<CreateUserResponse>(Error.TenantNotFound());
         }
 
         var businessUnit = await businessUnits.GetByIdAsync(tenant.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("User creation failed because the platform business unit is not configured. TenantId {TenantId}.", tenantId);
             return Result.Failure<CreateUserResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -213,6 +225,7 @@ public sealed class CreateUserCommandHandler(
             var existing = await users.CountActiveAsync(tenantId, cancellationToken);
             if (existing >= tenant.MaximumUsers.Value)
             {
+                logger.LogWarning("User creation rejected because the tenant user limit has been reached. TenantId {TenantId}, CurrentUsers {CurrentUsers}, MaximumUsers {MaximumUsers}.", tenantId, existing, tenant.MaximumUsers.Value);
                 return Result.Failure<CreateUserResponse>(Error.UserLimitReached());
             }
         }
@@ -221,6 +234,7 @@ public sealed class CreateUserCommandHandler(
         var email = EmailValue.TryParse(request.Email);
         if (email is null)
         {
+            logger.LogWarning("User creation failed because the supplied email is invalid.");
             return Result.Failure<CreateUserResponse>(
                 Error.Validation("Enter a valid e-mail address.",
                     [new ValidationError(nameof(request.Email), "That e-mail address is not valid.")]));
@@ -228,6 +242,7 @@ public sealed class CreateUserCommandHandler(
 
         if (await users.EmailExistsAsync(email.Value.ToUpperInvariant(), tenantId, null, cancellationToken))
         {
+            logger.LogWarning("User creation rejected because the email already exists in TenantId {TenantId}.", tenantId);
             return Result.Failure<CreateUserResponse>(
                 Error.Duplicate("Somebody in this organisation already uses that e-mail address."));
         }
@@ -239,6 +254,7 @@ public sealed class CreateUserCommandHandler(
         var username = UsernameValue.TryParse(usernameCandidate);
         if (username is null)
         {
+            logger.LogWarning("User creation failed because the username is invalid. TenantId {TenantId}.", tenantId);
             return Result.Failure<CreateUserResponse>(
                 Error.Validation("That username is not valid.",
                     [new ValidationError(nameof(request.Username),
@@ -263,6 +279,7 @@ public sealed class CreateUserCommandHandler(
         }
         else if (await users.UsernameExistsAsync(finalUsername.ToUpperInvariant(), tenantId, null, cancellationToken))
         {
+            logger.LogWarning("User creation rejected because the username already exists in TenantId {TenantId}.", tenantId);
             return Result.Failure<CreateUserResponse>(
                 Error.Duplicate("Somebody in this organisation already uses that username."));
         }
@@ -276,6 +293,7 @@ public sealed class CreateUserCommandHandler(
             var manager = await users.GetByIdAsync(request.ManagerUserId.Value, cancellationToken);
             if (manager is null)
             {
+                logger.LogWarning("User creation failed because the requested manager was not found in TenantId {TenantId}.", tenantId);
                 return Result.Failure<CreateUserResponse>(
                     Error.Validation("That manager was not found in this organisation.",
                         [new ValidationError(nameof(request.ManagerUserId), "Choose a manager from this organisation.")]));
@@ -344,6 +362,7 @@ public sealed class CreateUserCommandHandler(
             user, tenant, request.RoleIds, request.AccountCategory, now, cancellationToken);
         if (assigned.IsFailure)
         {
+            logger.LogWarning("User creation failed during role assignment. UserId {UserId}, TenantId {TenantId}.", user.Id, tenantId);
             return Result.Failure<CreateUserResponse>(assigned.Error!);
         }
 
@@ -411,6 +430,7 @@ public sealed class CreateUserCommandHandler(
 
         if (invitation is not null)
         {
+            logger.LogInformation("Invitation created for user. UserId {UserId}, InvitationId {InvitationId}.", user.Id, invitation.Id);
             await audit.WriteAsync(
                 AuditActionCodes.UserInvited, nameof(UserInvitation), invitation.Id,
                 user.DisplayName, new { invitation.Reference },
@@ -424,11 +444,14 @@ public sealed class CreateUserCommandHandler(
         string? activationUrl = null;
         if (invitation is not null && plaintextToken is not null)
         {
+            logger.LogInformation("Sending user invitation after user creation commit. UserId {UserId}, InvitationId {InvitationId}.", user.Id, invitation.Id);
             activationUrl = BuildActivationUrl(invitation.InvitationHostName!, plaintextToken);
 
             await notifications.SendInvitationAsync(
                 user, invitation, tenant, businessUnit, activationUrl, cancellationToken);
         }
+
+        logger.LogInformation("User created successfully. UserId {UserId}, TenantId {TenantId}, Status {Status}, InvitationCreated {InvitationCreated}.", user.Id, tenantId, user.Status, invitation is not null);
 
         return Result.Success(new CreateUserResponse(
             user.Id,
@@ -447,16 +470,20 @@ public sealed class CreateUserCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Resending user invitation. UserId {UserId}.", command.UserId);
+
         var now = clock.UtcNow;
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("User invitation resend failed because UserId {UserId} was not found.", command.UserId);
             return Result.Failure<CreateUserResponse>(Error.UserNotFound());
         }
 
         if (user.Status is not (UserStatus.Invited or UserStatus.Draft))
         {
+            logger.LogWarning("User invitation resend rejected because UserId {UserId} has status {Status}.", command.UserId, user.Status);
             return Result.Failure<CreateUserResponse>(Error.InvalidTransition(
                 "That account is already active. There is nothing to resend."));
         }
@@ -468,6 +495,7 @@ public sealed class CreateUserCommandHandler(
         var businessUnit = await businessUnits.GetByIdAsync(user.BusinessUnitId, cancellationToken);
         if (businessUnit is null || tenant is null)
         {
+            logger.LogError("User invitation resend failed because tenant or business unit configuration is unavailable. UserId {UserId}.", command.UserId);
             return Result.Failure<CreateUserResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -527,6 +555,8 @@ public sealed class CreateUserCommandHandler(
         await notifications.SendInvitationAsync(
             user, invitation, tenant, businessUnit, activationUrl, cancellationToken);
 
+        logger.LogInformation("User invitation resent successfully. UserId {UserId}, InvitationId {InvitationId}, ResendCount {ResendCount}.", user.Id, invitation.Id, invitation.ResendCount);
+
         return Result.Success(new CreateUserResponse(
             user.Id, user.Code, user.DisplayName, user.Email!, user.Status,
             InvitationSent: true, invitation.ExpiresAtUtc,
@@ -542,15 +572,19 @@ public sealed class CreateUserCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoking user invitation. UserId {UserId}.", command.UserId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("User invitation revocation failed because UserId {UserId} was not found.", command.UserId);
             return Result.Failure<CreateUserResponse>(Error.UserNotFound());
         }
 
         var invitation = await invitations.GetPendingForUserAsync(user.Id, cancellationToken);
         if (invitation is null)
         {
+            logger.LogWarning("User invitation revocation failed because no outstanding invitation exists. UserId {UserId}.", command.UserId);
             return Result.Failure<CreateUserResponse>(
                 Error.NotFound("There is no outstanding invitation for that user."));
         }
@@ -572,6 +606,8 @@ public sealed class CreateUserCommandHandler(
             user.DisplayName, new { command.Reason }, command.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("User invitation revoked successfully. UserId {UserId}, InvitationId {InvitationId}.", user.Id, invitation.Id);
 
         return Result.Success(new CreateUserResponse(
             user.Id, user.Code, user.DisplayName, user.Email!, user.Status,
@@ -605,6 +641,7 @@ public sealed class CreateUserCommandHandler(
 
         if (roleIds is { Count: > 0 } && requested.Count != roleIds.Count)
         {
+            logger.LogWarning("User role assignment failed because one or more requested roles were not found. UserId {UserId}, RequestedRoleCount {RequestedRoleCount}, FoundRoleCount {FoundRoleCount}.", user.Id, roleIds.Count, requested.Count);
             return Result.Failure(Error.Validation(
                 "One or more of those roles was not found in this organisation.",
                 [new ValidationError("RoleIds", "Choose roles from this organisation.")]));
@@ -666,6 +703,7 @@ public sealed class CreateUserCommandHandler(
 
         if (blocking.Count > 0)
         {
+            logger.LogWarning("User role assignment rejected due to segregation-of-duties rules. UserId {UserId}, ConflictCount {ConflictCount}.", user.Id, blocking.Count);
             return Result.Failure(Error.SegregationOfDuties(
                 "Those roles cannot be held together: " +
                 string.Join("; ", blocking.Select(rule => rule.Reason))));
@@ -690,6 +728,8 @@ public sealed class CreateUserCommandHandler(
 
             isFirst = false;
         }
+
+        logger.LogInformation("User roles assigned successfully. UserId {UserId}, RoleCount {RoleCount}.", user.Id, requested.Count);
 
         return Result.Success();
     }

@@ -1,6 +1,7 @@
 ﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Models;
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.Common.Services;
 using YDot.IAM.Application.Features.Menus.DTOs;
@@ -58,11 +59,14 @@ public sealed class NavigationQueryHandler(
     IPermissionRepository permissions,
     ITenantRepository tenants,
     ITenantContext tenantContext,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<NavigationQueryHandler> logger)
 {
     public async Task<Result<NavigationResponse>> HandleAsync(
         GetNavigationQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving navigation for current user.");
+
         var menu = await menuBuilder.BuildForCurrentUserAsync(cancellationToken);
 
         // The landing route is read OFF the tree just built rather than built again. This used
@@ -91,7 +95,11 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving menu permission codes.");
+
         var all = await permissions.GetAllAsync(cancellationToken);
+
+        logger.LogInformation("Menu permission codes retrieved. Count: {Count}.", all.Count);
 
         return Result.Success<IReadOnlyList<MenuPermissionOptionResponse>>(
         [
@@ -114,6 +122,8 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving menu definitions. IncludeRetired: {IncludeRetired}.", query.IncludeRetired);
+
         var catalogue = await menus.GetCatalogueAsync(cancellationToken);
 
         var nodes = query.IncludeRetired
@@ -121,6 +131,8 @@ public sealed class NavigationQueryHandler(
             : catalogue.Where(node => node.Status != MenuStatus.Retired).ToList();
 
         var namesById = catalogue.ToDictionary(node => node.Id, node => node.Name);
+
+        logger.LogInformation("Menu definitions retrieved. Count: {Count}.", nodes.Count);
 
         return Result.Success<IReadOnlyList<MenuDefinitionResponse>>(
             BuildDefinitionTree(nodes, namesById, parentId: null));
@@ -131,11 +143,15 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving menu catalogue. IncludePlatformNodes: {IncludePlatformNodes}.", query.IncludePlatformNodes);
+
         // Platform nodes are only ever included for a root user, whatever the flag asks for.
         var includePlatform = query.IncludePlatformNodes && currentUser.IsSuperAdmin;
 
         var tree = await menuBuilder.BuildCatalogueAsync(
             tenantContext.TenantId, includePlatform, cancellationToken);
+
+        logger.LogInformation("Menu catalogue retrieved. Count: {Count}.", tree.Count);
 
         return Result.Success(tree);
     }
@@ -149,14 +165,17 @@ public sealed class NavigationQueryHandler(
     {
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Tenant menu configuration retrieval requires a tenant context.");
             return Result.Failure<TenantMenuConfigurationResponse>(Error.TenantSelectionRequired());
         }
 
         var tenantId = tenantContext.RequireTenantId();
+        logger.LogInformation("Retrieving tenant menu configuration. TenantId: {TenantId}.", tenantId);
 
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Tenant not found while retrieving menu configuration. TenantId: {TenantId}.", tenantId);
             return Result.Failure<TenantMenuConfigurationResponse>(Error.TenantNotFound());
         }
 
@@ -169,6 +188,8 @@ public sealed class NavigationQueryHandler(
         var configurable = catalogue
             .Where(node => !node.IsPlatformOnly && node.Status != MenuStatus.Retired)
             .ToList();
+
+        logger.LogInformation("Tenant menu configuration retrieved. TenantId: {TenantId}, ConfigurableCount: {Count}.", tenantId, configurable.Count);
 
         return Result.Success(new TenantMenuConfigurationResponse(
             tenantId,
@@ -195,9 +216,12 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving role menu mapping. RoleId: {RoleId}.", query.RoleId);
+
         var role = await roles.GetWithPermissionsAsync(query.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role not found while retrieving menu mapping. RoleId: {RoleId}.", query.RoleId);
             return Result.Failure<RoleMenuMappingResponse>(Error.NotFound("That role was not found."));
         }
 
@@ -209,6 +233,7 @@ public sealed class NavigationQueryHandler(
         // applied where it is actually enforceable.
         if (role.IsPlatformRole)
         {
+            logger.LogWarning("Role menu mapping retrieval rejected for a platform role. RoleId: {RoleId}.", query.RoleId);
             return Result.Failure<RoleMenuMappingResponse>(Error.Forbidden(
                 "A platform role's navigation is not an organisation's to configure."));
         }
@@ -241,6 +266,8 @@ public sealed class NavigationQueryHandler(
             .Where(mapping => mapping.IsLandingPage)
             .Select(mapping => (Guid?)mapping.MenuDefinitionId)
             .FirstOrDefault();
+
+        logger.LogInformation("Role menu mapping retrieved. RoleId: {RoleId}, ConfigurableCount: {Count}.", role.Id, configurable.Count);
 
         return Result.Success(new RoleMenuMappingResponse(
             role.Id,

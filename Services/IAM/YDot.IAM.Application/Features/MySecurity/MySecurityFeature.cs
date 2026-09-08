@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -62,18 +63,26 @@ public sealed class MySecurityFeatureHandler(
     ICurrentUser currentUser,
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
-    IOptions<SecuritySettings> securityOptions)
+    IOptions<SecuritySettings> securityOptions,
+    ILogger<MySecurityFeatureHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
 
     public async Task<Result<UserSecurityResponse>> HandleAsync(
         GetMySecurityQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving current user's security profile. UserId: {UserId}.", currentUser.UserId);
+
         var page = await readService.GetSecurityAsync(currentUser.UserId, cancellationToken);
 
-        return page is null
-            ? Result.Failure<UserSecurityResponse>(Error.Unauthorised())
-            : Result.Success(page);
+        if (page is null)
+        {
+            logger.LogWarning("Current user's security profile was not found. UserId: {UserId}.", currentUser.UserId);
+            return Result.Failure<UserSecurityResponse>(Error.Unauthorised());
+        }
+
+        logger.LogInformation("Current user's security profile retrieved successfully. UserId: {UserId}.", currentUser.UserId);
+        return Result.Success(page);
     }
 
     /// <summary>
@@ -88,17 +97,21 @@ public sealed class MySecurityFeatureHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Beginning MFA enrolment for current user. UserId: {UserId}, MethodType: {MethodType}.", currentUser.UserId, command.MethodType);
+
         var now = clock.UtcNow;
 
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("MFA enrolment failed because the current user was not found. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<MfaEnrolmentResponse>(Error.Unauthorised());
         }
 
         var businessUnit = await businessUnits.GetByIdAsync(user.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("MFA enrolment failed because the user's business unit was not found. UserId: {UserId}, BusinessUnitId: {BusinessUnitId}.", user.Id, user.BusinessUnitId);
             return Result.Failure<MfaEnrolmentResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -113,51 +126,54 @@ public sealed class MySecurityFeatureHandler(
         switch (command.MethodType)
         {
             case MfaMethodType.AuthenticatorApp:
-            {
-                sharedSecret = totp.GenerateSecret();
+                {
+                    sharedSecret = totp.GenerateSecret();
 
-                // The issuer and label carry the Organisation name, so somebody administering
-                // three Organisations does not end up with three identical entries called YDot.
-                var issuer = tenant is null
-                    ? businessUnit.Name
-                    : $"{businessUnit.Name} - {tenant.Name}";
+                    // The issuer and label carry the Organisation name, so somebody administering
+                    // three Organisations does not end up with three identical entries called YDot.
+                    var issuer = tenant is null
+                        ? businessUnit.Name
+                        : $"{businessUnit.Name} - {tenant.Name}";
 
-                provisioningUri = totp.BuildProvisioningUri(
-                    sharedSecret, user.Email ?? user.UserName ?? user.Code, issuer);
+                    provisioningUri = totp.BuildProvisioningUri(
+                        sharedSecret, user.Email ?? user.UserName ?? user.Code, issuer);
 
-                maskedDestination = "Authenticator app";
-                break;
-            }
+                    maskedDestination = "Authenticator app";
+                    break;
+                }
 
             case MfaMethodType.Email:
-            {
-                if (string.IsNullOrWhiteSpace(user.Email))
                 {
-                    return Result.Failure<MfaEnrolmentResponse>(
-                        Error.Validation("This account has no e-mail address to send codes to.",
-                            [new ValidationError("Email", "Add an e-mail address first.")]));
-                }
+                    if (string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        logger.LogWarning("MFA e-mail enrolment failed because the current user has no e-mail address. UserId: {UserId}.", user.Id);
+                        return Result.Failure<MfaEnrolmentResponse>(
+                            Error.Validation("This account has no e-mail address to send codes to.",
+                                [new ValidationError("Email", "Add an e-mail address first.")]));
+                    }
 
-                maskedDestination = EmailValue.TryParse(user.Email)?.Masked();
-                break;
-            }
+                    maskedDestination = EmailValue.TryParse(user.Email)?.Masked();
+                    break;
+                }
 
             case MfaMethodType.Sms:
-            {
-                var mobile = MobileNumberValue.TryParse(user.MobileCountryCode, user.MobileNumber);
-
-                if (mobile is null)
                 {
-                    return Result.Failure<MfaEnrolmentResponse>(
-                        Error.Validation("This account has no mobile number to send codes to.",
-                            [new ValidationError("MobileNumber", "Add a mobile number first.")]));
+                    var mobile = MobileNumberValue.TryParse(user.MobileCountryCode, user.MobileNumber);
+
+                    if (mobile is null)
+                    {
+                        logger.LogWarning("MFA SMS enrolment failed because the current user has no valid mobile number. UserId: {UserId}.", user.Id);
+                        return Result.Failure<MfaEnrolmentResponse>(
+                            Error.Validation("This account has no mobile number to send codes to.",
+                                [new ValidationError("MobileNumber", "Add a mobile number first.")]));
+                    }
+
+                    maskedDestination = mobile.Masked();
+                    break;
                 }
 
-                maskedDestination = mobile.Masked();
-                break;
-            }
-
             case MfaMethodType.SecurityKey:
+                logger.LogWarning("MFA enrolment rejected because security keys are not available. UserId: {UserId}.", user.Id);
                 return Result.Failure<MfaEnrolmentResponse>(
                     Error.Validation("Security keys are not available yet.",
                         [new ValidationError("MethodType", "Choose an authenticator app, e-mail or SMS.")]));
@@ -200,6 +216,8 @@ public sealed class MySecurityFeatureHandler(
                 user, tenant, businessUnit, MfaChallengePurpose.Enrolment, method.Id, cancellationToken);
         }
 
+        logger.LogInformation("MFA enrolment initialized successfully. UserId: {UserId}, MethodId: {MethodId}, MethodType: {MethodType}.", user.Id, method.Id, method.MethodType);
+
         return Result.Success(new MfaEnrolmentResponse(
             method.Id,
             method.MethodType,
@@ -224,11 +242,14 @@ public sealed class MySecurityFeatureHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Confirming MFA enrolment for current user. UserId: {UserId}, MethodId: {MethodId}.", currentUser.UserId, command.MethodId);
+
         var now = clock.UtcNow;
 
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("MFA enrolment confirmation failed because the current user was not found. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<OutcomeResponse>(Error.Unauthorised());
         }
 
@@ -237,11 +258,13 @@ public sealed class MySecurityFeatureHandler(
         // Checked against the CALLER, so one person cannot confirm another enrolment.
         if (method is null || method.UserId != user.Id)
         {
+            logger.LogWarning("MFA enrolment confirmation rejected because the verification method was not found or does not belong to the current user. UserId: {UserId}, MethodId: {MethodId}.", user.Id, command.MethodId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That verification method was not found."));
         }
 
         if (method.Status == MfaMethodStatus.Revoked)
         {
+            logger.LogWarning("MFA enrolment confirmation rejected because the verification method has been revoked. UserId: {UserId}, MethodId: {MethodId}.", user.Id, method.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "That verification method has been removed."));
         }
@@ -266,6 +289,8 @@ public sealed class MySecurityFeatureHandler(
 
         if (!verified)
         {
+            logger.LogWarning("MFA enrolment confirmation failed verification. UserId: {UserId}, MethodId: {MethodId}.", user.Id, method.Id);
+
             await audit.WriteAsync(
                 AuditActionCodes.MfaFailed, nameof(MfaMethod), method.Id, AuditResult.Denied,
                 user.DisplayName, new { Context = "Enrolment" }, cancellationToken: cancellationToken);
@@ -299,6 +324,9 @@ public sealed class MySecurityFeatureHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("MFA enrolment confirmed successfully. UserId: {UserId}, MethodId: {MethodId}, MethodType: {MethodType}.", user.Id, method.Id, method.MethodType);
+
+
         return Result.Success(new OutcomeResponse(
             method.Id, method.Status.ToString(), method.Version,
             "Verification method confirmed. Generate recovery codes so you can get back in if you lose it.",
@@ -316,11 +344,14 @@ public sealed class MySecurityFeatureHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoking MFA method for current user. UserId: {UserId}, MethodId: {MethodId}.", currentUser.UserId, command.MethodId);
+
         var now = clock.UtcNow;
 
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("MFA method revocation failed because the current user was not found. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<OutcomeResponse>(Error.Unauthorised());
         }
 
@@ -328,6 +359,7 @@ public sealed class MySecurityFeatureHandler(
 
         if (method is null || method.UserId != user.Id)
         {
+            logger.LogWarning("MFA method revocation rejected because the verification method was not found or does not belong to the current user. UserId: {UserId}, MethodId: {MethodId}.", user.Id, command.MethodId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That verification method was not found."));
         }
 
@@ -341,6 +373,7 @@ public sealed class MySecurityFeatureHandler(
 
         if (remaining == 0 && user.IsMfaRequired(tenant?.DefaultMfaRequirement ?? MfaRequirement.Optional))
         {
+            logger.LogWarning("MFA method revocation rejected because the user's organisation requires MFA and this is the last usable method. UserId: {UserId}, MethodId: {MethodId}.", user.Id, method.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Your organisation requires two-factor authentication. Add another method before removing this one."));
         }
@@ -398,14 +431,18 @@ public sealed class MySecurityFeatureHandler(
     public async Task<Result<RecoveryCodesResponse>> HandleAsync(
         GenerateRecoveryCodesCommand command, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Generating recovery codes for current user. UserId: {UserId}.", currentUser.UserId);
+
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Recovery code generation failed because the current user was not found. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<RecoveryCodesResponse>(Error.Unauthorised());
         }
 
         if (!user.MfaEnabled)
         {
+            logger.LogWarning("Recovery code generation rejected because MFA is not enabled. UserId: {UserId}.", user.Id);
             return Result.Failure<RecoveryCodesResponse>(Error.MfaNotEnrolled(
                 "Set up two-factor authentication before generating recovery codes."));
         }
@@ -417,6 +454,8 @@ public sealed class MySecurityFeatureHandler(
             new { Count = codes.Count }, cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Recovery codes generated successfully. UserId: {UserId}, Count: {Count}.", user.Id, codes.Count);
 
         return Result.Success(new RecoveryCodesResponse(
             codes,
@@ -441,15 +480,19 @@ public sealed class MySecurityFeatureHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoking current user's session. UserId: {UserId}, SessionId: {SessionId}.", currentUser.UserId, command.SessionId);
+
         var session = await security.GetSessionAsync(command.SessionId, cancellationToken);
 
         if (session is null || session.UserId != currentUser.UserId)
         {
+            logger.LogWarning("Session revocation rejected because the session was not found or does not belong to the current user. UserId: {UserId}, SessionId: {SessionId}.", currentUser.UserId, command.SessionId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That session was not found."));
         }
 
         if (session.RevokedAtUtc is not null)
         {
+            logger.LogWarning("Session revocation rejected because the session has already ended. UserId: {UserId}, SessionId: {SessionId}.", currentUser.UserId, session.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "That session has already ended."));
         }
@@ -472,6 +515,8 @@ public sealed class MySecurityFeatureHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Session revoked successfully. UserId: {UserId}, SessionId: {SessionId}.", currentUser.UserId, session.Id);
+
         return Result.Success(new OutcomeResponse(
             session.Id, "Revoked", session.Version,
             $"The session on {session.DeviceName ?? "that device"} has ended.", ["View"]));
@@ -483,10 +528,13 @@ public sealed class MySecurityFeatureHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Revoking trusted device for current user. UserId: {UserId}, DeviceId: {DeviceId}.", currentUser.UserId, command.DeviceId);
+
         var device = await security.GetTrustedDeviceAsync(command.DeviceId, cancellationToken);
 
         if (device is null || device.UserId != currentUser.UserId)
         {
+            logger.LogWarning("Trusted device revocation rejected because the device was not found or does not belong to the current user. UserId: {UserId}, DeviceId: {DeviceId}.", currentUser.UserId, command.DeviceId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That device was not found."));
         }
 
@@ -499,6 +547,8 @@ public sealed class MySecurityFeatureHandler(
             new { command.Reason }, command.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Trusted device revoked successfully. UserId: {UserId}, DeviceId: {DeviceId}.", currentUser.UserId, device.Id);
 
         return Result.Success(new OutcomeResponse(
             device.Id, "Revoked", device.Version,

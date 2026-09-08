@@ -23,6 +23,10 @@
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />
   </ItemGroup>
   <ItemGroup Label="Identity, authentication and tokens">
     <!-- The Domain layer derives User/Role from IdentityUser/IdentityRole. This is the

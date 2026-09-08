@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -38,7 +39,8 @@ public sealed class TimeZoneCommandHandler(
     IGlobalMasterRepository masters,
     IAuditService audit,
     GlobalMasterWriteGuard guard,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<TimeZoneCommandHandler> logger)
 {
     /// <summary>The real-world extremes of UTC offset, in minutes.</summary>
     private const int MinimumOffsetMinutes = -12 * 60;
@@ -50,18 +52,26 @@ public sealed class TimeZoneCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating time zone.");
+
         var request = command.Request;
         var scopeTenantId = guard.WriteScopeTenantId;
 
         var offsetCheck = ValidateOffset(request.StandardUtcOffsetMinutes);
         if (offsetCheck.IsFailure)
         {
+            logger.LogWarning(
+                "Time zone creation failed because the UTC offset is invalid. OffsetMinutes: {OffsetMinutes}.",
+                request.StandardUtcOffsetMinutes);
+
             return Result.Failure<TimeZoneDetailResponse>(offsetCheck.Error!);
         }
 
         var ianaKey = request.TimeZoneKey?.Trim();
         if (string.IsNullOrWhiteSpace(ianaKey))
         {
+            logger.LogWarning("Time zone creation failed because the IANA key was not supplied.");
+
             return Result.Failure<TimeZoneDetailResponse>(Error.Validation(
                 "A time zone needs an IANA key.",
                 [new ValidationError(
@@ -71,6 +81,10 @@ public sealed class TimeZoneCommandHandler(
 
         if (await masters.IanaKeyExistsAsync(ianaKey, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning(
+                "Time zone creation failed because the IANA key already exists. IanaKey: {IanaKey}.",
+                ianaKey);
+
             return Result.Failure<TimeZoneDetailResponse>(
                 Error.Duplicate($"The time zone {ianaKey} already exists in this catalogue."));
         }
@@ -93,6 +107,11 @@ public sealed class TimeZoneCommandHandler(
             },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation(
+            "Time zone created successfully. TimeZoneId: {TimeZoneId}, IanaKey: {IanaKey}.",
+            timeZone.Id,
+            timeZone.IanaKey);
+
         return timeZone.ToDetailResponse(stateUsageCount: 0, isSuperAdmin: guard.IsSuperAdmin);
     }
 
@@ -101,17 +120,29 @@ public sealed class TimeZoneCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Updating time zone. TimeZoneId: {TimeZoneId}.",
+            command.TimeZoneId);
+
         var request = command.Request;
 
         var timeZone = await masters.GetTimeZoneAsync(command.TimeZoneId, cancellationToken);
         if (timeZone is null)
         {
+            logger.LogWarning(
+                "Time zone update failed because the time zone was not found. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That time zone was not found."));
         }
 
         var guarded = GuardWrite(timeZone, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Time zone update rejected by the write guard. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -120,6 +151,11 @@ public sealed class TimeZoneCommandHandler(
             var offsetCheck = ValidateOffset(request.StandardUtcOffsetMinutes.Value);
             if (offsetCheck.IsFailure)
             {
+                logger.LogWarning(
+                    "Time zone update failed because the UTC offset is invalid. TimeZoneId: {TimeZoneId}, OffsetMinutes: {OffsetMinutes}.",
+                    command.TimeZoneId,
+                    request.StandardUtcOffsetMinutes.Value);
+
                 return Result.Failure<OutcomeResponse>(offsetCheck.Error!);
             }
         }
@@ -144,6 +180,12 @@ public sealed class TimeZoneCommandHandler(
             },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation(
+            "Time zone updated successfully. TimeZoneId: {TimeZoneId}, IanaKey: {IanaKey}, OffsetChanged: {OffsetChanged}.",
+            timeZone.Id,
+            timeZone.IanaKey,
+            !string.Equals(previousOffset, timeZone.OffsetDisplay, StringComparison.Ordinal));
+
         return await BuildOutcomeAsync(timeZone, "Time zone updated.", cancellationToken);
     }
 
@@ -152,22 +194,40 @@ public sealed class TimeZoneCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Changing time zone status. TimeZoneId: {TimeZoneId}, RequestedStatus: {RequestedStatus}.",
+            command.TimeZoneId,
+            command.Request.Status);
+
         var request = command.Request;
 
         var timeZone = await masters.GetTimeZoneAsync(command.TimeZoneId, cancellationToken);
         if (timeZone is null)
         {
+            logger.LogWarning(
+                "Time zone status change failed because the time zone was not found. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That time zone was not found."));
         }
 
         var guarded = GuardWrite(timeZone, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Time zone status change rejected by the write guard. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
         if (timeZone.Status == request.Status)
         {
+            logger.LogWarning(
+                "Time zone status change rejected because the time zone is already in the requested status. TimeZoneId: {TimeZoneId}, Status: {Status}.",
+                command.TimeZoneId,
+                request.Status);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition($"That time zone is already {request.Status}."));
         }
@@ -187,6 +247,11 @@ public sealed class TimeZoneCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Time zone status changed successfully. TimeZoneId: {TimeZoneId}, NewStatus: {NewStatus}.",
+            timeZone.Id,
+            request.Status);
+
         return await BuildOutcomeAsync(
             timeZone,
             request.Status == MasterDataStatus.Active ? "Time zone activated." : "Time zone deactivated.",
@@ -198,17 +263,29 @@ public sealed class TimeZoneCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Deleting time zone. TimeZoneId: {TimeZoneId}.",
+            command.TimeZoneId);
+
         var request = command.Request;
 
         var timeZone = await masters.GetTimeZoneAsync(command.TimeZoneId, cancellationToken);
         if (timeZone is null)
         {
+            logger.LogWarning(
+                "Time zone deletion failed because the time zone was not found. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That time zone was not found."));
         }
 
         var guarded = GuardWrite(timeZone, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Time zone deletion rejected by the write guard. TimeZoneId: {TimeZoneId}.",
+                command.TimeZoneId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -219,6 +296,11 @@ public sealed class TimeZoneCommandHandler(
 
         if (free.IsFailure)
         {
+            logger.LogWarning(
+                "Time zone deletion rejected because states are still using it. TimeZoneId: {TimeZoneId}, UsageCount: {UsageCount}.",
+                command.TimeZoneId,
+                usageCount);
+
             return Result.Failure<OutcomeResponse>(free.Error!);
         }
 
@@ -236,6 +318,11 @@ public sealed class TimeZoneCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Time zone deleted successfully. TimeZoneId: {TimeZoneId}, IanaKey: {IanaKey}.",
+            timeZone.Id,
+            timeZone.IanaKey);
+
         return new OutcomeResponse(
             timeZone.Id, timeZone.Status.ToString(), timeZone.Version, "Time zone deleted.", []);
     }
@@ -244,9 +331,25 @@ public sealed class TimeZoneCommandHandler(
     {
         var writable = guard.EnsureWritable(timeZone, $"The time zone {timeZone.IanaKey}");
 
-        return writable.IsFailure
-            ? writable
-            : GlobalMasterWriteGuard.EnsureVersionMatches(timeZone, expectedVersion);
+        if (writable.IsFailure)
+        {
+            logger.LogWarning(
+                "Time zone write rejected by ownership or write guard. TimeZoneId: {TimeZoneId}.",
+                timeZone.Id);
+
+            return writable;
+        }
+
+        var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(timeZone, expectedVersion);
+
+        if (versioned.IsFailure)
+        {
+            logger.LogWarning(
+                "Time zone write rejected because the entity version does not match. TimeZoneId: {TimeZoneId}.",
+                timeZone.Id);
+        }
+
+        return versioned;
     }
 
     /// <summary>Rejects an offset outside the range real time zones occupy.</summary>

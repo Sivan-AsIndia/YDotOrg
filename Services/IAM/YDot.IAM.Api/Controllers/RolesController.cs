@@ -21,40 +21,86 @@ namespace YDot.IAM.Api.Controllers;
 [Authorize(Policy = PolicyNames.TenantContextRequired)]
 public sealed class RolesController(
     RoleCommandHandler commands,
-    RoleQueryHandler queries) : ApiControllerBase
+    RoleQueryHandler queries,
+    ILogger<RolesController> logger) : ApiControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.RolesView)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<RoleListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] RoleSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchRolesQuery(filter), cancellationToken));
+        [FromQuery] RoleSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching roles.");
+
+        var result = await queries.HandleAsync(new SearchRolesQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role search failed.");
+
+        return FromResult(result);
+    }
 
     [HttpGet("{id:guid}", Name = nameof(GetRoleAsync))]
     [HasPermission(PermissionCodes.RolesView)]
     [ProducesResponseType(typeof(ApiResponse<RoleDetailResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetRoleAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetRoleQuery(id), cancellationToken));
+    public async Task<IActionResult> GetRoleAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting role. RoleId: {RoleId}", id);
+
+        var result = await queries.HandleAsync(new GetRoleQuery(id), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get role. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpGet("lookup")]
     [HasPermission(PermissionCodes.RolesView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<RoleLookupResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> LookupAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupRolesQuery(), cancellationToken));
+    public async Task<IActionResult> LookupAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Looking up roles.");
+
+        var result = await queries.HandleAsync(new LookupRolesQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role lookup failed.");
+
+        return FromResult(result);
+    }
 
     [HttpGet("{id:guid}/members")]
     [HasPermission(PermissionCodes.RolesView)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<RoleMemberResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMembersAsync(
-        Guid id, [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetRoleMembersQuery(id, pagination), cancellationToken));
+        Guid id, [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting role members. RoleId: {RoleId}", id);
+
+        var result = await queries.HandleAsync(new GetRoleMembersQuery(id, pagination), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get role members. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpGet("export")]
     [HasPermission(PermissionCodes.RolesExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] RoleSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportRolesQuery(filter), cancellationToken));
+        [FromQuery] RoleSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting roles.");
+
+        var result = await queries.HandleAsync(new ExportRolesQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role export failed.");
+
+        return FileFromResult(result);
+    }
 
     [HttpPost]
     [HasPermission(PermissionCodes.RolesCreate)]
@@ -63,19 +109,42 @@ public sealed class RolesController(
     public async Task<IActionResult> CreateAsync(
         [FromBody] CreateRoleRequest request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Creating role.");
+
         var result = await commands.HandleAsync(new CreateRoleCommand(request), cancellationToken);
 
-        return result.IsFailure
-            ? FromResult(result)
-            : CreatedFromResult(result, nameof(GetRoleAsync), new { id = result.Value!.Id }, "Role created.");
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Role creation failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Role created successfully. RoleId: {RoleId}", result.Value!.Id);
+
+        return CreatedFromResult(result, nameof(GetRoleAsync), new { id = result.Value.Id }, "Role created.");
     }
 
     [HttpPut("{id:guid}")]
     [HasPermission(PermissionCodes.RolesEdit)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateAsync(
-        Guid id, [FromBody] UpdateRoleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new UpdateRoleCommand(id, request), cancellationToken));
+        Guid id, [FromBody] UpdateRoleRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Updating role. RoleId: {RoleId}", id);
+
+        var result = await commands.HandleAsync(new UpdateRoleCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role update failed. RoleId: {RoleId}", id);
+        else
+            logger.LogInformation("Role updated successfully. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Replaces a role permission set.
@@ -89,23 +158,64 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> AssignPermissionsAsync(
-        Guid id, [FromBody] AssignRolePermissionsRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new AssignRolePermissionsCommand(id, request), cancellationToken));
+        Guid id, [FromBody] AssignRolePermissionsRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Assigning permissions to role. RoleId: {RoleId}", id);
+
+        var result = await commands.HandleAsync(
+            new AssignRolePermissionsCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role permission assignment failed. RoleId: {RoleId}", id);
+        else
+            logger.LogInformation("Role permissions assigned successfully. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpPut("{id:guid}/claims")]
     [HasPermission(PermissionCodes.RolesEdit)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> AssignClaimsAsync(
-        Guid id, [FromBody] AssignRoleClaimsRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new AssignRoleClaimsCommand(id, request), cancellationToken));
+        Guid id, [FromBody] AssignRoleClaimsRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Assigning claims to role. RoleId: {RoleId}", id);
+
+        var result = await commands.HandleAsync(
+            new AssignRoleClaimsCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role claim assignment failed. RoleId: {RoleId}", id);
+        else
+            logger.LogInformation("Role claims assigned successfully. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     [HttpPost("{id:guid}/status")]
     [HasPermission(PermissionCodes.RolesActivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeStatusAsync(
-        Guid id, [FromBody] ChangeRoleStatusRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new ChangeRoleStatusCommand(id, request), cancellationToken));
+        Guid id, [FromBody] ChangeRoleStatusRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Changing role status. RoleId: {RoleId}", id);
+
+        var result = await commands.HandleAsync(
+            new ChangeRoleStatusCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role status change failed. RoleId: {RoleId}", id);
+        else
+            logger.LogInformation("Role status changed successfully. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     /// <summary>Deletes a role. Refused when anybody holds it, or when it is a system role.</summary>
     [HttpDelete("{id:guid}")]
@@ -113,8 +223,22 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteAsync(
-        Guid id, [FromBody] DeleteRoleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new DeleteRoleCommand(id, request), cancellationToken));
+        Guid id, [FromBody] DeleteRoleRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Deleting role. RoleId: {RoleId}", id);
+
+        var result = await commands.HandleAsync(
+            new DeleteRoleCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role deletion failed. RoleId: {RoleId}", id);
+        else
+            logger.LogInformation("Role deleted successfully. RoleId: {RoleId}", id);
+
+        return FromResult(result);
+    }
 
     // ---- Segregation of duties -----------------------------------------------------------
 
@@ -122,26 +246,59 @@ public sealed class RolesController(
     [HasPermission(PermissionCodes.RolesManageIncompatibility)]
     [ProducesResponseType(typeof(ApiResponse<RoleIncompatibilityResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CreateIncompatibilityAsync(
-        [FromBody] CreateRoleIncompatibilityRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new CreateRoleIncompatibilityCommand(request), cancellationToken));
+        [FromBody] CreateRoleIncompatibilityRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Creating role incompatibility.");
+
+        var result = await commands.HandleAsync(
+            new CreateRoleIncompatibilityCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role incompatibility creation failed.");
+        else
+            logger.LogInformation("Role incompatibility created successfully.");
+
+        return FromResult(result);
+    }
 
     [HttpDelete("incompatibilities/{id:guid}")]
     [HasPermission(PermissionCodes.RolesManageIncompatibility)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteIncompatibilityAsync(
-        Guid id, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new DeleteRoleIncompatibilityCommand(id), cancellationToken));
+        Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deleting role incompatibility. IncompatibilityId: {IncompatibilityId}", id);
+
+        var result = await commands.HandleAsync(
+            new DeleteRoleIncompatibilityCommand(id), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role incompatibility deletion failed. IncompatibilityId: {IncompatibilityId}", id);
+        else
+            logger.LogInformation("Role incompatibility deleted successfully. IncompatibilityId: {IncompatibilityId}", id);
+
+        return FromResult(result);
+    }
 
     // ---- Permission catalogue ---------------------------------------------------------------
 
     [HttpGet("/api/v1/permissions")]
     [HasPermission(PermissionCodes.PermissionsView)]
-    [ProducesResponseType(typeof(ApiResponse<PagedResponse<PermissionListItemResponse>>),
-        StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<PermissionListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchPermissionsAsync(
-        [FromQuery] PermissionSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchPermissionsQuery(filter), cancellationToken));
+        [FromQuery] PermissionSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching permissions.");
+
+        var result = await queries.HandleAsync(new SearchPermissionsQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Permission search failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The permission matrix the role editor renders.
@@ -153,6 +310,16 @@ public sealed class RolesController(
     [HasPermission(PermissionCodes.PermissionsView)]
     [ProducesResponseType(typeof(ApiResponse<PermissionMatrixResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPermissionMatrixAsync(
-        [FromQuery] Guid? roleId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetPermissionMatrixQuery(roleId), cancellationToken));
+        [FromQuery] Guid? roleId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting permission matrix. RoleId: {RoleId}", roleId);
+
+        var result = await queries.HandleAsync(
+            new GetPermissionMatrixQuery(roleId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get permission matrix. RoleId: {RoleId}", roleId);
+
+        return FromResult(result);
+    }
 }

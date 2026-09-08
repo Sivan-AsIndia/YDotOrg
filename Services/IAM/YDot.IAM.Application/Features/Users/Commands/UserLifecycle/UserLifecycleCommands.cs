@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -75,7 +76,8 @@ public sealed class UserLifecycleCommandHandler(
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
     IOptions<SecuritySettings> securityOptions,
-    IOptions<ClientAppSettings> clientOptions)
+    IOptions<ClientAppSettings> clientOptions,
+    ILogger<UserLifecycleCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
     private readonly ClientAppSettings _client = clientOptions.Value;
@@ -90,15 +92,20 @@ public sealed class UserLifecycleCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var request = command.Request;
+        logger.LogInformation("Update user started for user {UserId}.", command.UserId);
+
+        logger.LogInformation("Reactivate user started for user {UserId}.", command.UserId);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Reactivate user rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         if (user.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("User operation rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -106,6 +113,7 @@ public sealed class UserLifecycleCommandHandler(
         // constraint violation is a 500 and this is a 400 with a field message.
         if (request.ManagerUserId.HasValue && request.ManagerUserId.Value == user.Id)
         {
+            logger.LogWarning("Update user rejected for user {UserId} because the user cannot be their own manager.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("A user cannot be their own manager.",
                     [new ValidationError(nameof(request.ManagerUserId), "Choose a different manager.")]));
@@ -116,6 +124,7 @@ public sealed class UserLifecycleCommandHandler(
             var manager = await users.GetByIdAsync(request.ManagerUserId.Value, cancellationToken);
             if (manager is null)
             {
+                logger.LogWarning("Update user rejected for user {UserId} because the requested manager was not found.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Validation("That manager was not found in this organisation.",
                         [new ValidationError(nameof(request.ManagerUserId), "Choose a manager from this organisation.")]));
@@ -131,6 +140,7 @@ public sealed class UserLifecycleCommandHandler(
 
             if (mobile is null)
             {
+                logger.LogWarning("Update user rejected for user {UserId} because the supplied mobile number is invalid.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Validation("Enter a valid mobile number with its country code.",
                         [new ValidationError(nameof(request.MobileNumber), "That mobile number is not valid.")]));
@@ -151,6 +161,8 @@ public sealed class UserLifecycleCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("User lifecycle operation completed successfully for user {UserId}.", user.Id);
 
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version,
@@ -206,19 +218,24 @@ public sealed class UserLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Unlock user started for user {UserId}.", command.UserId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Unlock user rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         if (user.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("User operation rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (user.Status is not (UserStatus.Suspended or UserStatus.Deactivated or UserStatus.Expired))
         {
+            logger.LogWarning("Reactivate user rejected for user {UserId} because status is {Status}.", user.Id, user.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"An account that is {user.Status} cannot be reactivated."));
         }
@@ -263,14 +280,18 @@ public sealed class UserLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Force user sign-out started for user {UserId}.", command.UserId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Force user sign-out rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         if (user.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("User operation rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -305,6 +326,7 @@ public sealed class UserLifecycleCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Administrator password reset started for user {UserId}. SendResetLink={SendResetLink}.", command.UserId, request.SendResetLink);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
@@ -314,6 +336,7 @@ public sealed class UserLifecycleCommandHandler(
 
         if (user.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("User operation rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -324,6 +347,7 @@ public sealed class UserLifecycleCommandHandler(
         var businessUnit = await businessUnits.GetByIdAsync(user.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Administrator password reset cannot continue because business unit configuration is missing for user {UserId}.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -372,6 +396,7 @@ public sealed class UserLifecycleCommandHandler(
 
             if (failures.Count > 0)
             {
+                logger.LogWarning("Administrator password reset rejected for user {UserId} because the temporary password does not meet policy requirements.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.WeakPassword("That temporary password does not meet the requirements.",
                         [.. failures.Select(text => new ValidationError(nameof(request.TemporaryPassword), text))]));
@@ -410,6 +435,8 @@ public sealed class UserLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Administrator password reset completed successfully for user {UserId}. SendResetLink={SendResetLink}, SignOutAllSessions={SignOutAllSessions}.", user.Id, request.SendResetLink, request.SignOutAllSessions);
+
         // The plaintext travels back exactly once, in the response the administrator is
         // already looking at. It is never persisted and never e-mailed.
         TemporaryPasswordAccessor.Set(issuedPassword);
@@ -425,6 +452,7 @@ public sealed class UserLifecycleCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var now = clock.UtcNow;
+        logger.LogInformation("Extend user access started for user {UserId}.", command.UserId);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
@@ -434,12 +462,14 @@ public sealed class UserLifecycleCommandHandler(
 
         if (user.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("User operation rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (command.Request.AccessEndsAtUtc.HasValue
             && command.Request.AccessEndsAtUtc.Value <= user.AccessStartsAtUtc)
         {
+            logger.LogWarning("Extend user access rejected for user {UserId} because the access end date is invalid.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("The end date must be after the start date.",
                     [new ValidationError(nameof(command.Request.AccessEndsAtUtc),
@@ -461,6 +491,8 @@ public sealed class UserLifecycleCommandHandler(
             command.Request.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Extend user access completed successfully for user {UserId}. AccessEndSet={AccessEndSet}.", user.Id, command.Request.AccessEndsAtUtc.HasValue);
 
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version,
@@ -494,6 +526,8 @@ public sealed class UserLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Force user sign-out completed for user {UserId}. SessionsRevoked={SessionsRevoked}.", user.Id, revoked);
+
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version,
             $"Ended {revoked} session(s).", UserMappingConfig.PermittedActionsFor(user, clock.UtcNow)));
@@ -518,6 +552,7 @@ public sealed class UserLifecycleCommandHandler(
         CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
+        logger.LogInformation("User lifecycle transition started for user {UserId}. TargetStatus={TargetStatus}.", userId, target);
 
         var user = await users.GetByIdAsync(userId, cancellationToken);
         if (user is null)
@@ -534,6 +569,7 @@ public sealed class UserLifecycleCommandHandler(
         // administrator is how an Organisation locks itself out permanently.
         if (user.IsSystemAccount)
         {
+            logger.LogWarning("User lifecycle transition rejected for system account {UserId}. TargetStatus={TargetStatus}.", user.Id, target);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("System accounts cannot be changed."));
         }
@@ -542,12 +578,14 @@ public sealed class UserLifecycleCommandHandler(
         // is then the one person who cannot undo it.
         if (user.Id == currentUser.UserId)
         {
+            logger.LogWarning("User lifecycle transition rejected because user {UserId} attempted to change their own status.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("You cannot change the status of your own account."));
         }
 
         if (!UserMappingConfig.CanTransitionTo(user.Status, target))
         {
+            logger.LogWarning("User lifecycle transition rejected for user {UserId}. CurrentStatus={CurrentStatus}, TargetStatus={TargetStatus}.", user.Id, user.Status, target);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"An account that is {user.Status} cannot be moved to {target}."));
         }

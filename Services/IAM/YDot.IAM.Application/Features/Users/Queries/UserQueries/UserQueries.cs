@@ -6,6 +6,7 @@ using YDot.IAM.Application.Common.Models;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.DTOs;
 using YDot.IAM.Application.Features.Users.DTOs;
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Domain.Entities;
 using YDot.IAM.Domain.Enums;
 
@@ -58,14 +59,19 @@ public sealed class UserQueryHandler(
     ITokenHasher tokenHasher,
     IAuditService audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<UserQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<UserListItemResponse>>> HandleAsync(
         SearchUsersQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("User search started.");
+
         var page = await readService.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("User search completed. ResultCount={ResultCount}", page.Items.Count);
 
         return Result.Success(page);
     }
@@ -74,6 +80,8 @@ public sealed class UserQueryHandler(
         GetUserDetailQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("User detail retrieval started. UserId={UserId}", query.UserId);
 
         // Somebody may always see their own contact details in full, whatever permissions
         // they hold. Masking a person own e-mail from them would be absurd.
@@ -85,6 +93,7 @@ public sealed class UserQueryHandler(
 
         if (detail is null)
         {
+            logger.LogWarning("User detail retrieval failed because the user was not found. UserId={UserId}", query.UserId);
             return Result.Failure<UserDetailResponse>(Error.UserNotFound());
         }
 
@@ -97,7 +106,11 @@ public sealed class UserQueryHandler(
                 new { Action = "ViewedSensitiveContact" }, cancellationToken: cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Sensitive user contact detail view audited. UserId={UserId}", query.UserId);
         }
+
+        logger.LogInformation("User detail retrieval completed. UserId={UserId}", query.UserId);
 
         return Result.Success(detail);
     }
@@ -107,8 +120,12 @@ public sealed class UserQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("User lookup started.");
+
         var take = Math.Clamp(query.Take, 1, 50);
         var results = await readService.LookupAsync(query.Search, take, cancellationToken);
+
+        logger.LogInformation("User lookup completed. ResultCount={ResultCount}", results.Count);
 
         return Result.Success(results);
     }
@@ -128,6 +145,8 @@ public sealed class UserQueryHandler(
         GetPeopleDirectoryQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("People directory lookup started.");
 
         var take = Math.Clamp(query.Take, 1, 500);
 
@@ -155,7 +174,7 @@ public sealed class UserQueryHandler(
         // with the same name apart, and without these the clients had nothing to put there but the
         // person's own code - which they then displayed under a heading reading "Role & region".
         // The list projection already carries both, so this costs no extra query.
-        return Result.Success<IReadOnlyList<PersonLookupResponse>>(
+        var people = (IReadOnlyList<PersonLookupResponse>)
         [
             .. page.Items.Select(user => new PersonLookupResponse(
                 user.Id,
@@ -163,7 +182,11 @@ public sealed class UserQueryHandler(
                 user.Code,
                 user.RoleNames.Count > 0 ? string.Join(", ", user.RoleNames) : null,
                 user.OrganisationUnitName ?? user.DepartmentName))
-        ]);
+        ];
+
+        logger.LogInformation("People directory lookup completed. ResultCount={ResultCount}", people.Count);
+
+        return Result.Success(people);
     }
 
     public async Task<Result<UserSecurityResponse>> HandleAsync(
@@ -171,19 +194,28 @@ public sealed class UserQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("User security retrieval started. UserId={UserId}", query.UserId);
+
         // A person may always see their own security page. Seeing somebody else needs the
         // permission — re-checked here rather than trusted from the route.
         if (query.UserId != currentUser.UserId
             && !currentUser.HasPermission(PermissionCodes.UserSecurityView))
         {
+            logger.LogWarning("User security retrieval forbidden. UserId={UserId}", query.UserId);
             return Result.Failure<UserSecurityResponse>(Error.Forbidden());
         }
 
         var security = await readService.GetSecurityAsync(query.UserId, cancellationToken);
 
-        return security is null
-            ? Result.Failure<UserSecurityResponse>(Error.UserNotFound())
-            : Result.Success(security);
+        if (security is null)
+        {
+            logger.LogWarning("User security retrieval failed because the user was not found. UserId={UserId}", query.UserId);
+            return Result.Failure<UserSecurityResponse>(Error.UserNotFound());
+        }
+
+        logger.LogInformation("User security retrieval completed. UserId={UserId}", query.UserId);
+
+        return Result.Success(security);
     }
 
     public async Task<Result<UserAccessPreviewResponse>> HandleAsync(
@@ -191,23 +223,36 @@ public sealed class UserQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("User access preview retrieval started. UserId={UserId}", query.UserId);
+
         if (query.UserId != currentUser.UserId
             && !currentUser.HasPermission(PermissionCodes.PermissionsView))
         {
+            logger.LogWarning("User access preview retrieval forbidden. UserId={UserId}", query.UserId);
             return Result.Failure<UserAccessPreviewResponse>(Error.Forbidden());
         }
 
         var preview = await readService.GetAccessPreviewAsync(query.UserId, cancellationToken);
 
-        return preview is null
-            ? Result.Failure<UserAccessPreviewResponse>(Error.UserNotFound())
-            : Result.Success(preview);
+        if (preview is null)
+        {
+            logger.LogWarning("User access preview retrieval failed because the user was not found. UserId={UserId}", query.UserId);
+            return Result.Failure<UserAccessPreviewResponse>(Error.UserNotFound());
+        }
+
+        logger.LogInformation("User access preview retrieval completed. UserId={UserId}", query.UserId);
+
+        return Result.Success(preview);
     }
 
     public async Task<Result<UserStatisticsResponse>> HandleAsync(
         GetUserStatisticsQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("User statistics retrieval started.");
+
         var statistics = await readService.GetStatisticsAsync(currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("User statistics retrieval completed.");
 
         return Result.Success(statistics);
     }
@@ -215,12 +260,20 @@ public sealed class UserQueryHandler(
     public async Task<Result<UserDetailResponse>> HandleAsync(
         GetMyProfileQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Current user profile retrieval started.");
+
         var detail = await readService.GetDetailAsync(
             currentUser.UserId, currentUser.Scope, canSeeSensitiveContact: true, cancellationToken);
 
-        return detail is null
-            ? Result.Failure<UserDetailResponse>(Error.Unauthorised())
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Current user profile retrieval failed because the current user was not found.");
+            return Result.Failure<UserDetailResponse>(Error.Unauthorised());
+        }
+
+        logger.LogInformation("Current user profile retrieval completed.");
+
+        return Result.Success(detail);
     }
 
     /// <summary>
@@ -234,6 +287,8 @@ public sealed class UserQueryHandler(
         ExportUsersQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("User export started.");
 
         var canSeeContact = currentUser.HasPermission(PermissionCodes.UsersViewSensitiveContact);
 
@@ -249,6 +304,8 @@ public sealed class UserQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("User export completed. RowCount={RowCount}", rows.Count);
 
         return Result.Success(file);
     }

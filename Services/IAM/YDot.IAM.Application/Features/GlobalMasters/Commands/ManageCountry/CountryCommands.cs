@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -42,12 +43,15 @@ public sealed class CountryCommandHandler(
     IGlobalMasterRepository masters,
     IAuditService audit,
     GlobalMasterWriteGuard guard,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<CountryCommandHandler> logger)
 {
     public async Task<Result<CountryDetailResponse>> HandleAsync(
         CreateCountryCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Creating country.");
 
         var request = command.Request;
         var scopeTenantId = guard.WriteScopeTenantId;
@@ -55,6 +59,8 @@ public sealed class CountryCommandHandler(
         var code = CodeValue.TryParse(request.CountryCode)?.Value;
         if (code is null)
         {
+            logger.LogWarning("Country creation failed because the country code is invalid.");
+
             return Result.Failure<CountryDetailResponse>(Error.Validation(
                 "That country code is not valid.",
                 [new ValidationError(
@@ -65,6 +71,8 @@ public sealed class CountryCommandHandler(
         var iso2 = IsoAlpha2Value.TryParse(request.Iso2)?.Value;
         if (iso2 is null)
         {
+            logger.LogWarning("Country creation failed because the ISO2 code is invalid.");
+
             return Result.Failure<CountryDetailResponse>(Error.Validation(
                 "That ISO code is not valid.",
                 [new ValidationError(nameof(request.Iso2), "ISO2 must be exactly two letters.")]));
@@ -73,12 +81,18 @@ public sealed class CountryCommandHandler(
         if (await masters.CodeExistsAsync<Domain.Entities.Country>(
                 code, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning("Country creation failed because the country code already exists. Code: {Code}.",
+                code);
+
             return Result.Failure<CountryDetailResponse>(
                 Error.Duplicate($"A country with code {code} already exists in this catalogue."));
         }
 
         if (await masters.Iso2ExistsAsync(iso2, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning("Country creation failed because the ISO2 code already exists. ISO2: {Iso2}.",
+                iso2);
+
             return Result.Failure<CountryDetailResponse>(
                 Error.Duplicate($"A country with ISO code {iso2} already exists in this catalogue."));
         }
@@ -96,6 +110,12 @@ public sealed class CountryCommandHandler(
             new { country.Code, country.Iso2, Scope = scopeTenantId is null ? "Platform" : "Organisation" },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation(
+            "Country created successfully. CountryId: {CountryId}, Code: {Code}, Iso2: {Iso2}.",
+            country.Id,
+            country.Code,
+            country.Iso2);
+
         // A brand-new country has nothing beneath it, so both counts are zero rather than
         // being queried for.
         return country.ToDetailResponse(
@@ -107,23 +127,37 @@ public sealed class CountryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Updating country. CountryId: {CountryId}.",
+            command.CountryId);
+
         var request = command.Request;
 
         var country = await masters.GetCountryAsync(command.CountryId, cancellationToken);
         if (country is null)
         {
+            logger.LogWarning("Country update failed because the country was not found. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That country was not found."));
         }
 
         var writable = guard.EnsureWritable(country, $"The country {country.Name}");
         if (writable.IsFailure)
         {
+            logger.LogWarning("Country update rejected by the write guard. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(writable.Error!);
         }
 
         var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(country, request.ExpectedVersion);
         if (versioned.IsFailure)
         {
+            logger.LogWarning(
+                "Country update rejected because the entity version does not match. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(versioned.Error!);
         }
 
@@ -133,6 +167,9 @@ public sealed class CountryCommandHandler(
             var iso2 = IsoAlpha2Value.TryParse(request.Iso2)?.Value;
             if (iso2 is null)
             {
+                logger.LogWarning("Country update failed because the ISO2 code is invalid. CountryId: {CountryId}.",
+                    command.CountryId);
+
                 return Result.Failure<OutcomeResponse>(Error.Validation(
                     "That ISO code is not valid.",
                     [new ValidationError(nameof(request.Iso2), "ISO2 must be exactly two letters.")]));
@@ -141,6 +178,9 @@ public sealed class CountryCommandHandler(
             if (!string.Equals(iso2, country.Iso2, StringComparison.Ordinal)
                 && await masters.Iso2ExistsAsync(iso2, country.TenantId, country.Id, cancellationToken))
             {
+                logger.LogWarning("Country update failed because the ISO2 code already exists. CountryId: {CountryId}, Iso2: {Iso2}.",
+                    command.CountryId,iso2);
+
                 return Result.Failure<OutcomeResponse>(
                     Error.Duplicate($"A country with ISO code {iso2} already exists in this catalogue."));
             }
@@ -158,6 +198,9 @@ public sealed class CountryCommandHandler(
             new { country.Code, country.Iso2 },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation("Country updated successfully. CountryId: {CountryId}, Code: {Code}, Iso2: {Iso2}.",
+            country.Id,country.Code,country.Iso2);
+
         return await BuildOutcomeAsync(country, "Country updated.", cancellationToken);
     }
 
@@ -166,28 +209,44 @@ public sealed class CountryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Changing country status. CountryId: {CountryId}, RequestedStatus: {RequestedStatus}.",
+            command.CountryId,command.Request.Status);
+
         var request = command.Request;
 
         var country = await masters.GetCountryAsync(command.CountryId, cancellationToken);
         if (country is null)
         {
+            logger.LogWarning("Country status change failed because the country was not found. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That country was not found."));
         }
 
         var writable = guard.EnsureWritable(country, $"The country {country.Name}");
         if (writable.IsFailure)
         {
+            logger.LogWarning("Country status change rejected by the write guard. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(writable.Error!);
         }
 
         var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(country, request.ExpectedVersion);
         if (versioned.IsFailure)
         {
+            logger.LogWarning(
+                "Country status change rejected because the entity version does not match. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(versioned.Error!);
         }
 
         if (country.Status == request.Status)
         {
+            logger.LogWarning("Country status change rejected because the country is already in the requested status. CountryId: {CountryId}, Status: {Status}.",
+                command.CountryId,request.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"That country is already {request.Status}."));
         }
@@ -207,6 +266,9 @@ public sealed class CountryCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("Country status changed successfully. CountryId: {CountryId}, NewStatus: {NewStatus}.",
+            country.Id,request.Status);
+
         return await BuildOutcomeAsync(
             country,
             request.Status == MasterDataStatus.Active ? "Country activated." : "Country deactivated.",
@@ -218,23 +280,35 @@ public sealed class CountryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting country. CountryId: {CountryId}.",
+            command.CountryId);
+
         var request = command.Request;
 
         var country = await masters.GetCountryAsync(command.CountryId, cancellationToken);
         if (country is null)
         {
+            logger.LogWarning("Country deletion failed because the country was not found. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That country was not found."));
         }
 
         var writable = guard.EnsureWritable(country, $"The country {country.Name}");
         if (writable.IsFailure)
         {
+            logger.LogWarning("Country deletion rejected by the write guard. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(writable.Error!);
         }
 
         var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(country, request.ExpectedVersion);
         if (versioned.IsFailure)
         {
+            logger.LogWarning("Country deletion rejected because the entity version does not match. CountryId: {CountryId}.",
+                command.CountryId);
+
             return Result.Failure<OutcomeResponse>(versioned.Error!);
         }
 
@@ -252,6 +326,9 @@ public sealed class CountryCommandHandler(
 
         if (free.IsFailure)
         {
+            logger.LogWarning("Country deletion rejected because dependent records exist. CountryId: {CountryId}, StateCount: {StateCount}, CityCount: {CityCount}.",
+                command.CountryId,stateCount,cityCount);
+
             return Result.Failure<OutcomeResponse>(free.Error!);
         }
 
@@ -268,6 +345,9 @@ public sealed class CountryCommandHandler(
             snapshot,
             request.Reason,
             cancellationToken);
+
+        logger.LogInformation("Country deleted successfully. CountryId: {CountryId}, Code: {Code}, Iso2: {Iso2}.",
+            country.Id,country.Code,country.Iso2);
 
         return new OutcomeResponse(
             country.Id, country.Status.ToString(), country.Version, "Country deleted.", []);
@@ -300,3 +380,4 @@ public sealed class CountryCommandHandler(
                 country, guard.IsSuperAdmin, stateCount + cityCount));
     }
 }
+

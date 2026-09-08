@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -48,7 +49,8 @@ public sealed class MfaVerificationCommandHandler(
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
     SignInCommandHandler signIn,
-    IOptions<SecuritySettings> securityOptions)
+    IOptions<SecuritySettings> securityOptions,
+    ILogger<MfaVerificationCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
 
@@ -57,6 +59,8 @@ public sealed class MfaVerificationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("MFA verification started");
+
         var request = command.Request;
 
         var verification = await mfa.VerifyAsync(
@@ -64,6 +68,8 @@ public sealed class MfaVerificationCommandHandler(
 
         if (verification.IsFailure)
         {
+            logger.LogWarning("MFA verification failed");
+
             await audit.WriteAnonymousAsync(
                 AuditActionCodes.MfaFailed, nameof(User), null,
                 Guid.Empty, null, AuditResult.Denied,
@@ -74,6 +80,8 @@ public sealed class MfaVerificationCommandHandler(
             return Result.Failure<SignInResponse>(verification.Error!);
         }
 
+        logger.LogInformation("MFA verification succeeded for user {UserId}", verification.Value!.User.Id);
+
         return await CompleteAsync(verification.Value!, request.TrustThisDevice,
             request.DeviceName, request.DeviceIdentifier, request.ClientType, cancellationToken);
     }
@@ -83,13 +91,18 @@ public sealed class MfaVerificationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("MFA recovery code redemption started");
+
         var verification = await mfa.RedeemRecoveryCodeAsync(
             command.Request.ChallengeToken, command.Request.RecoveryCode, cancellationToken);
 
         if (verification.IsFailure)
         {
+            logger.LogWarning("MFA recovery code redemption failed");
             return Result.Failure<SignInResponse>(verification.Error!);
         }
+
+        logger.LogInformation("MFA recovery code redeemed successfully for user {UserId}", verification.Value!.User.Id);
 
         await audit.WriteAsync(
             AuditActionCodes.RecoveryCodeRedeemed, nameof(User), verification.Value!.User.Id,
@@ -118,6 +131,8 @@ public sealed class MfaVerificationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("MFA challenge cancellation requested");
+
         var challenge = await security.GetChallengeAsync(command.Request.ChallengeToken, cancellationToken);
 
         if (challenge is not null && !challenge.IsConsumed)
@@ -126,6 +141,8 @@ public sealed class MfaVerificationCommandHandler(
 
             if (challenge.User is not null)
             {
+                logger.LogInformation("MFA challenge cancelled for user {UserId}", challenge.UserId);
+
                 await audit.WriteAsync(
                     AuditActionCodes.MfaChallengeCancelled, nameof(User), challenge.UserId,
                     challenge.User.DisplayName,
@@ -134,6 +151,10 @@ public sealed class MfaVerificationCommandHandler(
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            logger.LogDebug("MFA challenge cancellation completed with no active challenge");
         }
 
         return Result.Success(new OutcomeResponse(
@@ -149,21 +170,26 @@ public sealed class MfaVerificationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("MFA challenge resend requested");
+
         var challenge = await security.GetChallengeAsync(command.Request.ChallengeToken, cancellationToken);
         if (challenge is null)
         {
+            logger.LogWarning("MFA challenge resend failed because the challenge was not found");
             return Result.Failure<MfaChallengeResponse>(Error.TokenInvalid("That verification session has ended."));
         }
 
         var user = challenge.User;
         if (user is null)
         {
+            logger.LogWarning("MFA challenge resend failed because the challenge user was not found");
             return Result.Failure<MfaChallengeResponse>(Error.TokenInvalid("That verification session has ended."));
         }
 
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("MFA challenge resend failed because the default business unit is not configured");
             return Result.Failure<MfaChallengeResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -176,11 +202,17 @@ public sealed class MfaVerificationCommandHandler(
 
         if (reissued.IsSuccess)
         {
+            logger.LogInformation("MFA challenge resent successfully for user {UserId}", user.Id);
+
             await audit.WriteAsync(
                 AuditActionCodes.MfaChallengeIssued, nameof(User), user.Id, user.DisplayName,
                 new { challenge.Purpose, Resent = true }, cancellationToken: cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            logger.LogWarning("MFA challenge resend failed for user {UserId}", user.Id);
         }
 
         return reissued;
@@ -201,9 +233,12 @@ public sealed class MfaVerificationCommandHandler(
         var now = clock.UtcNow;
         var user = verification.User;
 
+        logger.LogDebug("Completing MFA sign-in flow for user {UserId}; trust device {TrustDevice}; recovery code {UsedRecoveryCode}", user.Id, trustDevice, verification.UsedRecoveryCode);
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("MFA sign-in completion failed because the default business unit is not configured for user {UserId}", user.Id);
             return Result.Failure<SignInResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -231,10 +266,21 @@ public sealed class MfaVerificationCommandHandler(
             deviceIdentifier,
             deviceName);
 
-        return await signIn.CompleteSignInAsync(
+        var result = await signIn.CompleteSignInAsync(
             user, tenant, businessUnit, request, client,
             user.NormalizedEmail ?? string.Empty, now,
             usedTrustedDevice: trustDevice, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("MFA sign-in completed successfully for user {UserId}, tenant {TenantId}, trusted device {TrustedDevice}", user.Id, user.TenantId, trustDevice);
+        }
+        else
+        {
+            logger.LogWarning("MFA sign-in completion failed for user {UserId}, tenant {TenantId}", user.Id, user.TenantId);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -248,6 +294,8 @@ public sealed class MfaVerificationCommandHandler(
         User user, string? deviceName, string? deviceIdentifier, ClientType clientType,
         DateTimeOffset now, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Trusted device registration started for user {UserId}", user.Id);
+
         var client = userAgents.Parse(currentUser.UserAgent, clientType.ToString());
         var token = tokenHasher.GenerateToken();
 
@@ -272,6 +320,8 @@ public sealed class MfaVerificationCommandHandler(
         await audit.WriteAsync(
             AuditActionCodes.DeviceTrusted, nameof(TrustedDevice), null,
             deviceName ?? client.DeviceName, cancellationToken: cancellationToken);
+
+        logger.LogInformation("Trusted device registered successfully for user {UserId}", user.Id);
 
         // The plaintext is handed back through the response header so the API layer can put
         // it in an HttpOnly cookie. It is never persisted and never returned in the body.

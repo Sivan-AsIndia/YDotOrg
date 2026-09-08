@@ -29,7 +29,8 @@ namespace YDot.IAM.Api.Controllers;
 [Authorize]
 public sealed class MenusController(
     MenuCommandHandler commands,
-    NavigationQueryHandler queries) : ApiControllerBase
+    NavigationQueryHandler queries,
+    ILogger<MenusController> logger) : ApiControllerBase
 {
     /// <summary>
     /// The navigation tree for whoever is calling, already filtered.
@@ -49,8 +50,17 @@ public sealed class MenusController(
     // marking only that one - which is what happened first - fixes nothing.
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<NavigationResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetNavigationAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetNavigationQuery(), cancellationToken));
+    public async Task<IActionResult> GetNavigationAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting navigation tree.");
+
+        var result = await queries.HandleAsync(new GetNavigationQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Navigation tree retrieval failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The full catalogue of navigation nodes the platform defines.
@@ -62,16 +72,39 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.MenusView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuNode>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalogueAsync(
-        [FromQuery] bool includePlatformNodes, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetMenuCatalogueQuery(includePlatformNodes), cancellationToken));
+        [FromQuery] bool includePlatformNodes, CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Getting menu catalogue. IncludePlatformNodes: {IncludePlatformNodes}",
+            includePlatformNodes);
+
+        var result = await queries.HandleAsync(
+            new GetMenuCatalogueQuery(includePlatformNodes), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning(
+                "Menu catalogue retrieval failed. IncludePlatformNodes: {IncludePlatformNodes}",
+                includePlatformNodes);
+
+        return FromResult(result);
+    }
 
     /// <summary>What this Organisation has enabled, node by node.</summary>
     [HttpGet("configuration")]
     [HasPermission(PermissionCodes.MenusView)]
     [ProducesResponseType(typeof(ApiResponse<TenantMenuConfigurationResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetConfigurationAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetTenantMenuConfigurationQuery(), cancellationToken));
+    public async Task<IActionResult> GetConfigurationAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting tenant menu configuration.");
+
+        var result = await queries.HandleAsync(
+            new GetTenantMenuConfigurationQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Tenant menu configuration retrieval failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Turns navigation nodes on or off for this Organisation, and re-orders them.
@@ -83,15 +116,38 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.MenusConfigure)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ConfigureAsync(
-        [FromBody] ConfigureTenantMenuRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new ConfigureTenantMenuCommand(request), cancellationToken));
+        [FromBody] ConfigureTenantMenuRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Configuring tenant menu.");
+
+        var result = await commands.HandleAsync(
+            new ConfigureTenantMenuCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Tenant menu configuration failed.");
+        else
+            logger.LogInformation("Tenant menu configured successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>The menu-to-role mapping screen.</summary>
     [HttpGet("role-mapping/{roleId:guid}")]
     [HasPermission(PermissionCodes.MenusView)]
     [ProducesResponseType(typeof(ApiResponse<RoleMenuMappingResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetRoleMappingAsync(Guid roleId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetRoleMenuMappingQuery(roleId), cancellationToken));
+    public async Task<IActionResult> GetRoleMappingAsync(
+        Guid roleId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting role menu mapping. RoleId: {RoleId}", roleId);
+
+        var result = await queries.HandleAsync(
+            new GetRoleMenuMappingQuery(roleId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role menu mapping retrieval failed. RoleId: {RoleId}", roleId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Maps navigation nodes to a role.
@@ -103,8 +159,20 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.MenusMapRoles)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> MapRoleMenusAsync(
-        Guid roleId, [FromBody] MapRoleMenusRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new MapRoleMenusCommand(roleId, request), cancellationToken));
+        Guid roleId, [FromBody] MapRoleMenusRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Mapping menus to role. RoleId: {RoleId}", roleId);
+
+        var result = await commands.HandleAsync(
+            new MapRoleMenusCommand(roleId, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Role menu mapping failed. RoleId: {RoleId}", roleId);
+        else
+            logger.LogInformation("Role menus mapped successfully. RoleId: {RoleId}", roleId);
+
+        return FromResult(result);
+    }
 
     // ---- Platform catalogue authoring (SuperAdmin) --------------------------------------------
 
@@ -120,9 +188,22 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuDefinitionResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDefinitionsAsync(
-        [FromQuery] bool includeRetired, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetMenuDefinitionsQuery(includeRetired), cancellationToken));
+        [FromQuery] bool includeRetired, CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Getting menu definitions. IncludeRetired: {IncludeRetired}",
+            includeRetired);
+
+        var result = await queries.HandleAsync(
+            new GetMenuDefinitionsQuery(includeRetired), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning(
+                "Menu definitions retrieval failed. IncludeRetired: {IncludeRetired}",
+                includeRetired);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The permission codes a node may be gated on, for the authoring picker.
@@ -134,8 +215,18 @@ public sealed class MenusController(
     [HttpGet("definitions/permission-codes")]
     [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuPermissionOptionResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPermissionCodesAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetMenuPermissionCodesQuery(), cancellationToken));
+    public async Task<IActionResult> GetPermissionCodesAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting menu permission codes.");
+
+        var result = await queries.HandleAsync(
+            new GetMenuPermissionCodesQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Menu permission codes retrieval failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Adds a node to the PLATFORM catalogue — a new product feature, available to every
@@ -145,16 +236,42 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
     [ProducesResponseType(typeof(ApiResponse<MenuDefinitionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CreateDefinitionAsync(
-        [FromBody] CreateMenuDefinitionRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new CreateMenuDefinitionCommand(request), cancellationToken));
+        [FromBody] CreateMenuDefinitionRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Creating menu definition.");
+
+        var result = await commands.HandleAsync(
+            new CreateMenuDefinitionCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Menu definition creation failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Menu definition created successfully.");
+
+        return FromResult(result);
+    }
 
     [HttpPut("definitions/{menuId:guid}")]
     [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateDefinitionAsync(
-        Guid menuId, [FromBody] UpdateMenuDefinitionRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new UpdateMenuDefinitionCommand(menuId, request), cancellationToken));
+        Guid menuId, [FromBody] UpdateMenuDefinitionRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Updating menu definition. MenuId: {MenuId}", menuId);
+
+        var result = await commands.HandleAsync(
+            new UpdateMenuDefinitionCommand(menuId, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Menu definition update failed. MenuId: {MenuId}", menuId);
+        else
+            logger.LogInformation("Menu definition updated successfully. MenuId: {MenuId}", menuId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Removes a node from the catalogue.
@@ -170,7 +287,22 @@ public sealed class MenusController(
     [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteDefinitionAsync(
-        Guid menuId, [FromQuery] long expectedVersion, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new DeleteMenuDefinitionCommand(menuId, expectedVersion), cancellationToken));
+        Guid menuId, [FromQuery] long expectedVersion, CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Deleting menu definition. MenuId: {MenuId}, ExpectedVersion: {ExpectedVersion}",
+            menuId, expectedVersion);
+
+        var result = await commands.HandleAsync(
+            new DeleteMenuDefinitionCommand(menuId, expectedVersion), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning(
+                "Menu definition deletion failed. MenuId: {MenuId}, ExpectedVersion: {ExpectedVersion}",
+                menuId, expectedVersion);
+        else
+            logger.LogInformation("Menu definition deleted successfully. MenuId: {MenuId}", menuId);
+
+        return FromResult(result);
+    }
 }

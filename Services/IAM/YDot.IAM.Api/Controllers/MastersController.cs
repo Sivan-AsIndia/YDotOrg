@@ -21,7 +21,9 @@ namespace YDot.IAM.Api.Controllers;
 /// </summary>
 [Route("api/v1/masters")]
 [Authorize(Policy = PolicyNames.ActiveUserOnly)]
-public sealed class MastersController(GlobalMasterQueryHandler queries) : ApiControllerBase
+public sealed class MastersController(
+    GlobalMasterQueryHandler queries,
+    ILogger<MastersController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Every dropdown the Masters screens need.
@@ -39,7 +41,18 @@ public sealed class MastersController(GlobalMasterQueryHandler queries) : ApiCon
     [ProducesResponseType(
         typeof(ApiResponse<GlobalMasterReferenceDataResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReferenceDataAsync(
-        [FromQuery] Guid? countryId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetGlobalMasterReferenceDataQuery(countryId), cancellationToken));
+        [FromQuery] Guid? countryId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting global master reference data. CountryId: {CountryId}", countryId);
+
+        var result = await queries.HandleAsync(
+            new GetGlobalMasterReferenceDataQuery(countryId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning(
+                "Global master reference data lookup failed. CountryId: {CountryId}",
+                countryId);
+
+        return FromResult(result);
+    }
 }

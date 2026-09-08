@@ -28,7 +28,9 @@ namespace YDot.IAM.Api.Controllers;
 /// </summary>
 [Route("api/v1/audit-events")]
 [Authorize]
-public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiControllerBase
+public sealed class AuditEventsController(
+    GovernanceQueryHandler queries,
+    ILogger<AuditEventsController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Searches the trail.
@@ -41,8 +43,19 @@ public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiC
     [HasPermission(PermissionCodes.AuditView)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<AuditEventResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] AuditEventSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchAuditEventsQuery(filter), cancellationToken));
+        [FromQuery] AuditEventSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Searching audit events.");
+
+        var result = await queries.HandleAsync(new SearchAuditEventsQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Audit event search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The record types this Organisation's trail contains, for the filter dropdown.
@@ -54,14 +67,36 @@ public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiC
     [HttpGet("target-types")]
     [HasPermission(PermissionCodes.AuditView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<string>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTargetTypesAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetAuditTargetTypesQuery(), cancellationToken));
+    public async Task<IActionResult> GetTargetTypesAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting audit event target types.");
+
+        var result = await queries.HandleAsync(new GetAuditTargetTypesQuery(), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get audit event target types.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("{id:guid}")]
     [HasPermission(PermissionCodes.AuditView)]
     [ProducesResponseType(typeof(ApiResponse<AuditEventResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetAuditEventQuery(id), cancellationToken));
+    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting audit event. {AuditEventId}", id);
+
+        var result = await queries.HandleAsync(new GetAuditEventQuery(id), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get audit event. {AuditEventId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The recent history of one record — what the "Activity" tab on a user or role shows.
@@ -73,10 +108,21 @@ public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiC
     [HasPermission(PermissionCodes.AuditView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<AuditEventResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTrailAsync(
-        string targetType, Guid targetId, [FromQuery] int take, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
+        string targetType, Guid targetId, [FromQuery] int take, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting audit trail for target. {TargetId} {Take}", targetId, take);
+
+        var result = await queries.HandleAsync(
             new GetAuditTrailForTargetQuery(targetType, targetId, take <= 0 ? 20 : take),
-            cancellationToken));
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get audit trail for target. {TargetId}", targetId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Exports the trail to CSV.
@@ -88,6 +134,21 @@ public sealed class AuditEventsController(GovernanceQueryHandler queries) : ApiC
     [HasPermission(PermissionCodes.AuditExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] AuditEventSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportAuditEventsQuery(filter), cancellationToken));
+        [FromQuery] AuditEventSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting audit events.");
+
+        var result = await queries.HandleAsync(new ExportAuditEventsQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Audit event export failed.");
+        }
+        else
+        {
+            logger.LogInformation("Audit event export completed successfully.");
+        }
+
+        return FileFromResult(result);
+    }
 }

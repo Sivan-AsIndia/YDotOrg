@@ -70,10 +70,15 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Upserting payment gateway configuration. Provider: {Provider}, Environment: {Environment}, TenantId: {TenantId}.",
+            command.Request.Provider, command.Request.Environment, command.Request.TenantId);
+
         var request = command.Request;
 
         if (request.Provider == PaymentGatewayProvider.None)
         {
+            logger.LogWarning("Payment gateway configuration rejected because no provider was selected.");
             return Result.Failure<PaymentGatewayConfigurationResponse>(Error.Validation(
                 "Choose a payment gateway.",
                 [new ValidationError(
@@ -84,6 +89,7 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         var resolvedTenant = scope.ResolveWriteTenant(request.TenantId);
         if (resolvedTenant.IsFailure)
         {
+            logger.LogWarning("Payment gateway configuration tenant resolution failed. TenantId: {TenantId}.", request.TenantId);
             return Result.Failure<PaymentGatewayConfigurationResponse>(resolvedTenant.Error!);
         }
 
@@ -92,6 +98,8 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Payment gateway configuration tenant not found. TenantId: {TenantId}.", tenantId);
+
             return Result.Failure<PaymentGatewayConfigurationResponse>(
                 Error.TenantNotFound("That organisation was not found."));
         }
@@ -156,6 +164,9 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         var usable = EnsureUsable(configuration);
         if (usable.IsFailure)
         {
+            logger.LogWarning("Payment gateway configuration is not usable. ConfigurationId: {ConfigurationId}.",
+                configuration.Id);
+
             return Result.Failure<PaymentGatewayConfigurationResponse>(usable.Error!);
         }
 
@@ -219,6 +230,8 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         // overwritten is which merchant account the money reaches.
         if (request.ExpectedVersion is not { } expected)
         {
+            logger.LogWarning("Payment gateway configuration update rejected because expected version was not provided. ConfigurationId: {ConfigurationId}.",
+                configuration.Id);
             return Result.Failure<PaymentGatewayConfigurationResponse>(Error.Validation(
                 "This configuration already exists. Reload the screen and try again.",
                 [new ValidationError(
@@ -228,6 +241,10 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
 
         if (configuration.Version != expected)
         {
+            logger.LogWarning(
+                "Payment gateway configuration update concurrency conflict. ConfigurationId: {ConfigurationId}, ExpectedVersion: {ExpectedVersion}, CurrentVersion: {CurrentVersion}.",
+                configuration.Id, expected, configuration.Version);
+
             return Result.Failure<PaymentGatewayConfigurationResponse>(Error.Concurrency(
                 "Somebody else changed this gateway configuration while you had it open. "
                 + "Reload the screen to see their change before saving yours."));
@@ -338,6 +355,10 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Payment gateway configuration {ConfigurationId} updated. Provider: {Provider}, Environment: {Environment}, TenantId: {TenantId}, CredentialsChanged: {CredentialsChanged}.",
+            configuration.Id, configuration.Provider, configuration.Environment, configuration.TenantId, credentialsChanged);
+
         return configuration.ToResponse(organisationName, null, scope.PermittedActions(configuration.IsActive));
     }
 
@@ -345,6 +366,10 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         ChangePaymentGatewayStatusCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation(
+            "Changing payment gateway status. ConfigurationId: {ConfigurationId}, IsActive: {IsActive}.",
+            command.ConfigurationId, command.Request.IsActive);
 
         var request = command.Request;
 
@@ -412,6 +437,9 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("Payment gateway status changed. ConfigurationId: {ConfigurationId}, IsActive: {IsActive}, TenantId: {TenantId}.",
+            configuration.Id, configuration.IsActive, configuration.TenantId);
+
         return new OutcomeResponse(
             configuration.Id,
             configuration.IsActive ? "Active" : "Inactive",
@@ -426,6 +454,9 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         DeletePaymentGatewayConfigurationCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Deleting payment gateway configuration. ConfigurationId: {ConfigurationId}.",
+            command.ConfigurationId);
 
         var request = command.Request;
 
@@ -494,6 +525,10 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Payment gateway configuration {ConfigurationId} deleted. Provider: {Provider}, Environment: {Environment}, TenantId: {TenantId}.",
+            configuration.Id, configuration.Provider, configuration.Environment, configuration.TenantId);
+
         return new OutcomeResponse(
             configuration.Id, "Deleted", configuration.Version, "Gateway configuration deleted.", []);
     }
@@ -513,6 +548,9 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
         TestPaymentGatewayConfigurationCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Testing payment gateway configuration. ConfigurationId: {ConfigurationId}.",
+            command.ConfigurationId);
 
         var loaded = await LoadInScopeAsync(command.ConfigurationId, cancellationToken);
         if (loaded.IsFailure)
@@ -544,6 +582,10 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
 
         await configurations.AddAuditAsync(log.For(configuration, null), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Payment gateway configuration test completed. ConfigurationId: {ConfigurationId}, Succeeded: {Succeeded}, DurationMilliseconds: {DurationMilliseconds}.",
+            configuration.Id, outcome.Succeeded, outcome.DurationMilliseconds);
 
         await audit.WriteAsync(
             AuditActionCodes.PaymentGatewayTested,
@@ -589,10 +631,19 @@ public sealed class PaymentGatewayConfigurationCommandHandler(
             ? await configurations.GetAcrossTenantsAsync(id, cancellationToken)
             : await configurations.GetAsync(id, cancellationToken);
 
-        return configuration is null
-            ? Result.Failure<PaymentGatewayConfiguration>(
-                Error.NotFound("That gateway configuration was not found."))
-            : configuration;
+        if (configuration is null)
+        {
+            logger.LogWarning("Payment gateway configuration not found. ConfigurationId: {ConfigurationId}.",
+                id);
+
+            return Result.Failure<PaymentGatewayConfiguration>(
+                Error.NotFound("That gateway configuration was not found."));
+        }
+
+        logger.LogInformation("Payment gateway configuration loaded. ConfigurationId: {ConfigurationId}.",
+            id);
+
+        return configuration;
     }
 
     /// <summary>

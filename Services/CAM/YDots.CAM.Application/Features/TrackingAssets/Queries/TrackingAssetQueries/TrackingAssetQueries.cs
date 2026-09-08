@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -24,7 +25,8 @@ public sealed class TrackingAssetQueryHandler(
     ICsvExportService exports,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<TrackingAssetQueryHandler> logger)
 {
     private const int MaximumExportPages = 500;
 
@@ -35,8 +37,18 @@ public sealed class TrackingAssetQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.SearchAsync(query.Filter, currentUser.Scope, cancellationToken));
+        logger.LogInformation(
+            "Searching tracking assets. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page, query.Filter.PageSize);
+
+        var result = await readService.SearchAsync(
+            query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation(
+            "Tracking asset search completed. TotalCount: {TotalCount}.",
+            result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<TrackingAssetDetailResponse>> HandleAsync(
@@ -44,13 +56,28 @@ public sealed class TrackingAssetQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation(
+            "Retrieving tracking asset detail. TrackingAssetId: {TrackingAssetId}.",
+            query.TrackingAssetId);
+
         var asset = await readService.GetDetailAsync(
             query.TrackingAssetId, currentUser.Scope, cancellationToken);
 
-        return asset is null
-            ? Result.Failure<TrackingAssetDetailResponse>(
-                Error.NotFound("That tracking asset was not found."))
-            : Result.Success(asset);
+        if (asset is null)
+        {
+            logger.LogWarning(
+                "Tracking asset not found. TrackingAssetId: {TrackingAssetId}.",
+                query.TrackingAssetId);
+
+            return Result.Failure<TrackingAssetDetailResponse>(
+                Error.NotFound("That tracking asset was not found."));
+        }
+
+        logger.LogInformation(
+            "Tracking asset detail retrieved. TrackingAssetId: {TrackingAssetId}.",
+            query.TrackingAssetId);
+
+        return Result.Success(asset);
     }
 
     /// <summary>
@@ -65,6 +92,8 @@ public sealed class TrackingAssetQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Starting tracking asset export.");
+
         var filter = query.Filter;
         filter.PageSize = ExportPageSize;
         filter.Page = 1;
@@ -73,7 +102,12 @@ public sealed class TrackingAssetQueryHandler(
 
         while (filter.Page <= MaximumExportPages)
         {
-            var page = await readService.GetExportRowsAsync(filter, currentUser.Scope, cancellationToken);
+            logger.LogInformation(
+                "Retrieving tracking asset export page. Page: {Page}, PageSize: {PageSize}.",
+                filter.Page, filter.PageSize);
+
+            var page = await readService.GetExportRowsAsync(
+                filter, currentUser.Scope, cancellationToken);
 
             if (page.Count == 0)
             {
@@ -97,6 +131,10 @@ public sealed class TrackingAssetQueryHandler(
             $"Exported {rows.Count} tracking asset(s) as {file.Reference}.", cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Tracking asset export completed. RowCount: {RowCount}, Reference: {Reference}.",
+            rows.Count, file.Reference);
 
         return Result.Success(file);
     }
