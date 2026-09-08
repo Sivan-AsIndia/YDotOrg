@@ -1,7 +1,15 @@
+/* The theme's `.card` already carries `margin-bottom: 20px`; this just stops that spacing
+   trailing uselessly past the last card in the column. */
+.audit-right-col > .card:last-child { margin-bottom: 0; }
+
+.audit-card-outline {
+  border: 1px solid var(--bs-border-color, #e9ecef);
+  border-radius: var(--bs-border-radius-lg, 0.75rem);
+}
+
 /* ---------------------------------------------------------------------------------------
-   The audit trail is built almost entirely from the theme's card and table classes, so the
-   only thing that needs styling here is the expanded payload: JSON is unreadable without a
-   monospace face and a scroll boundary, and a long one would otherwise stretch the table.
+   The expanded payload: JSON is unreadable without a monospace face and a scroll boundary,
+   and a long one would otherwise stretch the timeline card.
    --------------------------------------------------------------------------------------- */
 .audit-payload {
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
@@ -12,8 +20,8 @@
   border-radius: 0.375rem;
   padding: 0.75rem 1rem;
 
-  /* Bounded in both directions: a large payload must not push the pager off the screen, and a
-     single long line must not widen the table past the viewport. */
+  /* Bounded in both directions: a large payload must not push later rows off the screen, and a
+     single long line must not widen the card past the viewport. */
   max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
@@ -26,12 +34,378 @@
   border-radius: 4px;
 }
 
-/* The action code beneath each action name. Small, dimmed, and monospaced so it reads as an
-   identifier rather than as prose. */
-.font-monospace {
-  font-size: 0.75rem;
+.font-monospace { font-size: 0.75rem; }
+
+.spin { animation: audit-spin 1s linear infinite; display: inline-block; }
+@keyframes audit-spin { to { transform: rotate(360deg); } }
+
+/* ---- Header ---------------------------------------------------------------------------- */
+.audit-header-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+/* ---- Summary stat cards ------------------------------------------------------------------ */
+.audit-stat-card {
+  border-radius: 1rem;
+  border: 1px solid transparent;
+}
+
+.audit-stat-card.bg-info-subtle { border-color: rgba(var(--pe-info-rgb), 0.22); }
+.audit-stat-card.bg-success-subtle { border-color: rgba(var(--pe-success-rgb), 0.22); }
+.audit-stat-card.bg-danger-subtle { border-color: rgba(var(--pe-danger-rgb), 0.22); }
+.audit-stat-card.bg-secondary-subtle { border-color: rgba(var(--pe-secondary-rgb), 0.22); }
+.audit-stat-card.bg-warning-subtle { border-color: rgba(var(--pe-warning-rgb), 0.22); }
+
+.audit-stat-card .card-body { padding: 0.9rem 1.1rem; }
+
+.audit-stat-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.audit-stat-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--bs-body-color);
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.audit-stat-number {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.audit-stat-spark {
+  width: 48px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.audit-stat-wave {
+  /* Spans the FULL card width with no side inset — the previous version was a 75%-wide box
+     pinned to the right, and its path had a hard vertical edge at its own x=0, which showed up
+     as an abrupt seam partway across the card instead of a wave that reaches the left edge. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 40%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.audit-stat-card .card-body > div,
+.audit-stat-card .card-body > h2,
+.audit-stat-card .card-body > h4,
+.audit-stat-card .card-body > p {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Filters ---------------------------------------------------------------------------- */
+.audit-search-group .form-control:focus,
+.audit-search-group .input-group-text {
+  box-shadow: none;
+}
+
+.audit-date-range {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: var(--bs-border-radius, 0.375rem);
+  padding: 0.3rem 0.75rem;
+}
+
+.audit-date-range .audit-date-input {
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.audit-date-range .audit-date-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+/* ---- Recent Activity header -------------------------------------------------------------- */
+.audit-activity-header {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  /* Title sits higher, with extra room below it before the border — the border position itself
+     is untouched, only the padding around the title/bar shifted. */
+  padding-top: 0.85rem !important;
+  padding-bottom: 1.6rem !important;
+}
+
+/*
+ * The dividing line is drawn here, not as a `border-bottom` on the header box, so its position
+ * is independent of the header's own padding — it sits where the mountain-peak decoration ends
+ * (matching `.audit-activity-deco`'s height), not wherever the padded box happens to end.
+ */
+.audit-activity-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 82%;
+  height: 1px;
+  background: var(--bs-border-color, #e9ecef);
+}
+
+.audit-activity-title {
+  border-left: 3px solid var(--pe-success, #37c37e);
+  padding-left: 0.75rem;
+}
+
+.audit-activity-deco {
+  /* A diagonal wash plus two overlapping triangular "peaks" — a mountain silhouette motif,
+     not stripes. Drawn as an SVG (not CSS gradients) so the peak edges are crisp diagonals. */
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 82%;
+  pointer-events: none;
+}
+
+/* ---- Recent Activity table — minimalistic: quiet borders, no zebra striping, no heavy badges
+   beyond the outcome pill, generous row padding instead of visual clutter. ----------------- */
+.audit-table {
+  --bs-table-bg: transparent;
+}
+
+.audit-table thead th {
+  border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+  padding: 0.85rem 1.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color, #6c757d);
+  white-space: nowrap;
+}
+
+.audit-table thead th:first-child,
+.audit-table tbody td:first-child { padding-left: 1.5rem; }
+.audit-table thead th:last-child,
+.audit-table tbody td:last-child { padding-right: 1.5rem; }
+
+.audit-table tbody td {
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.06));
+}
+
+.audit-table-row { cursor: pointer; transition: background-color 0.12s ease; }
+.audit-table-row:hover { background-color: var(--bs-tertiary-bg, #f8f9fa); }
+.audit-table tbody tr:last-child td { border-bottom: none; }
+
+.audit-table-icon-col {
+  /* A fixed width with the icon text-aligned centre — not the shrink-to-fit + asymmetric
+     padding this had before, where the cell's 50% midpoint landed left of the icon's actual
+     visual centre (icon width + only left padding meant the cell's true centre and the icon's
+     centre were two different points), which is why the connecting line looked offset. */
+  width: 64px;
+  text-align: center;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  position: relative;
+}
+
+/* The row-separator line starts after this column, not under the icon itself — the icon has its
+   own vertical connecting line instead. Scoped to tbody only: the header row's own bottom rule
+   (under "When / Action / By / On / Outcome") still runs the full width, icon column included. */
+.audit-table tbody td.audit-table-icon-col {
+  border-bottom: none !important;
+}
+
+/*
+ * Connecting line: two segments per cell rather than one continuous line, each stopping short
+ * of the icon's own vertical centre by a small gap (icon half-height + AUDIT_ICON_LINE_GAP).
+ * Adjacent rows' segments meet exactly at the shared row boundary (one ends at the border, the
+ * next begins at it), so the line still reads as continuous between rows while never touching
+ * either icon.
+ *
+ * Scoped to `tbody td` — NOT the bare `.audit-table-icon-col` class, which the empty header
+ * `<th>` also carries (for column-width alignment). Without this scoping, the same two segments
+ * drew themselves inside that empty header cell too, with no icon between them to justify the
+ * gap — two short lines "hanging" with nothing connecting them.
+ */
+.audit-table tbody td.audit-table-icon-col::before,
+.audit-table tbody td.audit-table-icon-col::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  background: var(--bs-border-color, #e9ecef);
+  transform: translateX(-50%);
+}
+
+.audit-table tbody td.audit-table-icon-col::before {
+  top: 0;
+  height: calc(50% - 12.5px - 6px); /* icon glyph half-height (25px / 2) + gap */
+}
+
+.audit-table tbody td.audit-table-icon-col::after {
+  top: calc(50% + 12.5px + 6px);
+  bottom: 0;
+}
+
+.audit-table-row:first-child .audit-table-icon-col::before { display: none; }
+.audit-table-row:last-child .audit-table-icon-col::after { display: none; }
+
+/* !important is required: a pre-existing, app-wide Theme Settings rule applies
+   `font-size: var(--font-size-base) !important` to every bare `i` tag in the whole app, which
+   silently caps icon glyph sizes unless beaten with an equally-important, more specific rule. */
+.audit-table-icon {
+  font-size: 25px !important;
+}
+
+
+.audit-table-chevron {
+  border: none;
+  background: transparent;
+  color: var(--bs-secondary-color, #6c757d);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.audit-table-chevron:hover { background: var(--bs-tertiary-bg, #f1f3f5); }
+.audit-table-chevron[aria-expanded="true"] i { transform: rotate(90deg); }
+.audit-table-chevron i { display: inline-block; transition: transform 0.15s ease; }
+
+.audit-table-detail-row td {
+  padding: 1rem 1.5rem 1.25rem;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+/* ---- Outcome donut ------------------------------------------------------------------------ */
+.audit-donut-empty { visibility: hidden; }
+
+.audit-donut-wrap {
+  position: relative;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.audit-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.audit-legend-dot { font-size: 0.55rem; }
+
+/* ---- Activity heatmap ---------------------------------------------------------------------- */
+.audit-heatmap-body {
+  display: flex;
+  gap: 8px;
+}
+
+.audit-heatmap-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.audit-heatmap-time {
+  font-size: 0.68rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+.audit-heatmap-grid {
+  /* Columns stretch to fill the card (1fr), but the ROW height is a fixed px value, not tied to
+     column width via aspect-ratio — that coupling is what made the grid balloon in height on a
+     wide card. Width now follows the card; height never does. */
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 24px;
+  gap: 4px;
+  width: 100%;
+}
+
+.audit-heatmap-cell {
+  border-radius: 4px;
+  background-color: var(--bs-tertiary-bg, #f1f3f5);
+  width: 100%;
+  height: 24px;
+}
+
+.audit-heatmap-days {
+  display: flex;
+  gap: 4px;
+  margin-left: 48px;
+  margin-top: 6px;
+}
+
+.audit-heatmap-days span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.6rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+/* ---- Quick Insights ------------------------------------------------------------------------ */
+.audit-insight-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.audit-insight-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
 }
 
 @media (max-width: 767.98px) {
   .audit-payload { max-height: 220px; }
+  .audit-timeline-when { width: auto; }
+  .audit-timeline-outcome { flex-basis: 100%; }
 }

@@ -1,13 +1,11 @@
 import {
   Component,
-  HostListener,
+  ChangeDetectionStrategy,
   computed,
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
-import { DonorListItem } from '../../../../Shared/models/donor-contract.model';
+import { WorkflowStateService } from '../../../../Service/workflow-state.service';
 
 /** Donor record as surfaced from the Donation & Payments module. */
 export interface Donor {
@@ -31,6 +29,10 @@ export interface Donor {
   engagementTag: EngagementTag;
   consentReviewRequired: boolean;
   createdDate: string;
+  /** Optional real values; no inferred donation history or verification. */
+  donationCount?: number;
+  donationType?: 'Recurring' | 'One-time';
+  givingGrowthPercent?: number;
 }
 
 export type FollowUpStatus = 'Due Today' | 'Tomorrow' | 'Overdue' | 'None';
@@ -80,25 +82,43 @@ const CONSENT_TAGS: ConsentStatus[] = [
 
 @Component({
   selector: 'app-donor-list',
+  standalone: true,
   imports: [],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown.escape)': 'onEscape()',
+    '(document:click)': 'onDocumentClick()',
+  },
   templateUrl: './donor-list.html',
   styleUrl: './donor-list.css',
 })
 export class DonorListComponent {
   /** ----- Raw data + async state ----- */
-  /**
-   * The donor records.
-   *
-   * FROM `GET /api/v1/donors`. The document describes this list as the destination of a
-   * conversion: "the lead becomes a donor, is removed from the Lead Work Queue and is added to
-   * the Donor List". That only works if the list reads the same store the conversion writes to.
-   */
-  protected readonly donors = signal<Donor[]>([]);
+  protected readonly donors = computed<Donor[]>(() => this.workflow.donors() as Donor[]);
   protected readonly loading = signal<boolean>(true);
   protected readonly error = signal<string | null>(null);
   protected readonly lastRefreshed = signal<Date>(new Date());
 
   /** ----- Search + filters ----- */
+  protected readonly periodFilter = signal('all');
+  protected readonly headerMenuOpen = signal(false);
+
+  protected setPeriodFilter(value: string): void {
+    this.periodFilter.set(value);
+    this.currentPage.set(1);
+  }
+
+  private inPeriod(value: string, period: string): boolean {
+    if (period === 'all') return true;
+    const date = new Date(value);
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    if (period === 'month') start.setDate(1);
+    else start.setDate(start.getDate() - Number(period) + 1);
+    return Number.isFinite(date.getTime()) && date >= start && date <= now;
+  }
+
   protected readonly searchTerm = signal<string>('');
   protected readonly filterPanelOpen = signal<boolean>(false);
   protected readonly ownerFilter = signal<string>('all');
@@ -133,109 +153,38 @@ export class DonorListComponent {
 
   constructor(
     private readonly router: Router,
-    private readonly api: DonorApiService,
+    private readonly workflow: WorkflowStateService,
   ) {
     this.loadDonors();
   }
 
   /**
-   * Loads the donors.
-   *
-   * IT USED TO `fetch('/assets/data/donors.json')` - a static file served from the bundle, with a
-   * comment saying to swap the URL "once the real endpoint is available". Three things followed:
-   * every organisation saw the same donors, the contact columns were never masked because a file
-   * cannot check a permission, and a donor created by a donation never appeared here at all.
+   * Loads donor records handed off by the Donation & Payments module.
+   * `donors.json` stands in for that read API during development — it is
+   * served as a static asset, so swap the URL below for the real endpoint
+   * (e.g. `/api/donors`) once it is available. Kept as a runtime fetch
+   * rather than a build-time import so no tsconfig changes are required.
    */
   private loadDonors(): void {
     this.loading.set(true);
     this.error.set(null);
-
-    this.api.searchDonors({ page: 1, pageSize: 200 }).subscribe({
-      next: (page) => {
-        this.donors.set(page.items.map((row) => this.toDonor(row)));
+    fetch('/assets/data/donors.json')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+        return response.json() as Promise<Donor[]>;
+      })
+      .then((data) => {
+        this.workflow.seedDonors(data);
         this.lastRefreshed.set(new Date());
+      })
+      .catch(() => {
+        this.error.set('Unable to load donors.');
+      })
+      .finally(() => {
         this.loading.set(false);
-      },
-      error: (error: unknown) => {
-        this.error.set(apiErrorMessage(error));
-        this.loading.set(false);
-      },
-    });
-  }
-
-  private toDonor(row: DonorListItem): Donor {
-    const owner = row.relationshipOwnerName ?? 'Unassigned';
-
-    return {
-      donorId: row.id,
-      reference: row.displayCode,
-      name: row.displayName,
-
-      // ALREADY MASKED, OR ALREADY NOT. `isContactMasked` is the server's decision.
-      mobile: row.mobileNumber ?? '',
-      email: row.emailAddress ?? '',
-      location: '',
-      region: '',
-      campaign: row.campaignName ?? '',
-      owner,
-      ownerInitials: this.initialsFor(owner),
-      ownerColor: this.colourFor(owner),
-      lastDonationAmount: row.lastDonationAmount ?? 0,
-      lastDonationDate: row.lastDonationAtUtc ?? '',
-      lifetimeGiving: row.lifetimeGiving,
-      followUpStatus: row.followUpStatus as FollowUpStatus,
-      consentStatus: this.toConsentStatus(row.consentStatus),
-      verificationStatus: row.verificationStatus as VerificationStatus,
-      engagementTag: this.toEngagementTag(row),
-      consentReviewRequired: row.consentReviewRequired,
-      createdDate: row.updatedAtUtc,
-    };
-  }
-
-  /** The screen's three consent words, from the server's four. */
-  private toConsentStatus(state: string): ConsentStatus {
-    switch (state) {
-      case 'Granted': return 'Full Consent';
-      case 'Partial': return 'Partial';
-      default: return 'Do Not Contact';
-    }
-  }
-
-  /**
-   * The engagement badge.
-   *
-   * DERIVED FROM FACTS THE SERVER SENT, in a fixed order so the same donor always gets the same
-   * badge. It was a stored string in the JSON file, which meant it could disagree with every
-   * other column on the row.
-   */
-  private toEngagementTag(row: DonorListItem): EngagementTag {
-    if (row.followUpStatus === 'Overdue' || row.followUpStatus === 'Due Today') {
-      return 'Follow-Up Due';
-    }
-    if (row.lifetimeGiving >= 100000) {
-      return 'High Potential';
-    }
-    if (row.lastDonationAtUtc === null) {
-      return 'No Contact';
-    }
-    return 'Dormant';
-  }
-
-  private initialsFor(name: string): string {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '??';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-
-  /** Deterministic per owner, so the same person is the same colour on every row. */
-  private colourFor(name: string): string {
-    const palette = ['#2d6a4f', '#3b82c4', '#b45309', '#6d28d9', '#0f766e', '#c53030'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return palette[Math.abs(hash) % palette.length];
+      });
   }
 
   /** ----- Derived filter option lists ----- */
@@ -257,7 +206,9 @@ export class DonorListComponent {
     thirtyDaysAgo.setDate(now.getDate() - 30);
 
     const newDonors = list.filter(
-      (d) => new Date(d.createdDate) >= thirtyDaysAgo,
+      (d) => this.periodFilter() === 'all'
+        ? new Date(d.createdDate) >= thirtyDaysAgo
+        : this.inPeriod(d.createdDate, this.periodFilter()),
     ).length;
     const activeDonors = list.filter(
       (d) => d.engagementTag === 'Recently Active',
@@ -275,13 +226,13 @@ export class DonorListComponent {
         key: 'total',
         label: 'Total Donors',
         value: list.length,
-        hint: 'Total donor records',
+        hint: 'All time records',
       },
       {
         key: 'new',
         label: 'New Donors',
         value: newDonors,
-        hint: 'Created within selected period',
+        hint: this.periodFilter() === 'all' ? 'Within the last 30 days' : 'Within selected period',
       },
       {
         key: 'active',
@@ -293,19 +244,19 @@ export class DonorListComponent {
         key: 'followups',
         label: 'Follow-Ups Due',
         value: followUpsDue,
-        hint: 'Donors needing engagement',
+        hint: 'Needs engagement',
       },
       {
         key: 'verification',
         label: 'Verification Pending',
         value: verificationPending,
-        hint: 'Donor identity still pending',
+        hint: 'Identity verification',
       },
       {
         key: 'consent',
         label: 'Consent Review Due',
         value: consentReviewDue,
-        hint: 'Consent requires attention',
+        hint: 'Requires attention',
       },
     ];
   });
@@ -346,6 +297,7 @@ export class DonorListComponent {
           : donor.consentStatus === consent);
 
       return (
+        this.inPeriod(donor.createdDate, this.periodFilter()) &&
         matchesSearch &&
         matchesOwner &&
         matchesCampaign &&
@@ -403,6 +355,7 @@ export class DonorListComponent {
 
   protected readonly hasActiveFilters = computed(
     () =>
+      this.periodFilter() !== 'all' ||
       this.ownerFilter() !== 'all' ||
       this.campaignFilter() !== 'all' ||
       this.regionFilter() !== 'all' ||
@@ -472,6 +425,7 @@ export class DonorListComponent {
   }
 
   protected clearFilters(): void {
+    this.periodFilter.set('all');
     this.ownerFilter.set('all');
     this.campaignFilter.set('all');
     this.regionFilter.set('all');
@@ -642,15 +596,15 @@ export class DonorListComponent {
   }
 
   /** ----- Global escape handler for drawer / menus ----- */
-  @HostListener('document:keydown.escape')
   protected onEscape(): void {
+    this.headerMenuOpen.set(false);
     this.previewDonorId.set(null);
     this.openMoreMenuId.set(null);
     this.exportMenuOpen.set(false);
   }
 
-  @HostListener('document:click')
   protected onDocumentClick(): void {
+    this.headerMenuOpen.set(false);
     this.openMoreMenuId.set(null);
     this.exportMenuOpen.set(false);
   }
@@ -661,6 +615,7 @@ export class DonorListComponent {
   }
 
   protected formatDate(value: string): string {
+    if (!value || !Number.isFinite(new Date(value).getTime())) return '—';
     return new Intl.DateTimeFormat('en-GB', {
       day: '2-digit',
       month: 'short',

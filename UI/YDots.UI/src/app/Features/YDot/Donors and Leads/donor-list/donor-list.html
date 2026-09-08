@@ -1,12 +1,11 @@
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="container-fluid px-4 py-3 donor-list">
+    <div class="container-fluid donor-list">
 
-      <!-- ============ PAGE HEADER ============ -->
+      
       <header class="dl-header">
         <div class="dl-header__titles">
-          <h1 class="dl-title" style="
-        font-size: 40px !important;">Donor List</h1>
+          <h1 class="dl-title">Donor List</h1>
           <p class="dl-subtitle">View and manage all donors created from successful donations.</p>
          
         </div>
@@ -47,10 +46,75 @@
             }
           </div>
         </div>
+          <div class="dl-header-more" (click)="$event.stopPropagation()">
+            <button type="button" class="btn dl-overflow-button" aria-label="More list options" [attr.aria-expanded]="headerMenuOpen()" (click)="headerMenuOpen.set(!headerMenuOpen())"><svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+            @if (headerMenuOpen()) {
+              <div class="dl-menu">
+                <button type="button" class="dl-menu__item" (click)="toggleSelectAllOnPage(); headerMenuOpen.set(false)">{{ allOnPageSelected() ? 'Deselect page' : 'Select page' }}</button>
+                <button type="button" class="dl-menu__item" (click)="clearAll(); headerMenuOpen.set(false)">Reset search and filters</button>
+                <p class="dl-menu-note">Updated {{ formatDateTime(lastRefreshed()) }}</p>
+              </div>
+            }
+          </div>
       </header>
 
-      <!-- ============ KPI CARDS ============ -->
-      <section class="dl-kpis" aria-label="Donor summary metrics">
+      
+      <section class="dl-kpis" aria-label="Donor summary metrics"><svg class="dl-donation-art" viewBox="0 0 260 330" fill="none" preserveAspectRatio="xMaxYMid meet" aria-hidden="true" focusable="false">
+  <!-- Crisp vector reconstruction of the supplied donation illustration. -->
+  <path d="M33 22C54 1 87 4 112 19c27 17 47 23 73 13 31-13 52-26 75-20v318H5c-9-28 14-45 38-57 35-17 43-32 38-58-7-38-20-70-44-92C9 98 5 51 33 22Z" fill="#fcf5ef"/>
+  <path d="M178 300c15-8 54-8 75 0-14 9-56 11-75 0Z" fill="#e9e7df"/>
+  <!-- Tall plant, behind the smaller pot and donation box. -->
+  <path d="M236 269c-1-34-1-69 0-100" stroke="#9caa75" stroke-width="3" stroke-linecap="round"/>
+  <path d="M235 197c-14-7-31-26-30-45 24-1 36 25 30 45Z" fill="#8aa45c"/>
+  <path d="M235 183c-11-22-2-42 14-50 14 23 6 41-14 50Z" fill="#9ab269"/>
+  <path d="M237 226c2-25 14-39 23-40v33c-7 5-15 7-23 7Z" fill="#7f9d52"/>
+  <path d="M236 245c-19-2-32-13-36-29 18-3 35 11 36 29Z" fill="#a2b77a"/>
+  <path d="m237 245 16-37m-17-12-20-30m20 18 10-36" stroke="#c3ce9b" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M223 257h35l-3 47h-28Z" fill="#e3d8ce"/>
+  <path d="M226 266h29l-2 35h-23Z" fill="#eee6df"/>
+  <path d="M222 257h38v8h-38Z" fill="#d4c3b5"/>
+  <path d="M227 257h28" stroke="#a89579" stroke-width="3"/>
+  <!-- Small broad-leaf plant in the foreground. -->
+  <path d="M209 277v-50" stroke="#90a266" stroke-width="3"/>
+  <path d="M210 259c-17 1-28-12-27-29 0-12 8-24 19-26 19 6 26 18 21 32-2 9-6 17-13 23Z" fill="#8aaa5d"/>
+  <path d="M202 204c-8 17-6 34-3 49m10-39 1 44m8-39-3 31" stroke="#aac482" stroke-width="2"/>
+  <path d="M191 270h34l-3 28h-27Z" fill="#e5dbd0"/>
+  <path d="M189 268h39v9h-39Z" fill="#c8b097"/>
+  <path d="M195 268h26" stroke="#ac9271" stroke-width="3"/>
+  <!-- Box: layered edges create depth without blur filters. -->
+  <ellipse cx="134" cy="312" rx="72" ry="6" fill="#e6e4de"/>
+  <path d="M77 210h105l8 92-8 10H74Z" fill="#e8ddd4"/>
+  <path d="m182 210 8 5v87l-8 10Z" fill="#dcd2c8"/>
+  <path d="M77 213h104v91H77Z" fill="#f5ece4"/>
+  <path d="M86 221h87v74H86Z" fill="#eadfd7"/>
+  <path d="M91 226h77v65H91Z" fill="#f0e5dc"/>
+  <path d="M95 230h69v57H95Z" fill="#e4d8cf"/>
+  <path d="M130 276c-7-5-22-15-22-25 0-12 13-17 22-7 9-10 22-5 22 7 0 10-15 20-22 25Z" fill="#a38d83"/>
+  <path d="M69 303h119v9H69Z" fill="#e6d9cf"/>
+  <path d="M73 303h111v4H73Z" fill="#f4eae2"/>
+  <path d="M72 204h113l4 10H69Z" fill="#eaded5"/>
+  <rect x="69" y="200" width="119" height="9" rx="3" fill="#f4eae3"/>
+  <path d="M97 207h63" stroke="#b6a99d" stroke-width="4" stroke-linecap="round"/>
+  <path d="M99 206h59" stroke="#8e8479" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Gold coin and a path-drawn rupee symbol (no font dependency). -->
+  <circle cx="139" cy="173" r="23" fill="#e9ad37"/>
+  <circle cx="139" cy="173" r="20" fill="#fbd579" stroke="#f3bf50" stroke-width="2"/>
+  <circle cx="139" cy="173" r="16.5" stroke="#eab751" stroke-width="1.3"/>
+  <path d="M132 164h13m-13 4h13m-11-4c9 0 9 10-1 10l10 10" stroke="#8e742f" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M123 166c2-6 5-9 10-10" stroke="#ffe7a8" stroke-width="2" stroke-linecap="round"/>
+  <!-- Hand pinching the coin; fingers are individually defined. -->
+  <path d="m224 78-37 9-34 4-20 23-4 14-1 17c0 5 5 8 8 4l5-15 11-12 6 4-11 15-9 9c-4 4-1 9 4 8l12-6 12-13 8-2-10 12c-3 4-1 9 4 8l10-7 8-10c17-6 29-17 37-26l18-7Z" fill="#dfab8e"/>
+  <path d="m221 79-34 10-32 4-20 23-4 14-1 15c0 3 2 4 4 1l5-15 13-14 11 2 8 8 19-5 16-13 21-9Z" fill="#e9b99a"/>
+  <path d="m151 120-9 12-3 14 8-7 11-14Z" fill="#b9856c"/>
+  <path d="m163 126-11 15-9 9m32-16-10 14m20-11-10 11" stroke="#cc967a" stroke-width="2" stroke-linecap="round"/>
+  <path d="m141 149-5 4c-2 3 0 5 3 4l7-4Z" fill="#f0ccb0"/>
+  <!-- Shirt cuff and dark jacket sleeve enter from the right edge. -->
+  <path d="m219 77 11-6 15 39-13 5Z" fill="#a7aaa5"/>
+  <path d="m226 74 5-3 14 37-6 3Z" fill="#c2c3bb"/>
+  <path d="m231 69 29-17v55l-14 8Z" fill="#3f4350"/>
+  <path d="m235 72 25-14v44l-11 6Z" fill="#494c5a"/>
+</svg>
+
         @if (loading()) {
           @for (i of [1,2,3,4,5,6]; track i) {
             <div class="dl-kpi dl-skeleton-card" aria-hidden="true">
@@ -60,16 +124,18 @@
           }
         } @else {
           @for (kpi of kpis(); track kpi.key) {
-            <div class="dl-kpi">
-              <span class="dl-kpi__value">{{ kpi.value }}</span>
+            <div class="dl-kpi" [attr.data-kpi]="kpi.key">
+              @if (kpi.key === 'total') { <span class="dl-overview">Overview</span> }
+              <div class="dl-kpi__top"><span class="dl-kpi__icon">@switch (kpi.key) {@case ('total') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-3a5 5 0 0 1 10 0v3H3Zm12-15a3 3 0 0 1 0 6m2 3a4 4 0 0 1 4 4v2h-5"/></svg>}@case ('new') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M2 20v-3a7 7 0 0 1 11-5m5-1v8m-4-4h8M2 20h11"/></svg>}@case ('active') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h5l3-9 4 18 3-9h5"/></svg>}@case ('followups') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5l-2 3Zm5 3h4M12 2v2"/></svg>}@case ('verification') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 8 3v6c0 5-8 11-8 11S4 16 4 11V5l8-3Z"/><path d="m8 11 3 3 5-5"/></svg>}@case ('consent') {<svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2h9l5 5v15H5V2Zm9 0v6h5M8 12h8m-8 4h8"/></svg>}}</span><span class="dl-kpi__value">{{ kpi.value }}</span></div>
               <span class="dl-kpi__label">{{ kpi.label }}</span>
               <span class="dl-kpi__hint">{{ kpi.hint }}</span>
+              @if (kpi.key !== 'total') { <span class="dl-kpi__trend" aria-hidden="true">—</span> }
             </div>
           }
         }
       </section>
 
-      <!-- ============ SEARCH + FILTER TOGGLE ============ -->
+      
       <section class="dl-toolbar">
         <label class="dl-search" for="donorSearch">
           <svg class="dl-icon dl-search__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -79,7 +145,7 @@
           <input
             id="donorSearch"
             type="search"
-            class="dl-search__input"
+            class="dl-search__input" aria-label="Search donors"
             placeholder="Search donor name, donor ID, mobile, email, campaign"
             [value]="searchTerm()"
             (input)="onSearchInput($any($event.target).value)"
@@ -93,23 +159,24 @@
           }
         </label>
 
+<label class="dl-period"><svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18"/></svg><span class="dl-sr-only">Filter by donor creation period</span><select [value]="periodFilter()" (change)="setPeriodFilter($any($event.target).value)"><option value="all">Select period</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="month">This month</option></select></label>
         <button
           type="button"
-          class="btn btn-outline-primary btn-sm "
+          class="btn dl-filter-button" aria-label="Toggle filters"
           (click)="toggleFilterPanel()"
           [attr.aria-expanded]="filterPanelOpen()"
         >
           <svg class="dl-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 5h16M7 12h10M10 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M3 4h18l-7 8v8l-4 2V12L3 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span>Filters</span>
+          <span class="dl-sr-only">Filters</span>
           @if (hasActiveFilters()) {
             <span class="dl-filter-dot" aria-hidden="true"></span>
           }
         </button>
       </section>
 
-      <!-- ============ FILTER PANEL ============ -->
+      
       @if (filterPanelOpen()) {
         <section class="dl-filter-panel" aria-label="Donor filters">
           <div class="dl-filter-group">
@@ -207,12 +274,12 @@
         </section>
       }
 
-      <!-- ============ TABLE CARD ============ -->
-      <section class="dl-table-card">
+      
+      <section class="dl-table-card" [attr.aria-busy]="loading()">
       
 
         @if (loading()) {
-          <!-- ===== LOADING SKELETON ===== -->
+          
           <div class="dl-table-wrap" aria-hidden="true">
             <table class="dl-table">
               <thead>
@@ -234,7 +301,7 @@
             </table>
           </div>
         } @else if (error()) {
-          <!-- ===== ERROR STATE ===== -->
+          
           <div class="dl-state">
             <svg class="dl-state__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
@@ -244,7 +311,7 @@
             <button type="button" class="btn btn-primary btn-sm" (click)="refresh()">Retry</button>
           </div>
         } @else if (paginatedDonors().length === 0) {
-          <!-- ===== EMPTY STATE ===== -->
+          
           <div class="dl-state">
             <svg class="dl-state__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 7h16l-1.5 11.2a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
@@ -257,7 +324,7 @@
             </div>
           </div>
         } @else {
-          <!-- ===== DATA TABLE ===== -->
+          
           <div class="dl-table-wrap">
             <table class="dl-table">
               <thead>
@@ -270,19 +337,18 @@
                       aria-label="Select all donors on this page"
                     />
                   </th>
-                  <!-- <th>Donor ID</th> -->
+                  
                   <th class="dl-sortable" (click)="toggleSort('name')">
                     <button type="button" class="dl-sort-btn">
-                      Donor Name
+                      Donor Details
                       <svg class="dl-icon dl-sort-icon" [class.dl-sort-icon--asc]="sortIndicator('name')==='asc'" [class.dl-sort-icon--desc]="sortIndicator('name')==='desc'" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="m7 15 5 5 5-5M7 9l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
                     </button>
                   </th>
-                  <th class="dl-hide-md">Mobile</th>
-                  <th class="dl-hide-lg">Email</th>
-                  <!-- <th class="dl-hide-md">Location</th> -->
-                  <th class="dl-sortable dl-hide-lg" (click)="toggleSort('campaign')">
+                  <th>Contact</th>
+                  
+                  <th class="dl-sortable" (click)="toggleSort('campaign')">
                     <button type="button" class="dl-sort-btn">
                       Campaign
                       <svg class="dl-icon dl-sort-icon" [class.dl-sort-icon--asc]="sortIndicator('campaign')==='asc'" [class.dl-sort-icon--desc]="sortIndicator('campaign')==='desc'" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -290,14 +356,7 @@
                       </svg>
                     </button>
                   </th>
-                  <!-- <th class="dl-sortable" (click)="toggleSort('owner')">
-                    <button type="button" class="dl-sort-btn">
-                      Owner
-                      <svg class="dl-icon dl-sort-icon" [class.dl-sort-icon--asc]="sortIndicator('owner')==='asc'" [class.dl-sort-icon--desc]="sortIndicator('owner')==='desc'" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="m7 15 5 5 5-5M7 9l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                    </button>
-                  </th> -->
+                  
                   <th class="dl-sortable" (click)="toggleSort('lastDonationDate')">
                     <button type="button" class="dl-sort-btn">
                       Last Donation
@@ -315,8 +374,8 @@
                     </button>
                   </th>
                   <th>Follow-Up</th>
-                  <!-- <th class="dl-hide-lg">Consent</th> -->
-                  <th class="dl-hide-md">Verification</th>
+                  
+                  <th >Verification</th>
                   <th class="dl-col-actions">Actions</th>
                 </tr>
               </thead>
@@ -335,31 +394,23 @@
                         [attr.aria-label]="'Select ' + donor.name"
                       />
                     </td>
-                    <!-- <td data-label="Donor ID"><span class="dl-donor-id">{{ donor.donorId }}</span></td> -->
-                    <td data-label="Donor Name"><span class="dl-donor-name">{{ donor.name }}</span></td>
-                    <td class="dl-hide-md" data-label="Mobile">{{ donor.mobile }}</td>
-                    <td class="dl-hide-lg" data-label="Email">{{ donor.email }}</td>
-                    <!-- <td class="dl-hide-md" data-label="Location">{{ donor.location }}</td> -->
-                    <td class="dl-hide-lg" data-label="Campaign">{{ donor.campaign }}</td>
-                    <!-- <td data-label="Owner">
-                      <span class="dl-owner">
-                        <span class="dl-avatar" [style.background]="donor.ownerColor">{{ donor.ownerInitials }}</span>
-                        {{ donor.owner }}
-                      </span>
-                    </td> -->
+                    
+                    <td data-label="Donor Details" class="dl-identity-cell"><div class="dl-identity"><span class="dl-donor-avatar" [class.dl-donor-avatar--green]="$odd">{{ donor.name.charAt(0).toUpperCase() }}</span><div><button type="button" class="dl-donor-name dl-text-button" (click)="openDonor360(donor, $event)">{{ donor.name }}</button>@if (donor.verificationStatus === 'Verified') { <span class="dl-badge dl-identity-verified" data-variant="verification-Verified">✓ Verified</span> }<span class="dl-donor-id">Donor ID: {{ donor.donorId }}</span></div></div></td>
+                    <td data-label="Contact"><div class="dl-contact"><span><svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3H3v4c0 8 6 14 14 14h4v-4l-5-2-2 2a14 14 0 0 1-7-7l2-2-2-5Z"/></svg><span>{{ donor.mobile || '—' }}</span></span><span><svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 6 9 7 9-7"/></svg><span>{{ donor.email || '—' }}</span></span></div></td>
+                    
+                    <td data-label="Campaign"><div class="dl-cell-stack"><strong>{{ donor.campaign }}</strong>@if (donor.donationType) { <span class="dl-badge dl-badge--blue">{{ donor.donationType }}</span> }</div></td>
+                    
                     <td data-label="Last Donation">
-                      <span class="dl-amount" role="button" tabindex="0" (click)="openDonations(donor, $event)" (keydown.enter)="openDonations(donor, $event)" (keydown.space)="openDonations(donor, $event)">{{ formatCurrency(donor.lastDonationAmount) }}</span>
+                      <button type="button" class="dl-amount dl-text-button" (click)="openDonations(donor, $event)">{{ formatCurrency(donor.lastDonationAmount) }}</button>
                       <span class="dl-subtext">{{ formatDate(donor.lastDonationDate) }}</span>
                     </td>
-                    <td data-label="Lifetime Giving"><span class="dl-amount">{{ formatCurrency(donor.lifetimeGiving) }}</span></td>
+                    <td data-label="Lifetime Giving"><div class="dl-cell-stack"><span class="dl-amount">{{ formatCurrency(donor.lifetimeGiving) }}</span>@if (donor.donationCount !== undefined) { <span class="dl-subtext">{{ donor.donationCount }} {{ donor.donationCount === 1 ? 'donation' : 'donations' }}</span> }@if (donor.givingGrowthPercent !== undefined) { <span class="dl-growth" [class.dl-growth--negative]="donor.givingGrowthPercent < 0">{{ donor.givingGrowthPercent >= 0 ? '↑' : '↓' }} {{ donor.givingGrowthPercent }}%</span> }</div></td>
                     <td data-label="Follow-Up">
                       <span class="dl-badge" [attr.data-variant]="'followup-' + donor.followUpStatus">{{ donor.followUpStatus }}</span>
                     </td>
-                    <!-- <td class="dl-hide-lg" data-label="Consent">
-                      <span class="dl-badge" role="button" tabindex="0" [attr.data-variant]="'consent-' + donor.consentStatus" (click)="openConsentCentre(donor, $event)" (keydown.enter)="openConsentCentre(donor, $event)" (keydown.space)="openConsentCentre(donor, $event)">{{ donor.consentStatus }}</span>
-                    </td> -->
-                    <td class="dl-hide-md" data-label="Verification">
-                      <span class="dl-badge" role="button" tabindex="0" [attr.data-variant]="'verification-' + donor.verificationStatus" (click)="openIdentityVerification(donor, $event)" (keydown.enter)="openIdentityVerification(donor, $event)" (keydown.space)="openIdentityVerification(donor, $event)">{{ donor.verificationStatus }}</span>
+                    
+                    <td  data-label="Verification">
+                      <button type="button" class="dl-badge" [attr.data-variant]="'verification-' + donor.verificationStatus" (click)="openIdentityVerification(donor, $event)">{{ donor.verificationStatus }}</button>
                     </td>
                     <td class="dl-col-actions" data-label="Actions">
                       <div class="dl-actions" (click)="$event.stopPropagation()">
@@ -380,25 +431,8 @@
                             <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                           </svg>
                         </button>
-                        <!-- <div class="dl-more">
-                          <button type="button" class="dl-icon-btn" (click)="toggleMoreMenu(donor.donorId, $event)" aria-label="More actions" aria-haspopup="menu" [attr.aria-expanded]="openMoreMenuId() === donor.donorId">
-                            <svg class="dl-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-                              <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-                              <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
-                            </svg>
-                          </button>
-                          @if (openMoreMenuId() === donor.donorId) {
-                            <div class="dl-menu dl-menu--right" role="menu">
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="openDonor360(donor, $event)">Open Donor 360</button>
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="openCommunicationTimeline(donor, $event)">Communication Timeline</button>
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="openFollowUpPlanner(donor, $event)">Schedule Follow-Up</button>
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="openIdentityVerification(donor, $event)">Identity Verification</button>
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="openConsentCentre(donor, $event)">Consent Centre</button>
-                              <button type="button" role="menuitem" class="dl-menu__item" (click)="exportDonorRecord(donor, $event)">Export Donor Record</button>
-                            </div>
-                          }
-                        </div> -->
+                        
+<div class="dl-more"><button type="button" class="dl-icon-btn" (click)="toggleMoreMenu(donor.donorId, $event)" aria-label="More donor actions" [attr.aria-expanded]="openMoreMenuId() === donor.donorId"><svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>@if (openMoreMenuId() === donor.donorId) {<div class="dl-menu dl-menu--right"><button type="button" class="dl-menu__item" (click)="openDonations(donor, $event)">Donations</button><button type="button" class="dl-menu__item" (click)="openConsentCentre(donor, $event)">Consent Centre</button><button type="button" class="dl-menu__item" (click)="openIdentityVerification(donor, $event)">Identity Verification</button><button type="button" class="dl-menu__item" (click)="exportDonorRecord(donor, $event)">Export Donor Record</button></div>}</div>
                       </div>
                     </td>
                   </tr>
@@ -407,8 +441,8 @@
             </table>
           </div>
 
-          <!-- ============ PAGINATION (redesigned) ============ -->
-          <div class="dl-pagination">
+          
+          <div class="dl-pagination"><span class="dl-results" aria-live="polite">{{ rangeStart() }}–{{ rangeEnd() }} of {{ totalRecords() }} donors</span>
             <label class="dl-page-size">
               <span>Rows per page</span>
               <select [value]="pageSize()" (change)="setPageSize(+$any($event.target).value)">
@@ -455,7 +489,7 @@
     </div>
   </div>
 
-  <!-- ============ DONOR PREVIEW DRAWER ============ -->
+  
   @if (previewDonor(); as donor) {
     <div class="dl-drawer-backdrop" (click)="closePreview()">
       <aside
@@ -468,10 +502,7 @@
         <div class="dl-drawer__header">
           <div>
             <p class="dl-drawer__name">{{ donor.name }}</p>
-            <!-- THE DISPLAY CODE, NOT THE API ID. `donorId` is the row's Guid, which is what the
-                 checkbox and the row actions key off; `reference` is the DON-2026-000001 a person
-                 quotes. The drawer was showing the former under the donor's name. -->
-            <p class="dl-drawer__id">{{ donor.reference }}</p>
+            <p class="dl-drawer__id">{{ donor.donorId }}</p>
           </div>
           <button type="button" class="dl-icon-btn" (click)="closePreview()" aria-label="Close preview">
             <svg class="dl-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">

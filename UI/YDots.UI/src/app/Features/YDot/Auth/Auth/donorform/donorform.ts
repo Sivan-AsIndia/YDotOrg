@@ -473,8 +473,13 @@ export class DonorformComponent {
     if (!raw) {
       return false;
     }
-    const n = Number(raw);
-    return Number.isNaN(n) || n < 0;
+    // An Indian PAN is five letters, four digits, one letter. Other organisations'
+    // tax identifiers are free text, so the only hard rule here is a minimum of
+    // five characters - the old numeric-only check rejected every real PAN.
+    if (/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(raw)) {
+      return false;
+    }
+    return raw.length < 5;
   });
   protected readonly panMasked = computed(() => {
     const v = this.panOrTaxId().trim();
@@ -495,6 +500,16 @@ export class DonorformComponent {
   protected geographyLabel(reference: string): string {
     return this.geographyCatalogue().find((g) => g.reference === reference)?.label ?? '';
   }
+
+  /**
+   * City, state and country — optional free text, captured exactly as entered and
+   * carried on the intent's second address line. The API's cityId / stateId /
+   * countryId are master-data GUIDs, and resolving them is the server's job; a
+   * public donor's typed words travel as address text, not as guessed ids.
+   */
+  protected readonly city = signal('');
+  protected readonly state = signal('');
+  protected readonly country = signal('');
 
   /**
    * Anonymous donation — checkbox; Optional (NEW FIELD). Drives the public
@@ -785,7 +800,15 @@ export class DonorformComponent {
       trackingReference: this.trackingReference() || null,
       taxIdentifier: this.panOrTaxId().trim() || null,
       addressLine1: this.addressText().trim() || null,
-      addressLine2: this.geographyLabel(this.geography()) || null,
+      // CITY / STATE / COUNTRY TRAVEL AS ADDRESS TEXT. The intent's city/state/country
+      // columns take master-data ids this form cannot resolve for an anonymous donor,
+      // so the typed values are preserved on the second line, comma-joined, exactly as
+      // the donor entered them. The approved geography pick, where one was made, comes
+      // after them.
+      addressLine2:
+        [this.city().trim(), this.state().trim(), this.country().trim()].filter(Boolean).join(', ')
+        || this.geographyLabel(this.geography())
+        || null,
 
       // Consent is captured BEFORE the intent exists, so it travels with the creation rather
       // than being written over it afterwards.
