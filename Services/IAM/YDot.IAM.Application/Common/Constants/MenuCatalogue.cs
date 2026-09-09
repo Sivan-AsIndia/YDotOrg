@@ -139,8 +139,8 @@ public static class MenuCatalogue
             "/app/administration/access/role-and-permission-catalogue", "shield",
             PermissionCodes.RolesView, 40),
 
-        new("ADMIN_MENU_MAPPING", "Menu Mapping", "ADMIN_ACCESS", MenuLevel.ChildSubMenu, "IAM",
-            "/app/administration/access/menu-mapping", "sliders",
+        new("ADMIN_MENU_MAPPING", "Menu Configuration", "ADMIN_ACCESS", MenuLevel.ChildSubMenu, "IAM",
+            "/app/administration/access/menu-configuration", "sliders",
             PermissionCodes.MenusView, 50),
 
         // BULK USER ADMINISTRATION IS DELIBERATELY ABSENT FROM THIS CATALOGUE.

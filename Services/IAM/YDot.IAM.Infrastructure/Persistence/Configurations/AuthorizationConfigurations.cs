@@ -163,12 +163,30 @@ public sealed class MenuDefinitionConfiguration : IEntityTypeConfiguration<MenuD
 
         builder.HasKey(menu => menu.Id);
 
-        builder.HasIndex(menu => menu.Code)
-            .HasDatabaseName("ix_iam_menu_definitions_code")
+        // UNIQUE PER OWNER, NOT GLOBALLY. It was a bare unique index on Code, which is correct
+        // while every row belongs to the platform and wrong the moment an Organisation can add
+        // its own: two charities both adding a "REPORTS" node is not a collision, and refusing
+        // the second would leak the existence of the first.
+        //
+        // PostgreSQL treats NULLs as distinct in a unique index, so the platform rows - all of
+        // which have a null owner - would not be constrained by this at all. The filtered index
+        // below is what keeps a platform Code unique; this one covers the Organisation rows.
+        builder.HasIndex(menu => new { menu.OwnerTenantId, menu.Code })
+            .HasDatabaseName("ix_iam_menu_definitions_owner_code")
             .IsUnique();
+
+        builder.HasIndex(menu => menu.Code)
+            .HasDatabaseName("ix_iam_menu_definitions_platform_code")
+            .IsUnique()
+            .HasFilter("owner_tenant_id IS NULL");
 
         builder.HasIndex(menu => new { menu.ParentMenuId, menu.DisplayOrder })
             .HasDatabaseName("ix_iam_menu_definitions_parent_order");
+
+        // The menu builder reads one Organisation's own nodes alongside the platform's on every
+        // navigation request, which is the hottest read this table has.
+        builder.HasIndex(menu => new { menu.OwnerTenantId, menu.Status })
+            .HasDatabaseName("ix_iam_menu_definitions_owner_status");
 
         builder.Property(menu => menu.Code).HasMaxLength(80).IsRequired();
         builder.Property(menu => menu.Name).HasMaxLength(160).IsRequired();
@@ -178,6 +196,8 @@ public sealed class MenuDefinitionConfiguration : IEntityTypeConfiguration<MenuD
         builder.Property(menu => menu.Icon).HasMaxLength(80);
         builder.Property(menu => menu.RequiredPermissionCode).HasMaxLength(100);
         builder.Property(menu => menu.BadgeKey).HasMaxLength(80);
+
+        builder.Property(menu => menu.IsSystemDefined).HasDefaultValue(true);
 
         builder.Property(menu => menu.Level).HasConversion<string>().HasMaxLength(40).IsRequired();
         builder.Property(menu => menu.Status).HasConversion<string>().HasMaxLength(40).IsRequired();

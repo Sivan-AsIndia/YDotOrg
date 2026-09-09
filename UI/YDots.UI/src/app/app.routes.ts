@@ -79,7 +79,7 @@ import { AccessDeniedComponent } from './Features/YDot/Shared/access-denied/acce
 import { PageNotFoundComponent } from './Features/YDot/Shared/page-not-found/page-not-found';
 import { AuditTrailComponent } from './Features/YDot/Administration/audit-trail/audit-trail';
 import { PaymentGatewayConfigurationComponent } from './Features/YDot/Configuration/payment/payment-gateway-configuration';
-import { MenuMappingComponent } from './Features/YDot/Administration/menu-mapping/menu-mapping';
+import { MenuConfigurationComponent } from './Features/YDot/Administration/menu-configuration/menu-configuration';
 import { OrganisationStructureComponent } from './Features/YDot/Administration/organisation-structure/organisation-structure';
 import { BusinessUnitComponent } from './Features/YDot/Platform/business-unit/business-unit';
 import { MenuCatalogueComponent } from './Features/YDot/Platform/menu-catalogue/menu-catalogue';
@@ -350,9 +350,19 @@ export const routes: Routes = [
       // a screen that cannot save.
       // =========================================================================
       {
-        path: 'administration/access/menu-mapping',
-        component: MenuMappingComponent,
+        path: 'administration/access/menu-configuration',
+        component: MenuConfigurationComponent,
         canActivate: [requirePermission('iam.menus.view', 'iam.menus.configure')],
+      },
+
+      // THE OLD PATH STILL OPENS. Menu Mapping was replaced by Menu Configuration, and its URL
+      // is in browser histories, bookmarks and at least one screenshot in a support thread.
+      // Redirecting costs one line and is the difference between a colleague landing on the new
+      // screen and landing on a 404 they report as a regression.
+      {
+        path: 'administration/access/menu-mapping',
+        redirectTo: 'administration/access/menu-configuration',
+        pathMatch: 'full',
       },
 
       // =========================================================================

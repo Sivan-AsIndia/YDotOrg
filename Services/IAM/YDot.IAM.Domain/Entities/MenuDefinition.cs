@@ -39,8 +39,46 @@ namespace YDot.IAM.Domain.Entities;
 /// </summary>
 public class MenuDefinition : AuditEntity, ICodedEntity
 {
-    /// <summary>Globally unique, for example IAM_USERS or IAM_USERS_DIRECTORY.</summary>
+    /// <summary>Unique within its owner: globally for a platform row, per Organisation otherwise.</summary>
     public string Code { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which Organisation owns this node, or null for the platform catalogue.
+    ///
+    /// THE TABLE WAS DELIBERATELY GLOBAL AND MOSTLY STILL IS. The class comment above explains
+    /// why: a screen either exists in the deployed software or it does not, and copying the
+    /// catalogue per Organisation would mean every new screen needed a row inserted into every
+    /// Tenant. Null still means exactly that - a row the platform ships, visible to every
+    /// Organisation, editable only by a platform administrator.
+    ///
+    /// WHAT THIS ADDS is the other half: a node an Organisation created FOR ITSELF. It is
+    /// visible only to that Organisation, editable only by it, and invisible to the platform
+    /// catalogue screen. Without it, "let an organisation add a menu" would have meant writing
+    /// into the shared catalogue, where one charity's menu item would appear in every other
+    /// charity's sidebar.
+    ///
+    /// IT IS NOT CALLED TenantId, AND THAT IS ON PURPOSE. <see cref="TenantEntity"/> carries a
+    /// TenantId that the DbContext stamps automatically and the global query filters match on;
+    /// this entity is an <see cref="AuditEntity"/> and must NOT join that machinery, because a
+    /// platform row has no Tenant and a filtered query would hide the entire catalogue from
+    /// everybody. A different name keeps the two mechanisms from being confused for each other.
+    /// </summary>
+    public Guid? OwnerTenantId { get; set; }
+
+    /// <summary>
+    /// True when this row came from <c>MenuCatalogue</c> rather than from a person.
+    ///
+    /// THIS EXISTS BECAUSE THE SEEDER RETIRES WHAT IT DOES NOT RECOGNISE. On every start it
+    /// compares the table against the code catalogue and marks anything absent from it as
+    /// Retired - which is right for a screen withdrawn from the product, and fatal for a menu an
+    /// administrator added five minutes ago: its Code is in no code file, so the next restart
+    /// filed it away and the menu vanished with no error anywhere.
+    ///
+    /// The seeder now only retires rows it originally wrote. An administrator's node is left
+    /// alone, for the same reason <c>TenantMenu.IsSystemGenerated</c> exists one table over: a
+    /// person's decision outranks a default, and a deploy must never quietly undo one.
+    /// </summary>
+    public bool IsSystemDefined { get; set; } = true;
 
     /// <summary>The default label. An Organisation may override it in <see cref="TenantMenu"/>.</summary>
     public string Name { get; set; } = string.Empty;
@@ -110,6 +148,9 @@ public class MenuDefinition : AuditEntity, ICodedEntity
 
     /// <summary>True when the node is a container: it has children and no route of its own.</summary>
     public bool IsGroupOnly => string.IsNullOrWhiteSpace(Route);
+
+    /// <summary>True for a row the platform ships and every Organisation can see.</summary>
+    public bool IsPlatformCatalogue => OwnerTenantId is null;
 
     public bool IsVisible => Status == MenuStatus.Active;
 }

@@ -377,7 +377,13 @@ public sealed class IamDbSeeder(
     /// <summary>The global navigation catalogue, reconciled from <c>MenuCatalogue</c>.</summary>
     private async Task SeedMenuDefinitionsAsync(CancellationToken cancellationToken)
     {
+        // PLATFORM ROWS ONLY. An Organisation may now add nodes of its own, and those are no part
+        // of this reconciliation: their codes are unique only within their Organisation, so
+        // keying the whole table by Code would let one charity's "REPORTS" shadow the catalogue
+        // seed of the same name - and the retire pass below would then file away every node no
+        // code file has ever heard of, which is all of them.
         var existing = await context.MenuDefinitions
+            .Where(menu => menu.OwnerTenantId == null)
             .ToDictionaryAsync(menu => menu.Code, StringComparer.Ordinal, cancellationToken);
 
         var added = 0;
@@ -462,6 +468,13 @@ public sealed class IamDbSeeder(
                 IsPlatformOnly = seed.IsPlatformOnly,
                 IsEnabledByDefault = seed.IsEnabledByDefault,
                 IsMandatory = seed.IsMandatory,
+
+                // WRITTEN BY THE PLATFORM, and both of these say so. The retire pass below acts
+                // only on rows carrying IsSystemDefined, so an administrator's own menu is never
+                // filed away by a deploy.
+                OwnerTenantId = null,
+                IsSystemDefined = true,
+
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 CreatedByUserId = Guid.Empty
             };
@@ -485,8 +498,14 @@ public sealed class IamDbSeeder(
         var known = MenuCatalogue.All.Select(seed => seed.Code).ToHashSet(StringComparer.Ordinal);
         var retired = 0;
 
+        // ONLY ROWS THE SEEDER WROTE. `existing` is already limited to platform rows, and
+        // IsSystemDefined narrows it again to the ones this catalogue actually produced - so a
+        // node a platform administrator created by hand through the API survives a restart too.
+        // Retiring it would have been the same silent data loss as retiring an Organisation's.
         foreach (var orphan in existing.Values.Where(menu =>
-                     !known.Contains(menu.Code) && menu.Status != MenuStatus.Retired))
+                     menu.IsSystemDefined
+                     && !known.Contains(menu.Code)
+                     && menu.Status != MenuStatus.Retired))
         {
             orphan.Status = MenuStatus.Retired;
             retired++;

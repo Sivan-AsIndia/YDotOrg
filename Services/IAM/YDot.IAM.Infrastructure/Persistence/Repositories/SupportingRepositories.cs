@@ -93,9 +93,10 @@ public sealed class MenuRepository(IamDbContext context) : IMenuRepository
             menu => menu.Code == code.ToUpperInvariant(), cancellationToken);
 
     public Task<bool> DefinitionCodeExistsAsync(
-        string code, Guid? excludingId, CancellationToken cancellationToken) =>
+        string code, Guid? excludingId, Guid? ownerTenantId, CancellationToken cancellationToken) =>
         context.MenuDefinitions
             .Where(menu => excludingId == null || menu.Id != excludingId)
+            .Where(menu => menu.OwnerTenantId == ownerTenantId)
             .AnyAsync(menu => menu.Code == code.ToUpperInvariant(), cancellationToken);
 
     public async Task AddDefinitionAsync(MenuDefinition definition, CancellationToken cancellationToken) =>
@@ -162,6 +163,27 @@ public sealed class MenuRepository(IamDbContext context) : IMenuRepository
     /// answer only for whichever Organisation happened to be selected and would cheerfully
     /// report zero while another Organisation depended on the node.
     /// </summary>
+    public async Task CascadeDeleteOwnedDefinitionAsync(
+        Guid menuDefinitionId, Guid ownerTenantId, CancellationToken cancellationToken)
+    {
+        // IgnoreQueryFilters, then filter by the owner BY HAND. The global filter would scope
+        // these to the CALLER's Organisation, which is the same thing here and would stop being
+        // so the day a platform administrator deletes a node on an Organisation's behalf. The
+        // explicit predicate says what is intended rather than relying on ambient state.
+        var tenantMenus = await context.TenantMenus
+            .IgnoreQueryFilters()
+            .Where(item => item.MenuDefinitionId == menuDefinitionId && item.TenantId == ownerTenantId)
+            .ToListAsync(cancellationToken);
+
+        var roleMenus = await context.RoleMenus
+            .IgnoreQueryFilters()
+            .Where(item => item.MenuDefinitionId == menuDefinitionId && item.TenantId == ownerTenantId)
+            .ToListAsync(cancellationToken);
+
+        context.TenantMenus.RemoveRange(tenantMenus);
+        context.RoleMenus.RemoveRange(roleMenus);
+    }
+
     public async Task<int> CountDefinitionReferencesAsync(
         Guid menuDefinitionId, CancellationToken cancellationToken)
     {
