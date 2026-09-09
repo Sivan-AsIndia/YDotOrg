@@ -38,11 +38,37 @@ public interface IMenuRepository
 
     Task<MenuDefinition?> GetDefinitionByCodeAsync(string code, CancellationToken cancellationToken);
 
-    Task<bool> DefinitionCodeExistsAsync(string code, Guid? excludingId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Whether a code is already taken WITHIN ONE OWNER.
+    ///
+    /// The owner is a parameter rather than an assumption because a menu code is only unique
+    /// inside the set it belongs to: null asks about the platform catalogue, an id asks about one
+    /// Organisation's own nodes. Two charities both calling something REPORTS is not a collision,
+    /// and answering as though it were would tell one of them what the other had named.
+    /// </summary>
+    Task<bool> DefinitionCodeExistsAsync(
+        string code, Guid? excludingId, Guid? ownerTenantId, CancellationToken cancellationToken);
 
     Task AddDefinitionAsync(MenuDefinition definition, CancellationToken cancellationToken);
 
     void RemoveDefinition(MenuDefinition definition);
+
+    /// <summary>
+    /// Removes the Organisation settings and role mappings that point at one of its OWN nodes.
+    ///
+    /// WHY DELETING A NODE NEEDS THIS AT ALL. Creating a node immediately produces rows that
+    /// reference it - a TenantMenu row per Organisation setting, a RoleMenu row per role mapped
+    /// to it - so the reference guard that protects a platform node made an Organisation's own
+    /// node permanently undeletable from the moment it existed. "Retire it instead" is the right
+    /// answer for a node other Organisations also use, and no answer at all for one nobody else
+    /// has ever seen.
+    ///
+    /// SCOPED TO THE OWNER, so this can never reach across Organisations. It is only ever called
+    /// for an owned node, and the owner is passed rather than inferred so that is checkable here
+    /// rather than only at the call site.
+    /// </summary>
+    Task CascadeDeleteOwnedDefinitionAsync(
+        Guid menuDefinitionId, Guid ownerTenantId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<TenantMenu>> GetTenantMenusAsync(Guid tenantId, CancellationToken cancellationToken);
 

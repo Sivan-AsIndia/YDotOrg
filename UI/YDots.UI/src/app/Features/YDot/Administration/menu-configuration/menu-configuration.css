@@ -1,0 +1,664 @@
+/* =============================================================================================
+   Menu configuration.
+
+   TOKENS, NOT LITERALS. Every colour resolves from the theme variables the customiser writes, so
+   this screen follows a change of primary colour, sidebar mode or radius without being touched.
+   The fallbacks are the shipped defaults, for the moment before the customiser has run.
+
+   LOGICAL PROPERTIES, so the layout mirrors when Direction is set to RTL rather than needing a
+   second stylesheet.
+   ============================================================================================= */
+
+.mc-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-block-end: 5rem; /* room for the floating save bar */
+}
+
+/* ---- Header ---- */
+.mc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.mc-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.mc-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+/* ---- Explainer ---- */
+.mc-explainer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: color-mix(in srgb, var(--pe-primary, #315746) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pe-primary, #315746) 18%, transparent);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  font-size: 0.8125rem;
+}
+
+.mc-explainer > i {
+  color: var(--pe-primary, #315746);
+  font-size: 1.05rem;
+  flex: 0 0 auto;
+}
+
+.mc-explainer p {
+  margin: 0;
+}
+
+.mc-explainer-warn {
+  margin-block-start: 0.375rem !important;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+/* ---- Toolbar ---- */
+.mc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mc-modes {
+  display: inline-flex;
+  padding: 0.25rem;
+  background: var(--pe-secondary-bg, #f1f3f6);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  gap: 0.25rem;
+}
+
+.mc-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border: 0;
+  border-radius: calc(var(--pe-border-radius, 0.5rem) - 0.125rem);
+  background: transparent;
+  color: var(--pe-secondary-color, #7b8794);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mc-mode.is-active {
+  background: var(--pe-secondary-bg, #fff);
+  background: #fff;
+  color: var(--pe-primary, #315746);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+}
+
+.mc-mode-count {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pe-primary, #315746) 12%, transparent);
+  font-size: 0.6875rem;
+}
+
+.mc-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-role-select {
+  inline-size: 12rem;
+}
+
+.mc-search {
+  position: relative;
+  inline-size: 16rem;
+  max-inline-size: 100%;
+}
+
+.mc-search i {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.5rem;
+  transform: translateY(-50%);
+  color: var(--pe-secondary-color, #7b8794);
+  pointer-events: none;
+}
+
+.mc-search input {
+  padding-inline-start: 1.85rem;
+}
+
+/* ---- States ---- */
+.mc-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.mc-state {
+  margin: 0;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-state-error p {
+  margin-block-end: 0.75rem;
+}
+
+/* ---- Body: tree beside the inspector ---- */
+.mc-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.mc-body.has-inspector {
+  grid-template-columns: minmax(0, 1fr) 22rem;
+}
+
+.mc-tree {
+  min-inline-size: 0;
+  background: var(--pe-secondary-bg, #fff);
+  background: #fff;
+  border: 1px solid var(--pe-border-color, #e4e8ee);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  overflow: hidden;
+}
+
+.mc-tree-head,
+.mc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.6fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.875rem;
+}
+
+.mc-tree-head {
+  border-block-end: 1px solid var(--pe-border-color, #e4e8ee);
+  background: var(--pe-secondary-bg, #f7f8fa);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-th-action {
+  text-align: end;
+}
+
+.mc-row {
+  border-block-end: 1px solid color-mix(in srgb, var(--pe-border-color, #e4e8ee) 60%, transparent);
+  transition: background-color 0.12s ease;
+}
+
+.mc-row:last-child {
+  border-block-end: 0;
+}
+
+.mc-row:hover {
+  background: color-mix(in srgb, var(--pe-primary, #315746) 4%, transparent);
+}
+
+.mc-row.is-selected {
+  background: color-mix(in srgb, var(--pe-primary, #315746) 8%, transparent);
+}
+
+/* A node the organisation has switched off is dimmed rather than hidden: it is still there to
+   be switched back on, and hiding it would make the list disagree with the count above it. */
+.mc-row.is-off .mc-cell-name,
+.mc-row.is-off .mc-cell-meta {
+  opacity: 0.55;
+}
+
+/* ---- Name cell ---- */
+.mc-cell-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-inline-size: 0;
+}
+
+.mc-twisty {
+  display: grid;
+  place-items: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--pe-secondary-color, #7b8794);
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+
+.mc-twisty-empty {
+  cursor: default;
+}
+
+.mc-row-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  flex: 0 0 auto;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--pe-primary, #315746) 10%, transparent);
+  color: var(--pe-primary, #315746);
+  font-size: 0.875rem;
+}
+
+.mc-row-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+}
+
+.mc-row-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-row-tags {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.mc-tag {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mc-tag-level {
+  background: var(--pe-secondary-bg, #eef1f5);
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-tag-own {
+  background: color-mix(in srgb, var(--pe-primary, #315746) 14%, transparent);
+  color: var(--pe-primary, #315746);
+}
+
+.mc-tag-custom {
+  background: #fff4e0;
+  color: #9a6300;
+}
+
+.mc-tag-required {
+  background: #e8eef9;
+  color: #2a4c8f;
+}
+
+/* ---- Meta cell ---- */
+.mc-cell-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-inline-size: 0;
+  font-size: 0.6875rem;
+}
+
+.mc-route,
+.mc-perm {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+}
+
+.mc-route {
+  color: var(--pe-primary, #315746);
+}
+
+.mc-perm {
+  color: #a13a2f;
+}
+
+.mc-meta-muted {
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+/* ---- Action cell ---- */
+.mc-cell-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mc-locked,
+.mc-hidden-org,
+.mc-blocked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mc-locked {
+  background: #e8eef9;
+  color: #2a4c8f;
+}
+
+.mc-hidden-org {
+  background: #fff4e0;
+  color: #9a6300;
+}
+
+.mc-blocked {
+  background: #fde8e6;
+  color: #a13a2f;
+}
+
+.mc-landing {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border: 1px solid var(--pe-border-color, #e4e8ee);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--pe-secondary-color, #7b8794);
+  cursor: pointer;
+}
+
+.mc-landing.is-on {
+  border-color: var(--pe-primary, #315746);
+  background: color-mix(in srgb, var(--pe-primary, #315746) 14%, transparent);
+  color: var(--pe-primary, #315746);
+}
+
+.mc-row-actions {
+  display: inline-flex;
+  gap: 0.15rem;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+/* Revealed on hover on a pointer device, always visible on touch - where there is no hover and
+   an invisible control is simply a missing one. */
+.mc-row:hover .mc-row-actions,
+.mc-row:focus-within .mc-row-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .mc-row-actions {
+    opacity: 1;
+  }
+}
+
+.mc-icon-btn {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--pe-secondary-color, #7b8794);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.mc-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pe-primary, #315746) 12%, transparent);
+  color: var(--pe-primary, #315746);
+}
+
+.mc-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mc-icon-danger:hover:not(:disabled) {
+  background: #fde8e6;
+  color: #a13a2f;
+}
+
+/* ---- Inspector ---- */
+.mc-inspector {
+  position: sticky;
+  inset-block-start: 1rem;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--pe-border-color, #e4e8ee);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  overflow: hidden;
+}
+
+.mc-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border-block-end: 1px solid var(--pe-border-color, #e4e8ee);
+}
+
+.mc-inspector-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.mc-inspector-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 0.875rem;
+  max-block-size: 60vh;
+  overflow-y: auto;
+}
+
+.mc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mc-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mc-req {
+  color: #a13a2f;
+}
+
+.mc-hint {
+  font-size: 0.6875rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-inspector-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  border-block-start: 1px solid var(--pe-border-color, #e4e8ee);
+  background: var(--pe-secondary-bg, #f7f8fa);
+}
+
+/* ---- Save bar ---- */
+/* FIXED, NOT STICKY. Sticky pins the bar to the bottom of its CONTAINING BLOCK, so on a menu
+   long enough to scroll it sat below the fold - pending changes with their only commit button
+   somewhere off screen, which reads exactly like a screen that ignored you. Fixed keeps it in
+   the viewport, which is the whole job of a save bar. */
+.mc-savebar {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline: auto;
+  inline-size: min(46rem, calc(100% - 2rem));
+  margin-inline: auto;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.625rem 1rem;
+  background: #fff;
+  border: 1px solid var(--pe-primary, #315746);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  box-shadow: 0 0.5rem 1.5rem rgba(17, 24, 39, 0.12);
+  font-size: 0.8125rem;
+  z-index: 5;
+}
+
+.mc-savebar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ---- Delete confirmation ---- */
+.mc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(17, 24, 39, 0.45);
+}
+
+.mc-modal {
+  inline-size: min(26rem, 100%);
+  padding: 1.25rem;
+  background: #fff;
+  border-radius: var(--pe-border-radius, 0.5rem);
+  box-shadow: 0 1.5rem 3rem rgba(17, 24, 39, 0.25);
+}
+
+.mc-modal-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mc-modal-lead {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.mc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* =============================================================================================
+   Responsive
+
+   THE INSPECTOR STOPS BEING A COLUMN BEFORE THE TREE STOPS BEING READABLE. Below the tablet
+   breakpoint a 22rem panel leaves the tree too narrow to show a route, so the panel becomes a
+   sheet over the page instead of a column beside it.
+   ============================================================================================= */
+@media (max-width: 991.98px) {
+  .mc-body.has-inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-inspector {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1045;
+    border-radius: var(--pe-border-radius, 0.5rem) var(--pe-border-radius, 0.5rem) 0 0;
+    box-shadow: 0 -0.5rem 2rem rgba(17, 24, 39, 0.2);
+    max-block-size: 82vh;
+  }
+
+  .mc-inspector-body {
+    max-block-size: 55vh;
+  }
+}
+
+/* The three-column row collapses to two lines: the name keeps its indentation, and the route
+   and the control sit beneath it. Squeezing three columns onto a phone made every one of them
+   an ellipsis. */
+@media (max-width: 767.98px) {
+  .mc-tree-head {
+    display: none;
+  }
+
+  .mc-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.35rem;
+  }
+
+  .mc-cell-name {
+    grid-column: 1;
+  }
+
+  .mc-cell-action {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .mc-cell-meta {
+    grid-column: 1 / -1;
+    padding-inline-start: 1.65rem;
+  }
+
+  .mc-search,
+  .mc-role-select {
+    inline-size: 100%;
+  }
+
+  .mc-toolbar-right {
+    inline-size: 100%;
+  }
+
+  .mc-modes {
+    inline-size: 100%;
+  }
+
+  .mc-mode {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}

@@ -98,7 +98,16 @@
         <div class="field">
           <span class="field-label" id="lbl-campaign">Campaign or appeal <span class="req-star">*</span></span>
           <div class="scope-picker">
+            <!-- DISABLED WHEN THE LINK NAMED THE CAMPAIGN, not merely inert.
+                 `toggleCampaignPicker()` already refused to open while locked, so the control
+                 was unusable - but it still looked and focused exactly like an open dropdown,
+                 so a donor clicked it, nothing happened, and the form read as broken. The flow
+                 document asks for the campaign to be "auto-bound as the default on the donation
+                 form and cannot be edited or changed by the donor"; a disabled control is how
+                 that is said to somebody looking at the page, and to a screen reader. -->
             <button type="button" id="fld-campaign" class="input picker-trigger" (click)="toggleCampaignPicker()"
+                    [disabled]="campaignLockedByLink() || formLocked()"
+                    [class.is-locked]="campaignLockedByLink()"
                     [attr.aria-invalid]="!selectedCampaign() && uiState() === 'validation'"
                     aria-haspopup="listbox" [attr.aria-expanded]="campaignPickerOpen()" aria-labelledby="lbl-campaign">
               <svg class="lead-ic static" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
@@ -132,6 +141,19 @@
               </div>
             }
           </div>
+          @if (campaignLockedByLink()) {
+            <span class="field-hint">Chosen by the link you followed, so your gift reaches the appeal it was raised for.</span>
+          }
+          @if (campaignLinkUnresolved()) {
+            <!-- A LINK WE COULD NOT HONOUR ASKS FOR A CHOICE, IT DOES NOT REFUSE.
+                 The picker beside this message is open and full, so the sentence explains why
+                 the donor is being asked to pick rather than telling them they cannot give. It
+                 is a hint and not an error for the same reason: nothing is wrong with anything
+                 they have done, and a red message on an untouched form reads as their mistake. -->
+            <span class="field-hint">
+              We could not find the appeal this link named, so please choose one below.
+            </span>
+          }
           @if (!selectedCampaign() && uiState() === 'validation') {
             <span class="field-error">Enter Campaign or appeal.</span>
           }

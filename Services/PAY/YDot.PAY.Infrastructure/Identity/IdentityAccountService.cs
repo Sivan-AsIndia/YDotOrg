@@ -23,6 +23,7 @@ public sealed class IdentityAccountService(
     PaymentDbContext context,
     IHttpClientFactory httpClientFactory,
     IOptions<IdentityIntegrationSettings> settings,
+    ITenantHostDirectory tenantHosts,
     ILogger<IdentityAccountService> logger) : IIdentityAccountService
 {
     /// <summary>The name the client is registered under in DependencyInjection.</summary>
@@ -147,6 +148,39 @@ public sealed class IdentityAccountService(
         {
             var client = httpClientFactory.CreateClient(HttpClientName);
 
+            // ============================================================================
+            // THE HOST HEADER IS THE ORGANISATION, AND WITHOUT IT NOTHING HERE WORKS.
+            // ============================================================================
+            // IAM resolves which Organisation a request belongs to from the Host header. This
+            // client's BaseAddress is the container address - http://ydot-iam:8080 - so every
+            // call arrived at IAM saying Host: ydot-iam:8080, which is registered to no
+            // Organisation at all. IAM therefore looked the service account up in nothing, found
+            // nothing, and answered INVALID_CREDENTIALS: "The sign-in details are incorrect."
+            //
+            // The credentials were correct the whole time. The same username and password
+            // succeed against Host: ten1.localhost and fail against Host: ydot-iam:8080, which
+            // is why this looked like a configuration problem nobody could find - and why donor
+            // portal accounts were never created for anyone, on any donation.
+            //
+            // The header is set rather than the address changed: the connection must still go to
+            // the container, and only the name IAM reads changes. It is the same fact the
+            // receipt link resolves, from the same table.
+            var tenantHost = await tenantHosts.GetPrimaryHostAsync(request.TenantId, cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(tenantHost))
+            {
+                client.DefaultRequestHeaders.Host = tenantHost;
+            }
+            else
+            {
+                logger.LogWarning(
+                    "No host is registered for organisation {TenantId}, so the identity service "
+                    + "cannot resolve it and the donor account for donation {DonationReference} "
+                    + "will not be created.",
+                    request.TenantId,
+                    request.DonationReference);
+            }
+
             var token = await SignInAsync(client, cancellationToken);
 
             if (token is null)
@@ -159,12 +193,14 @@ public sealed class IdentityAccountService(
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var (firstName, lastName) = SplitName(request.Name);
+            var (mobileCountryCode, mobileNumber) = SplitMobile(request.Mobile);
 
             var payload = new CreateUserPayload(
                 FirstName: firstName,
                 LastName: lastName,
                 Email: request.Email,
-                MobileNumber: request.Mobile,
+                MobileCountryCode: mobileCountryCode,
+                MobileNumber: mobileNumber,
                 AccountCategory: _settings.DonorAccountCategory,
 
                 // The invitation names the donation so the donor recognises what they are
@@ -252,9 +288,18 @@ public sealed class IdentityAccountService(
 
         if (!response.IsSuccessStatusCode)
         {
+            // THE BODY IS LOGGED, NOT JUST THE STATUS CODE. A bare "rejected: 400" is what hid
+            // the wrong field name for as long as it did - IAM says exactly which field it could
+            // not read, and that sentence is the whole diagnosis.
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
             logger.LogWarning(
-                "The identity service rejected the PAY service account sign-in: {StatusCode}.",
-                (int)response.StatusCode);
+                "The identity service rejected the PAY service account sign-in as {Username} on "
+                + "host {Host}: {StatusCode} {Body}",
+                _settings.ServiceAccountUsername,
+                client.DefaultRequestHeaders.Host ?? client.BaseAddress?.Host,
+                (int)response.StatusCode,
+                Truncate(body));
 
             return null;
         }
@@ -277,6 +322,82 @@ public sealed class IdentityAccountService(
             : (trimmed[..lastSpace], trimmed[(lastSpace + 1)..]);
     }
 
+    /// <summary>
+    /// Splits a donor's mobile number into the country code and the number IAM asks for.
+    ///
+    /// A NUMBER THAT WILL NOT PARSE IS DROPPED, NOT SENT. IAM validates the whole request, so an
+    /// unusable phone number does not fail the phone number - it fails the CREATE, and the donor
+    /// loses the account and the activation invitation over a field that is optional on the form
+    /// they filled in. A donor record with no telephone number is a small loss; a donor with no
+    /// way into the portal they were promised is the thing this method exists to prevent.
+    ///
+    /// A DONOR'S OWN "+" CODE WINS over the configured default: somebody who typed +44 is not in
+    /// India, and stamping +91 on their number would store a number that dials nobody.
+    /// </summary>
+    private (string? CountryCode, string? Number) SplitMobile(string? mobile)
+    {
+        if (string.IsNullOrWhiteSpace(mobile))
+        {
+            return (null, null);
+        }
+
+        var trimmed = mobile.Trim();
+        string countryCode;
+        string digits;
+
+        if (trimmed.StartsWith('+'))
+        {
+            // Everything up to the first separator is the code; failing a separator, the E.164
+            // maximum of three digits, which is all a dialling code can be.
+            var rest = new string([.. trimmed[1..].Where(character => char.IsDigit(character) || character == ' ' || character == '-')]);
+            var parts = rest.Split([' ', '-'], 2, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 2)
+            {
+                countryCode = "+" + new string([.. parts[0].Where(char.IsDigit)]);
+                digits = new string([.. parts[1].Where(char.IsDigit)]);
+            }
+            else
+            {
+                var all = new string([.. trimmed.Where(char.IsDigit)]);
+
+                // Longer than a national number means a code is glued to the front of it.
+                countryCode = all.Length > 10 ? "+" + all[..(all.Length - 10)] : "+" + all;
+                digits = all.Length > 10 ? all[(all.Length - 10)..] : string.Empty;
+            }
+        }
+        else
+        {
+            countryCode = _settings.DefaultMobileCountryCode?.Trim() ?? string.Empty;
+
+            if (countryCode.Length > 0 && !countryCode.StartsWith('+'))
+            {
+                countryCode = "+" + countryCode;
+            }
+
+            digits = new string([.. trimmed.Where(char.IsDigit)]);
+        }
+
+        // IAM's own rule, applied here so a number it would reject never reaches it: a dialling
+        // code of one to four digits, a national number of four to fourteen, fifteen in total.
+        var codeDigits = countryCode.Length - 1;
+
+        var usable = codeDigits is >= 1 and <= 4
+                     && digits.Length is >= 4 and <= 14
+                     && codeDigits + digits.Length <= 15;
+
+        if (!usable)
+        {
+            logger.LogInformation(
+                "A donor's mobile number could not be expressed with a country code and was "
+                + "omitted from their account. The account is still created.");
+
+            return (null, null);
+        }
+
+        return (countryCode, digits);
+    }
+
     private static string Truncate(string value) => value.Length <= 500 ? value : value[..500];
 
     // ---- Wire shapes -------------------------------------------------------------------
@@ -284,7 +405,20 @@ public sealed class IdentityAccountService(
     /// <summary>IAM's six-key response envelope, of which PAY needs one field.</summary>
     private sealed record ApiEnvelope<T>(bool Success, T? Data, string? Message);
 
-    private sealed record SignInPayload(string UsernameOrEmail, string Password);
+    /// <summary>
+    /// IAM's sign-in body.
+    ///
+    /// THE FIELD IS "Identifier", AND IT WAS "UsernameOrEmail" HERE. IAM's SignInRequest has no
+    /// such property, so its validator rejected every call before the handler ran - 400,
+    /// "The Identifier field is required." SignInAsync then returned null, and the only thing
+    /// that reported it was a LogWarning saying the identity service "rejected the sign-in",
+    /// which reads like a bad password rather than a body IAM could not even read.
+    ///
+    /// The consequence was silent and complete: no service-account token, so no donor account and
+    /// no activation invitation, for every donation ever taken. The donation itself was recorded
+    /// correctly, which is exactly why nobody noticed.
+    /// </summary>
+    private sealed record SignInPayload(string Identifier, string Password);
 
     private sealed record SignInResult(string? AccessToken);
 
@@ -292,6 +426,7 @@ public sealed class IdentityAccountService(
         string FirstName,
         string LastName,
         string Email,
+        string? MobileCountryCode,
         string? MobileNumber,
         string AccountCategory,
         string InvitationMessage,

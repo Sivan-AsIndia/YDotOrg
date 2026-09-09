@@ -65,9 +65,24 @@
 
                                 @for (child of children(item); track trackByCode($index, child)) {
 
-                                    <!-- Third level: a submenu that itself has children. -->
+                                    <!-- Third level: a submenu that itself has children.
+
+                                         `pe-slide-item`, NOT `pe-slide`, AND THAT ONE WORD IS
+                                         WHY THE THIRD LEVEL LOOKED LIKE THE SECOND. The theme
+                                         indents a nested submenu with
+                                         `.pe-slide-menu .pe-slide-item .pe-slide-menu`, so a
+                                         wrapper carrying `pe-slide` matched nothing: the child
+                                         sub-menu inherited the same 35px as its parent and both
+                                         started on the same vertical line.
+
+                                         It also stopped the icon-only sidebar telling the two
+                                         apart - `[data-sidebar='icon'] .pe-slide.pe-has-sub
+                                         .pe-slide-menu` turns a submenu into an absolutely
+                                         positioned flyout, and with `pe-slide` here that rule
+                                         reached the third level as well and pinned it to the
+                                         sidebar edge on top of its own parent. -->
                                     @if (isGroup(child)) {
-                                        <li class="pe-slide pe-has-sub">
+                                        <li class="pe-slide-item pe-has-sub">
                                             <a [href]="'#' + collapseId(child)" class="pe-nav-link"
                                                data-bs-toggle="collapse" aria-expanded="false"
                                                [attr.aria-controls]="collapseId(child)">

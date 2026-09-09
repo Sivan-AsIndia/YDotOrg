@@ -78,6 +78,21 @@ public static class PermissionCodes
     public const string MenusConfigure = "iam.menus.configure";
     public const string MenusMapRoles = "iam.menus.map-roles";
 
+    /// <summary>
+    /// Creating, editing and deleting an Organisation's OWN menu nodes.
+    ///
+    /// SEPARATE FROM <see cref="MenusConfigure"/> because they are different powers over
+    /// different things. Configure shapes what the platform already ships - switch a node off,
+    /// rename it, give it another icon. This one adds nodes that did not exist, and a node
+    /// pointing at a route the application does not have is a dead link an administrator can
+    /// create for everybody in their Organisation.
+    ///
+    /// IT NEVER REACHES THE PLATFORM CATALOGUE. That stays behind
+    /// <see cref="Platform.MenuCatalogueManage"/>, which no Organisation role may hold: a
+    /// charity editing a row every other charity renders is not a permission, it is a defect.
+    /// </summary>
+    public const string MenusManageStructure = "iam.menus.manage-structure";
+
     // ---- User security, devices and sessions --------------------------------------------------
     public const string UserSecurityView = "iam.user-security.view";
     public const string UserSecurityRevokeSession = "iam.user-security.revoke-session";
@@ -292,7 +307,7 @@ public static class PermissionCodes
         UsersChangeLoginIdentifier, UsersViewSensitiveContact,
         RolesCreate, RolesEdit, RolesDelete, RolesAssignPermissions, RolesAssignUsers,
         PermissionsAssign, PermissionsRevoke,
-        MenusConfigure, MenusMapRoles,
+        MenusConfigure, MenusMapRoles, MenusManageStructure,
         UserSecurityRevokeSession, UserSecurityRevokeDevice, UserSecurityResetMfa,
         UserSecurityForceSignOut,
         AccessRequestsApprove, AccessRequestsReject,
@@ -319,7 +334,7 @@ public static class PermissionCodes
         RolesView, RolesCreate, RolesEdit, RolesDelete, RolesActivate, RolesDeactivate,
         RolesAssignPermissions, RolesAssignUsers, RolesManageIncompatibility, RolesExport,
         PermissionsView, PermissionsAssign, PermissionsRevoke, PermissionsExport,
-        MenusView, MenusConfigure, MenusMapRoles,
+        MenusView, MenusConfigure, MenusMapRoles, MenusManageStructure,
         UserSecurityView, UserSecurityRevokeSession, UserSecurityRevokeDevice, UserSecurityResetMfa,
         UserSecurityForceSignOut,
         AccessRequestsView, AccessRequestsCreate, AccessRequestsSubmit, AccessRequestsApprove,

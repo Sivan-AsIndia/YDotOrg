@@ -169,6 +169,19 @@ export class PaymentEventQueueComponent {
     this.tokens.hasAnyPermission('pay.intents.create'),
   );
 
+  /**
+   * Whether this caller may put a fresh payment link in the donor's inbox.
+   *
+   * IT IS A SEPARATE PERMISSION FROM SAFE RETRY, AND THAT IS THE POINT OF SPLITTING THE ACTION.
+   * Safe retry only VERIFIES - it asks the provider what really happened to the last attempt and
+   * refuses to go further if the donor was in fact charged. Issuing a link is what actually asks
+   * somebody for money again, so an Initiator holds it and a Donor pressing Retry on their own
+   * failed gift does not: they pay it themselves through Continue payment instead.
+   */
+  protected readonly canResendLink = computed(() =>
+    this.tokens.hasAnyPermission('pay.intents.resend-link'),
+  );
+
   protected readonly pageTitle = 'Payments & Receipts';
   protected readonly pageSubtitle = 'One place to track every payment event and the receipt it generated.';
   protected readonly operatingTimeZone = 'Asia/Kolkata · IST (UTC+05:30)';
@@ -283,9 +296,28 @@ export class PaymentEventQueueComponent {
   }
 
   /**
-   * The five tiles. Two small, unpaged requests - independent of whatever page or batch of rows
+   * The five tiles. Three small, unpaged requests - independent of whatever page or batch of rows
    * is currently on screen, so the totals stay honest about the whole scope (4.5.1's "totals
    * qualified by scope", not by what happens to be rendered).
+   *
+   * ============================================================================================
+   * EACH TILE IS COUNTED FROM THE SAME SOURCE THE ROWS BENEATH IT COME FROM. That sounds obvious
+   * and was the whole bug: the summary asked the register for its own four totals while passing
+   * `status: 'Success'`, and the register HONOURS that filter when it counts. So the failed half
+   * of its union was never queried, and:
+   *
+   *   Failed       always read 0, however many failed rows the table showed. A page whose one
+   *                job is finding payments that need a retry reported that there were none,
+   *                beside a red row saying otherwise.
+   *   Total Events undercounted by exactly the failed rows - 3 above a table saying 4 of 4.
+   *
+   * Asking the register for Failed instead would have swapped one wrong number for another: the
+   * register's failed half counts donation INTENTS, while the Fail rows in the table come from
+   * the payment event queue, and one failed intent can carry several events. The tile and the
+   * table would disagree again, in the other direction. So Fail is counted where Fail is listed.
+   *
+   * TOTAL EVENTS IS THE SUM OF THE THREE, not a fourth independent number, because that is
+   * precisely what the table below contains.
    */
   private loadSummary(): void {
     const search = this.searchTerm().trim() || undefined;
@@ -293,17 +325,23 @@ export class PaymentEventQueueComponent {
     forkJoin([
       this.payments.getReceiptRegister({ page: 1, pageSize: 1, search, status: 'Success' }),
       this.payments.searchPaymentEvents({ page: 1, pageSize: 1, search, paymentOutcome: 'Pending' }),
+      this.payments.searchPaymentEvents({ page: 1, pageSize: 1, search, paymentOutcome: 'Fail' }),
     ]).subscribe({
-      next: ([receiptPage, pendingPage]) => {
+      next: ([receiptPage, pendingPage, failedPage]) => {
         const s = receiptPage.summary;
+        const successful = s?.successful ?? 0;
+
         this.summary.set({
-          // registerSummary.totalReceipts is already successful + failed together (the union);
-          // pending never appears in the register, so it is added on here.
-          totalEvents: (s?.totalReceipts ?? 0) + pendingPage.totalCount,
+          totalEvents: successful + pendingPage.totalCount + failedPage.totalCount,
+
+          // SUCCESSFUL MONEY ONLY, which is what the server sums and the only figure anybody
+          // should copy into a report - a failed or pending payment moved nothing. The tile
+          // says so beneath the number rather than leaving the reader to assume.
           totalAmount: s?.totalAmount.amount ?? 0,
-          successful: s?.successful ?? 0,
+
+          successful,
           pending: pendingPage.totalCount,
-          failed: s?.failed ?? 0,
+          failed: failedPage.totalCount,
         });
       },
       // Summary is a nice-to-have next to the row data; a failure here should not block the table.
@@ -478,8 +516,28 @@ export class PaymentEventQueueComponent {
   }
 
   // ===========================================================================================
-  // Retry (Fail rows) - unchanged from the queue's safe-retry flow
+  // Retry (Fail rows) - verify, then actually issue the link the verification earned
   // ===========================================================================================
+  //
+  // WHAT "RETRY" DID BEFORE, AND WHY THE TOAST WAS A LIE. Pressing it called safe-retry, which
+  // does exactly one thing: it asks the provider what really happened to the last attempt, so a
+  // donor who was in fact charged is never charged twice. That check is the whole reason the
+  // operation is called SAFE retry, and it worked. What it does NOT do is re-attempt the
+  // payment - the server says so in as many words, returning "A new payment link CAN be issued"
+  // with paymentLinkUrl null - and nothing was ever done with that answer.
+  //
+  // So the screen said "Retry started ... A new payment link can be issued", and then:
+  //   - no link was created, and none was sent anywhere;
+  //   - no new attempt was opened, so the donation never reached the attempt cap and never
+  //     moved on to Payment Support & Safe Retry the way the flow document says it should;
+  //   - the row stayed Fail, so the obvious reading was that the retry had failed too.
+  // The donor was waiting for an e-mail that no part of the system had undertaken to send.
+  //
+  // A retry now completes the sentence the server starts: verify first, and where the previous
+  // attempt is confirmed unsuccessful, issue the fresh link through the endpoint that already
+  // exists for it (POST donation-intents/{id}/resend-link) - which opens a new attempt and has
+  // the provider e-mail the link to the donor. The toast then names the address it went to,
+  // because "where will it be sent" is the question anybody pressing this button is asking.
 
   protected readonly retryingRef = signal<string | null>(null);
 
@@ -516,6 +574,14 @@ export class PaymentEventQueueComponent {
       )
       .subscribe({
         next: (result) => {
+          // ONLY "Retried" MEANS THE MONEY DEFINITELY DID NOT MOVE. AlreadyPaid and StillPending
+          // are the two answers that must never be followed by asking for payment again, and
+          // they are reported and left alone.
+          if (result.outcome === 'Retried') {
+            this.issueFreshLinkAfterRetry(row, intentId);
+            return;
+          }
+
           this.retryingRef.set(null);
           this.reportRetryOutcome(row, result.outcome, result.message, result.paymentLinkUrl);
           this.loadRows();
@@ -528,6 +594,74 @@ export class PaymentEventQueueComponent {
       });
   }
 
+  /**
+   * The half of a retry that actually asks the donor for the money again.
+   *
+   * REACHED ONLY AFTER THE PROVIDER HAS CONFIRMED THE LAST ATTEMPT FAILED. That confirmation is
+   * what makes issuing a second link safe rather than a double charge, and it is why this is a
+   * separate step instead of one call: a verification that comes back AlreadyPaid must end the
+   * whole operation, not merely change the wording on it.
+   *
+   * THE VERSION IS RE-READ RATHER THAN REUSED. Safe retry may have written to the intent -
+   * verification can settle an attempt and move the status - so the version held from before the
+   * call is stale, and sending it would be refused as a concurrency conflict the operator can
+   * neither see nor act on.
+   */
+  private issueFreshLinkAfterRetry(row: PaymentReceiptRow, intentId: string): void {
+    // A caller who may verify but not re-issue is told plainly what did and did not happen. This
+    // is the Donor's case: their own next step is Continue payment, which they hold.
+    if (!this.canResendLink()) {
+      this.retryingRef.set(null);
+      this.toast.show(
+        'Previous attempt confirmed failed',
+        `Nothing was charged for ${row.receiptOrIntentRef} and no new payment link has been sent. `
+          + 'Use Continue payment to pay it now, or ask an administrator to send a fresh link.',
+        'info',
+      );
+      this.loadRows();
+      this.loadSummary();
+      return;
+    }
+
+    this.payments
+      .getIntent(intentId)
+      .pipe(switchMap((intent) => this.payments.resendPaymentLink(intentId, intent.version)))
+      .subscribe({
+        next: (link) => {
+          this.retryingRef.set(null);
+          this.toast.show(
+            'New payment link sent',
+            row.donorEmail && row.donorEmail !== '\u2014'
+              ? `A fresh payment link for ${row.receiptOrIntentRef} was e-mailed to `
+                + `${row.donorEmail}. It is attempt ${link.attemptNumber} and expires `
+                + `${this.formatDateTime(link.expiresAtUtc)}.`
+              : `A fresh payment link was issued for ${row.receiptOrIntentRef} (attempt `
+                + `${link.attemptNumber}), expiring ${this.formatDateTime(link.expiresAtUtc)}. `
+                + 'This donation carries no e-mail address, so nothing was sent - pass the link '
+                + 'to the donor yourself.',
+            'success',
+          );
+          this.loadRows();
+          this.loadSummary();
+        },
+
+        // THE TWO HALVES FAIL SEPARATELY AND ARE REPORTED SEPARATELY. The verification succeeded
+        // and nothing was charged - saying only "retry failed" here would leave an operator
+        // believing the donor may have been billed.
+        error: (error: unknown) => {
+          this.retryingRef.set(null);
+          this.toast.show(
+            'No new payment link was issued',
+            `The previous attempt for ${row.receiptOrIntentRef} was confirmed as unsuccessful and `
+              + `nothing was charged, but a fresh link could not be issued: ${apiErrorMessage(error)}`,
+            'warning',
+          );
+          this.loadRows();
+          this.loadSummary();
+        },
+      });
+  }
+
   private reportRetryOutcome(
     row: PaymentReceiptRow,
     outcome: string,
@@ -535,10 +669,15 @@ export class PaymentEventQueueComponent {
     paymentLinkUrl: string | null,
   ): void {
     switch (outcome) {
+      // 'Retried' NEVER ARRIVES HERE any more - it is the one outcome with work still to do, and
+      // issueFreshLinkAfterRetry does that work and reports what came of it. The branch remains
+      // only so an outcome added server-side that reuses the word is not reported as a refusal.
       case 'Retried':
         this.toast.show(
-          'Retry started',
-          paymentLinkUrl ? `A fresh payment link was issued for ${row.receiptOrIntentRef}.` : message,
+          'Previous attempt confirmed failed',
+          paymentLinkUrl
+            ? `A fresh payment link was issued for ${row.receiptOrIntentRef}.`
+            : message,
           'success',
         );
         break;

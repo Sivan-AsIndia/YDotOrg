@@ -1,0 +1,82 @@
+<!-- ============================================================================================
+     The trigger: what is chosen now, and a way in.
+     ============================================================================================ -->
+<div class="ip-root">
+  <button type="button" class="ip-trigger" (click)="toggle()"
+          [attr.aria-expanded]="open()" aria-haspopup="dialog">
+    @if (selectedClass()) {
+      <span class="ip-preview" aria-hidden="true"><i [class]="selectedClass()"></i></span>
+      <span class="ip-name">{{ selectedName() }}</span>
+    } @else if (inheritedClass()) {
+      <!-- INHERITED IS SHOWN, NOT LEFT BLANK. A platform node with no override still draws an
+           icon in the sidebar, so an empty control here would be a lie about what people see. -->
+      <span class="ip-preview ip-preview-muted" aria-hidden="true"><i [class]="inheritedClass()"></i></span>
+      <span class="ip-name ip-name-muted">{{ inheritedIcon() }} · from the product</span>
+    } @else {
+      <span class="ip-preview ip-preview-empty" aria-hidden="true"><i class="ri-image-line"></i></span>
+      <span class="ip-name ip-name-muted">{{ placeholder() }}</span>
+    }
+    <i class="ri-arrow-down-s-line ip-chevron" aria-hidden="true"></i>
+  </button>
+
+  @if (open()) {
+    <!-- Click-away. A backdrop rather than a document listener: it cannot leak past the
+         component's life and it stops clicks reaching the row behind the panel. -->
+    <div class="ip-backdrop" (click)="close()"></div>
+
+    <div class="ip-panel" role="dialog" aria-label="Choose an icon">
+      <div class="ip-panel-head">
+        <div class="ip-search">
+          <i class="ri-search-line" aria-hidden="true"></i>
+          <input type="search" class="form-control form-control-sm" placeholder="Search 3,058 icons…"
+                 [ngModel]="search()" (ngModelChange)="search.set($event)"
+                 (keydown.enter)="applyTyped()" aria-label="Search icons" />
+        </div>
+
+        <select class="form-select form-select-sm ip-category" aria-label="Filter by category"
+                [ngModel]="category()" (ngModelChange)="category.set($event)">
+          <option value="">All categories</option>
+          @for (name of categories; track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+        </select>
+      </div>
+
+      @if (typedIsRenderable && search().trim()) {
+        <button type="button" class="ip-typed" (click)="applyTyped()">
+          <i [class]="iconClassFor(search().trim())" aria-hidden="true"></i>
+          Use “{{ search().trim() }}”
+        </button>
+      }
+
+      <div class="ip-grid" role="listbox" aria-label="Icons">
+        @for (name of visible(); track name) {
+          <button type="button" class="ip-cell" role="option"
+                  [class.is-selected]="name === selectedName()"
+                  [attr.aria-selected]="name === selectedName()"
+                  [title]="name" (click)="choose(name)">
+            <i [class]="iconClassFor(name)" aria-hidden="true"></i>
+          </button>
+        }
+
+        @if (visible().length === 0) {
+          <p class="ip-empty">No icon matches “{{ search() }}”.</p>
+        }
+      </div>
+
+      <div class="ip-panel-foot">
+        @if (hiddenCount() > 0) {
+          <!-- HOW MANY MORE, RATHER THAN A SCROLLBAR THAT NEVER ENDS. It tells the reader that
+               narrowing the search is the way through, instead of leaving them to guess. -->
+          <span class="ip-more">{{ hiddenCount() | number }} more — keep typing to narrow it down</span>
+        } @else {
+          <span class="ip-more">{{ matches().length | number }} icon(s)</span>
+        }
+
+        <button type="button" class="btn btn-sm btn-link ip-clear" (click)="clear()">
+          @if (inheritedClass()) { Use the product's icon } @else { Clear }
+        </button>
+      </div>
+    </div>
+  }
+</div>

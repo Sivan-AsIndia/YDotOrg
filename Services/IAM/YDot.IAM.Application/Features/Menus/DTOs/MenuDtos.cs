@@ -85,6 +85,13 @@ public sealed record MenuDefinitionResponse(
     bool OpensInNewTab,
     string? BadgeKey,
     long Version,
+
+    /// <summary>Null for a platform catalogue row; the Organisation that added it otherwise.</summary>
+    Guid? OwnerTenantId,
+
+    /// <summary>False when a person added this node rather than the shipped catalogue.</summary>
+    bool IsSystemDefined,
+
     IReadOnlyList<MenuDefinitionResponse> Children);
 
 /// <summary>
@@ -113,6 +120,23 @@ public sealed record TenantMenuNodeResponse(
     string? DisplayNameOverride,
     string? IconOverride,
     int? DisplayOrderOverride,
+
+    /// <summary>
+    /// True when this Organisation added the node itself, and may therefore edit or delete it.
+    ///
+    /// THE SCREEN NEEDS THIS TO KNOW WHICH VERBS TO OFFER. A platform node can be renamed,
+    /// re-iconed, reordered and switched off for this Organisation - but never edited at source
+    /// or deleted, because it belongs to every Organisation. One of its own can be. Without the
+    /// flag the screen would have to guess, and would offer a Delete that always failed.
+    /// </summary>
+    bool IsOrganisationOwned,
+
+    /// <summary>The node's own concurrency stamp, needed to edit or delete an owned node.</summary>
+    long Version,
+
+    /// <summary>Its parent, so the editor can re-parent without walking the tree back up.</summary>
+    Guid? ParentMenuDefinitionId,
+
     IReadOnlyList<TenantMenuNodeResponse> Children);
 
 /// <summary>The menu-mapping screen for one role.</summary>

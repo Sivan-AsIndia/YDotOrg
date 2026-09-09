@@ -40,9 +40,22 @@ export class BulkUserAdminApiService {
    * The response carries a row per person with its own outcome, which is what the preview screen
    * renders. Nothing has been done at this point.
    */
-  createOperation(request: CreateBulkOperationRequest): Observable<BulkOperationDetailResponse> {
+  /**
+   * Creates and validates the operation. Returns the OUTCOME, not the operation.
+   *
+   * THE RETURN TYPE WAS WRONG, and silently so. `POST /users/bulk-actions` answers with an
+   * OutcomeResponse - an id, a status, a version and a message - while this declared
+   * `BulkOperationDetailResponse`. TypeScript checks the shape you DECLARE, not the JSON that
+   * arrives, so every read of `.items` and `.totalItemCount` compiled cleanly and returned
+   * undefined at runtime. The screen reported "0 in the selection" for a validation the server
+   * had actually performed, and `apply` never had an operation id to send - which is to say the
+   * page could neither preview nor apply anything.
+   *
+   * Call `getOperation` with the id to read the rows and the counts.
+   */
+  createOperation(request: CreateBulkOperationRequest): Observable<OutcomeResponse> {
     return this.http
-      .post<ApiResponse<BulkOperationDetailResponse>>(this.baseUrl, request)
+      .post<ApiResponse<OutcomeResponse>>(this.baseUrl, request)
       .pipe(map((response) => response.data!));
   }
 
@@ -52,9 +65,9 @@ export class BulkUserAdminApiService {
    * `expectedVersion` guards against two administrators applying the same batch twice, which
    * would otherwise send forty invitations to the same forty people.
    */
-  apply(request: ApplyBulkOperationRequest): Observable<BulkOperationDetailResponse> {
+  apply(request: ApplyBulkOperationRequest): Observable<OutcomeResponse> {
     return this.http
-      .post<ApiResponse<BulkOperationDetailResponse>>(`${this.baseUrl}/apply`, request)
+      .post<ApiResponse<OutcomeResponse>>(`${this.baseUrl}/apply`, request)
       .pipe(map((response) => response.data!));
   }
 

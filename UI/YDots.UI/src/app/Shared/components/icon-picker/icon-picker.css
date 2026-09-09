@@ -1,0 +1,225 @@
+/* =============================================================================================
+   Icon picker.
+
+   Sized in rem and laid out with auto-fill rather than a fixed column count, so the grid reflows
+   inside whatever it is dropped into - an inspector panel on a desktop, a full-width sheet on a
+   phone - without the host having to know anything about it.
+   ============================================================================================= */
+
+.ip-root {
+  position: relative;
+  display: block;
+}
+
+/* ---- Trigger ---- */
+.ip-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--pe-form-control-bg, #fff);
+  border: 1px solid var(--pe-border-color, #dfe5ec);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ip-trigger:hover,
+.ip-trigger:focus-visible {
+  border-color: var(--pe-primary, #315746);
+  outline: none;
+  box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--pe-primary, #315746) 18%, transparent);
+}
+
+.ip-preview {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--pe-primary, #315746) 10%, transparent);
+  color: var(--pe-primary, #315746);
+  font-size: 1rem;
+  flex: 0 0 auto;
+}
+
+.ip-preview-muted,
+.ip-preview-empty {
+  background: var(--pe-secondary-bg, #f1f3f6);
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.ip-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.ip-name-muted {
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.ip-chevron {
+  flex: 0 0 auto;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+/* ---- Panel ---- */
+.ip-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+}
+
+.ip-panel {
+  position: absolute;
+  z-index: 1041;
+  inset-inline-start: 0;
+  inset-block-start: calc(100% + 0.375rem);
+  inline-size: min(24rem, 92vw);
+  background: var(--pe-secondary-bg, #fff);
+  border: 1px solid var(--pe-border-color, #dfe5ec);
+  border-radius: var(--pe-border-radius, 0.5rem);
+  box-shadow: 0 1rem 2.5rem rgba(17, 24, 39, 0.16);
+  overflow: hidden;
+}
+
+.ip-panel-head {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  border-block-end: 1px solid var(--pe-border-color, #dfe5ec);
+}
+
+.ip-search {
+  position: relative;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.ip-search i {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.5rem;
+  transform: translateY(-50%);
+  color: var(--pe-secondary-color, #7b8794);
+  pointer-events: none;
+}
+
+.ip-search input {
+  padding-inline-start: 1.85rem;
+}
+
+.ip-category {
+  flex: 0 0 8.5rem;
+}
+
+.ip-typed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--pe-primary, #315746) 8%, transparent);
+  border: 0;
+  border-block-end: 1px solid var(--pe-border-color, #dfe5ec);
+  color: var(--pe-primary, #315746);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+/* auto-fill, so the column count follows the width rather than being declared per breakpoint. */
+.ip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.25rem, 1fr));
+  gap: 0.25rem;
+  padding: 0.625rem;
+  max-block-size: 17rem;
+  overflow-y: auto;
+}
+
+.ip-cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--pe-body-color, #212529);
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.ip-cell:hover,
+.ip-cell:focus-visible {
+  background: color-mix(in srgb, var(--pe-primary, #315746) 10%, transparent);
+  outline: none;
+}
+
+.ip-cell.is-selected {
+  border-color: var(--pe-primary, #315746);
+  background: color-mix(in srgb, var(--pe-primary, #315746) 16%, transparent);
+  color: var(--pe-primary, #315746);
+}
+
+.ip-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 1.25rem 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.ip-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-block-start: 1px solid var(--pe-border-color, #dfe5ec);
+}
+
+.ip-more {
+  font-size: 0.75rem;
+  color: var(--pe-secondary-color, #7b8794);
+}
+
+.ip-clear {
+  padding: 0;
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+/* On a narrow screen the panel becomes a sheet: a 24rem popover anchored to a control near the
+   right edge would otherwise hang off the viewport. */
+@media (max-width: 575.98px) {
+  .ip-panel {
+    position: fixed;
+    inset: auto 0 0 0;
+    inline-size: 100%;
+    border-radius: var(--pe-border-radius, 0.5rem) var(--pe-border-radius, 0.5rem) 0 0;
+    max-block-size: 70vh;
+  }
+
+  .ip-grid {
+    max-block-size: 42vh;
+  }
+
+  .ip-panel-head {
+    flex-wrap: wrap;
+  }
+
+  .ip-category {
+    flex: 1 1 100%;
+  }
+}

@@ -210,6 +210,10 @@ public static class DependencyInjection
         // BusinessUnit that seeder creates.
         services.AddScoped<GlobalMasterSeeder>();
 
+        // LAST OF THE THREE. Its rows name the sample Organisation's users and roles by their
+        // generated ids, which exist only once IamDbSeeder has saved them.
+        services.AddScoped<AccessGovernanceSeeder>();
+
         return services;
     }
 

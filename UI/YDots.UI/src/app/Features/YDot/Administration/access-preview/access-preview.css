@@ -1,0 +1,115 @@
+/*
+ * Access preview.
+ *
+ * The screen is a picker beside an answer, and the answer is long. Everything here is in service
+ * of one thing: making a list of two hundred permission codes readable by somebody who is looking
+ * for one of them.
+ */
+
+/* ---- The person picker ---------------------------------------------------------------------
+ *
+ * SCROLLS ON ITS OWN rather than growing the page. The answer beside it is far taller than the
+ * list, and a picker that pushed the page down would put the thing being answered off screen.
+ */
+.person-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0 -0.25rem;
+}
+
+.person-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.125rem;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.person-row:hover {
+  background-color: rgba(13, 110, 253, 0.06);
+}
+
+.person-row--active {
+  background-color: rgba(13, 110, 253, 0.1);
+  border-color: rgba(13, 110, 253, 0.35);
+}
+
+.person-row__name {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.person-row__meta {
+  display: block;
+  font-size: 0.6875rem;
+  color: #6c757d;
+  line-height: 1.4;
+}
+
+/* The roles are the reason somebody is looking, so they are shown - but truncated, because a
+ * person holding four roles must not make their row four lines tall. */
+.person-row__roles {
+  display: block;
+  font-size: 0.6875rem;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- The module accordion ------------------------------------------------------------------ */
+.module-block + .module-block {
+  border-top: 1px solid #e9ecef;
+}
+
+.module-head {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.module-head:hover {
+  background-color: #f8f9fa;
+}
+
+.module-head__chevron {
+  width: 1.1rem;
+  color: #6c757d;
+}
+
+.module-body {
+  padding: 0 1rem 0.75rem 2.1rem;
+  background-color: #fbfcfd;
+}
+
+.permission-group + .permission-group {
+  margin-top: 0.75rem;
+}
+
+.permission-group__title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin: 0.5rem 0 0.25rem;
+}
+
+/* A permission code is read character by character when somebody is checking one, so it gets a
+ * monospace face and stays on one line. */
+.permission-group code {
+  font-size: 0.75rem;
+  color: #495057;
+  white-space: nowrap;
+}

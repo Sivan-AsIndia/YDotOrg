@@ -185,7 +185,7 @@ public sealed class MenusController(
     /// because the fields it adds are only useful to somebody authoring.
     /// </summary>
     [HttpGet("definitions")]
-    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [HasPermission(PermissionCodes.MenusView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuDefinitionResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDefinitionsAsync(
         [FromQuery] bool includeRetired, CancellationToken cancellationToken)
@@ -212,8 +212,12 @@ public sealed class MenusController(
     /// the TENANT permission <c>iam.permissions.view</c>, which a SuperAdmin at platform level
     /// does not hold — leaving the picker empty for the only person who uses this screen.
     /// </summary>
+    // READABLE BY ANY MENU ADMINISTRATOR. It is the list of permission codes a node can be
+    // guarded by - the picker behind "who is allowed to see this item" - and an Organisation
+    // building its own menu needs it as much as the platform does. The codes are not secrets:
+    // they are already on every role screen.
     [HttpGet("definitions/permission-codes")]
-    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [HasPermission(PermissionCodes.MenusView)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MenuPermissionOptionResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPermissionCodesAsync(CancellationToken cancellationToken)
     {
@@ -232,8 +236,14 @@ public sealed class MenusController(
     /// Adds a node to the PLATFORM catalogue — a new product feature, available to every
     /// Organisation. Not a per-Organisation setting; that is <c>PUT configuration</c>.
     /// </summary>
+    // THE ATTRIBUTE IS THE COARSE GATE, THE HANDLER IS THE RULE. Either permission can reach
+    // these three endpoints now, because either kind of caller has nodes they are entitled to
+    // write - a platform administrator the catalogue, an Organisation its own. Which set this
+    // particular caller may touch is decided in MenuCommandHandler against the ROW, which is
+    // the only check that can tell those two apart. A SuperAdmin satisfies any permission check
+    // by scope, so gating on the tenant code costs the platform caller nothing.
     [HttpPost("definitions")]
-    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [HasPermission(PermissionCodes.MenusManageStructure)]
     [ProducesResponseType(typeof(ApiResponse<MenuDefinitionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CreateDefinitionAsync(
         [FromBody] CreateMenuDefinitionRequest request, CancellationToken cancellationToken)
@@ -255,7 +265,7 @@ public sealed class MenusController(
     }
 
     [HttpPut("definitions/{menuId:guid}")]
-    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [HasPermission(PermissionCodes.MenusManageStructure)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateDefinitionAsync(
         Guid menuId, [FromBody] UpdateMenuDefinitionRequest request, CancellationToken cancellationToken)
@@ -284,7 +294,7 @@ public sealed class MenusController(
     /// This is for the node somebody added by mistake and nothing has touched yet.
     /// </summary>
     [HttpDelete("definitions/{menuId:guid}")]
-    [HasPermission(PermissionCodes.Platform.MenuCatalogueManage)]
+    [HasPermission(PermissionCodes.MenusManageStructure)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteDefinitionAsync(
         Guid menuId, [FromQuery] long expectedVersion, CancellationToken cancellationToken)
