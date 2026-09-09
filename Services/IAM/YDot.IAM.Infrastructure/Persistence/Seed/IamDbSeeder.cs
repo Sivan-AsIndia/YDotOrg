@@ -204,6 +204,12 @@ public sealed class IamDbSeeder(
             await ReconcileSystemRolePermissionsAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
 
+            // AFTER THE ROLES EXIST, because a conflict names two of them by id. The rule is what
+            // makes the maker-checker split enforceable rather than merely intended - see the
+            // note on RoleConflicts for why an empty table meant the check allowed everything.
+            await ReconcileRoleIncompatibilitiesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
             // AFTER the grants, because what a role may SEE is computed from what it may DO.
             await ReconcileRoleMenusAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
@@ -608,6 +614,139 @@ public sealed class IamDbSeeder(
         {
             logger.LogInformation(
                 "Reconciled Organisation roles: {Added} missing role(s) created across {TenantCount} Organisation(s).",
+                added, tenants.Count);
+        }
+    }
+
+    /// <summary>
+    /// The segregation-of-duties rules every Organisation gets.
+    ///
+    /// ONE RULE, AND IT IS THE ONE THE WHOLE ROLE MODEL RESTS ON: nobody holds INITIATOR and
+    /// APPROVER at once. <see cref="RoleAccessProfiles.Initiator"/> is computed as "everything
+    /// except the approvals" and APPROVER as "the approvals", so a person holding both is a maker
+    /// and a checker simultaneously - which is the exact combination the two roles were split to
+    /// prevent.
+    ///
+    /// WHY IT HAD TO BE SEEDED RATHER THAN LEFT TO ADMINISTRATORS. The rule was enforceable from
+    /// the first release - <c>CheckSegregationOfDutiesAsync</c> is called on every path that
+    /// grants a role - but the table was empty on every database, so the check ran, matched
+    /// nothing and allowed everything. Worse, the only way to record a rule through the product
+    /// is the Create Draft Role dialog, which names conflicts for a role being CREATED; INITIATOR
+    /// and APPROVER are built-in and already exist, so there was no route to it at all.
+    ///
+    /// IT IS BLOCKING. The alternative - flagging the combination for review - is the right
+    /// setting where one person genuinely has to wear both hats, and an Organisation that needs
+    /// that can set <c>IsBlocking</c> false or deactivate the rule. Refusing by default is the
+    /// safer way round: a combination that is allowed by accident is discovered at an audit, and
+    /// one that is refused by accident is discovered immediately by somebody who can change it.
+    ///
+    /// IT DOES NOT UNPICK WHAT IS ALREADY GRANTED. The check runs when a role is being assigned,
+    /// so an account that already holds both keeps them - removing somebody's access on a
+    /// start-up pass, with no operator involved and no record of the decision, would be a far
+    /// worse thing to do than leaving a known combination in place for somebody to resolve.
+    /// </summary>
+    private static readonly (string RoleCode, string ConflictingRoleCode, string Reason)[]
+        RoleConflicts =
+    [
+        (RoleCodes.Initiator, RoleCodes.Approver,
+            "The maker and the checker must be different people. Initiator raises campaigns, "
+            + "donors, payments and access requests; Approver decides on them. One person holding "
+            + "both can have their own work approved by a colleague whose work they approve in "
+            + "return, which is the arrangement these two roles exist to prevent.")
+    ];
+
+    /// <summary>
+    /// Records the conflicts above in every Organisation that has both roles.
+    ///
+    /// STORED ONCE PER PAIR, not twice. The rule is symmetric and the check asks whether BOTH
+    /// role ids appear in the person's combined set, so a mirrored row would add nothing and
+    /// report every conflict twice to whoever hit it.
+    /// </summary>
+    private async Task ReconcileRoleIncompatibilitiesAsync(CancellationToken cancellationToken)
+    {
+        var tenants = await context.Tenants
+            .IgnoreQueryFilters()
+            .Select(tenant => new { tenant.Id, tenant.BusinessUnitId, tenant.Code })
+            .ToListAsync(cancellationToken);
+
+        if (tenants.Count == 0)
+        {
+            return;
+        }
+
+        var roles = await context.Roles
+            .IgnoreQueryFilters()
+            .Where(role => role.TenantId != null)
+            .Select(role => new { TenantId = role.TenantId!.Value, role.Id, role.Code })
+            .ToListAsync(cancellationToken);
+
+        var rolesByTenant = roles
+            .GroupBy(role => role.TenantId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.ToDictionary(
+                    role => role.Code, role => role.Id, StringComparer.Ordinal));
+
+        // Every pair already recorded, in both directions, so an administrator who added the
+        // rule by hand - or added it the other way round - is recognised rather than duplicated.
+        var present = (await context.RoleIncompatibilities
+                .IgnoreQueryFilters()
+                .Select(rule => new { rule.TenantId, rule.RoleId, rule.ConflictingRoleId })
+                .ToListAsync(cancellationToken))
+            .SelectMany(rule => new[]
+            {
+                (rule.TenantId, First: rule.RoleId, Second: rule.ConflictingRoleId),
+                (rule.TenantId, First: rule.ConflictingRoleId, Second: rule.RoleId)
+            })
+            .ToHashSet();
+
+        var now = DateTimeOffset.UtcNow;
+        var added = 0;
+
+        foreach (var tenant in tenants)
+        {
+            if (!rolesByTenant.TryGetValue(tenant.Id, out var tenantRoles))
+            {
+                continue;
+            }
+
+            foreach (var conflict in RoleConflicts)
+            {
+                if (!tenantRoles.TryGetValue(conflict.RoleCode, out var roleId)
+                    || !tenantRoles.TryGetValue(conflict.ConflictingRoleCode, out var conflictingRoleId))
+                {
+                    continue;
+                }
+
+                if (present.Contains((tenant.Id, roleId, conflictingRoleId)))
+                {
+                    continue;
+                }
+
+                await context.RoleIncompatibilities.AddAsync(new RoleIncompatibility
+                {
+                    TenantId = tenant.Id,
+                    BusinessUnitId = tenant.BusinessUnitId,
+                    RoleId = roleId,
+                    ConflictingRoleId = conflictingRoleId,
+                    Reason = conflict.Reason,
+                    IsBlocking = true,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    CreatedByUserId = Guid.Empty,
+                    Version = 1
+                }, cancellationToken);
+
+                present.Add((tenant.Id, roleId, conflictingRoleId));
+                present.Add((tenant.Id, conflictingRoleId, roleId));
+                added++;
+            }
+        }
+
+        if (added > 0)
+        {
+            logger.LogInformation(
+                "Recorded {Added} segregation-of-duties rule(s) across {TenantCount} Organisation(s).",
                 added, tenants.Count);
         }
     }

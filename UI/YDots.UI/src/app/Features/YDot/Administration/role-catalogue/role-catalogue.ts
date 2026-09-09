@@ -24,6 +24,15 @@
 
   /** One segregation-of-duties rule, as the detail panel lists it. */
   interface RoleConflictView {
+    /**
+     * The rule's own id.
+     *
+     * CARRIED SO THE RULE CAN BE REMOVED. The panel used to render the conflicting role's name
+     * and drop everything else, which is why the section could be read and not changed: there
+     * was nothing to address a delete to.
+     */
+    id: string;
+    conflictingRoleId: string;
     name: string;
     reason: string;
     isBlocking: boolean;
@@ -329,6 +338,8 @@
           .map(toPermissionView),
 
         incompatibleRoles: (detail.incompatibilities ?? []).map((conflict) => ({
+          id: conflict.id ?? '',
+          conflictingRoleId: conflict.conflictingRoleId ?? '',
           name: conflict.conflictingRoleName ?? '',
           reason: conflict.reason ?? '',
           isBlocking: conflict.isBlocking === true,
@@ -757,7 +768,153 @@
       });
     }
 
-    closeDetail(): void { this.showDetailModal.set(false); this.detailRole.set(null); }
+    closeDetail(): void {
+      this.showDetailModal.set(false);
+      this.detailRole.set(null);
+      this.resetConflictForm();
+    }
+
+    // ===== SEGREGATION-OF-DUTIES RULES ON AN EXISTING ROLE =====
+    //
+    // WHY THIS EXISTS. Conflicts could only ever be named in the Create Draft Role dialog, which
+    // meant they could be set for a role being CREATED and never afterwards. The two roles the
+    // rule matters most for - INITIATOR and APPROVER - are built in and already exist, so there
+    // was no route to pairing them at all: the detail panel showed a "Cannot be held alongside"
+    // section that could be read and never changed, and the enforcement behind it
+    // (`CheckSegregationOfDutiesAsync`, called on every path that grants a role) queried an empty
+    // table and therefore allowed everything.
+
+    /** Whether the add-a-rule form is open on the detail panel. */
+    showConflictForm = signal(false);
+
+    conflictForm = signal({ conflictingRoleId: '', reason: '', isBlocking: true });
+
+    conflictSaving = signal(false);
+
+    /** The rule being removed, so the row can show its own spinner rather than the whole panel. */
+    conflictRemovingId = signal('');
+
+    /**
+     * The roles this one can be paired with.
+     *
+     * ITSELF AND ANYTHING ALREADY PAIRED ARE EXCLUDED. A role cannot conflict with itself, and
+     * offering a pair that already exists invites a duplicate the server would refuse - both are
+     * better prevented in the picker than explained in an error.
+     */
+    readonly conflictCandidates = computed(() => {
+      const detail = this.detailView();
+
+      if (!detail) {
+        return [];
+      }
+
+      const taken = new Set(detail.incompatibleRoles.map((conflict) => conflict.conflictingRoleId));
+
+      return (this.data()?.roles ?? [])
+        .filter((role) => (role.id ?? '') !== detail.id && !taken.has(role.id ?? ''))
+        .map((role) => ({ id: role.id ?? '', name: role.name ?? role.code ?? '' }));
+    });
+
+    openConflictForm(): void {
+      this.conflictForm.set({ conflictingRoleId: '', reason: '', isBlocking: true });
+      this.showConflictForm.set(true);
+    }
+
+    resetConflictForm(): void {
+      this.showConflictForm.set(false);
+      this.conflictForm.set({ conflictingRoleId: '', reason: '', isBlocking: true });
+      this.conflictSaving.set(false);
+      this.conflictRemovingId.set('');
+    }
+
+    /**
+     * Records the rule.
+     *
+     * A REASON IS REQUIRED, and not merely encouraged. It is the text shown to whoever is refused
+     * the combination later, and "Approver and Initiator cannot be held together:" followed by
+     * nothing is a refusal somebody cannot act on or argue with.
+     */
+    saveConflict(): void {
+      const detail = this.detailView();
+      const form = this.conflictForm();
+
+      if (!detail || !form.conflictingRoleId || !form.reason.trim()) {
+        this.toast.show(
+          'Incomplete', 'Choose a role and say why the two cannot be held together.', 'warning');
+
+        return;
+      }
+
+      this.conflictSaving.set(true);
+
+      this.api.addIncompatibility({
+        roleId: detail.id,
+        conflictingRoleId: form.conflictingRoleId,
+        reason: form.reason.trim(),
+        isBlocking: form.isBlocking,
+      }).subscribe({
+        next: () => {
+          this.toast.show(
+            'Rule recorded',
+            form.isBlocking
+              ? 'The combination will now be refused when somebody tries to grant it.'
+              : 'The combination will now be flagged for review.',
+            'success');
+
+          this.resetConflictForm();
+          this.refreshOpenRole(detail.id);
+        },
+        error: (error: Error) => {
+          this.conflictSaving.set(false);
+          this.toast.show('Not recorded', error.message, 'error');
+        },
+      });
+    }
+
+    removeConflict(conflict: RoleConflictView): void {
+      const detail = this.detailView();
+
+      if (!detail || !conflict.id) {
+        return;
+      }
+
+      this.conflictRemovingId.set(conflict.id);
+
+      this.api.removeIncompatibility(conflict.id).subscribe({
+        next: () => {
+          this.toast.show(
+            'Rule removed',
+            `${detail.name} and ${conflict.name} may now be held together.`,
+            'success');
+
+          this.conflictRemovingId.set('');
+          this.refreshOpenRole(detail.id);
+        },
+        error: (error: Error) => {
+          this.conflictRemovingId.set('');
+          this.toast.show('Not removed', error.message, 'error');
+        },
+      });
+    }
+
+    /**
+     * Re-reads the open role after a rule changes.
+     *
+     * THE CACHE IS EVICTED FIRST. `openDetail` serves from `detailCache` when it can, so leaving
+     * the stale entry in place would show the rule reappearing the next time the panel was
+     * opened - the change having been saved, and the screen disagreeing with the database.
+     */
+    private refreshOpenRole(roleId: string): void {
+      this.detailCache.delete(roleId);
+
+      this.api.getRole(roleId).subscribe({
+        next: (detail) => {
+          this.detailCache.set(detail.id ?? '', detail);
+          this.detailRole.set(detail);
+        },
+        error: (error: Error) => this.toast.show('Reload failed', error.message, 'error'),
+      });
+    }
 
     // ===== COMPARE =====
     openCompareModal(role: RoleItemView): void {

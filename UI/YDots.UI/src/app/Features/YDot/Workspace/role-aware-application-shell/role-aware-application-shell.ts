@@ -191,7 +191,6 @@ export class RoleAwareApplicationShellComponent {
           route: '/app/administration/access/role-and-permission-catalogue',
           permitted: true,
         },
-        { label: 'Access review campaign', route: '/app/administration/access/access-review-campaign', permitted: false },
       ],
     },
     {

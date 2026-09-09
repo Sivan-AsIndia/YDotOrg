@@ -79,6 +79,25 @@ public sealed class PaymentSettings
     /// </summary>
     public int FinancialYearStartMonth { get; set; } = 4;
 
+    /// <summary>
+    /// The time zone dates are PRINTED in on a document a person reads.
+    ///
+    /// EVERY TIMESTAMP IS STORED AND COMPARED IN UTC and none of that changes - see
+    /// <see cref="Abstractions.Services.IDateTimeProvider"/> for why. This setting governs
+    /// presentation only, and it exists because the two disagreed in front of a donor: a gift
+    /// taken at 02:47 on 9 September in India is 21:17 on the 8th in UTC, so the receipt said
+    /// "Issued 08 September 2026" while the Payments and Receipts screen beside it - which
+    /// formats in the reader's own browser - said 09 Sept. A tax document that disagrees with the
+    /// register about which day money arrived is one an auditor queries, and the donor cannot
+    /// tell which of the two is right.
+    ///
+    /// AN IANA ID, and Asia/Kolkata by default because this platform operates on the Indian
+    /// financial year. .NET accepts IANA ids on Windows and Linux alike, so one value is correct
+    /// on a developer's machine and in the container. An id this does not recognise falls back to
+    /// UTC rather than throwing: a receipt must still render.
+    /// </summary>
+    public string DisplayTimeZone { get; set; } = "Asia/Kolkata";
+
     /// <summary>How many days a chargeback allows for evidence, when the gateway does not say.</summary>
     public int DefaultChargebackEvidenceDays { get; set; } = 7;
 

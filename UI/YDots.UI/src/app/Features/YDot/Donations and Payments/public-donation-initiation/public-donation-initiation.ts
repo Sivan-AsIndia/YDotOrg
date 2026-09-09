@@ -61,6 +61,17 @@ interface ScopeOption {
   readonly reference: string;
   readonly name: string;
   readonly context: string;
+
+  /**
+   * The campaign's GUID, where the source of the option knows it.
+   *
+   * The API wants a Guid, and the only code-to-Guid translation was the AUTHENTICATED campaign
+   * register - which answers nothing for a caller with no session. This route is reachable
+   * anonymously as /donate, so the campaign a link named was shown, locked, and then sent as
+   * null. The public campaigns endpoint returns the id on every row; the picker was discarding
+   * it. Optional because the signed-in branch still resolves through the store.
+   */
+  readonly apiId?: string | null;
 }
 
 interface CatalogueOption {
@@ -188,6 +199,9 @@ export class PublicDonationInitiationComponent {
         reference: campaign.code,
         name: campaign.name,
         context: 'Open for donations',
+
+        // THE ID TRAVELS WITH THE OPTION - see ScopeOption.apiId.
+        apiId: campaign.id,
       }));
     }
 
@@ -198,6 +212,10 @@ export class PublicDonationInitiationComponent {
         reference: c.code,
         name: c.name,
         context: c.status,
+
+        // CARRIED HERE TOO, so `?campaign=<guid>` resolves to a real option for a signed-in
+        // caller exactly as it does for an anonymous one.
+        apiId: store.apiId(c.code) ?? null,
       }));
   });
   protected readonly campaignQuery = signal('');
@@ -538,8 +556,15 @@ export class PublicDonationInitiationComponent {
       // the identifier the API requires.
       // THE LINK'S OWN ID WINS. It is already the identifier the API wants, and it is the only
       // one available to a donor with no session - see `campaignIdFromLink`.
+      // THREE SOURCES, IN THE ORDER THEY CAN BE TRUSTED. A GUID on the link is already the
+      // identifier the API wants. Failing that, the option the picker holds carries its own id
+      // for an anonymous donor. The store is last and answers only for a signed-in caller.
+      // WHAT IS SELECTED ON SCREEN IS WHAT IS SENT. With the link's id first, a donor who
+      // arrived on an unresolvable `?campaign=` and then chose an appeal from the reopened
+      // dropdown would have had that choice overridden by the dead id from the link.
       campaignId:
-        this.campaignIdFromLink()
+        this.selectedCampaign()?.apiId
+        ?? this.campaignIdFromLink()
         ?? (campaignRef ? this.campaignStoreOrNull()?.apiId(campaignRef) ?? null : null),
       trackingReference: this.trackingReference() || null,
       taxIdentifier: this.panOrTaxId().trim() || null,
@@ -585,6 +610,29 @@ export class PublicDonationInitiationComponent {
     // straight to the gateway; they are converted to a Donor, given a login and sent an
     // activation invitation AFTER the money arrives, by the server, on the success path.
     if (intent.existingDonorMatched !== true) {
+      this.startPayment(intent.intentReference, intent.version);
+      return;
+    }
+
+    // ============================================================================
+    // ALREADY SIGNED IN MEANS THERE IS NOTHING TO ASK.
+    // ============================================================================
+    // The choice this panel offers is "pay now, or sign in first and then pay". Both of its
+    // branches assume a visitor with no session - and this route lives under /app, behind the
+    // authentication guard, so every single person who reaches it is signed in already.
+    //
+    // The result was a dialog telling somebody who was looking at their own name and avatar in
+    // the header "You already have an account with this organisation. Please sign in to
+    // continue", with a button that would have sent them to a sign-in form they had no reason
+    // to fill in. It fired on every donation an existing donor made from inside the
+    // application, and the only way past it was the secondary button.
+    //
+    // Recognition is still worth recording - it is why the donation is attributed to the donor
+    // rather than creating a second identity - but it changes nothing about what happens next
+    // for somebody whose session already proves who they are. They go to payment, like anyone
+    // else. The public donor form keeps the branch, because there the question is real.
+    if (this.isInternalView()) {
+      this.pushActivity('Recognised as an existing donor; continuing to payment.');
       this.startPayment(intent.intentReference, intent.version);
       return;
     }
@@ -803,19 +851,26 @@ export class PublicDonationInitiationComponent {
    * the answer from our own API, which is the only account of this worth showing anybody.
    */
   private confirmCheckout(session: CheckoutSession, confirmation: ConfirmCheckoutRequest): void {
-    this.uiState.set('loading');
     this.pushActivity('Payment completed at the gateway; confirming.');
 
+    // THE NAVIGATION HAPPENS FIRST - see the twin on the public donor form for the full note.
+    // Waiting for this call before moving left the donor looking at the donation form they had
+    // just paid from, fully filled in, with a payment button on it. The request is started here
+    // so it is already in flight when this component goes away, nothing unsubscribes it, and if
+    // it were lost the result page's verify - a pull against the provider - settles the payment
+    // regardless.
     this.payments
       .confirmCheckout(session.intentReference, confirmation)
       .subscribe({
-        next: () => this.goToResult(session.intentReference),
+        next: () => undefined,
 
         // A FAILED CONFIRMATION IS NOT A FAILED PAYMENT, and the donor must never be told it is.
         // The money may well have moved; what failed was our chance to hear about it on this
         // request. The result page asks again, and keeps asking.
-        error: () => this.goToResult(session.intentReference),
+        error: () => undefined,
       });
+
+    this.goToResult(session.intentReference);
   }
 
   /** The donor closed the form without paying. Nothing failed; nothing was charged. */
@@ -1209,16 +1264,29 @@ export class PublicDonationInitiationComponent {
     }
 
     const match = this.campaignOptions().find(
-      (option) => option.reference.toLowerCase() === code || option.name.toLowerCase() === code,
+      (option) =>
+        option.reference.toLowerCase() === code
+        || option.name.toLowerCase() === code
+
+        // THE ID, MATCHED TOO. A link from the tracking asset manager carries a GUID, which
+        // nothing here compared - so it never selected an option and the picker stayed locked
+        // and empty on the strength of `campaignIdFromLink` alone.
+        || (option.apiId ?? '').toLowerCase() === code,
     );
 
     if (match) {
       this.selectedCampaign.set(match);
       this.campaignPickerOpen.set(false);
-    } else if (!this.campaignIdFromLink()) {
-      this.campaignLockedByLink.set(false);
-      this.pushActivity('The campaign named on the link is not open for donations.');
+      return;
     }
+
+    // NO MATCH MEANS THE PICKER OPENS, WHATEVER THE LINK CARRIED. The `!campaignIdFromLink()`
+    // guard kept the lock on for a link naming an id that resolved to nothing donatable - a
+    // closed appeal, a mistyped GUID - which left a required field locked and empty and the
+    // donor with no way to give at all. A link we cannot honour now behaves like a link that
+    // named nothing.
+    this.campaignLockedByLink.set(false);
+    this.pushActivity('The campaign named on the link is not open for donations; choose one below.');
   }
 
   /**

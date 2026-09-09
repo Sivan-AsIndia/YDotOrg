@@ -121,6 +121,11 @@ public static class DependencyInjection
         // created alongside a donation commits with it.
         services.AddScoped<IDonorDirectory, DonorDirectory>();
         services.AddScoped<ICampaignDirectory, CampaignDirectory>();
+
+        // The Organisation's own host, so a receipt links to the charity the donor gave to
+        // rather than to the platform's front door. Reads IAM's domain table over the shared
+        // database, which makes it scoped like every other reader here.
+        services.AddScoped<ITenantHostDirectory, TenantHostDirectory>();
         services.AddScoped<IIdentityAccountService, IdentityAccountService>();
 
         // ---- Supporting services ---------------------------------------------------------------------------
@@ -140,7 +145,10 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         services.AddSingleton<IReceiptDocumentStore, FileSystemReceiptDocumentStore>();
-        services.AddSingleton<IReceiptDocumentService, ReceiptDocumentService>();
+        // SCOPED, NOT SINGLETON, since it resolves the Organisation's host through a reader that
+        // holds the request's DbContext. Every caller is a scoped command handler, so nothing
+        // else changes.
+        services.AddScoped<IReceiptDocumentService, ReceiptDocumentService>();
         services.AddScoped<IAuditWriter, AuditWriter>();
 
         // ---- Payment gateway ---------------------------------------------------------------------------------

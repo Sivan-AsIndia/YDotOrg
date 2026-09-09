@@ -1001,3 +1001,21 @@
     transition-duration: 0.01ms !important;
   }
 }
+/*
+ * The add-a-rule form on the detail panel.
+ *
+ * INSET AND TINTED so it reads as a form that has opened inside the section rather than as more
+ * of the record being displayed. The panel is otherwise entirely read-only, and an editable area
+ * that looked identical to the rows above it would invite somebody to type into the record.
+ */
+.rc-conflict-form {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(13, 110, 253, 0.25);
+  border-radius: 0.5rem;
+  background-color: rgba(13, 110, 253, 0.04);
+}
+
+.rc-conflict-form .form-label {
+  margin-bottom: 0.2rem;
+}

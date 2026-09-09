@@ -432,6 +432,19 @@
   font-size: 13.5px;
 }
 .picker-trigger:disabled { cursor: not-allowed; }
+
+/* LOCKED BY THE LINK READS AS SETTLED, NOT AS BROKEN. A disabled control that still looks like
+   a live dropdown invites a click that does nothing. The chevron is what promises the list, so
+   it goes; the name stays at full contrast, because it is the answer to "where is my money
+   going" and must not be greyed out with the control. */
+.picker-trigger.is-locked {
+  background: var(--surface-sunken, #f4f5f7);
+  opacity: 1;
+  cursor: default;
+}
+.picker-trigger.is-locked .chev-ic.static { display: none; }
+.picker-trigger.is-locked .picker-name { color: var(--ink); }
+
 .picker-trigger .chev-ic.static { color: var(--ink-soft); }
 .picker-value { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .picker-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }

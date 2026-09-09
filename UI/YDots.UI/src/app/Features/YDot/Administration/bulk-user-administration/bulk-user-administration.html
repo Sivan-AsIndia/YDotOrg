@@ -77,27 +77,44 @@
                             </div>
 
                             <!-- Conditional Fields -->
-                            @if (selectedAction() === 'Suspend' || selectedAction() === 'Deactivate') {
+                            <!--
+                                THESE COMPARE AGAINST THE ACTION VALUES, which are camelCase.
+
+                                They used to read 'Suspend', 'Deactivate', 'RequirePasswordReset'
+                                and 'RevokeSessions' - PascalCase names taken from a local enum in
+                                bulk-user-administration.model.ts that does not match the API's
+                                BulkActionType at all. Nothing ever matched, so every conditional
+                                field on this form was unreachable: the role picker Add a role
+                                needs and the date Extend access needs could not be filled in, and
+                                the server refused both actions for the missing value.
+                            -->
+                            @if (selectedAction() === 'suspend' || selectedAction() === 'deactivate') {
                                 <div class="conditional-field">
                                     <label class="conditional-field-label">Reason for Suspension / Deactivation</label>
                                     <textarea class="form-control" formControlName="suspensionReason" rows="2" placeholder="Provide a detailed reason..."></textarea>
                                 </div>
                             }
-                            @if (selectedAction() === 'AssignAccessReview') {
+
+                            @if (selectedAction() === 'assignRole' || selectedAction() === 'removeRole') {
                                 <div class="conditional-field">
-                                    <label class="conditional-field-label">Select Access Review Campaign</label>
-                                    <select class="form-select" formControlName="campaign">
-                                        <option value="">-- Choose a campaign --</option>
-                                        @for (camp of campaignOptions(); track camp.id) {
-                                            <option [value]="camp.id">{{ camp.name }}</option>
-                                         }
+                                    <label class="conditional-field-label">
+                                        Role <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select" formControlName="roleId">
+                                        <option value="">-- Choose a role --</option>
+                                        @for (role of roleOptions(); track role.id) {
+                                            <option [value]="role.id">{{ role.name }}</option>
+                                        }
                                     </select>
                                 </div>
                             }
-                            @if (selectedAction() === 'RequirePasswordReset' || selectedAction() === 'RevokeSessions') {
+
+                            @if (selectedAction() === 'extendAccess') {
                                 <div class="conditional-field">
-                                    <label class="conditional-field-label">Effective Time</label>
-                                    <input type="datetime-local" class="form-control" formControlName="effectiveTime">
+                                    <label class="conditional-field-label">
+                                        New access end date <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="datetime-local" class="form-control" formControlName="accessEndsAt">
                                 </div>
                             }
                         </div>
@@ -136,17 +153,43 @@
                                         }
                                     </div>
                                 </div>
+                            } @else {
+                                <!--
+                                    ARRIVING WITH NOBODY SELECTED IS A DEAD END, so it says so
+                                    here rather than letting somebody choose an action, write a
+                                    justification and discover it at the Validate button.
+
+                                    It is reachable only by bookmark or stale link now that the
+                                    sidebar entry is gone - which is exactly when a screen has to
+                                    explain itself, because there is no obvious way back.
+                                -->
+                                <div class="text-center py-4">
+                                    <i class="ri-group-2-line fs-1 text-muted d-block mb-2"></i>
+                                    <h6 class="fw-semibold mb-1">No users selected</h6>
+                                    <p class="text-muted small mb-3" style="max-width:460px; margin:0 auto;">
+                                        A bulk action runs over a list somebody has looked at. Pick
+                                        the people in the User Directory first, then bring them
+                                        here with its <strong>Bulk Actions</strong> button.
+                                    </p>
+                                    <a class="btn btn-primary btn-sm"
+                                       routerLink="/app/administration/access/user-directory">
+                                        <i class="ri-arrow-left-line me-1"></i> Go to User Directory
+                                    </a>
+                                </div>
                             }
 
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold fs-13">Scope Type</label>
-                                <select class="form-select" formControlName="scopeType">
-                                    <option value="">-- Select scope type --</option>
-                                    @for (scope of scopeTypeOptions(); track scope.id) {
-                                        <option [value]="scope.id">{{ scope.name }}</option>
-                                    }
-                                </select>
-                            </div>
+                            <!--
+                                SCOPE TYPE IS GONE, because it never did anything.
+
+                                `CreateBulkOperationRequest` has no scope field: the operation is
+                                defined by the explicit user ids handed over from the directory,
+                                which is deliberate - a bulk action driven by a scope expression
+                                is one where nobody has looked at the list, and the preview exists
+                                so that somebody does. The dropdown was collected, bound to a form
+                                control, and dropped on the floor in buildRequest, so an operator
+                                setting it believed they had narrowed the action when they had
+                                not.
+                            -->
 
                             <div class="d-flex gap-2 flex-wrap">
                                 <button type="button" class="btn btn-primary btn-sm" (click)="validateSelection()" [disabled]="loading()">
@@ -240,7 +283,7 @@
                                 </div>
                                 <div class="sidebar-row">
                                     <span class="sidebar-label">Scope</span>
-                                    <span class="sidebar-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                                    <span class="sidebar-value">{{ selectedUsers().length }} selected from the directory</span>
                                 </div>
                                 <div class="sidebar-row">
                                     <span class="sidebar-label">Approval</span>
@@ -330,7 +373,7 @@
                     </div>
                     <div class="summary-row">
                         <span class="summary-row-label">Scope</span>
-                        <span class="summary-row-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                        <span class="summary-row-value">{{ selectedUsers().length }} selected from the directory</span>
                     </div>
                 </div>
             </div>
@@ -361,7 +404,7 @@
                     </div>
                     <div class="summary-row">
                         <span class="summary-row-label">Scope</span>
-                        <span class="summary-row-value">{{ bulkForm.value.scopeType || '—' }}</span>
+                        <span class="summary-row-value">{{ selectedUsers().length }} selected from the directory</span>
                     </div>
                     <div class="summary-row">
                         <span class="summary-row-label">Affected Users</span>

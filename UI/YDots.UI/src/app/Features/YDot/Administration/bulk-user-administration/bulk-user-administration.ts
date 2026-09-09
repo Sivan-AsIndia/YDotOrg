@@ -10,11 +10,11 @@ import {
   Validators,
 } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { BulkUserAdminApiService } from '../../../../Service/bulk-user-admin-api.service';
+import { RoleCatalogueApiService } from '../../../../Service/role-catalogue-api.service';
 import { UserDirectoryApiService } from '../../../../Service/user-directory-api.service';
-import { AccessReviewApiService } from '../../../../Service/access-review-api.service';
 import {
   BulkActionOption,
   BulkActionRequest,
@@ -32,6 +32,10 @@ import { LookupItem } from '../../../../Shared/models/api-response.model';
   imports: [
     CommonModule,
     ReactiveFormsModule,
+
+    // For the empty state's link back to the directory. Without it routerLink binds to
+    // nothing and the button is inert - the quiet kind of failure, with no console error.
+    RouterModule,
   ],
   templateUrl: './bulk-user-administration.html',
   styleUrl: './bulk-user-administration.css',
@@ -42,7 +46,7 @@ export class BulkUserAdministrationComponent {
   private readonly toast = inject(ToastService);
   private readonly api = inject(BulkUserAdminApiService);
   private readonly userApi = inject(UserDirectoryApiService);
-  private readonly reviewApi = inject(AccessReviewApiService);
+  private readonly roleApi = inject(RoleCatalogueApiService);
 
   selectedUsers = signal<UserListItem[]>([]);
 
@@ -67,7 +71,6 @@ export class BulkUserAdministrationComponent {
   /** Scope type options loaded from the user-directory API. */
   scopeTypeOptions = signal<LookupItem[]>([]);
   /** Campaign options loaded from the bulk view API. */
-  campaignOptions = signal<LookupItem[]>([]);
 
   // Selection state
   totalCount = signal(0);
@@ -90,9 +93,16 @@ export class BulkUserAdministrationComponent {
 
   bulkForm = this.fb.group({
     action: ['', Validators.required],
-    scopeType: [''],
-    campaign: [''],
-    effectiveTime: [''],
+
+    // THE ROLE THE ACTION GRANTS OR REMOVES. This replaces a control named `campaign`, which was
+    // written only by the access-review campaign picker and read into `roleId` on the way out -
+    // so the server's "Choose a role for this action." was unavoidable for assignRole and
+    // removeRole, and there was no control on the screen that could have satisfied it.
+    roleId: [''],
+
+    // The new end of the access window, for Extend access. `accessEndsAtUtc` on the request.
+    accessEndsAt: [''],
+
     suspensionReason: [''],
     businessJustification: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(1000)]],
   });
@@ -123,6 +133,9 @@ export class BulkUserAdministrationComponent {
 
   /** Recent operations, so somebody can see what was run and how it went. */
   readonly recentOperations = signal<BulkOperationResponse[]>([]);
+
+  /** The roles Add/Remove a role can name, from the catalogue the server already publishes. */
+  readonly roleOptions = signal<LookupItem[]>([]);
 
   /**
    * What a bulk operation can do.
@@ -156,10 +169,11 @@ export class BulkUserAdministrationComponent {
     this.permittedActions.set(BulkUserAdministrationComponent.ACTIONS.map((a) => a.value));
     this.loading.set(false);
 
+    this.loadRoles();
+
     this.api.getOperations(1, 20).subscribe({
       next: (page) => {
         this.recentOperations.set(page.items ?? []);
-        this.loadCampaignFallback();
         this.loading.set(false);
       },
       error: (error: Error) => {
@@ -195,24 +209,21 @@ export class BulkUserAdministrationComponent {
     });
   }
 
-  /** Fallback: fetch review campaigns from the access-review API. */
-  private loadCampaignFallback(): void {
-    this.reviewApi.getCampaigns().subscribe({
-      next: (campaigns) => {
-        const options: LookupItem[] = campaigns.map((camp) => ({
-          id: camp.id ?? '',
-          code: camp.code ?? '',
-          name: `${camp.code} — ${camp.name}`,
-          isActive: camp.status === 'active',
-          description: camp.statusDisplay ?? null,
-        }));
-        if (options.length > 0) {
-          this.campaignOptions.set(options);
-        }
-      },
-      error: () => {
-        // Non-blocking — the dropdown will just offer the placeholder.
-      },
+  /**
+   * The role catalogue, for the Add/Remove a role picker.
+   *
+   * Non-blocking: the other ten actions do not need it, and a failure here should not stop
+   * somebody suspending forty accounts.
+   */
+  private loadRoles(): void {
+    this.roleApi.getRoleLookup().subscribe({
+      next: (roles) => this.roleOptions.set(roles.map((role) => ({
+        id: role.id ?? '',
+        code: role.code ?? '',
+        name: role.name ?? role.code ?? '',
+        isActive: true,
+      }))),
+      error: () => { /* Non-blocking. */ },
     });
   }
 
@@ -238,8 +249,8 @@ export class BulkUserAdministrationComponent {
       // Explicit ids only. There is deliberately no "everybody matching this scope" option: a
       // bulk action driven by a scope expression is one where nobody has looked at the list, and
       // the whole point of the preview is that somebody does.
-      roleId: form.campaign || null,
-      accessEndsAtUtc: form.effectiveTime ? new Date(form.effectiveTime).toISOString() : null,
+      roleId: form.roleId || null,
+      accessEndsAtUtc: form.accessEndsAt ? new Date(form.accessEndsAt).toISOString() : null,
       reason: form.businessJustification || form.suspensionReason || null,
 
       // Never true from this screen. Applying is a second, deliberate press after the preview
@@ -264,24 +275,18 @@ export class BulkUserAdministrationComponent {
     // Creating the operation VALIDATES it and reports what would happen, row by row, without
     // changing anything. Applying it is a separate call — see the service for why the two-step
     // shape is the point rather than an inconvenience.
-    this.api.createOperation(this.buildRequest()).subscribe({
-      next: (preview) => {
+    this.createThenLoad({
+      next: (detail) => {
         this.validating.set(false);
-        this.applyPreview(preview);
 
-        const total = preview.totalItemCount ?? 0;
-        const failed = preview.failedItemCount ?? 0;
+        const total = detail.totalItemCount ?? 0;
+        const failed = (detail.items ?? []).filter((item) => item.isValid === false).length;
 
         this.toast.show(
           'Selection checked',
           `${total} in the selection. ${failed} cannot be actioned.`,
           failed > 0 ? 'warning' : 'success',
         );
-      },
-      error: (error: Error) => {
-        this.validating.set(false);
-        this.validationError.set(error.message);
-        this.toast.show('Validation Failed', error.message, 'error');
       },
     });
   }
@@ -294,16 +299,60 @@ export class BulkUserAdministrationComponent {
     }
     this.validating.set(true);
     this.validationError.set('');
-    this.api.createOperation(this.buildRequest()).subscribe({
-      next: (preview) => {
+    this.createThenLoad({
+      next: () => {
         this.validating.set(false);
-        this.applyPreview(preview);
         this.showPreviewModal.set(true);
+      },
+      failureTitle: 'Preview Failed',
+    });
+  }
+
+  /**
+   * Validates the selection, then reads back what the server made of it.
+   *
+   * TWO CALLS, AND BOTH ARE NEEDED. `POST /users/bulk-actions` validates and answers with an
+   * outcome - an id, a status and a message - and nothing else. The rows, the counts and the
+   * per-person reasons live on the operation, which is read with `GET bulk-operations/{id}`.
+   *
+   * The screen used to make only the first call and read `items` and `totalItemCount` off its
+   * response. Those fields are not on it, so every counter resolved to 0 and the page reported
+   * "0 in the selection" for a validation the server had genuinely performed - and `apply` was
+   * left with no operation id to send, so nothing could be applied either.
+   */
+  private createThenLoad(handlers: {
+    next: (detail: BulkImpactPreviewResponse) => void;
+    failureTitle?: string;
+  }): void {
+    this.api.createOperation(this.buildRequest()).subscribe({
+      next: (outcome) => {
+        if (!outcome.id) {
+          this.validating.set(false);
+          this.validationError.set('The server did not return an operation to read.');
+          return;
+        }
+
+        this.api.getOperation(outcome.id).subscribe({
+          next: (detail) => {
+            // Held so `apply` can name the operation and its version. This is the step whose
+            // absence made the Apply button report "Check the selection before applying it."
+            // however many times the selection had been checked.
+            this.operation.set(detail);
+            this.operationId.set(detail.id ?? '');
+            this.applyPreview(detail);
+            handlers.next(detail);
+          },
+          error: (error: Error) => {
+            this.validating.set(false);
+            this.validationError.set(error.message);
+            this.toast.show(handlers.failureTitle ?? 'Validation Failed', error.message, 'error');
+          },
+        });
       },
       error: (error: Error) => {
         this.validating.set(false);
         this.validationError.set(error.message);
-        this.toast.show('Preview Failed', error.message, 'error');
+        this.toast.show(handlers.failureTitle ?? 'Validation Failed', error.message, 'error');
       },
     });
   }
@@ -364,30 +413,44 @@ export class BulkUserAdministrationComponent {
     this.api
       .apply({ operationId: validated.id, expectedVersion: validated.version ?? 0 })
       .subscribe({
-      next: (operation) => {
-        this.submitting.set(false);
-        this.operation.set(operation);
-        this.operationId.set(operation.id ?? '');
-        this.resultFileUrl.set(
-          `bulk-operation-${operation.operationNumber ?? operation.id}.csv`);
+      // AND READ IT BACK, for the same reason the validate step does: applying answers with an
+      // outcome, and the per-person results the modal lists live on the operation.
+      next: (outcome) => {
+        this.api.getOperation(outcome.id ?? validated.id!).subscribe({
+          next: (operation) => {
+            this.submitting.set(false);
+            this.operation.set(operation);
+            this.operationId.set(operation.id ?? '');
+            this.applyPreview(operation);
+            this.resultFileUrl.set(
+              `bulk-operation-${operation.operationNumber ?? operation.id}.csv`);
 
-        // The directory listens for this so it can re-read: several of these actions change
-        // rows it is showing, and a stale list after a bulk suspend is confusing.
-        window.dispatchEvent(new CustomEvent('bulk-operation-completed', { detail: operation }));
-        this.showResultModal.set(true);
+            // The directory listens for this so it can re-read: several of these actions change
+            // rows it is showing, and a stale list after a bulk suspend is confusing.
+            window.dispatchEvent(
+              new CustomEvent('bulk-operation-completed', { detail: operation }));
+            this.showResultModal.set(true);
 
-        // PARTIAL SUCCESS IS A REAL RESULT, not a failure. Forty-seven of fifty succeeding is
-        // exactly what happened, and the three that did not are listed with their reasons.
-        const succeeded = operation.succeededItemCount ?? 0;
-        const failed = operation.failedItemCount ?? 0;
+            // PARTIAL SUCCESS IS A REAL RESULT, not a failure. Forty-seven of fifty succeeding
+            // is exactly what happened, and the three that did not are listed with their
+            // reasons.
+            const succeeded = operation.succeededItemCount ?? 0;
+            const failed = operation.failedItemCount ?? 0;
 
-        this.toast.show(
-          'Bulk action applied',
-          failed > 0
-            ? `${succeeded} succeeded, ${failed} could not be actioned. See the list for why.`
-            : `${succeeded} completed.`,
-          failed > 0 ? 'warning' : 'success',
-        );
+            this.toast.show(
+              'Bulk action applied',
+              failed > 0
+                ? `${succeeded} succeeded, ${failed} could not be actioned. See the list for why.`
+                : `${succeeded} completed.`,
+              failed > 0 ? 'warning' : 'success',
+            );
+          },
+          error: (error: Error) => {
+            this.submitting.set(false);
+            this.validationError.set(error.message);
+            this.toast.show('Submit Failed', error.message, 'error');
+          },
+        });
       },
       error: (error: Error) => {
         this.submitting.set(false);

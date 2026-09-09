@@ -120,7 +120,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: ramya2000/ydot-iam:9.1.9
+    image: sivan67906/ydot-iam:9.3.2
     build:
       context: .
       dockerfile: Services/IAM/YDot.IAM.Api/Dockerfile
@@ -318,7 +318,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: ramya2000/ydot-cam:9.1.9
+    image: sivan67906/ydot-cam:9.3.2
     build:
       context: .
       dockerfile: Services/CAM/YDots.CAM.API/Dockerfile
@@ -391,7 +391,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: ramya2000/ydot-don:9.1.9
+    image: sivan67906/ydot-don:9.3.2
     build:
       context: .
       dockerfile: Services/DON/YDots.DON.Api/Dockerfile
@@ -442,7 +442,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: ramya2000/ydot-pay:9.1.9
+    image: sivan67906/ydot-pay:9.3.2
     build:
       context: .
       dockerfile: Services/PAY/YDot.PAY.Api/Dockerfile
@@ -556,6 +556,16 @@ services:
       ClientAppSettings__AllowedOrigins__0: "http://localhost:6700"
       ClientAppSettings__AllowedOrigins__1: "http://localhost:6701"
 
+      # WHERE A RECEIPT LINKS BACK TO. Only the PATH is set here: the scheme and port come from
+      # BaseUrl above and the HOST comes from the organisation's own row in iam_tenant_domains,
+      # so a receipt issued by the organisation on ten1.localhost links to
+      # http://ten1.localhost:6700/app/donations/payment-event-queue and not to the platform host.
+      ClientAppSettings__ReceiptsPath: "/app/donations/payment-event-queue"
+
+      # The zone receipt dates are PRINTED in. Storage stays UTC; this only stops a receipt
+      # saying 08 September for a gift the register shows on the 9th.
+      PaymentSettings__DisplayTimeZone: "${PAY_DISPLAY_TIME_ZONE:-Asia/Kolkata}"
+
       # ---- Payment provider credentials ------------------------------------------------------
       #
       # A gateway account row holds only the NAME of the section its credentials live in, so a
@@ -644,7 +654,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: ramya2000/ydot-ui:9.1.9
+    image: sivan67906/ydot-ui:9.3.2
     build:
       context: UI/YDots.UI
       dockerfile: Dockerfile

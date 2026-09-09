@@ -143,9 +143,21 @@ public static class MenuCatalogue
             "/app/administration/access/menu-mapping", "sliders",
             PermissionCodes.MenusView, 50),
 
-        new("ADMIN_BULK_USERS", "Bulk User Administration", "ADMIN_ACCESS", MenuLevel.ChildSubMenu, "IAM",
-            "/app/administration/users/bulk-actions", "layers",
-            PermissionCodes.UsersBulkAdminister, 60),
+        // BULK USER ADMINISTRATION IS DELIBERATELY ABSENT FROM THIS CATALOGUE.
+        //
+        // The screen, its route and its API are intact; what was withdrawn is the navigation
+        // entry, because arriving through it could only ever fail. The page takes its selection
+        // from router state handed over by the User Directory's "Bulk Actions" button - there is
+        // no user picker on the page itself - so opening it from a menu produced the whole form
+        // with nobody selected, and the operator learned that only after choosing an action and
+        // writing a justification.
+        //
+        // THE DIRECTORY IS THE ONLY HONEST ENTRY POINT: tick people, then act on them. That
+        // ordering is the feature, not an inconvenience - a bulk action is defined by an explicit
+        // list somebody has looked at.
+        //
+        // RESTORING IT IS ONE ENTRY. Add the node back with code ADMIN_BULK_USERS and the seeder
+        // un-retires the row it already has, mappings and Organisation overrides intact.
 
         // ---- Governance ------------------------------------------------------------------------
         new("ADMIN_GOVERNANCE", "Access Governance", Administration, MenuLevel.SubMenu, "IAM",
@@ -155,10 +167,21 @@ public static class MenuCatalogue
             "/app/administration/access/access-request-and-approval", "inbox",
             PermissionCodes.AccessRequestsView, 10),
 
-        new("ADMIN_ACCESS_REVIEWS", "Access Reviews", "ADMIN_GOVERNANCE", MenuLevel.ChildSubMenu, "IAM",
-            "/app/administration/access/access-review-campaign", "check-square",
-            PermissionCodes.AccessReviewsView, 20),
-
+        // ACCESS REVIEWS IS DELIBERATELY ABSENT FROM THIS CATALOGUE.
+        //
+        // The screen, its route and its API are all intact - recertification still works and
+        // /app/administration/access/access-review-campaign still serves it. What was withdrawn is
+        // the navigation entry, because a quarterly recertification is not something anybody
+        // browses to between other work: the campaign is raised, the reviewers are told, and they
+        // arrive by link. A permanent sidebar item for it sat beside two screens people use daily
+        // and read as clutter.
+        //
+        // RESTORING IT IS ONE ENTRY. Add the node back with code ADMIN_ACCESS_REVIEWS and the
+        // seeder un-retires the row it already has, mappings and Organisation overrides intact -
+        // see the note on the retirement pass in IamDbSeeder.SeedMenuDefinitionsAsync.
+        //
+        // Sort order 30 is left on Access Preview rather than closed up, so the gap is visible to
+        // whoever reads this next and a restored Access Reviews lands back in its old place.
         new("ADMIN_ACCESS_PREVIEW", "Access Preview", "ADMIN_GOVERNANCE", MenuLevel.ChildSubMenu, "IAM",
             "/app/administration/access/access-preview", "eye",
             PermissionCodes.PermissionsView, 30),

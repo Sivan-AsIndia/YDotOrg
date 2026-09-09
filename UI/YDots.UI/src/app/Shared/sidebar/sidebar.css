@@ -39,3 +39,129 @@
 .pe-app-sidebar.theme-bg-active .pe-slide-menu .pe-nav-link::before {
   background-color: rgba(255, 255, 255, 0.35) !important;
 }
+
+/* =============================================================================================
+   MENU DEPTH — one indent step per level, and icons only on the top level
+   =============================================================================================
+
+   THE PROBLEM THIS SOLVES. The theme indents every link inside a `.pe-slide-menu` by the same
+   35px, and only steps deeper through `.pe-slide-menu .pe-slide-item .pe-slide-menu`. The
+   sidebar's third level was wrapped in `pe-slide` rather than `pe-slide-item`, so that rule
+   never matched and a child sub-menu started on exactly the same vertical line as the child
+   above it — "Access and Identity" and "User Directory" were indistinguishable as parent and
+   ancestor. The template now uses the class the theme expects; these rules make the scale
+   explicit rather than leaving it to a vendor selector that has already drifted once.
+
+   MEASURED FROM DEPTH, NOT FROM A CLASS NAME. `.pe-slide-menu .pe-slide-menu` is true of a third
+   level however its wrapper `<li>` is classed, so a future edit to the markup cannot silently
+   flatten the tree again the way the last one did.
+
+   LOGICAL PROPERTIES THROUGHOUT. The theme ships a mirrored stylesheet and the Direction control
+   swaps to it wholesale, so `padding-inline-start` and `inset-inline-start` are what keep one
+   set of rules correct in both directions — a `padding-left` here would indent from the wrong
+   edge the moment somebody chose RTL.
+   ============================================================================================= */
+
+.pe-app-sidebar {
+  /* One scale, named once. The step between levels is deliberately larger than the eye needs to
+     notice (20px) because the sidebar is scanned quickly and at a glance, not read. */
+  --pe-menu-indent-l2: 44px;
+  --pe-menu-indent-l3: 64px;
+
+  /* The guide line and the active marker travel with the text they belong to; leaving them at
+     the theme's 18/19px would leave a child sub-menu's rail sitting under its parent's. */
+  --pe-menu-rail-l2: 22px;
+  --pe-menu-rail-l3: 42px;
+}
+
+/* ---- Level 2: a child of a top-level group ---- */
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu > li > .pe-nav-link,
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu > li > a {
+  padding-inline-start: var(--pe-menu-indent-l2);
+  padding-inline-end: 12px;
+}
+
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu::after {
+  inset-inline-start: var(--pe-menu-rail-l2);
+}
+
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu > li > .pe-nav-link::before {
+  inset-inline-start: calc(var(--pe-menu-rail-l2) - 1px);
+}
+
+/* ---- Level 3: a child sub-menu, one step deeper again ---- */
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-slide-menu > li > .pe-nav-link,
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-slide-menu > li > a {
+  padding-inline-start: var(--pe-menu-indent-l3);
+}
+
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-slide-menu::after {
+  inset-inline-start: var(--pe-menu-rail-l3);
+}
+
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-slide-menu > li > .pe-nav-link::before {
+  inset-inline-start: calc(var(--pe-menu-rail-l3) - 1px);
+}
+
+/* The nested list carries no padding of its own: the step lives on the link, so the guide line
+   and the hover background still span the full width of the sidebar rather than starting short
+   of it. */
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-slide-item .pe-slide-menu {
+  padding-inline-start: 0;
+}
+
+/* ---- Icon-only sidebar: the same ladder, sized for an 11.7rem flyout ----
+
+   The theme turns a submenu into a narrow floating panel when the sidebar is collapsed. The
+   expanded scale would spend a third of that width on indentation, so the step is compressed
+   rather than dropped — the levels still read as levels, and the labels still fit. */
+[data-sidebar='icon'] .pe-app-sidebar,
+[data-sidebar='icon-hover'] .pe-app-sidebar {
+  --pe-menu-indent-l2: 24px;
+  --pe-menu-indent-l3: 40px;
+  --pe-menu-rail-l2: 12px;
+  --pe-menu-rail-l3: 28px;
+}
+
+/* =============================================================================================
+   ICONS: EVERY TOP-LEVEL ITEM HAS ONE, NOTHING BELOW IT DOES
+   ============================================================================================= */
+
+/* A FIXED SLOT, SO THE LABELS LINE UP. Remix glyphs are not all the same width, and without a
+   reserved box every top-level label sat a pixel or two off its neighbour — which reads as a
+   wobble down the left edge of the menu rather than as a list. */
+.pe-app-sidebar .pe-app-sidebar-menu .pe-main-menu > li > .pe-nav-link > .pe-nav-icon {
+  flex: 0 0 auto;
+  inline-size: 1.25rem;
+  text-align: center;
+  line-height: 1;
+}
+
+/* NOTHING BELOW THE TOP LEVEL CARRIES AN ICON, and this enforces it rather than trusting the
+   template to keep not adding one. The menu is server-driven: every node in the catalogue has an
+   `Icon` column, including the children, so a child icon is one edit away at any time — and a
+   half-iconed submenu is worse than either choice made consistently.
+
+   THE COLLAPSE ARROWS ARE NOT ICONS and must survive: they are the only thing telling a reader
+   that a child sub-menu opens. Hence the exclusion rather than a blanket `i { display:none }`,
+   which would have hidden them and left a group that looked like a dead link. */
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu .pe-nav-link > i:not(.pe-nav-arrow),
+.pe-app-sidebar .pe-app-sidebar-menu .pe-slide-menu a > i:not(.pe-nav-arrow) {
+  display: none;
+}
+
+/* ---- Small screens: the sidebar is an overlay and the same ladder applies ----
+   Declared explicitly so a narrower viewport cannot inherit the icon-mode scale from a stale
+   `data-sidebar` attribute left over from a wider one. */
+@media (max-width: 991.98px) {
+  /* Both forms, because the icon-mode block above is an attribute selector and would otherwise
+     out-specify a bare `.pe-app-sidebar` here — leaving a phone showing the compressed flyout
+     ladder on a full-width overlay, which is the opposite of what this block is for. */
+  [data-sidebar] .pe-app-sidebar,
+  .pe-app-sidebar {
+    --pe-menu-indent-l2: 40px;
+    --pe-menu-indent-l3: 58px;
+    --pe-menu-rail-l2: 20px;
+    --pe-menu-rail-l3: 38px;
+  }
+}

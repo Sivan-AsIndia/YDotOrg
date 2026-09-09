@@ -54,4 +54,19 @@ public sealed class IdentityIntegrationSettings
     /// installation may have named its portal category differently.
     /// </summary>
     public string DonorAccountCategory { get; set; } = "DonorPortal";
+
+    /// <summary>
+    /// The dialling code to put in front of a donor's mobile number when they did not give one.
+    ///
+    /// IT IS REQUIRED BY IAM AND WAS NEVER SENT. IAM validates the mobile as E.164 and rejects a
+    /// number with no country code - "Enter a valid mobile number with its country code" - and
+    /// that refusal fails the WHOLE create call, so a donor who typed a phone number got no
+    /// account and no invitation, while one who left the field blank got both. The public
+    /// donation form asks for ten digits and offers no country selector, so the code has to come
+    /// from configuration.
+    ///
+    /// +91 because this platform runs on the Indian financial year and its donors dial from
+    /// India. A donor who types their own "+" code keeps it - see SplitMobile.
+    /// </summary>
+    public string DefaultMobileCountryCode { get; set; } = "+91";
 }
