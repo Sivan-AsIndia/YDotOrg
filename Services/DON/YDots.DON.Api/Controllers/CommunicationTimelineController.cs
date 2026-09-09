@@ -23,6 +23,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class CommunicationTimelineController : ApiControllerBase
 {
+    private readonly ILogger<CommunicationTimelineController> _logger;
+
+    public CommunicationTimelineController(ILogger<CommunicationTimelineController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>
     /// GET the timeline for a lead, for a donor, or for a lead and the donor it became.
     ///
@@ -42,7 +49,22 @@ public sealed class CommunicationTimelineController : ApiControllerBase
         [FromQuery] Guid? leadId,
         [FromQuery] Guid? donorId,
         [FromServices] CommunicationTimelineQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(
-            new GetCommunicationTimelineQuery(leadId, donorId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Communication timeline retrieval started.");
+
+        var result = await handler.HandleAsync(
+            new GetCommunicationTimelineQuery(leadId, donorId), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Communication timeline retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Communication timeline retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 }

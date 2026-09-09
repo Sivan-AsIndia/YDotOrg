@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -27,7 +28,8 @@ public sealed class LeadWorkQueueQueryHandler(
     IConsentRepository consentRepository,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<LeadWorkQueueQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -35,11 +37,14 @@ public sealed class LeadWorkQueueQueryHandler(
         GetLeadWorkQueueQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Getting lead work queue.");
+
         var filter = query.Filter;
 
         if (filter.OnlyMine == true)
         {
             filter.OwnerUserId = currentUser.UserId;
+            logger.LogInformation("Lead work queue restricted to the current user's records.");
         }
 
         var page = await leadRepository.SearchAsync(filter, currentUser.Scope, cancellationToken);
@@ -80,6 +85,8 @@ public sealed class LeadWorkQueueQueryHandler(
             now,
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Lead work queue loaded successfully. ResultCount: {ResultCount}, TotalCount: {TotalCount}, Page: {Page}", rows.Count, page.TotalCount, page.Page);
+
         return Result.Success(response);
     }
 
@@ -87,21 +94,27 @@ public sealed class LeadWorkQueueQueryHandler(
         GetLeadDetailQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Getting lead detail.");
+
         var lead = await leadRepository.GetByIdAsync(query.LeadId, cancellationToken);
 
         if (lead is null || lead.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Lead detail request rejected because the lead was not found in the current organisation scope.");
             return Result.Failure<LeadDetailResponse>(Error.NotFound("That lead was not found inside your scope."));
         }
 
         if (currentUser.Scope.IsOwnRecordsOnly && lead.OwnerUserId != currentUser.UserId)
         {
+            logger.LogWarning("Lead detail request rejected because the lead is outside the current user's record scope.");
             return Result.Failure<LeadDetailResponse>(Error.NotFound("That lead was not found inside your scope."));
         }
 
         lead.SlaState = LeadMappingConfig.CalculateSlaState(lead.NextActionDueUtc, clock.UtcNow, _settings);
 
         var consents = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
+
+        logger.LogInformation("Lead detail loaded successfully.");
 
         return Result.Success(lead.ToDetailResponse(
             currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consents));
@@ -167,7 +180,7 @@ public sealed class LeadWorkQueueQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            parts.Add($"search '{filter.Search}'");
+            parts.Add("search filter");
         }
 
         if (filter.CampaignId is not null)

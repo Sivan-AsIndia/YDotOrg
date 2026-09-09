@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -15,6 +16,7 @@ using YDots.DON.Domain.Enums;
 
 namespace YDots.DON.Application.Features.AssignmentBoard.Queries.GetAssignmentBoard;
 
+
 /// <summary>SCR-DON-006 GET. Balance ownership by team, language, workload and SLA.</summary>
 public sealed record GetAssignmentBoardQuery(LeadSearchFilter Filter);
 
@@ -27,7 +29,8 @@ public sealed class AssignmentBoardQueryHandler(
     IConsentRepository consentRepository,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<AssignmentBoardQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -35,6 +38,8 @@ public sealed class AssignmentBoardQueryHandler(
         GetAssignmentBoardQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Assignment board retrieval started.");
+
         var filter = query.Filter;
         var now = clock.UtcNow;
 
@@ -116,6 +121,8 @@ public sealed class AssignmentBoardQueryHandler(
             _settings.BulkRouteMaximumItems,
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Assignment board retrieved successfully with {RowCount} row(s) from {TotalCount} matching lead(s).", rows.Count, page.TotalCount);
+
         return Result.Success(response);
     }
 
@@ -123,10 +130,14 @@ public sealed class AssignmentBoardQueryHandler(
         GetAssignmentHistoryQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Assignment history retrieval started for LeadId {LeadId}.", query.LeadId);
+
         var lead = await leadRepository.GetByIdAsync(query.LeadId, cancellationToken);
 
         if (lead is null || lead.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Assignment history retrieval failed for LeadId {LeadId} because the lead was not found inside the current scope.", query.LeadId);
+
             return Result.Failure<AssignmentBoardLeadResponse>(
                 Error.NotFound("That lead was not found inside your scope."));
         }
@@ -149,6 +160,8 @@ public sealed class AssignmentBoardQueryHandler(
                 item.EffectiveAtUtc,
                 item.AssignedByUserId,
                 item.IsBulkRoute))]);
+
+        logger.LogInformation("Assignment history retrieved successfully for LeadId {LeadId} with {HistoryCount} history record(s).", query.LeadId, history.Count);
 
         return Result.Success(new AssignmentBoardLeadResponse(detail, historyResponse));
     }

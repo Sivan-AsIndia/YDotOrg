@@ -62,15 +62,19 @@ public sealed class RefundCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Requesting refund for donation {DonationId}.", command.DonationId);
+
         var donation = await donations.GetDonationAsync(command.DonationId, cancellationToken);
 
         if (donation is null)
         {
+            logger.LogWarning("Donation {DonationId} was not found while requesting a refund.", command.DonationId);
             return Result.Failure<RefundCaseDetailResponse>(Error.NotFound("That donation was not found."));
         }
 
         if (donation.Status is DonationStatus.Voided)
         {
+            logger.LogWarning("Refund request rejected for donation {DonationId} because it is voided.", command.DonationId);
             return Result.Failure<RefundCaseDetailResponse>(Error.InvalidTransition(
                 "A voided donation has nothing to refund."));
         }
@@ -79,6 +83,7 @@ public sealed class RefundCommandHandler(
         // top would send it twice.
         if (donation.Status is DonationStatus.ChargedBack)
         {
+            logger.LogWarning("Refund request rejected for donation {DonationId} because it is under a chargeback.", command.DonationId);
             return Result.Failure<RefundCaseDetailResponse>(Error.InvalidTransition(
                 "This donation is under a chargeback. The money has already been reversed."));
         }
@@ -88,6 +93,7 @@ public sealed class RefundCommandHandler(
         // reconciliation.
         if (await refunds.HasOpenRefundAsync(donation.Id, cancellationToken))
         {
+            logger.LogWarning("Refund request rejected for donation {DonationId} because another refund is already in progress.", command.DonationId);
             return Result.Failure<RefundCaseDetailResponse>(Error.RefundAlreadyInProgress());
         }
 
@@ -96,6 +102,7 @@ public sealed class RefundCommandHandler(
         // CHECKED AGAINST WHAT IS LEFT, not against the original. See the class comment.
         if (amount.Amount > donation.RefundableAmount.Amount)
         {
+            logger.LogWarning("Refund request rejected for donation {DonationId} because the requested amount exceeds the refundable balance.", command.DonationId);
             return Result.Failure<RefundCaseDetailResponse>(Error.RefundExceedsBalance(
                 $"Only {donation.RefundableAmount} can still be refunded on this donation."));
         }
@@ -104,6 +111,7 @@ public sealed class RefundCommandHandler(
 
         if (reference.IsFailure)
         {
+            logger.LogError("Failed to generate a unique refund case reference.");
             return Result.Failure<RefundCaseDetailResponse>(reference.Error!);
         }
 
@@ -139,6 +147,8 @@ public sealed class RefundCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Refund case {CaseReference} requested successfully.", refundCase.CaseReference);
+
         return refundCase.ToDetailResponse(
             donation, canSeeSensitiveDonor: true, PermittedActions(refundCase));
     }
@@ -159,20 +169,25 @@ public sealed class RefundCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Rejecting refund case {RefundCaseId}.", command.RefundCaseId);
+
         var refundCase = await refunds.GetRefundAsync(command.RefundCaseId, cancellationToken);
 
         if (refundCase is null)
         {
+            logger.LogWarning("Refund case {RefundCaseId} was not found for rejection.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That refund was not found."));
         }
 
         if (refundCase.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Refund case {RefundCaseId} rejection failed due to a concurrency conflict.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (refundCase.Status != RefundStatus.Requested)
         {
+            logger.LogWarning("Refund case {RefundCaseId} cannot be approved because it is {Status}.", command.RefundCaseId, refundCase.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A refund that is {refundCase.Status} cannot be approved."));
         }
@@ -190,6 +205,8 @@ public sealed class RefundCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Refund case {RefundCaseId} approval rejected due to segregation of duties.", command.RefundCaseId);
+
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "You cannot approve a refund you requested. Ask a colleague to review it."));
         }
@@ -198,6 +215,7 @@ public sealed class RefundCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning("Refund case {RefundCaseId} could not be approved because its donation was not found.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.Dependency(
                 "That refund is not linked to a donation."));
         }
@@ -206,6 +224,7 @@ public sealed class RefundCommandHandler(
         // between, and the balance that was there when this was raised may be gone.
         if (refundCase.Amount.Amount > donation.RefundableAmount.Amount)
         {
+            logger.LogWarning("Refund case {RefundCaseId} approval rejected because the refundable balance is insufficient.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.RefundExceedsBalance(
                 $"Only {donation.RefundableAmount} can still be refunded. "
                 + "Another refund may have completed since this was raised."));
@@ -259,6 +278,8 @@ public sealed class RefundCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogInformation("Refund case {CaseReference} approved and completed as a manual refund.", refundCase.CaseReference);
+
             return BuildOutcome(
                 refundCase, "Refund approved. It must be paid back manually - there is no gateway payment to reverse.");
         }
@@ -298,6 +319,8 @@ public sealed class RefundCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Refund case {CaseReference} was approved but gateway processing failed because the provider was unavailable.", refundCase.CaseReference);
+
             return Result.Failure<OutcomeResponse>(Error.PaymentGatewayUnavailable(
                 "The refund was approved but the provider could not be reached. It will be retried."));
         }
@@ -317,6 +340,8 @@ public sealed class RefundCommandHandler(
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogWarning("Gateway refused refund case {CaseReference}.", refundCase.CaseReference);
 
             return Result.Failure<OutcomeResponse>(Error.Dependency(
                 $"The provider refused the refund: {result.FailureMessage}"));
@@ -347,6 +372,8 @@ public sealed class RefundCommandHandler(
             ? "Refund completed. The donation is now fully refunded - correct or void its receipt."
             : "Refund completed. The donation is partially refunded - correct its receipt for the new amount.";
 
+        logger.LogInformation("Refund case {CaseReference} completed successfully.", refundCase.CaseReference);
+
         return BuildOutcome(refundCase, message);
     }
 
@@ -359,20 +386,25 @@ public sealed class RefundCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Rejecting refund case {RefundCaseId}.", command.RefundCaseId);
+
         var refundCase = await refunds.GetRefundAsync(command.RefundCaseId, cancellationToken);
 
         if (refundCase is null)
         {
+            logger.LogWarning("Refund case {RefundCaseId} was not found for rejection.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That refund was not found."));
         }
 
         if (refundCase.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Refund case {RefundCaseId} rejection failed due to a concurrency conflict.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (refundCase.Status != RefundStatus.Requested)
         {
+            logger.LogWarning("Refund case {RefundCaseId} cannot be rejected because it is {Status}.", command.RefundCaseId, refundCase.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A refund that is {refundCase.Status} cannot be rejected."));
         }
@@ -382,6 +414,7 @@ public sealed class RefundCommandHandler(
         // have to distinguish them.
         if (!refundCase.CanBeDecidedBy(currentUser.UserId))
         {
+            logger.LogWarning("Refund case {RefundCaseId} rejection denied due to segregation of duties.", command.RefundCaseId);
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "You cannot decide a refund you requested. Ask a colleague to review it."));
         }
@@ -400,6 +433,8 @@ public sealed class RefundCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Refund case {CaseReference} rejected successfully.", refundCase.CaseReference);
 
         return BuildOutcome(refundCase, "Refund rejected.");
     }
@@ -436,6 +471,8 @@ public sealed class RefundCommandHandler(
                 return candidate;
             }
         }
+
+        logger.LogError("Failed to generate a unique refund case reference after {ReferenceAttempts} attempts.", ReferenceAttempts);
 
         return Result.Failure<string>(Error.Dependency(
             "A unique case reference could not be generated."));

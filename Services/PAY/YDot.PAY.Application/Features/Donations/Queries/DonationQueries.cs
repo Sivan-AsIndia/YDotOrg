@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.PAY.Application.Common.Abstractions.Persistence;
 using YDot.PAY.Application.Common.Abstractions.Security;
 using YDot.PAY.Application.Common.Abstractions.Services;
@@ -52,7 +53,8 @@ public sealed class DonationQueryHandler(
     ICsvExportService exports,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<DonationQueryHandler> logger)
 {
     private const int MaximumExportPages = 500;
 
@@ -68,14 +70,22 @@ public sealed class DonationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await intentReadService.SearchAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Searching donation intents.");
+
+        var result = await intentReadService.SearchAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Donation intent search completed.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<DonationIntentDetailResponse>> HandleAsync(
         GetDonationIntentQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Retrieving donation intent {IntentId}.", query.IntentId);
 
         var canSeeSensitive = CanSeeSensitiveDonor;
 
@@ -84,12 +94,18 @@ public sealed class DonationQueryHandler(
 
         if (intent is null)
         {
+            logger.LogWarning("Donation intent {IntentId} was not found.", query.IntentId);
+
             return Result.Failure<DonationIntentDetailResponse>(
                 Error.NotFound("That donation was not found."));
         }
 
         if (canSeeSensitive)
         {
+            logger.LogInformation(
+                "Sensitive donor details accessed for donation intent {IntentId}.",
+                query.IntentId);
+
             await audit.WriteAsync(
                 AuditActionCodes.DonationSensitiveDonorViewed,
                 nameof(DonationIntent),
@@ -99,6 +115,8 @@ public sealed class DonationQueryHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
+
+        logger.LogInformation("Donation intent {IntentId} retrieved successfully.", query.IntentId);
 
         return Result.Success(intent);
     }
@@ -115,12 +133,22 @@ public sealed class DonationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving donation intent by public reference.");
+
         var intent = await intentReadService.GetDetailByReferenceAsync(
             query.IntentReference, cancellationToken);
 
-        return intent is null
-            ? Result.Failure<DonationIntentDetailResponse>(Error.NotFound("That donation was not found."))
-            : Result.Success(intent);
+        if (intent is null)
+        {
+            logger.LogWarning("Donation intent was not found for the supplied public reference.");
+
+            return Result.Failure<DonationIntentDetailResponse>(
+                Error.NotFound("That donation was not found."));
+        }
+
+        logger.LogInformation("Donation intent retrieved successfully by public reference.");
+
+        return Result.Success(intent);
     }
 
     public async Task<Result<PagedResponse<PaymentSupportCaseResponse>>> HandleAsync(
@@ -128,8 +156,14 @@ public sealed class DonationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await intentReadService.GetSupportQueueAsync(
-            query.Pagination, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Retrieving payment support queue.");
+
+        var result = await intentReadService.GetSupportQueueAsync(
+            query.Pagination, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Payment support queue retrieved successfully.");
+
+        return Result.Success(result);
     }
 
     // ---- Donations ----------------------------------------------------------------------------
@@ -139,14 +173,22 @@ public sealed class DonationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await donationReadService.SearchAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Searching donations.");
+
+        var result = await donationReadService.SearchAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Donation search completed.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<DonationDetailResponse>> HandleAsync(
         GetDonationQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Retrieving donation {DonationId}.", query.DonationId);
 
         var canSeeSensitive = CanSeeSensitiveDonor;
 
@@ -155,11 +197,18 @@ public sealed class DonationQueryHandler(
 
         if (donation is null)
         {
-            return Result.Failure<DonationDetailResponse>(Error.NotFound("That donation was not found."));
+            logger.LogWarning("Donation {DonationId} was not found.", query.DonationId);
+
+            return Result.Failure<DonationDetailResponse>(
+                Error.NotFound("That donation was not found."));
         }
 
         if (canSeeSensitive)
         {
+            logger.LogInformation(
+                "Sensitive donor details accessed for donation {DonationId}.",
+                query.DonationId);
+
             await audit.WriteAsync(
                 AuditActionCodes.DonationSensitiveDonorViewed,
                 nameof(Donation),
@@ -170,6 +219,8 @@ public sealed class DonationQueryHandler(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        logger.LogInformation("Donation {DonationId} retrieved successfully.", query.DonationId);
+
         return Result.Success(donation);
     }
 
@@ -178,8 +229,14 @@ public sealed class DonationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await donationReadService.GetStatisticsAsync(currentUser.Scope, cancellationToken));
+        logger.LogInformation("Retrieving donation statistics.");
+
+        var statistics = await donationReadService.GetStatisticsAsync(
+            currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Donation statistics retrieved successfully.");
+
+        return Result.Success(statistics);
     }
 
     /// <summary>
@@ -192,6 +249,8 @@ public sealed class DonationQueryHandler(
         ExportDonationsQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Starting donation register export.");
 
         var canSeeSensitive = CanSeeSensitiveDonor;
 
@@ -231,6 +290,10 @@ public sealed class DonationQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Donation register export completed successfully with {RowCount} rows.",
+            rows.Count);
 
         return Result.Success(file);
     }

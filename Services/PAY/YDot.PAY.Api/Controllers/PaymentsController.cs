@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using YDot.PAY.Application.Common.Constants;
 using YDot.PAY.Application.Common.Models;
 using YDot.PAY.Application.Common.Results;
@@ -23,7 +24,9 @@ namespace YDot.PAY.Api.Controllers;
 [Route("api/v1/payments")]
 [Produces("application/json")]
 public sealed class PaymentsController(
-    PaymentProcessingCommandHandler payments, PaymentEventQueryHandler events) : ApiControllerBase
+    PaymentProcessingCommandHandler payments,
+    PaymentEventQueryHandler events,
+    ILogger<PaymentsController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Asks the gateway what actually happened to an attempt.
@@ -37,8 +40,23 @@ public sealed class PaymentsController(
     [ProducesResponseType(typeof(ApiResponse<PaymentVerificationResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> VerifyAsync(
-        [FromBody] VerifyPaymentRequest request, CancellationToken cancellationToken) =>
-        FromResult(await payments.HandleAsync(new VerifyPaymentCommand(request), cancellationToken));
+        [FromBody] VerifyPaymentRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Payment verification request received.");
+
+        var result = await payments.HandleAsync(new VerifyPaymentCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Payment verification completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Payment verification could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Safe retry - section 23.
@@ -54,9 +72,23 @@ public sealed class PaymentsController(
     [ProducesResponseType(typeof(ApiResponse<SafeRetryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SafeRetryAsync(
-        Guid intentId, [FromBody] SafeRetryRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await payments.HandleAsync(new SafeRetryCommand(intentId, request), cancellationToken));
+        Guid intentId, [FromBody] SafeRetryRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Safe payment retry requested for payment intent {IntentId}.", intentId);
+
+        var result = await payments.HandleAsync(new SafeRetryCommand(intentId, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Safe payment retry completed for payment intent {IntentId}.", intentId);
+        }
+        else
+        {
+            logger.LogWarning("Safe payment retry could not be completed for payment intent {IntentId}.", intentId);
+        }
+
+        return FromResult(result);
+    }
 
     // =====================================================================================
     // The gateway event queue - SCR-PAY-003
@@ -68,8 +100,23 @@ public sealed class PaymentsController(
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<PaymentEventListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchEventsAsync(
-        [FromQuery] PaymentEventSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await events.HandleAsync(new SearchPaymentEventsQuery(filter), cancellationToken));
+        [FromQuery] PaymentEventSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Payment event queue search requested.");
+
+        var result = await events.HandleAsync(new SearchPaymentEventsQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Payment event queue search completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Payment event queue search could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// One queued event, with its verbatim payload.
@@ -82,8 +129,23 @@ public sealed class PaymentsController(
     [HasPermission(PermissionCodes.PaymentsViewEvents)]
     [ProducesResponseType(typeof(ApiResponse<PaymentEventDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetEventAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await events.HandleAsync(new GetPaymentEventQuery(id), cancellationToken));
+    public async Task<IActionResult> GetEventAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Payment event details requested for event {EventId}.", id);
+
+        var result = await events.HandleAsync(new GetPaymentEventQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Payment event details retrieved successfully for event {EventId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Payment event details could not be retrieved for event {EventId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Re-runs a failed event through the processor.
@@ -98,14 +160,25 @@ public sealed class PaymentsController(
     public async Task<IActionResult> ReprocessEventAsync(
         Guid id, [FromBody] ReprocessPaymentEventRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Payment event reprocessing requested for event {EventId}.", id);
+
         // The expected version is carried on the body for optimistic concurrency; the handler
         // itself takes only the id, because applying an event is idempotent by its unique
         // gateway event id rather than by version.
         _ = request;
 
-        return FromResult(
-            await payments.HandleAsync(new ApplyPaymentEventCommand(id), cancellationToken),
-            "Event reprocessed.");
+        var result = await payments.HandleAsync(new ApplyPaymentEventCommand(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Payment event reprocessed successfully for event {EventId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Payment event reprocessing could not be completed for event {EventId}.", id);
+        }
+
+        return FromResult(result, "Event reprocessed.");
     }
 
     /// <summary>
@@ -120,8 +193,21 @@ public sealed class PaymentsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DismissEventAsync(
-        Guid id, [FromBody] DismissPaymentEventRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await events.HandleAsync(new DismissPaymentEventCommand(id, request), cancellationToken),
-            "Event dismissed.");
+        Guid id, [FromBody] DismissPaymentEventRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Payment event dismissal requested for event {EventId}.", id);
+
+        var result = await events.HandleAsync(new DismissPaymentEventCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Payment event dismissed successfully for event {EventId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Payment event dismissal could not be completed for event {EventId}.", id);
+        }
+
+        return FromResult(result, "Event dismissed.");
+    }
 }

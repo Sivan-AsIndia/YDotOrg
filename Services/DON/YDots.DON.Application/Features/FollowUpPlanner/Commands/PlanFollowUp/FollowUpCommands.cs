@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -48,7 +49,8 @@ public sealed class FollowUpCommandHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<FollowUpCommandHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -58,8 +60,12 @@ public sealed class FollowUpCommandHandler(
     {
         var request = command.Request;
 
+        logger.LogInformation("Follow-up scheduling started for organisation {OrganisationId}.", currentUser.OrganisationId);
+
         if (request.DonorId is null && request.LeadId is null)
         {
+            logger.LogWarning("Follow-up scheduling failed because neither donor nor lead was provided for organisation {OrganisationId}.", currentUser.OrganisationId);
+
             return Result.Failure<FollowUpResponse>(Error.Validation(
                 "Enter Donor or lead reference.",
                 [new ValidationError(nameof(request.DonorId), "Choose a donor or a lead.")]));
@@ -67,6 +73,8 @@ public sealed class FollowUpCommandHandler(
 
         if (!Enum.TryParse<ConsentChannel>(request.PermittedChannel, ignoreCase: true, out var channel))
         {
+            logger.LogWarning("Follow-up scheduling failed because an invalid permitted channel was supplied for organisation {OrganisationId}.", currentUser.OrganisationId);
+
             return Result.Failure<FollowUpResponse>(Error.Validation(
                 "Review Permitted channel. Choose a value from the approved catalogue.",
                 [new ValidationError(nameof(request.PermittedChannel), "Choose a channel from the list.")]));
@@ -81,6 +89,8 @@ public sealed class FollowUpCommandHandler(
 
             if (donor is null || donor.OrganisationId != currentUser.OrganisationId)
             {
+                logger.LogWarning("Follow-up scheduling failed because donor {DonorId} was not found inside the current organisation scope.", request.DonorId.Value);
+
                 return Result.Failure<FollowUpResponse>(Error.DonorNotFound());
             }
         }
@@ -91,6 +101,8 @@ public sealed class FollowUpCommandHandler(
 
             if (lead is null || lead.OrganisationId != currentUser.OrganisationId)
             {
+                logger.LogWarning("Follow-up scheduling failed because lead {LeadId} was not found inside the current organisation scope.", request.LeadId.Value);
+
                 return Result.Failure<FollowUpResponse>(Error.NotFound("That lead was not found inside your scope."));
             }
         }
@@ -103,19 +115,23 @@ public sealed class FollowUpCommandHandler(
 
         if (string.Equals(warning.Level, "Blocking", StringComparison.Ordinal))
         {
+            logger.LogWarning("Follow-up scheduling blocked by consent restrictions for organisation {OrganisationId}.", currentUser.OrganisationId);
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(warning.Message));
         }
 
         if (warning.ProhibitedChannels.Contains(channel.ToString(), StringComparer.Ordinal))
         {
+            logger.LogWarning("Follow-up scheduling blocked because the selected channel is prohibited for the target record.");
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(
                 $"Contact by {channel} has been withdrawn for this record. Choose a permitted channel."));
         }
 
-        // The acknowledgement is only demanded when there is actually something to acknowledge,
-        // and it is never pre-selected for the caller.
         if (warning.HasWarning && !request.ConsentWarningAcknowledged)
         {
+            logger.LogWarning("Follow-up scheduling failed because the consent warning was not acknowledged.");
+
             return Result.Failure<FollowUpResponse>(Error.Validation(
                 warning.Message + " Acknowledge the consent warning before scheduling.",
                 [new ValidationError(nameof(request.ConsentWarningAcknowledged), "Read and accept the consent warning.")]));
@@ -125,6 +141,8 @@ public sealed class FollowUpCommandHandler(
 
         if (request.DueAtUtc < now)
         {
+            logger.LogWarning("Follow-up scheduling failed because the due date is in the past.");
+
             return Result.Failure<FollowUpResponse>(Error.Validation(
                 "Review Due date and time. It cannot be in the past.",
                 [new ValidationError(nameof(request.DueAtUtc), "Choose a future date and time.")]));
@@ -176,6 +194,8 @@ public sealed class FollowUpCommandHandler(
         task.Donor = donor;
         task.Lead = lead;
 
+        logger.LogInformation("Follow-up {FollowUpId} scheduled successfully for organisation {OrganisationId}.", task.Id, currentUser.OrganisationId);
+
         return Result.Success(task.ToResponse(currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), warning));
     }
 
@@ -183,9 +203,12 @@ public sealed class FollowUpCommandHandler(
         AssignFollowUpCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Follow-up assignment started for follow-up {FollowUpId}.", command.FollowUpId);
+
         var loaded = await LoadAsync(command.FollowUpId, command.Request.ExpectedVersion, cancellationToken);
         if (loaded.Error is not null)
         {
+            logger.LogWarning("Follow-up assignment failed for follow-up {FollowUpId}.", command.FollowUpId);
             return Result.Failure<FollowUpResponse>(loaded.Error);
         }
 
@@ -193,6 +216,8 @@ public sealed class FollowUpCommandHandler(
 
         if (task.Status is FollowUpStatus.Completed or FollowUpStatus.Cancelled)
         {
+            logger.LogWarning("Follow-up assignment rejected for follow-up {FollowUpId} because it is already in terminal state {Status}.", command.FollowUpId, task.Status);
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(
                 $"A follow-up in state {task.Status} can no longer be assigned."));
         }
@@ -208,6 +233,8 @@ public sealed class FollowUpCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Follow-up {FollowUpId} assigned successfully.", command.FollowUpId);
+
         return await BuildResponseAsync(task, cancellationToken);
     }
 
@@ -215,9 +242,12 @@ public sealed class FollowUpCommandHandler(
         CompleteFollowUpCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Follow-up completion started for follow-up {FollowUpId}.", command.FollowUpId);
+
         var loaded = await LoadAsync(command.FollowUpId, command.Request.ExpectedVersion, cancellationToken);
         if (loaded.Error is not null)
         {
+            logger.LogWarning("Follow-up completion failed for follow-up {FollowUpId}.", command.FollowUpId);
             return Result.Failure<FollowUpResponse>(loaded.Error);
         }
 
@@ -225,6 +255,8 @@ public sealed class FollowUpCommandHandler(
 
         if (task.Status is FollowUpStatus.Completed or FollowUpStatus.Cancelled)
         {
+            logger.LogWarning("Follow-up completion rejected for follow-up {FollowUpId} because it is already in terminal state {Status}.", command.FollowUpId, task.Status);
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(
                 $"A follow-up in state {task.Status} cannot be completed again."));
         }
@@ -263,6 +295,8 @@ public sealed class FollowUpCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Follow-up {FollowUpId} completed successfully.", command.FollowUpId);
+
         return await BuildResponseAsync(task, cancellationToken);
     }
 
@@ -270,9 +304,12 @@ public sealed class FollowUpCommandHandler(
         RescheduleFollowUpCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Follow-up rescheduling started for follow-up {FollowUpId}.", command.FollowUpId);
+
         var loaded = await LoadAsync(command.FollowUpId, command.Request.ExpectedVersion, cancellationToken);
         if (loaded.Error is not null)
         {
+            logger.LogWarning("Follow-up rescheduling failed for follow-up {FollowUpId}.", command.FollowUpId);
             return Result.Failure<FollowUpResponse>(loaded.Error);
         }
 
@@ -280,12 +317,16 @@ public sealed class FollowUpCommandHandler(
 
         if (task.Status is FollowUpStatus.Completed or FollowUpStatus.Cancelled)
         {
+            logger.LogWarning("Follow-up rescheduling rejected for follow-up {FollowUpId} because it is already in terminal state {Status}.", command.FollowUpId, task.Status);
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(
                 $"A follow-up in state {task.Status} can no longer be rescheduled."));
         }
 
         if (command.Request.DueAtUtc < clock.UtcNow)
         {
+            logger.LogWarning("Follow-up rescheduling failed for follow-up {FollowUpId} because the new due date is in the past.", command.FollowUpId);
+
             return Result.Failure<FollowUpResponse>(Error.Validation(
                 "Review Due date and time. It cannot be in the past.",
                 [new ValidationError(nameof(command.Request.DueAtUtc), "Choose a future date and time.")]));
@@ -307,6 +348,8 @@ public sealed class FollowUpCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Follow-up {FollowUpId} rescheduled successfully.", command.FollowUpId);
+
         return await BuildResponseAsync(task, cancellationToken);
     }
 
@@ -314,9 +357,12 @@ public sealed class FollowUpCommandHandler(
         CancelFollowUpCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Follow-up cancellation started for follow-up {FollowUpId}.", command.FollowUpId);
+
         var loaded = await LoadAsync(command.FollowUpId, command.Request.ExpectedVersion, cancellationToken);
         if (loaded.Error is not null)
         {
+            logger.LogWarning("Follow-up cancellation failed for follow-up {FollowUpId}.", command.FollowUpId);
             return Result.Failure<FollowUpResponse>(loaded.Error);
         }
 
@@ -324,6 +370,8 @@ public sealed class FollowUpCommandHandler(
 
         if (task.Status is FollowUpStatus.Completed or FollowUpStatus.Cancelled)
         {
+            logger.LogWarning("Follow-up cancellation rejected for follow-up {FollowUpId} because it is already in terminal state {Status}.", command.FollowUpId, task.Status);
+
             return Result.Failure<FollowUpResponse>(Error.InvalidTransition(
                 $"A follow-up in state {task.Status} cannot be cancelled."));
         }
@@ -337,6 +385,8 @@ public sealed class FollowUpCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Follow-up {FollowUpId} cancelled successfully.", command.FollowUpId);
 
         return await BuildResponseAsync(task, cancellationToken);
     }
@@ -381,16 +431,19 @@ public sealed class FollowUpCommandHandler(
 
         if (task is null || task.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Follow-up {FollowUpId} was not found inside the current organisation scope.", followUpId);
             return (null, Error.NotFound("That follow-up was not found inside your scope."));
         }
 
         if (currentUser.Scope.IsOwnRecordsOnly && task.RelationshipOwnerUserId != currentUser.UserId)
         {
+            logger.LogWarning("Follow-up {FollowUpId} was rejected because it is outside the current user's record scope.", followUpId);
             return (null, Error.NotFound("That follow-up was not found inside your scope."));
         }
 
         if (expectedVersion is > 0 && expectedVersion != task.Version)
         {
+            logger.LogWarning("Follow-up {FollowUpId} concurrency check failed. Expected version {ExpectedVersion}, actual version {ActualVersion}.", followUpId, expectedVersion, task.Version);
             return (null, Error.Concurrency());
         }
 

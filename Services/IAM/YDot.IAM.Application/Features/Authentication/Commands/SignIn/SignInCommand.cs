@@ -387,6 +387,9 @@ public sealed class SignInCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Sign-in completed successfully. {UserId} {TenantId} {SessionId} {UsedTrustedDevice}",
+            user.Id, tenant?.Id, tokens.SessionId, usedTrustedDevice);
+
         // An administrator-set temporary password gets the person in, but nowhere else until
         // they change it. The client routes straight to the change-password screen.
         if (user.MustChangePassword)

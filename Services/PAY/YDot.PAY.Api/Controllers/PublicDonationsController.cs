@@ -47,7 +47,8 @@ public sealed class PublicDonationsController(
     DonationQueryHandler queries,
     PaymentProcessingCommandHandler payments,
     ICampaignDirectory campaigns,
-    ITenantContext tenantContext) : ApiControllerBase
+    ITenantContext tenantContext,
+    ILogger<PublicDonationsController> logger) : ApiControllerBase
 {
     /// <summary>
     /// The appeals this Organisation is currently taking donations for.
@@ -76,11 +77,19 @@ public sealed class PublicDonationsController(
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<PublicCampaignSummary>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCampaignsAsync(CancellationToken cancellationToken)
     {
+        logger.LogInformation("Public donation campaign list requested.");
+
         var tenantId = tenantContext.TenantId ?? Guid.Empty;
 
-        var rows = tenantId == Guid.Empty
-            ? []
-            : await campaigns.GetDonatableCampaignsAsync(tenantId, cancellationToken);
+        if (tenantId == Guid.Empty)
+        {
+            logger.LogInformation("Public donation campaign list returned empty because no tenant context was resolved.");
+            return Ok(ApiResponse<IReadOnlyList<PublicCampaignSummary>>.Ok([]));
+        }
+
+        var rows = await campaigns.GetDonatableCampaignsAsync(tenantId, cancellationToken);
+
+        logger.LogInformation("Public donation campaign list retrieved successfully.");
 
         return Ok(ApiResponse<IReadOnlyList<PublicCampaignSummary>>.Ok(rows));
     }
@@ -97,10 +106,23 @@ public sealed class PublicDonationsController(
     [ProducesResponseType(typeof(ApiResponse<DonationIntentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> InitiateAsync(
-        [FromBody] CreateDonationIntentRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(new CreateDonationIntentCommand(request), cancellationToken),
-            "Donation started.");
+        [FromBody] CreateDonationIntentRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public donation initiation requested.");
+
+        var result = await intents.HandleAsync(new CreateDonationIntentCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public donation initiated successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public donation initiation could not be completed.");
+        }
+
+        return FromResult(result, "Donation started.");
+    }
 
     /// <summary>
     /// Section 12: is this donor already known to this charity?
@@ -117,9 +139,23 @@ public sealed class PublicDonationsController(
     [HttpPost("{intentReference}/check-donor")]
     [ProducesResponseType(typeof(ApiResponse<ExistingDonorCheckResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CheckDonorAsync(
-        string intentReference, CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(new CheckExistingDonorCommand(intentReference), cancellationToken));
+        string intentReference, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public donor existence check requested.");
+
+        var result = await intents.HandleAsync(new CheckExistingDonorCommand(intentReference), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public donor existence check completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public donor existence check could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Issues the payment link and opens an attempt.
@@ -134,10 +170,24 @@ public sealed class PublicDonationsController(
     public async Task<IActionResult> CreatePaymentLinkAsync(
         string intentReference,
         [FromBody] CreatePaymentLinkRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(
-                new CreatePaymentLinkCommand(intentReference, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public payment link creation requested.");
+
+        var result = await intents.HandleAsync(
+            new CreatePaymentLinkCommand(intentReference, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public payment link created successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public payment link creation could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Opens the provider's checkout for this donation, so the donor pays without leaving us.
@@ -158,10 +208,24 @@ public sealed class PublicDonationsController(
     public async Task<IActionResult> CreateCheckoutSessionAsync(
         string intentReference,
         [FromBody] CreateCheckoutSessionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(
-                new CreateCheckoutSessionCommand(intentReference, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public checkout session creation requested.");
+
+        var result = await intents.HandleAsync(
+            new CreateCheckoutSessionCommand(intentReference, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public checkout session created successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public checkout session creation could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Takes the signed result of a finished checkout and settles the donation.
@@ -184,10 +248,24 @@ public sealed class PublicDonationsController(
     public async Task<IActionResult> ConfirmCheckoutAsync(
         string intentReference,
         [FromBody] ConfirmCheckoutRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(
-            await payments.HandleAsync(
-                new ConfirmCheckoutPaymentCommand(intentReference, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public checkout confirmation requested.");
+
+        var result = await payments.HandleAsync(
+            new ConfirmCheckoutPaymentCommand(intentReference, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public checkout confirmation completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public checkout confirmation could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The donor's own view of their donation, for the result page they land on after paying.
@@ -199,10 +277,24 @@ public sealed class PublicDonationsController(
     [ProducesResponseType(typeof(ApiResponse<DonationIntentDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAsync(
-        string intentReference, CancellationToken cancellationToken) =>
-        FromResult(
-            await queries.HandleAsync(
-                new GetDonationIntentByReferenceQuery(intentReference), cancellationToken));
+        string intentReference, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public donation details requested.");
+
+        var result = await queries.HandleAsync(
+            new GetDonationIntentByReferenceQuery(intentReference), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public donation details retrieved successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public donation details could not be retrieved.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Asks the gateway what actually happened - SCR-PAY-002.
@@ -218,9 +310,23 @@ public sealed class PublicDonationsController(
     [HttpPost("{intentReference}/verify")]
     [ProducesResponseType(typeof(ApiResponse<PaymentVerificationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> VerifyAsync(
-        string intentReference, CancellationToken cancellationToken) =>
-        FromResult(
-            await payments.HandleAsync(
-                new VerifyPaymentCommand(new VerifyPaymentRequest(IntentReference: intentReference)),
-                cancellationToken));
+        string intentReference, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Public payment verification requested.");
+
+        var result = await payments.HandleAsync(
+            new VerifyPaymentCommand(new VerifyPaymentRequest(IntentReference: intentReference)),
+            cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Public payment verification completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Public payment verification could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 }

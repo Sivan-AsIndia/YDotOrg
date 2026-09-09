@@ -25,8 +25,9 @@ namespace YDot.PAY.Api.Controllers;
 [Authorize(Policy = PolicyNames.ActiveUserOnly)]
 [Route("api/v1/gateway-accounts")]
 [Produces("application/json")]
-public sealed class GatewayAccountsController(GatewayAccountCommandHandler accounts)
-    : ApiControllerBase
+public sealed class GatewayAccountsController(
+    GatewayAccountCommandHandler accounts,
+    ILogger<GatewayAccountsController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Every account this organisation holds, live and test alike.
@@ -39,8 +40,17 @@ public sealed class GatewayAccountsController(GatewayAccountCommandHandler accou
     [HasPermission(PermissionCodes.GatewayView)]
     [ProducesResponseType(
         typeof(ApiResponse<IReadOnlyList<GatewayAccountResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAllAsync(CancellationToken cancellationToken) =>
-        FromResult(await accounts.HandleAsync(new GetGatewayAccountsQuery(), cancellationToken));
+    public async Task<IActionResult> GetAllAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting payment gateway accounts.");
+
+        var result = await accounts.HandleAsync(
+            new GetGatewayAccountsQuery(), cancellationToken);
+
+        logger.LogInformation("Payment gateway accounts loaded successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Creates or updates the account for a gateway and mode.
@@ -58,8 +68,15 @@ public sealed class GatewayAccountsController(GatewayAccountCommandHandler accou
     [ProducesResponseType(typeof(ApiResponse<GatewayAccountResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpsertAsync(
-        [FromBody] UpsertGatewayAccountRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await accounts.HandleAsync(new UpsertGatewayAccountCommand(request), cancellationToken),
-            "Gateway account saved.");
+        [FromBody] UpsertGatewayAccountRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Upsert payment gateway account action started.");
+
+        var result = await accounts.HandleAsync(
+            new UpsertGatewayAccountCommand(request), cancellationToken);
+
+        logger.LogInformation("Upsert payment gateway account action completed.");
+
+        return FromResult(result, "Gateway account saved.");
+    }
 }

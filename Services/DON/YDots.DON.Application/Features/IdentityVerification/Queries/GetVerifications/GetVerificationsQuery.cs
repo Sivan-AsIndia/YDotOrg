@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -22,7 +23,8 @@ public sealed record GetVerificationDetailQuery(Guid VerificationId);
 public sealed class IdentityVerificationQueryHandler(
     IVerificationRepository verificationRepository,
     ICurrentUser currentUser,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<IdentityVerificationQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -30,6 +32,8 @@ public sealed class IdentityVerificationQueryHandler(
         GetVerificationListQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Identity verification list retrieval started for organisation {OrganisationId}.", currentUser.OrganisationId);
+
         var canSeeEvidence = currentUser.CanSeeEvidence();
         var page = await verificationRepository.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
 
@@ -51,6 +55,8 @@ public sealed class IdentityVerificationQueryHandler(
             _settings.VerificationMaxAttempts,
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Identity verification list retrieval completed successfully. Returned {RowCount} rows out of {TotalCount} for organisation {OrganisationId}.", rows.Count, page.TotalCount, currentUser.OrganisationId);
+
         return Result.Success(response);
     }
 
@@ -58,13 +64,19 @@ public sealed class IdentityVerificationQueryHandler(
         GetVerificationDetailQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Identity verification detail retrieval started for verification {VerificationId}.", query.VerificationId);
+
         var verification = await verificationRepository.GetByIdAsync(query.VerificationId, cancellationToken);
 
         if (verification is null || verification.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Identity verification {VerificationId} was not found inside the current organisation scope.", query.VerificationId);
+
             return Result.Failure<IdentityVerificationResponse>(
                 Error.NotFound("That verification was not found inside your scope."));
         }
+
+        logger.LogInformation("Identity verification detail retrieval completed successfully for verification {VerificationId}.", query.VerificationId);
 
         return Result.Success(verification.ToResponse(
             currentUser.CanSeeEvidence(), _settings.VerificationMaxAttempts));
@@ -106,7 +118,7 @@ public sealed class IdentityVerificationQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            parts.Add($"search '{filter.Search}'");
+            parts.Add("search filter");
         }
 
         if (filter.DonorId is not null)

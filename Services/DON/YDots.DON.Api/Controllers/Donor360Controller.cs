@@ -20,6 +20,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class Donor360Controller : ApiControllerBase
 {
+    private readonly ILogger<Donor360Controller> _logger;
+
+    public Donor360Controller(ILogger<Donor360Controller> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the whole 360 view for one donor: thirteen panels in one call.</summary>
     [HttpGet("{donorId:guid}", Name = "GetDonor360")]
     [HasPermission(PermissionCodes.Donor360View)]
@@ -30,8 +37,23 @@ public sealed class Donor360Controller : ApiControllerBase
     public async Task<IActionResult> Get(
         Guid donorId,
         [FromServices] Donor360QueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetDonor360Query(donorId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor 360 retrieval started. DonorId={DonorId}", donorId);
+
+        var result = await handler.HandleAsync(new GetDonor360Query(donorId), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor 360 retrieval completed successfully. DonorId={DonorId}", donorId);
+        }
+        else
+        {
+            _logger.LogWarning("Donor 360 retrieval failed. DonorId={DonorId}", donorId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST correct. Records a change to the donor with a mandatory reason.</summary>
     [HttpPost("{donorId:guid}/correct")]
@@ -45,9 +67,23 @@ public sealed class Donor360Controller : ApiControllerBase
         Guid donorId,
         [FromBody] CorrectDonorRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CorrectDonorCommand(donorId, request), cancellationToken),
-            "The correction was recorded.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor correction started. DonorId={DonorId}", donorId);
+
+        var result = await handler.HandleAsync(new CorrectDonorCommand(donorId, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor correction completed successfully. DonorId={DonorId}", donorId);
+        }
+        else
+        {
+            _logger.LogWarning("Donor correction failed. DonorId={DonorId}", donorId);
+        }
+
+        return FromResult(result, "The correction was recorded.");
+    }
 
     /// <summary>
     /// POST create intent. Records a stated giving intention as an open promise.
@@ -73,9 +109,24 @@ public sealed class Donor360Controller : ApiControllerBase
         Guid donorId,
         [FromBody] CreateIntentRequest request,
         [FromServices] CreateIntentCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CreateIntentCommand(donorId, request), cancellationToken),
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor pledge creation started. DonorId={DonorId}", donorId);
+
+        var result = await handler.HandleAsync(new CreateIntentCommand(donorId, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor pledge creation completed successfully. DonorId={DonorId}", donorId);
+        }
+        else
+        {
+            _logger.LogWarning("Donor pledge creation failed. DonorId={DonorId}", donorId);
+        }
+
+        return FromResult(result,
             "The pledge was recorded. It is not a payment request - the donor pays through their own donation link.");
+    }
 
     /// <summary>DELETE an unused draft donor. Only for an unsubmitted Prospect with no history.</summary>
     [HttpDelete("{donorId:guid}")]
@@ -89,6 +140,21 @@ public sealed class Donor360Controller : ApiControllerBase
         Guid donorId,
         [FromBody] ReasonRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new DeleteDonorDraftCommand(donorId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Draft donor deletion started. DonorId={DonorId}", donorId);
+
+        var result = await handler.HandleAsync(new DeleteDonorDraftCommand(donorId, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Draft donor deletion completed successfully. DonorId={DonorId}", donorId);
+        }
+        else
+        {
+            _logger.LogWarning("Draft donor deletion failed. DonorId={DonorId}", donorId);
+        }
+
+        return FromResult(result);
+    }
 }

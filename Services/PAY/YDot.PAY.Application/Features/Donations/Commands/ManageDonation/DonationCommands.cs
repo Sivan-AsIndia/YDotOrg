@@ -72,15 +72,19 @@ public sealed class DonationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Offline donation recording requested.");
+
         var request = command.Request;
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Offline donation recording rejected because no tenant context was available.");
             return Result.Failure<DonationDetailResponse>(Error.TenantSelectionRequired());
         }
 
         if (!currentUser.HasPermission(PermissionCodes.DonationsRecordOffline))
         {
+            logger.LogWarning("Offline donation recording rejected because the current user lacks the required permission.");
             return Result.Failure<DonationDetailResponse>(Error.Forbidden(
                 "You do not have permission to record an offline donation."));
         }
@@ -93,6 +97,7 @@ public sealed class DonationCommandHandler(
         // exists and let a receipt be issued for it.
         if (request.ReceivedAtUtc > now)
         {
+            logger.LogWarning("Offline donation recording rejected because the received date is in the future.");
             return Result.Failure<DonationDetailResponse>(Error.Validation(
                 "An offline donation cannot be dated in the future."));
         }
@@ -106,6 +111,7 @@ public sealed class DonationCommandHandler(
 
             if (!eligibility.CanAcceptDonations)
             {
+                logger.LogWarning("Offline donation recording rejected because the selected campaign cannot accept donations.");
                 return Result.Failure<DonationDetailResponse>(Error.Validation(
                     eligibility.Reason ?? "That campaign cannot accept donations."));
             }
@@ -113,6 +119,8 @@ public sealed class DonationCommandHandler(
 
         return await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
+            logger.LogInformation("Offline donation transaction started.");
+
             var intentReference = await MintAsync(
                 references.NewIntentReference,
                 candidate => donations.IntentReferenceExistsAsync(candidate, token),
@@ -125,6 +133,7 @@ public sealed class DonationCommandHandler(
 
             if (intentReference is null || donationReference is null)
             {
+                logger.LogError("Offline donation recording failed because a unique reference could not be allocated.");
                 return Result.Failure<DonationDetailResponse>(Error.Dependency(
                     "A unique reference could not be allocated. Please try again."));
             }
@@ -261,10 +270,8 @@ public sealed class DonationCommandHandler(
             await unitOfWork.SaveChangesAsync(token);
 
             logger.LogInformation(
-                "Offline donation {DonationReference} recorded for organisation {TenantId} by {UserId}.",
-                donation.DonationReference,
-                tenantId,
-                currentUser.UserId);
+                "Offline donation {DonationReference} recorded successfully.",
+                donation.DonationReference);
 
             return Result.Success(await BuildDetailAsync(donation, intent, tenantId, token));
         }, cancellationToken);
@@ -292,10 +299,18 @@ public sealed class DonationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Donation reconciliation requested for donation {DonationId}.",
+            command.DonationId);
+
         var request = command.Request;
 
         if (!currentUser.HasPermission(PermissionCodes.DonationsReconcile))
         {
+            logger.LogWarning(
+                "Donation reconciliation rejected for donation {DonationId} because the current user lacks the required permission.",
+                command.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 "You do not have permission to reconcile donations."));
         }
@@ -304,11 +319,19 @@ public sealed class DonationCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning(
+                "Donation reconciliation failed because donation {DonationId} was not found.",
+                command.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That donation was not found."));
         }
 
         if (donation.Version != request.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Donation reconciliation rejected for donation {DonationId} because the record version is stale.",
+                command.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -317,6 +340,10 @@ public sealed class DonationCommandHandler(
         if (request.Status == ReconciliationStatus.Discrepancy
             && string.IsNullOrWhiteSpace(request.Note))
         {
+            logger.LogWarning(
+                "Donation reconciliation rejected for donation {DonationId} because a discrepancy requires a note.",
+                command.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "A discrepancy has to say what does not agree."));
         }
@@ -326,6 +353,10 @@ public sealed class DonationCommandHandler(
         if (request.Status == ReconciliationStatus.ManuallyResolved
             && string.IsNullOrWhiteSpace(request.Note))
         {
+            logger.LogWarning(
+                "Donation reconciliation rejected for donation {DonationId} because a manual resolution requires a note.",
+                command.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "A manual resolution has to record why it was resolved this way."));
         }
@@ -373,10 +404,9 @@ public sealed class DonationCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Donation {DonationReference} marked {Status} by {UserId}.",
+            "Donation {DonationReference} reconciliation completed with status {Status}.",
             donation.DonationReference,
-            request.Status,
-            currentUser.UserId);
+            request.Status);
 
         return Result.Success(new OutcomeResponse(
             donation.Id,

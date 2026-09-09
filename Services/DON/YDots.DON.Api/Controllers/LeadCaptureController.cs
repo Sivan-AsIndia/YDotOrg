@@ -19,6 +19,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class LeadCaptureController : ApiControllerBase
 {
+    private readonly ILogger<LeadCaptureController> _logger;
+
+    public LeadCaptureController(ILogger<LeadCaptureController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET a blank capture form, or an existing draft when leadId is supplied.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.LeadCaptureView)]
@@ -29,8 +36,23 @@ public sealed class LeadCaptureController : ApiControllerBase
     public async Task<IActionResult> GetForm(
         [FromQuery] Guid? leadId,
         [FromServices] GetLeadCaptureQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetLeadCaptureQuery(leadId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead capture form retrieval started.");
+
+        var result = await handler.HandleAsync(new GetLeadCaptureQuery(leadId), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead capture form retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Lead capture form retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET one saved lead by id.</summary>
     [HttpGet("{id:guid}", Name = "GetCapturedLead")]
@@ -41,8 +63,23 @@ public sealed class LeadCaptureController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] GetLeadCaptureQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetLeadCaptureQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Captured lead retrieval started. LeadId={LeadId}", id);
+
+        var result = await handler.HandleAsync(new GetLeadCaptureQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Captured lead retrieval completed successfully. LeadId={LeadId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Captured lead retrieval failed. LeadId={LeadId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST save. Creates the draft lead and, when the consent toggle is on, its consent rows.</summary>
     [HttpPost]
@@ -56,7 +93,18 @@ public sealed class LeadCaptureController : ApiControllerBase
         [FromServices] LeadCaptureCommandHandler handler,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Lead draft creation started.");
+
         var result = await handler.HandleAsync(new SaveLeadCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead draft creation completed successfully. LeadId={LeadId}", result.Value?.Id);
+        }
+        else
+        {
+            _logger.LogWarning("Lead draft creation failed.");
+        }
 
         return CreatedFromResult(result, "GetCapturedLead", new { id = result.Value?.Id ?? Guid.Empty },
             "The lead was saved.");
@@ -74,9 +122,23 @@ public sealed class LeadCaptureController : ApiControllerBase
         Guid id,
         [FromBody] UpdateLeadRequest request,
         [FromServices] LeadCaptureCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new UpdateLeadCommand(id, request), cancellationToken),
-            "The lead was saved.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead draft update started. LeadId={LeadId}", id);
+
+        var result = await handler.HandleAsync(new UpdateLeadCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead draft update completed successfully. LeadId={LeadId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Lead draft update failed. LeadId={LeadId}", id);
+        }
+
+        return FromResult(result, "The lead was saved.");
+    }
 
     /// <summary>
     /// POST deduplicate. Read-only: it reports safe candidate categories and comparison routes,
@@ -100,9 +162,23 @@ public sealed class LeadCaptureController : ApiControllerBase
     public async Task<IActionResult> BulkImport(
         [FromBody] BulkLeadImportRequest request,
         [FromServices] LeadCaptureCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new BulkImportLeadsCommand(request), cancellationToken),
-            "The upload was processed.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Bulk lead import started.");
+
+        var result = await handler.HandleAsync(new BulkImportLeadsCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Bulk lead import completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Bulk lead import failed.");
+        }
+
+        return FromResult(result, "The upload was processed.");
+    }
 
     [HttpPost("{id:guid}/deduplicate")]
     [HasPermission(PermissionCodes.LeadCaptureDeduplicate)]
@@ -112,8 +188,23 @@ public sealed class LeadCaptureController : ApiControllerBase
     public async Task<IActionResult> Deduplicate(
         Guid id,
         [FromServices] LeadCaptureCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new DeduplicateLeadCommand(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead deduplication started. LeadId={LeadId}", id);
+
+        var result = await handler.HandleAsync(new DeduplicateLeadCommand(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead deduplication completed successfully. LeadId={LeadId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Lead deduplication failed. LeadId={LeadId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// POST submit. Promotes the draft into the work queue. Send an Idempotency-Key header and a
@@ -130,9 +221,23 @@ public sealed class LeadCaptureController : ApiControllerBase
         Guid id,
         [FromBody] TransitionRequest request,
         [FromServices] LeadCaptureCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SubmitLeadCommand(id, request), cancellationToken),
-            "The lead was submitted to the work queue.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead submission started. LeadId={LeadId}", id);
+
+        var result = await handler.HandleAsync(new SubmitLeadCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead submission completed successfully. LeadId={LeadId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Lead submission failed. LeadId={LeadId}", id);
+        }
+
+        return FromResult(result, "The lead was submitted to the work queue.");
+    }
 
     /// <summary>DELETE an unused draft. Only for a draft with no consent, assignment or donor reference.</summary>
     [HttpDelete("{id:guid}")]
@@ -146,6 +251,21 @@ public sealed class LeadCaptureController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] LeadCaptureCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new DeleteLeadDraftCommand(id, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead draft deletion started. LeadId={LeadId}", id);
+
+        var result = await handler.HandleAsync(new DeleteLeadDraftCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead draft deletion completed successfully. LeadId={LeadId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Lead draft deletion failed. LeadId={LeadId}", id);
+        }
+
+        return FromResult(result);
+    }
 }

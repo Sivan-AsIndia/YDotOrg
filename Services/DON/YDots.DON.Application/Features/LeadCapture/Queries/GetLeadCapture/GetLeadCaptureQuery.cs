@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -23,7 +24,8 @@ public sealed class GetLeadCaptureQueryHandler(
     ICampaignRepository campaignRepository,
     IConsentRepository consentRepository,
     ICurrentUser currentUser,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<GetLeadCaptureQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -31,20 +33,26 @@ public sealed class GetLeadCaptureQueryHandler(
         GetLeadCaptureQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Getting lead capture screen. LeadId provided: {HasLeadId}", query.LeadId is not null);
+
         LeadDetailResponse? lead = null;
         var duplicates = new List<DuplicateCandidateResponse>();
 
         if (query.LeadId is not null)
         {
+            logger.LogInformation("Loading lead capture details for the requested lead.");
+
             var entity = await leadRepository.GetByIdAsync(query.LeadId.Value, cancellationToken);
 
             if (entity is null || entity.OrganisationId != currentUser.OrganisationId)
             {
+                logger.LogWarning("Lead capture request rejected because the lead was not found in the current organisation scope.");
                 return Result.Failure<LeadCaptureResponse>(Error.NotFound("That lead was not found inside your scope."));
             }
 
             if (currentUser.Scope.IsOwnRecordsOnly && entity.OwnerUserId != currentUser.UserId)
             {
+                logger.LogWarning("Lead capture request rejected because the lead is outside the current user's record scope.");
                 return Result.Failure<LeadCaptureResponse>(Error.NotFound("That lead was not found inside your scope."));
             }
 
@@ -63,8 +71,12 @@ public sealed class GetLeadCaptureQueryHandler(
                     IdentityConfidence.Medium.ToString(),
                     entity.DuplicateCandidateSummary,
                     ScreenRoutes.DuplicateReview));
+
+                logger.LogInformation("Lead capture duplicate review information is available for the requested lead.");
             }
         }
+
+        logger.LogInformation("Loading active campaigns and known lead owners for the lead capture screen.");
 
         var campaigns = await campaignRepository.GetActiveAsync(currentUser.OrganisationId, cancellationToken);
         var owners = await leadRepository.GetKnownOwnersAsync(currentUser.OrganisationId, cancellationToken);
@@ -83,6 +95,8 @@ public sealed class GetLeadCaptureQueryHandler(
             BuildPermittedActions(lead),
             DescribeScope(),
             lead is null ? ScreenState.Initial : ScreenState.Success);
+
+        logger.LogInformation("Lead capture screen loaded successfully. Existing lead: {HasLead}, CampaignCount: {CampaignCount}, OwnerCount: {OwnerCount}", lead is not null, campaigns.Count(), owners.Count());
 
         return Result.Success(response);
     }

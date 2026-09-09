@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -39,19 +40,50 @@ public sealed class AssignmentBoardCommandHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<AssignmentBoardCommandHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
     public async Task<Result<LeadDetailResponse>> HandleAsync(
         AssignFromBoardCommand command,
-        CancellationToken cancellationToken = default) =>
-        await ApplyAssignmentAsync(command.Request, expectOwned: false, AuditActionCodes.AssignmentAssigned, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Lead assignment from board started for LeadId {LeadId}.", command.Request.LeadId);
+
+        var result = await ApplyAssignmentAsync(command.Request, expectOwned: false, AuditActionCodes.AssignmentAssigned, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Lead assignment from board completed successfully for LeadId {LeadId}.", command.Request.LeadId);
+        }
+        else
+        {
+            logger.LogWarning("Lead assignment from board failed for LeadId {LeadId}.", command.Request.LeadId);
+        }
+
+        return result;
+    }
 
     public async Task<Result<LeadDetailResponse>> HandleAsync(
         ReassignFromBoardCommand command,
-        CancellationToken cancellationToken = default) =>
-        await ApplyAssignmentAsync(command.Request, expectOwned: true, AuditActionCodes.AssignmentReassigned, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Lead reassignment from board started for LeadId {LeadId}.", command.Request.LeadId);
+
+        var result = await ApplyAssignmentAsync(command.Request, expectOwned: true, AuditActionCodes.AssignmentReassigned, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Lead reassignment from board completed successfully for LeadId {LeadId}.", command.Request.LeadId);
+        }
+        else
+        {
+            logger.LogWarning("Lead reassignment from board failed for LeadId {LeadId}.", command.Request.LeadId);
+        }
+
+        return result;
+    }
 
     public async Task<Result<BulkRouteResultResponse>> HandleAsync(
         BulkRouteCommand command,
@@ -60,8 +92,12 @@ public sealed class AssignmentBoardCommandHandler(
         var request = command.Request;
         var requestedIds = request.LeadIds.Distinct().ToList();
 
+        logger.LogInformation("Bulk lead routing started for {RequestedLeadCount} lead(s).", requestedIds.Count);
+
         if (requestedIds.Count == 0)
         {
+            logger.LogWarning("Bulk lead routing failed because no leads were selected.");
+
             return Result.Failure<BulkRouteResultResponse>(Error.Validation(
                 "Select at least one lead before routing.",
                 [new ValidationError(nameof(request.LeadIds), "Select at least one row.")]));
@@ -69,6 +105,8 @@ public sealed class AssignmentBoardCommandHandler(
 
         if (requestedIds.Count > _settings.BulkRouteMaximumItems)
         {
+            logger.LogWarning("Bulk lead routing failed because the requested lead count {RequestedLeadCount} exceeds the maximum allowed count {MaximumLeadCount}.", requestedIds.Count, _settings.BulkRouteMaximumItems);
+
             return Result.Failure<BulkRouteResultResponse>(Error.Validation(
                 $"A bulk route may cover at most {_settings.BulkRouteMaximumItems} leads. Narrow the selection and try again.",
                 [new ValidationError(nameof(request.LeadIds), $"Select no more than {_settings.BulkRouteMaximumItems} rows.")]));
@@ -87,12 +125,16 @@ public sealed class AssignmentBoardCommandHandler(
             // UI section 6.2 forbids for a bulk action.
             if (lead is null || lead.OrganisationId != currentUser.OrganisationId)
             {
+                logger.LogWarning("Lead {LeadId} was skipped during bulk routing because it was not found inside the current scope.");
+
                 items.Add(new BulkRouteItemResponse(leadId, null, false, "Not found inside your scope."));
                 continue;
             }
 
             if (lead.Status is LeadStatus.Converted or LeadStatus.Closed or LeadStatus.Suppressed)
             {
+                logger.LogWarning("Lead {LeadId} was skipped during bulk routing because its current state {LeadStatus} cannot be routed.", leadId, lead.Status);
+
                 items.Add(new BulkRouteItemResponse(leadId, lead.LeadReference, false,
                     $"State {lead.Status} cannot be routed."));
                 continue;
@@ -100,6 +142,8 @@ public sealed class AssignmentBoardCommandHandler(
 
             if (lead.OwnerUserId == request.NewOwnerUserId)
             {
+                logger.LogWarning("Lead {LeadId} was skipped during bulk routing because it is already owned by the selected user.", leadId);
+
                 items.Add(new BulkRouteItemResponse(leadId, lead.LeadReference, false,
                     "Already owned by the selected person."));
                 continue;
@@ -120,6 +164,8 @@ public sealed class AssignmentBoardCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var skipped = requestedIds.Count - routed;
+
+        logger.LogInformation("Bulk lead routing completed. Requested: {RequestedLeadCount}, routed: {RoutedLeadCount}, skipped: {SkippedLeadCount}.", requestedIds.Count, routed, skipped);
 
         return Result.Success(new BulkRouteResultResponse(
             requestedIds.Count,
@@ -142,34 +188,46 @@ public sealed class AssignmentBoardCommandHandler(
 
         if (lead is null || lead.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Lead assignment failed for LeadId {LeadId} because the lead was not found inside the current scope.", request.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.NotFound("That lead was not found inside your scope."));
         }
 
         if (request.ExpectedVersion is > 0 && request.ExpectedVersion != lead.Version)
         {
+            logger.LogWarning("Lead assignment failed for LeadId {LeadId} because of a concurrency conflict.", request.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.Concurrency());
         }
 
         if (lead.Status is LeadStatus.Converted or LeadStatus.Closed or LeadStatus.Suppressed)
         {
+            logger.LogWarning("Lead assignment failed for LeadId {LeadId} because its current state {LeadStatus} cannot be routed.", request.LeadId, lead.Status);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 $"A lead in state {lead.Status} can no longer be routed."));
         }
 
         if (expectOwned && lead.OwnerUserId is null)
         {
+            logger.LogWarning("Lead reassignment failed for LeadId {LeadId} because the lead has no existing owner.", request.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 "This lead has no owner yet. Use Assign rather than Reassign."));
         }
 
         if (!expectOwned && lead.OwnerUserId is not null)
         {
+            logger.LogWarning("Lead assignment failed for LeadId {LeadId} because the lead already has an owner.", request.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 "This lead already has an owner. Use Reassign rather than Assign."));
         }
 
         if (lead.OwnerUserId == request.NewOwnerUserId)
         {
+            logger.LogWarning("Lead assignment failed for LeadId {LeadId} because the selected user already owns the lead.", request.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 "That person already owns this lead."));
         }

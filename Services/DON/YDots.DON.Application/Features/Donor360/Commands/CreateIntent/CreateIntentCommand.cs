@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Abstractions.Services;
@@ -24,32 +25,43 @@ public sealed class CreateIntentCommandHandler(
     IAuditWriter auditWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IDateTimeProvider clock)
+    IDateTimeProvider clock,
+    ILogger<CreateIntentCommandHandler> logger)
 {
     public async Task<Result<PromiseResponse>> HandleAsync(
         CreateIntentCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Create donor giving intent started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
 
         if (donor is null || donor.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Create donor giving intent failed for DonorId {DonorId} because the donor was not found inside the current scope.", command.DonorId);
+
             return Result.Failure<PromiseResponse>(Error.DonorNotFound());
         }
 
         if (currentUser.Scope.IsOwnRecordsOnly && donor.RelationshipOwnerUserId != currentUser.UserId)
         {
+            logger.LogWarning("Create donor giving intent failed for DonorId {DonorId} because the donor is outside the current user's ownership scope.", command.DonorId);
+
             return Result.Failure<PromiseResponse>(Error.DonorNotFound());
         }
 
         if (donor.Status is DonorStatus.Archived or DonorStatus.Merged)
         {
+            logger.LogWarning("Create donor giving intent failed for DonorId {DonorId} because the donor is in state {DonorStatus}.", command.DonorId, donor.Status);
+
             return Result.Failure<PromiseResponse>(Error.InvalidTransition(
                 $"A donor in state {donor.Status} cannot record a new intent."));
         }
 
         if (donor.DoNotContact)
         {
+            logger.LogWarning("Create donor giving intent failed for DonorId {DonorId} because the donor is marked Do not contact.", command.DonorId);
+
             return Result.Failure<PromiseResponse>(Error.InvalidTransition(
                 "This donor is marked Do not contact, so a new giving intent cannot be recorded."));
         }
@@ -62,6 +74,8 @@ public sealed class CreateIntentCommandHandler(
 
             if (campaign is null || campaign.OrganisationId != currentUser.OrganisationId)
             {
+                logger.LogWarning("Create donor giving intent failed for DonorId {DonorId} because CampaignId {CampaignId} was not found inside the current scope.", command.DonorId, command.Request.CampaignId.Value);
+
                 return Result.Failure<PromiseResponse>(Error.Validation(
                     "Review Campaign. Choose a campaign inside your scope.",
                     [new ValidationError(nameof(command.Request.CampaignId), "Choose a campaign from the list.")]));
@@ -92,6 +106,8 @@ public sealed class CreateIntentCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Create donor giving intent completed successfully for DonorId {DonorId} and PromiseId {PromiseId}.", donor.Id, promise.Id);
 
         return Result.Success(new PromiseResponse(
             promise.Id,

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -33,7 +34,8 @@ public sealed class FollowUpPlannerQueryHandler(
     IDonorRepository donorRepository,
     ILeadRepository leadRepository,
     ICurrentUser currentUser,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<FollowUpPlannerQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -43,9 +45,12 @@ public sealed class FollowUpPlannerQueryHandler(
     {
         var filter = query.Filter;
 
+        logger.LogInformation("Follow-up planner list retrieval started for organisation {OrganisationId}.", currentUser.OrganisationId);
+
         if (filter.OnlyMine == true)
         {
             filter.RelationshipOwnerUserId = currentUser.UserId;
+            logger.LogInformation("Follow-up planner list restricted to current user's records.");
         }
 
         var page = await followUpRepository.SearchAsync(filter, currentUser.Scope, cancellationToken);
@@ -77,6 +82,8 @@ public sealed class FollowUpPlannerQueryHandler(
             DescribeScope(),
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Follow-up planner list retrieval completed successfully. Returned {RowCount} rows out of {TotalCount} for organisation {OrganisationId}.", rows.Count, page.TotalCount, currentUser.OrganisationId);
+
         return Result.Success(response);
     }
 
@@ -84,19 +91,27 @@ public sealed class FollowUpPlannerQueryHandler(
         GetFollowUpDetailQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Follow-up detail retrieval started for follow-up {FollowUpId}.", query.FollowUpId);
+
         var task = await followUpRepository.GetByIdAsync(query.FollowUpId, cancellationToken);
 
         if (task is null || task.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Follow-up {FollowUpId} was not found inside the current organisation scope.", query.FollowUpId);
+
             return Result.Failure<FollowUpResponse>(Error.NotFound("That follow-up was not found inside your scope."));
         }
 
         if (currentUser.Scope.IsOwnRecordsOnly && task.RelationshipOwnerUserId != currentUser.UserId)
         {
+            logger.LogWarning("Follow-up {FollowUpId} was rejected because it is outside the current user's record scope.", query.FollowUpId);
+
             return Result.Failure<FollowUpResponse>(Error.NotFound("That follow-up was not found inside your scope."));
         }
 
         var warning = await BuildWarningAsync(task.DonorId, task.LeadId, cancellationToken);
+
+        logger.LogInformation("Follow-up detail retrieval completed successfully for follow-up {FollowUpId}.", query.FollowUpId);
 
         return Result.Success(task.ToResponse(
             currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), warning));
@@ -106,13 +121,19 @@ public sealed class FollowUpPlannerQueryHandler(
         GetConsentWarningQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Consent warning retrieval started for the selected follow-up target.");
+
         if (query.DonorId is null && query.LeadId is null)
         {
+            logger.LogWarning("Consent warning retrieval failed because neither donor nor lead was provided.");
+
             return Result.Failure<ConsentWarningResponse>(Error.Validation(
                 "Enter Donor or lead reference before the consent warning can be checked."));
         }
 
         var warning = await BuildWarningAsync(query.DonorId, query.LeadId, cancellationToken);
+
+        logger.LogInformation("Consent warning retrieval completed successfully.");
 
         return Result.Success(warning);
     }
@@ -179,7 +200,7 @@ public sealed class FollowUpPlannerQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            parts.Add($"search '{filter.Search}'");
+            parts.Add("search filter");
         }
 
         if (filter.DonorId is not null)

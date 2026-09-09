@@ -44,10 +44,14 @@ public sealed class GatewayAccountCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting gateway account create or update.");
+
         var request = command.Request;
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Gateway account operation rejected because no tenant is selected.");
+
             return Result.Failure<GatewayAccountResponse>(Error.TenantSelectionRequired());
         }
 
@@ -55,6 +59,8 @@ public sealed class GatewayAccountCommandHandler(
 
         if (existing is null)
         {
+            logger.LogInformation("No active gateway account exists. Creating a new gateway account.");
+
             var created = new PaymentGatewayAccount
             {
                 TenantId = tenantContext.RequireTenantId(),
@@ -84,11 +90,20 @@ public sealed class GatewayAccountCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogInformation(
+                "Gateway account {GatewayAccountId} created successfully for tenant {TenantId}.",
+                created.Id,
+                created.TenantId);
+
             return created.ToResponse(PermittedActions());
         }
 
         if (request.ExpectedVersion.HasValue && existing.Version != request.ExpectedVersion.Value)
         {
+            logger.LogWarning(
+                "Gateway account {GatewayAccountId} update rejected because the record version is stale.",
+                existing.Id);
+
             return Result.Failure<GatewayAccountResponse>(Error.Concurrency());
         }
 
@@ -129,12 +144,24 @@ public sealed class GatewayAccountCommandHandler(
         if (payoutChanged)
         {
             logger.LogWarning(
-                "The payout destination for organisation {TenantId} changed from {Previous} to "
-                + "{Current}, by user {UserId}.",
-                existing.TenantId, previousMerchantId, newMerchantId, currentUser.UserId);
+                "Payout destination changed for gateway account {GatewayAccountId} in tenant {TenantId}.",
+                existing.Id,
+                existing.TenantId);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Updating gateway account {GatewayAccountId} for tenant {TenantId}.",
+                existing.Id,
+                existing.TenantId);
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Gateway account {GatewayAccountId} updated successfully for tenant {TenantId}.",
+            existing.Id,
+            existing.TenantId);
 
         return existing.ToResponse(PermittedActions());
     }
@@ -144,7 +171,13 @@ public sealed class GatewayAccountCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving gateway accounts for the current tenant.");
+
         var all = await accounts.GetAllForTenantAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Gateway account retrieval completed with {GatewayAccountCount} account(s).",
+            all.Count);
 
         return Result.Success<IReadOnlyList<GatewayAccountResponse>>(
             [.. all.Select(account => account.ToResponse(PermittedActions()))]);

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -26,7 +27,8 @@ public sealed class ConsentCentreQueryHandler(
     IAuditWriter auditWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<ConsentCentreQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -34,6 +36,8 @@ public sealed class ConsentCentreQueryHandler(
         GetConsentCentreQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Consent centre retrieval started.");
+
         var canSeeEvidence = currentUser.CanSeeEvidence();
 
         var page = await consentRepository.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
@@ -61,6 +65,8 @@ public sealed class ConsentCentreQueryHandler(
             DescribeScope(),
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Consent centre retrieved successfully with {RowCount} row(s) from {TotalCount} matching consent record(s).", rows.Count, page.TotalCount);
+
         return Result.Success(response);
     }
 
@@ -68,10 +74,14 @@ public sealed class ConsentCentreQueryHandler(
         GetConsentEvidenceQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Consent evidence retrieval started for ConsentId {ConsentId}.", query.ConsentId);
+
         var consent = await consentRepository.GetByIdAsync(query.ConsentId, cancellationToken);
 
         if (consent is null || consent.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Consent evidence retrieval failed for ConsentId {ConsentId} because the consent record was not found inside the current scope.", query.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(
                 Error.NotFound("That consent record was not found inside your scope."));
         }
@@ -86,6 +96,12 @@ public sealed class ConsentCentreQueryHandler(
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Consent evidence viewed successfully for ConsentId {ConsentId}.", query.ConsentId);
+        }
+        else
+        {
+            logger.LogInformation("Consent evidence retrieved without evidence access for ConsentId {ConsentId}.", query.ConsentId);
         }
 
         return Result.Success(consent.ToListItemResponse(canSeeEvidence));
@@ -122,7 +138,7 @@ public sealed class ConsentCentreQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            parts.Add($"search '{filter.Search}'");
+            parts.Add("search filter");
         }
 
         if (filter.DonorId is not null)

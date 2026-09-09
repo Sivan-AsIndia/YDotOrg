@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.PAY.Application.Common.Abstractions.Persistence;
 using YDot.PAY.Application.Common.Abstractions.Security;
 using YDot.PAY.Application.Common.Abstractions.Services;
@@ -27,7 +28,8 @@ public sealed class ReceiptQueryHandler(
     ICsvExportService exports,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<ReceiptQueryHandler> logger)
 {
     private const int MaximumExportPages = 500;
 
@@ -41,8 +43,14 @@ public sealed class ReceiptQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Searching receipts.");
+
+        var result = await readService.SearchAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Receipt search completed successfully.");
+
+        return Result.Success(result);
     }
 
     /// <summary>
@@ -57,8 +65,14 @@ public sealed class ReceiptQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.GetRegisterAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Retrieving receipt register.");
+
+        var result = await readService.GetRegisterAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Receipt register retrieved successfully.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<ReceiptDetailResponse>> HandleAsync(
@@ -66,12 +80,20 @@ public sealed class ReceiptQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving receipt detail for receipt {ReceiptId}.", query.ReceiptId);
+
         var receipt = await readService.GetDetailAsync(
             query.ReceiptId, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
 
-        return receipt is null
-            ? Result.Failure<ReceiptDetailResponse>(Error.NotFound("That receipt was not found."))
-            : Result.Success(receipt);
+        if (receipt is null)
+        {
+            logger.LogWarning("Receipt {ReceiptId} was not found.", query.ReceiptId);
+            return Result.Failure<ReceiptDetailResponse>(Error.NotFound("That receipt was not found."));
+        }
+
+        logger.LogInformation("Receipt detail retrieved successfully for receipt {ReceiptId}.", query.ReceiptId);
+
+        return Result.Success(receipt);
     }
 
     public async Task<Result<ExportFile>> HandleAsync(
@@ -80,6 +102,8 @@ public sealed class ReceiptQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
 
         var canSeeSensitive = CanSeeSensitiveDonor;
+
+        logger.LogInformation("Starting receipt export.");
 
         var filter = query.Filter;
         filter.PageSize = ExportPageSize;
@@ -107,6 +131,11 @@ public sealed class ReceiptQueryHandler(
             filter.Page++;
         }
 
+        if (filter.Page > MaximumExportPages)
+        {
+            logger.LogWarning("Receipt export reached the maximum export page limit of {MaximumExportPages}.", MaximumExportPages);
+        }
+
         var file = exports.ToCsv(rows, "receipts");
 
         await audit.WriteAsync(
@@ -117,6 +146,8 @@ public sealed class ReceiptQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Receipt export completed successfully with {RowCount} rows.", rows.Count);
 
         return Result.Success(file);
     }

@@ -159,6 +159,24 @@ finally
 /// </summary>
 internal static class DatabaseInitialisation
 {
+
+    internal static IHostBuilder UseIamSerilog(this IHostBuilder host) =>
+    host.UseSerilog((context, services, configuration) =>
+    {
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext()
+            .Enrich.WithProperty("ServiceName", "IAM")
+            .WriteTo.Console();
+
+        var seqUrl = context.Configuration["Seq:ServerUrl"];
+
+        if (!string.IsNullOrWhiteSpace(seqUrl))
+        {
+            configuration.WriteTo.Seq(seqUrl);
+        }
+    });
     /// <summary>
     /// Applies pending migrations and runs the seeder, both gated by configuration.
     ///

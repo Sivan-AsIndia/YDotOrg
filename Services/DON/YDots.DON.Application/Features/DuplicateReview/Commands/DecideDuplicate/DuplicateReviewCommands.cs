@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Abstractions.Services;
@@ -41,16 +42,20 @@ public sealed class DuplicateReviewCommandHandler(
     IOutboxWriter outboxWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IDateTimeProvider clock)
+    IDateTimeProvider clock,
+    ILogger<DuplicateReviewCommandHandler> logger)
 {
     public async Task<Result<DuplicateReviewDetailResponse>> HandleAsync(
         CreateDuplicateReviewCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Create duplicate review started.");
+
         var request = command.Request;
 
         if (request.CandidateADonorId == request.CandidateBDonorId)
         {
+            logger.LogWarning("Create duplicate review failed because Candidate A and Candidate B are the same donor {DonorId}.", request.CandidateADonorId);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.Validation(
                 "Review Candidate B. A record cannot be a duplicate of itself.",
                 [new ValidationError(nameof(request.CandidateBDonorId), "Choose a different candidate.")]));
@@ -62,11 +67,13 @@ public sealed class DuplicateReviewCommandHandler(
         if (candidateA is null || candidateA.OrganisationId != currentUser.OrganisationId
             || candidateB is null || candidateB.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Create duplicate review failed because one or both candidate donors were not found inside the current organisation scope.");
             return Result.Failure<DuplicateReviewDetailResponse>(Error.DonorNotFound());
         }
 
         if (await mergeCaseRepository.PairExistsAsync(candidateA.Id, candidateB.Id, cancellationToken))
         {
+            logger.LogWarning("Create duplicate review failed because a review already exists for the candidate pair.");
             return Result.Failure<DuplicateReviewDetailResponse>(Error.Duplicate(
                 "A review already exists for these two records."));
         }
@@ -106,6 +113,8 @@ public sealed class DuplicateReviewCommandHandler(
         mergeCase.CandidateADonor = candidateA;
         mergeCase.CandidateBDonor = candidateB;
 
+        logger.LogInformation("Create duplicate review completed successfully for ReviewId {ReviewId}.", mergeCase.Id);
+
         return Result.Success(BuildDetail(mergeCase));
     }
 
@@ -113,21 +122,26 @@ public sealed class DuplicateReviewCommandHandler(
         MergeDuplicateCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Merge duplicate review decision started for ReviewId {ReviewId}.", command.ReviewId);
+
         var mergeCase = await mergeCaseRepository.GetWithCandidatesAsync(command.ReviewId, cancellationToken);
 
         if (mergeCase is null || mergeCase.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Merge duplicate review failed for ReviewId {ReviewId} because the review was not found inside the current organisation scope.", command.ReviewId);
             return Result.Failure<DuplicateReviewDetailResponse>(
                 Error.NotFound("That duplicate review was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != mergeCase.Version)
         {
+            logger.LogWarning("Merge duplicate review failed for ReviewId {ReviewId} because the expected version does not match the current version.", command.ReviewId);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.Concurrency());
         }
 
         if (mergeCase.Status is not (DonorMergeCaseStatus.Active or DonorMergeCaseStatus.UnderReview))
         {
+            logger.LogWarning("Merge duplicate review failed for ReviewId {ReviewId} because the review is already in state {ReviewCaseStatus}.", command.ReviewId, mergeCase.Status);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.InvalidTransition(
                 $"This review is already {mergeCase.Status} and cannot be decided again."));
         }
@@ -135,6 +149,7 @@ public sealed class DuplicateReviewCommandHandler(
         if (!Enum.TryParse<MergeDecision>(command.Request.Decision, ignoreCase: true, out var decision)
             || decision == MergeDecision.Reject)
         {
+            logger.LogWarning("Merge duplicate review failed for ReviewId {ReviewId} because the supplied decision is invalid.", command.ReviewId);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.Validation(
                 "Review Decision. Choose Merge, Link or KeepSeparate.",
                 [new ValidationError(nameof(command.Request.Decision), "Choose a decision from the list.")]));
@@ -150,9 +165,12 @@ public sealed class DuplicateReviewCommandHandler(
 
         if (decision == MergeDecision.Merge)
         {
+            logger.LogInformation("Applying merge for ReviewId {ReviewId}.", command.ReviewId);
+
             var mergeResult = await ApplyMergeAsync(mergeCase, command.Request.SurvivingDonorId, now, cancellationToken);
             if (mergeResult is not null)
             {
+                logger.LogWarning("Merge duplicate review failed for ReviewId {ReviewId} while applying the merge.", command.ReviewId);
                 return Result.Failure<DuplicateReviewDetailResponse>(mergeResult);
             }
 
@@ -173,6 +191,8 @@ public sealed class DuplicateReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Merge duplicate review decision completed successfully for ReviewId {ReviewId}. Decision {Decision}.", command.ReviewId, decision);
+
         return Result.Success(BuildDetail(mergeCase));
     }
 
@@ -180,21 +200,26 @@ public sealed class DuplicateReviewCommandHandler(
         RejectDuplicateCandidateCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Reject duplicate candidate started for ReviewId {ReviewId}.", command.ReviewId);
+
         var mergeCase = await mergeCaseRepository.GetWithCandidatesAsync(command.ReviewId, cancellationToken);
 
         if (mergeCase is null || mergeCase.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Reject duplicate candidate failed for ReviewId {ReviewId} because the review was not found inside the current organisation scope.", command.ReviewId);
             return Result.Failure<DuplicateReviewDetailResponse>(
                 Error.NotFound("That duplicate review was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != mergeCase.Version)
         {
+            logger.LogWarning("Reject duplicate candidate failed for ReviewId {ReviewId} because the expected version does not match the current version.", command.ReviewId);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.Concurrency());
         }
 
         if (mergeCase.Status is not (DonorMergeCaseStatus.Active or DonorMergeCaseStatus.UnderReview))
         {
+            logger.LogWarning("Reject duplicate candidate failed for ReviewId {ReviewId} because the review is already in state {ReviewCaseStatus}.", command.ReviewId, mergeCase.Status);
             return Result.Failure<DuplicateReviewDetailResponse>(Error.InvalidTransition(
                 $"This review is already {mergeCase.Status} and cannot be rejected."));
         }
@@ -213,6 +238,8 @@ public sealed class DuplicateReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Reject duplicate candidate completed successfully for ReviewId {ReviewId}.", command.ReviewId);
+
         return Result.Success(BuildDetail(mergeCase));
     }
 
@@ -229,11 +256,13 @@ public sealed class DuplicateReviewCommandHandler(
     {
         if (survivingDonorId is null)
         {
+            logger.LogWarning("Apply merge failed for ReviewId {ReviewId} because no surviving donor was specified.", mergeCase.Id);
             return Error.Validation("Enter Surviving record. A merge has to name the record that stays.");
         }
 
         if (survivingDonorId != mergeCase.CandidateADonorId && survivingDonorId != mergeCase.CandidateBDonorId)
         {
+            logger.LogWarning("Apply merge failed for ReviewId {ReviewId} because the surviving donor is not one of the review candidates.", mergeCase.Id);
             return Error.Validation("Review Surviving record. It has to be candidate A or candidate B.");
         }
 
@@ -246,11 +275,13 @@ public sealed class DuplicateReviewCommandHandler(
 
         if (surviving is null || absorbed is null)
         {
+            logger.LogWarning("Apply merge failed for ReviewId {ReviewId} because one or both donor records could not be loaded.", mergeCase.Id);
             return Error.DonorNotFound();
         }
 
         if (absorbed.Status == DonorStatus.Merged)
         {
+            logger.LogWarning("Apply merge failed for ReviewId {ReviewId} because the absorbed donor is already merged.", mergeCase.Id);
             return Error.InvalidTransition($"{absorbed.DonorNumber} has already been merged into another record.");
         }
 
@@ -300,6 +331,8 @@ public sealed class DuplicateReviewCommandHandler(
             IntegrationEventNames.DonorStatusChangedV1, nameof(Donor), absorbed.Id,
             new DonorStatusChangedV1(absorbed.Id, absorbed.DonorNumber, previousStatus,
                 absorbed.Status.ToString(), absorbed.OrganisationId, now));
+
+        logger.LogInformation("Donor merge applied successfully for ReviewId {ReviewId}. SurvivingDonorId {SurvivingDonorId}, AbsorbedDonorId {AbsorbedDonorId}.", mergeCase.Id, surviving.Id, absorbed.Id);
 
         return null;
     }

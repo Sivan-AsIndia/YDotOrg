@@ -27,7 +27,9 @@ namespace YDot.PAY.Api.Controllers;
 [Route("api/v1/receipts")]
 [Produces("application/json")]
 public sealed class ReceiptsController(
-    ReceiptQueryHandler queries, ReceiptCommandHandler receipts) : ApiControllerBase
+    ReceiptQueryHandler queries,
+    ReceiptCommandHandler receipts,
+    ILogger<ReceiptsController> logger) : ApiControllerBase
 {
     /// <summary>The receipt register.</summary>
     [HttpGet]
@@ -35,8 +37,23 @@ public sealed class ReceiptsController(
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<ReceiptListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] ReceiptSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchReceiptsQuery(filter), cancellationToken));
+        [FromQuery] ReceiptSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt search requested.");
+
+        var result = await queries.HandleAsync(new SearchReceiptsQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt search completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Receipt search could not be completed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The Receipt Register - rows and the four totals, in one call.
@@ -50,8 +67,23 @@ public sealed class ReceiptsController(
     [ProducesResponseType(typeof(ApiResponse<ReceiptRegisterResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetRegisterAsync(
-        [FromQuery] ReceiptRegisterFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetReceiptRegisterQuery(filter), cancellationToken));
+        [FromQuery] ReceiptRegisterFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt register requested.");
+
+        var result = await queries.HandleAsync(new GetReceiptRegisterQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt register retrieved successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Receipt register could not be retrieved.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The CSV export - the file a finance team files with the year's return.
@@ -60,8 +92,23 @@ public sealed class ReceiptsController(
     [HasPermission(PermissionCodes.ReceiptsExport)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] ReceiptSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportReceiptsQuery(filter), cancellationToken));
+        [FromQuery] ReceiptSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt export requested.");
+
+        var result = await queries.HandleAsync(new ExportReceiptsQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt export completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Receipt export could not be completed.");
+        }
+
+        return FileFromResult(result);
+    }
 
     /// <summary>
     /// One receipt in full, with its delivery history.
@@ -74,8 +121,23 @@ public sealed class ReceiptsController(
     [HasPermission(PermissionCodes.ReceiptsView)]
     [ProducesResponseType(typeof(ApiResponse<ReceiptDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetReceiptAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetReceiptQuery(id), cancellationToken));
+    public async Task<IActionResult> GetReceiptAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt details requested for receipt {ReceiptId}.", id);
+
+        var result = await queries.HandleAsync(new GetReceiptQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt details retrieved successfully for receipt {ReceiptId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Receipt details could not be retrieved for receipt {ReceiptId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Corrects an issued receipt.
@@ -89,10 +151,23 @@ public sealed class ReceiptsController(
     [ProducesResponseType(typeof(ApiResponse<ReceiptDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CorrectAsync(
-        Guid id, [FromBody] CorrectReceiptRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await receipts.HandleAsync(new CorrectReceiptCommand(id, request), cancellationToken),
-            "Receipt corrected.");
+        Guid id, [FromBody] CorrectReceiptRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt correction requested for receipt {ReceiptId}.", id);
+
+        var result = await receipts.HandleAsync(new CorrectReceiptCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt corrected successfully for receipt {ReceiptId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Receipt correction could not be completed for receipt {ReceiptId}.", id);
+        }
+
+        return FromResult(result, "Receipt corrected.");
+    }
 
     /// <summary>
     /// Voids a receipt outright, where a correction is not enough.
@@ -105,10 +180,23 @@ public sealed class ReceiptsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> VoidAsync(
-        Guid id, [FromBody] VoidReceiptRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await receipts.HandleAsync(new VoidReceiptCommand(id, request), cancellationToken),
-            "Receipt voided.");
+        Guid id, [FromBody] VoidReceiptRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt void requested for receipt {ReceiptId}.", id);
+
+        var result = await receipts.HandleAsync(new VoidReceiptCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt voided successfully for receipt {ReceiptId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Receipt void could not be completed for receipt {ReceiptId}.", id);
+        }
+
+        return FromResult(result, "Receipt voided.");
+    }
 
     /// <summary>
     /// Sends an issued receipt again.
@@ -120,8 +208,21 @@ public sealed class ReceiptsController(
     [HasPermission(PermissionCodes.ReceiptsResend)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResendAsync(
-        Guid id, [FromBody] ResendReceiptRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await receipts.HandleAsync(new ResendReceiptCommand(id, request), cancellationToken),
-            "Receipt re-sent.");
+        Guid id, [FromBody] ResendReceiptRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Receipt resend requested for receipt {ReceiptId}.", id);
+
+        var result = await receipts.HandleAsync(new ResendReceiptCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation("Receipt re-sent successfully for receipt {ReceiptId}.", id);
+        }
+        else
+        {
+            logger.LogWarning("Receipt resend could not be completed for receipt {ReceiptId}.", id);
+        }
+
+        return FromResult(result, "Receipt re-sent.");
+    }
 }
