@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -32,17 +33,22 @@ public sealed class AttributionCommandHandler(
     IAuditWriter audit,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<AttributionCommandHandler> logger)
 {
     public async Task<Result<OutcomeResponse>> HandleAsync(
         RequestAttributionCorrectionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Requesting attribution correction.");
+
         var request = command.Request;
 
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
+            logger.LogWarning("Attribution correction request rejected because the reason was not provided.");
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "Say why the attribution looks wrong, so it can be assessed."));
         }
@@ -55,6 +61,10 @@ public sealed class AttributionCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning(
+                "Attribution correction request rejected because donation {DonationId} was not found in the current scope.",
+                request.DonationId);
+
             return Result.Failure<OutcomeResponse>(
                 Error.NotFound("That donation was not found inside your scope."));
         }
@@ -63,6 +73,10 @@ public sealed class AttributionCommandHandler(
 
         if (existing is not null)
         {
+            logger.LogWarning(
+                "Attribution correction request rejected because an open correction already exists for donation {DonationId}.",
+                request.DonationId);
+
             return Result.Failure<OutcomeResponse>(Error.Duplicate(
                 "Somebody has already asked for this donation's attribution to be checked. "
                 + "Add to that request rather than raising a second one."));
@@ -76,6 +90,10 @@ public sealed class AttributionCommandHandler(
 
             if (campaign is null)
             {
+                logger.LogWarning(
+                    "Attribution correction request rejected because proposed campaign {CampaignId} was not found.",
+                    proposed);
+
                 return Result.Failure<OutcomeResponse>(
                     Error.NotFound("The campaign you proposed was not found inside your scope."));
             }
@@ -104,6 +122,11 @@ public sealed class AttributionCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Attribution correction request {CorrectionRequestId} created successfully for donation {DonationId}.",
+            correction.Id,
+            donation.DonationId);
+
         return new OutcomeResponse(
             correction.Id,
             "Open",
@@ -125,8 +148,16 @@ public sealed class AttributionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Resolving attribution correction request {CorrectionRequestId}.",
+            command.RequestId);
+
         if (string.IsNullOrWhiteSpace(command.ResolutionNote))
         {
+            logger.LogWarning(
+                "Attribution correction request {CorrectionRequestId} rejected because the resolution note was not provided.",
+                command.RequestId);
+
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "Say what was decided, so the person who raised it knows what happened."));
         }
@@ -135,17 +166,29 @@ public sealed class AttributionCommandHandler(
 
         if (correction is null)
         {
+            logger.LogWarning(
+                "Attribution correction request {CorrectionRequestId} was not found.",
+                command.RequestId);
+
             return Result.Failure<OutcomeResponse>(
                 Error.NotFound("That correction request was not found."));
         }
 
         if (correction.Version != command.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Attribution correction request {CorrectionRequestId} failed concurrency validation.",
+                command.RequestId);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (correction.IsResolved)
         {
+            logger.LogWarning(
+                "Attribution correction request {CorrectionRequestId} has already been resolved.",
+                command.RequestId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "That correction request has already been closed."));
         }
@@ -163,6 +206,11 @@ public sealed class AttributionCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Attribution correction request {CorrectionRequestId} resolved successfully. AttributionChanged: {AttributionChanged}.",
+            correction.Id,
+            command.AttributionChanged);
 
         var message = command.AttributionChanged
             ? "Closed. The attribution was corrected."

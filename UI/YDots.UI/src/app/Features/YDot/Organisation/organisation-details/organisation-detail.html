@@ -278,6 +278,7 @@
                 <select class="org-select org-select-narrow"
                         [ngModel]="form().contactPhoneCountryCode"
                         (ngModelChange)="update('contactPhoneCountryCode', $event)">
+                  <option value="" disabled>Select Code</option>
                   @for (code of countryCodes(); track code) {
                     <option [value]="code">{{ code }}</option>
                   }

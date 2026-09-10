@@ -199,7 +199,7 @@
           <select id="org-type" class="org-select"
                   [ngModel]="form().organisationType"
                   (ngModelChange)="update('organisationType', $event)">
-            <option value="">Not specified</option>
+            <option value="">Select Organisation Type</option>
             @for (type of organisationTypes; track type) {
               <option [value]="type">{{ type }}</option>
             }
@@ -259,6 +259,7 @@
             <select class="org-select org-select-narrow"
                     [ngModel]="form().contactPhoneCountryCode"
                     (ngModelChange)="update('contactPhoneCountryCode', $event)">
+              <option value="" disabled>Select Code</option>
               @for (code of countryCodes(); track code) {
                 <option [value]="code">{{ code }}</option>
               }

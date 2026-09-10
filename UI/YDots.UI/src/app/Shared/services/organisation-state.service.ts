@@ -244,6 +244,11 @@ export class OrganisationStateService {
    */
   private toRecord(item: OrganisationListItemResponse): OrganisationRecord {
     return {
+      // THE CODE FIRST, THE GUID ONLY AS A KEY. `id` is what `getById` matches on and what the
+      // screens navigate by, so it cannot be blanked for an organisation the API returned without
+      // a code - every such record would collide on the empty string. It is the RENDERING that is
+      // guarded instead: the templates print it through the `readableId` pipe, which shows the
+      // code and withholds a GUID. See Shared/pipes/readable-id.pipe.
       id: item.code ?? item.id ?? '',
       name: item.name ?? '',
       status: (item.statusDisplay ?? item.status ?? 'Draft') as OrganisationStatus,

@@ -175,6 +175,18 @@ export interface PublicCampaignSummary {
   name: string;
   publicDescription: string | null;
   currencyCode: string;
+
+  /**
+   * The campaign amount - the fixed figure this appeal is stated at.
+   *
+   * PUBLIC LIKE EVERYTHING ELSE ON THIS RECORD, and for the same reason: it is the number on the
+   * poster the donor scanned. It is NOT the target and NOT what has been raised; neither of those
+   * is here.
+   *
+   * ZERO MEANS NOT STATED - what a campaign created before the column existed holds - so a form
+   * shows nothing rather than "0.00" for it.
+   */
+  campaignAmount: number;
 }
 
 export interface CreateDonationIntentRequest {

@@ -144,7 +144,31 @@
               </div>
             }
             @if (visibleActions().length === 0) {
-              <div class="col-12"><p class="text-muted small mb-0">{{ currentUserName() }} has no permission for lifecycle actions.</p></div>
+              <!-- THREE DIFFERENT REASONS, NOT ONE SENTENCE. This said "has no permission for
+                   lifecycle actions" whenever the list came back empty, which was wrong in two of
+                   the three cases it covered: an Organisation Administrator holds every campaign
+                   permission and still sees nothing on a Draft or a Closed campaign, and anybody
+                   at all sees nothing in the moment before the record's permitted actions have
+                   been fetched. Being told you lack a permission you hold sends somebody to an
+                   administrator to fix something that is not broken. -->
+              <div class="col-12">
+                @if (!permissionsResolved()) {
+                  <p class="text-muted small mb-0">Checking what you can do with this campaign…</p>
+                } @else if (isViewOnly()) {
+                  <p class="text-muted small mb-0">
+                    {{ currentUserName() }} may view this campaign but holds no lifecycle permission on it.
+                  </p>
+                } @else {
+                  <p class="text-muted small mb-0">
+                    No lifecycle action applies to a {{ currentState() ?? '—' }} campaign.
+                    @if (currentState() === 'Draft') {
+                      Submit it for approval from the campaign detail first.
+                    } @else if (currentState() === 'Submitted') {
+                      It is with an approver for a launch decision.
+                    }
+                  </p>
+                }
+              </div>
             }
           </div>
         </div>

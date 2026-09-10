@@ -32,7 +32,7 @@
 
         <dl class="org-dl org-dl--spaced-top">
           <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
-          <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id }}</dd></div>
+          <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id | readableId: '' }}</dd></div>
           <div class="org-dl-row"><dt>Owner Name</dt><dd>{{ org.ownerName }}</dd></div>
           <div class="org-dl-row"><dt>Owner Email / Login ID</dt><dd>{{ org.ownerEmail }}</dd></div>
           <div class="org-dl-row"><dt>Account Status</dt><dd><span class="org-badge org-badge-warn">{{ org.ownerAccountStatus }}</span></dd></div>
@@ -91,7 +91,7 @@
               @for (item of selectableOrganisations(); track item.id) {
                 <tr>
                   <td>{{ item.name }}</td>
-                  <td>{{ item.id }}</td>
+                  <td>{{ item.id | readableId: '' }}</td>
                   <td>{{ item.ownerName }}</td>
                   <td><span class="org-badge" [ngClass]="item.statusClass">{{ item.status }}</span></td>
                   <td class="text-end">

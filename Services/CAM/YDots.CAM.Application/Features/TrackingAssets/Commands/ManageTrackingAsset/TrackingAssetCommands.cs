@@ -78,14 +78,18 @@ public sealed class TrackingAssetCommandHandler(
 
         var request = command.Request;
 
+        logger.LogInformation("Creating tracking asset for campaign {CampaignId}. AssetType: {AssetType}.", request.CampaignId, request.AssetType);
+
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Tracking asset creation denied because no tenant is selected.");
             return Result.Failure<TrackingAssetDetailResponse>(Error.TenantSelectionRequired());
         }
 
         var campaign = await campaigns.GetByIdAsync(request.CampaignId, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Tracking asset creation failed because campaign {CampaignId} was not found.", request.CampaignId);
             return Result.Failure<TrackingAssetDetailResponse>(
                 Error.NotFound("That campaign was not found."));
         }
@@ -95,6 +99,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (context.IsFailure)
         {
+            logger.LogWarning("Tracking asset creation failed while resolving reference data for campaign {CampaignId}.", request.CampaignId);
             return Result.Failure<TrackingAssetDetailResponse>(context.Error!);
         }
 
@@ -105,11 +110,13 @@ public sealed class TrackingAssetCommandHandler(
 
         if (placementCheck.IsFailure)
         {
+            logger.LogWarning("Tracking asset creation failed placement validation for campaign {CampaignId}.", request.CampaignId);
             return Result.Failure<TrackingAssetDetailResponse>(placementCheck.Error!);
         }
 
         if (request.ActiveTo <= request.ActiveFrom)
         {
+            logger.LogWarning("Tracking asset creation failed because the active window is invalid for campaign {CampaignId}.", request.CampaignId);
             return Result.Failure<TrackingAssetDetailResponse>(Error.Validation(
                 "The active window is not valid.",
                 [new ValidationError(
@@ -145,6 +152,8 @@ public sealed class TrackingAssetCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tracking asset {AssetId} created for campaign {CampaignId}.", asset.Id, request.CampaignId);
+
         return asset.ToDetailResponse(
             campaign.Code, campaign.Name,
             context.Value.ChannelName, context.Value.SourceName, context.Value.MediumName,
@@ -160,9 +169,12 @@ public sealed class TrackingAssetCommandHandler(
 
         var request = command.Request;
 
+        logger.LogInformation("Updating tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(command.TrackingAssetId, request.ExpectedVersion, cancellationToken);
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} update failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -173,6 +185,7 @@ public sealed class TrackingAssetCommandHandler(
         // the whole thing being approved.
         if (asset.Status != TrackingAssetStatus.Draft)
         {
+            logger.LogWarning("Tracking asset {AssetId} update rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft tracking asset can be edited. This one is {asset.Status}."));
         }
@@ -182,6 +195,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (context.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} update failed while resolving reference data.", asset.Id);
             return Result.Failure<OutcomeResponse>(context.Error!);
         }
 
@@ -196,11 +210,13 @@ public sealed class TrackingAssetCommandHandler(
 
         if (placementCheck.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} update failed placement validation.", asset.Id);
             return Result.Failure<OutcomeResponse>(placementCheck.Error!);
         }
 
         if (request.ActiveTo <= request.ActiveFrom)
         {
+            logger.LogWarning("Tracking asset {AssetId} update failed because the active window is invalid.", asset.Id);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "The active window is not valid.",
                 [new ValidationError(
@@ -215,6 +231,8 @@ public sealed class TrackingAssetCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tracking asset {AssetId} updated successfully.", asset.Id);
+
         return BuildOutcome(asset, "Tracking asset updated.");
     }
 
@@ -223,11 +241,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Submitting tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -235,6 +256,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status != TrackingAssetStatus.Draft)
         {
+            logger.LogWarning("Tracking asset {AssetId} submission rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft tracking asset can be submitted. This one is {asset.Status}."));
         }
@@ -249,6 +271,8 @@ public sealed class TrackingAssetCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tracking asset {AssetId} submitted for approval.", asset.Id);
+
         return BuildOutcome(asset, "Tracking asset submitted for approval.");
     }
 
@@ -257,11 +281,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Approving tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -269,6 +296,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status != TrackingAssetStatus.Submitted)
         {
+            logger.LogWarning("Tracking asset {AssetId} approval rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Submitted tracking asset can be approved. This one is {asset.Status}."));
         }
@@ -277,6 +305,7 @@ public sealed class TrackingAssetCommandHandler(
         // simply refused: an attempt to approve one's own work is what a later review looks for.
         if (!asset.CanBeApprovedBy(currentUser.UserId))
         {
+            logger.LogWarning("Tracking asset {AssetId} approval denied by segregation-of-duties rules.", asset.Id);
             await audit.WriteAsync(
                 TrackingAssetAuditActionCodes.Approved, nameof(TrackingAsset), asset.Id,
                 AuditResult.Denied, "Attempted to approve an asset they created or submitted.",
@@ -298,6 +327,8 @@ public sealed class TrackingAssetCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tracking asset {AssetId} approved.", asset.Id);
+
         return BuildOutcome(asset, "Tracking asset approved.");
     }
 
@@ -313,11 +344,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Activating tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -325,6 +359,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status != TrackingAssetStatus.Approved)
         {
+            logger.LogWarning("Tracking asset {AssetId} activation rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only an Approved tracking asset can be activated. This one is {asset.Status}."));
         }
@@ -333,6 +368,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.ActiveTo <= now)
         {
+            logger.LogWarning("Tracking asset {AssetId} activation rejected because its active window has closed.", asset.Id);
             return Result.Failure<OutcomeResponse>(Error.TrackingAssetNotLive(
                 $"This asset's window closed on {asset.ActiveTo:yyyy-MM-dd}. Extend it before activating."));
         }
@@ -387,11 +423,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Requesting disable for tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -399,6 +438,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status != TrackingAssetStatus.Active)
         {
+            logger.LogWarning("Tracking asset {AssetId} disable request rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only an Active tracking asset can be requested for disable. This one is {asset.Status}."));
         }
@@ -410,6 +450,8 @@ public sealed class TrackingAssetCommandHandler(
             command.Request.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Disable requested for tracking asset {AssetId}.", asset.Id);
 
         return BuildOutcome(asset, "Disable requested. An approver must decide it.");
     }
@@ -426,11 +468,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deactivating tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -438,6 +483,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status is not (TrackingAssetStatus.Active or TrackingAssetStatus.DisableRequested))
         {
+            logger.LogWarning("Tracking asset {AssetId} deactivation rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Only an Active tracking asset, or one with a disable request on it, can be "
                 + $"deactivated. This one is {asset.Status}."));
@@ -450,6 +496,8 @@ public sealed class TrackingAssetCommandHandler(
             command.Request.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Tracking asset {AssetId} deactivated.", asset.Id);
 
         return BuildOutcome(asset, "Tracking asset deactivated.");
     }
@@ -469,11 +517,14 @@ public sealed class TrackingAssetCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting draft tracking asset {AssetId}.", command.TrackingAssetId);
+
         var loaded = await LoadAsync(
             command.TrackingAssetId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Tracking asset {AssetId} operation failed while loading the asset.", command.TrackingAssetId);
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -481,6 +532,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.Status != TrackingAssetStatus.Draft)
         {
+            logger.LogWarning("Tracking asset {AssetId} deletion rejected because its status is {Status}.", asset.Id, asset.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft tracking asset can be deleted. This one is {asset.Status}. "
                 + "An asset that has been approved is retired by deactivating it, so the "
@@ -489,6 +541,7 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset.UsageCount > 0)
         {
+            logger.LogWarning("Draft tracking asset {AssetId} deletion rejected because it has usage.", asset.Id);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This draft has recorded usage, so something already points at it. It cannot be "
                 + "deleted."));
@@ -520,12 +573,17 @@ public sealed class TrackingAssetCommandHandler(
 
         if (asset is null)
         {
+            logger.LogWarning("Tracking asset {AssetId} was not found.", assetId);
             return Result.Failure<TrackingAsset>(Error.NotFound("That tracking asset was not found."));
         }
 
-        return asset.Version == expectedVersion
-            ? asset
-            : Result.Failure<TrackingAsset>(Error.Concurrency());
+        if (asset.Version != expectedVersion)
+        {
+            logger.LogWarning("Tracking asset {AssetId} version conflict. Expected: {ExpectedVersion}, Actual: {ActualVersion}.", assetId, expectedVersion, asset.Version);
+            return Result.Failure<TrackingAsset>(Error.Concurrency());
+        }
+
+        return asset;
     }
 
     /// <summary>
@@ -540,18 +598,21 @@ public sealed class TrackingAssetCommandHandler(
         var channel = await referenceData.GetChannelAsync(channelId, cancellationToken);
         if (channel is null)
         {
+            logger.LogWarning("Tracking asset reference data channel {ChannelId} was not found.", channelId);
             return Result.Failure<ReferenceContext>(Error.NotFound("That channel was not found."));
         }
 
         var source = await referenceData.GetSourceAsync(sourceId, cancellationToken);
         if (source is null)
         {
+            logger.LogWarning("Tracking asset reference data source {SourceId} was not found.", sourceId);
             return Result.Failure<ReferenceContext>(Error.NotFound("That source was not found."));
         }
 
         var medium = await referenceData.GetMediumAsync(mediumId, cancellationToken);
         if (medium is null)
         {
+            logger.LogWarning("Tracking asset reference data medium {MediumId} was not found.", mediumId);
             return Result.Failure<ReferenceContext>(Error.NotFound("That medium was not found."));
         }
 
@@ -688,8 +749,7 @@ public sealed class TrackingAssetCommandHandler(
                 return candidate;
             }
 
-            logger.LogWarning(
-                "Tracking reference collision on attempt {Attempt}. Retrying.", attempt + 1);
+            logger.LogWarning("Tracking reference collision on attempt {Attempt}. Retrying.", attempt + 1);
         }
 
         // Five collisions in a row against a random reference means the generator is broken, not

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Results;
 using YDots.CAM.Application.Features.ReferenceData.DTOs;
@@ -24,12 +25,17 @@ public sealed record GetMediumsQuery(bool ActiveOnly = true);
 /// ONE HANDLER REPLACING THREE - GetChannelsQueryHandler, GetSourcesQueryHandler and
 /// GetMediumsQueryHandler were the same six lines against three tables.
 /// </summary>
-public sealed class ReferenceDataQueryHandler(IReferenceDataRepository referenceData)
+public sealed class ReferenceDataQueryHandler(
+    IReferenceDataRepository referenceData,
+    ILogger<ReferenceDataQueryHandler> logger)
 {
     public async Task<Result<CampaignReferenceDataResponse>> HandleAsync(
         GetCampaignReferenceDataQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        logger.LogInformation("Retrieving campaign reference data. ActiveOnly: {ActiveOnly}.",
+            query.ActiveOnly);
 
         // FETCHED ONE AFTER ANOTHER, NOT IN PARALLEL. The three reads share one DbContext, and
         // EF Core permits exactly one operation on a context at a time - starting them together
@@ -39,6 +45,9 @@ public sealed class ReferenceDataQueryHandler(IReferenceDataRepository reference
         var channels = await referenceData.GetChannelsAsync(query.ActiveOnly, cancellationToken);
         var sources = await referenceData.GetSourcesAsync(query.ActiveOnly, cancellationToken);
         var mediums = await referenceData.GetMediumsAsync(query.ActiveOnly, cancellationToken);
+
+        logger.LogInformation("Campaign reference data retrieved. Channels: {ChannelCount}, Sources: {SourceCount}, Mediums: {MediumCount}.",
+            channels.Count, sources.Count, mediums.Count);
 
         return Result.Success(new CampaignReferenceDataResponse(
             [.. channels.Select(channel => channel.ToResponse())],
@@ -57,7 +66,13 @@ public sealed class ReferenceDataQueryHandler(IReferenceDataRepository reference
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving campaign channels. ActiveOnly: {ActiveOnly}.",
+            query.ActiveOnly);
+
         var channels = await referenceData.GetChannelsAsync(query.ActiveOnly, cancellationToken);
+
+        logger.LogInformation("Campaign channels retrieved. Count: {ChannelCount}.",
+            channels.Count);
 
         return Result.Success<IReadOnlyList<ReferenceItemResponse>>(
             [.. channels.Select(channel => channel.ToResponse())]);
@@ -68,7 +83,13 @@ public sealed class ReferenceDataQueryHandler(IReferenceDataRepository reference
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving campaign sources. ActiveOnly: {ActiveOnly}.",
+            query.ActiveOnly);
+
         var sources = await referenceData.GetSourcesAsync(query.ActiveOnly, cancellationToken);
+
+        logger.LogInformation("Campaign sources retrieved. Count: {SourceCount}.",
+            sources.Count);
 
         return Result.Success<IReadOnlyList<ReferenceItemResponse>>(
             [.. sources.Select(source => source.ToResponse())]);
@@ -79,7 +100,13 @@ public sealed class ReferenceDataQueryHandler(IReferenceDataRepository reference
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving campaign mediums. ActiveOnly: {ActiveOnly}.",
+            query.ActiveOnly);
+
         var mediums = await referenceData.GetMediumsAsync(query.ActiveOnly, cancellationToken);
+
+        logger.LogInformation("Campaign mediums retrieved. Count: {MediumCount}.",
+            mediums.Count);
 
         return Result.Success<IReadOnlyList<ReferenceItemResponse>>(
             [.. mediums.Select(medium => medium.ToResponse())]);

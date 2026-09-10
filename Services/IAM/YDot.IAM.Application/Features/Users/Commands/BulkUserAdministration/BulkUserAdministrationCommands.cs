@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -44,18 +45,22 @@ public sealed class BulkUserAdministrationCommandHandler(
     ITenantContext tenantContext,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<BulkUserAdministrationCommandHandler> logger)
 {
     public async Task<Result<OutcomeResponse>> HandleAsync(
         CreateBulkOperationCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating bulk user administration operation.");
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Bulk user operation creation failed because tenant selection is required.");
             return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
         }
 
@@ -65,6 +70,7 @@ public sealed class BulkUserAdministrationCommandHandler(
 
         if (userIds.Count == 0)
         {
+            logger.LogWarning("Bulk user operation creation failed because no users were selected.");
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("Choose at least one user.",
                     [new ValidationError(nameof(request.UserIds), "No users were selected.")]));
@@ -75,6 +81,7 @@ public sealed class BulkUserAdministrationCommandHandler(
         if (request.ActionType is BulkActionType.AssignRole or BulkActionType.RemoveRole
             && !request.RoleId.HasValue)
         {
+            logger.LogWarning("Bulk user operation creation failed because a role is required for ActionType {ActionType}.", request.ActionType);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("Choose a role for this action.",
                     [new ValidationError(nameof(request.RoleId), "A role is required.")]));
@@ -86,6 +93,7 @@ public sealed class BulkUserAdministrationCommandHandler(
             role = await roles.GetByIdAsync(request.RoleId.Value, cancellationToken);
             if (role is null)
             {
+                logger.LogWarning("Bulk user operation creation failed because the requested role was not found. RoleId {RoleId}.", request.RoleId);
                 return Result.Failure<OutcomeResponse>(
                     Error.NotFound("That role was not found in this organisation."));
             }
@@ -180,9 +188,12 @@ public sealed class BulkUserAdministrationCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Bulk user operation validated. OperationId {OperationId}, TotalCount {TotalCount}, ValidCount {ValidCount}, Status {Status}.", operation.Id, operation.TotalItemCount, validCount, operation.Status);
+
         // Applying immediately is opt-in, so the default is always "look before you leap".
         if (request.ApplyImmediately && validCount > 0)
         {
+            logger.LogInformation("Applying bulk user operation immediately. OperationId {OperationId}.", operation.Id);
             return await ApplyAsync(operation.Id, operation.Version, cancellationToken);
         }
 
@@ -202,6 +213,8 @@ public sealed class BulkUserAdministrationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Applying bulk user operation. OperationId {OperationId}.", command.Request.OperationId);
+
         return ApplyAsync(command.Request.OperationId, command.Request.ExpectedVersion, cancellationToken);
     }
 
@@ -210,14 +223,18 @@ public sealed class BulkUserAdministrationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Cancelling bulk user operation. OperationId {OperationId}.", command.Id);
+
         var operation = await operations.GetAsync(command.Id, cancellationToken);
         if (operation is null)
         {
+            logger.LogWarning("Bulk user operation cancellation failed because OperationId {OperationId} was not found.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That job was not found."));
         }
 
         if (operation.IsTerminal)
         {
+            logger.LogWarning("Bulk user operation cancellation rejected because OperationId {OperationId} is already terminal with status {Status}.", command.Id, operation.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A job that is {operation.Status} cannot be cancelled."));
         }
@@ -232,6 +249,8 @@ public sealed class BulkUserAdministrationCommandHandler(
             command.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Bulk user operation cancelled successfully. OperationId {OperationId}.", operation.Id);
 
         return Result.Success(new OutcomeResponse(
             operation.Id, operation.Status.ToString(), operation.Version, "Job cancelled.", ["View"]));
@@ -249,19 +268,24 @@ public sealed class BulkUserAdministrationCommandHandler(
     {
         var now = clock.UtcNow;
 
+        logger.LogInformation("Starting bulk user operation application. OperationId {OperationId}.", operationId);
+
         var operation = await operations.GetWithItemsAsync(operationId, cancellationToken);
         if (operation is null)
         {
+            logger.LogWarning("Bulk user operation application failed because OperationId {OperationId} was not found.", operationId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That job was not found."));
         }
 
         if (operation.Version != expectedVersion)
         {
+            logger.LogWarning("Bulk user operation application failed due to concurrency conflict. OperationId {OperationId}.", operationId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (operation.Status != BulkOperationStatus.Validated)
         {
+            logger.LogWarning("Bulk user operation application rejected because OperationId {OperationId} has status {Status}.", operationId, operation.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A job that is {operation.Status} cannot be applied. Validate it first."));
         }
@@ -322,6 +346,7 @@ public sealed class BulkUserAdministrationCommandHandler(
             {
                 item.Succeeded = false;
                 item.ResultMessage = exception.Message;
+                logger.LogWarning(exception, "Bulk user operation row could not be applied. OperationId {OperationId}, RowNumber {RowNumber}.", operation.Id, item.RowNumber);
             }
         }
 
@@ -361,6 +386,8 @@ public sealed class BulkUserAdministrationCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Bulk user operation completed. OperationId {OperationId}, Status {Status}, Succeeded {SucceededCount}, Failed {FailedCount}, Skipped {SkippedCount}.", operation.Id, operation.Status, operation.SucceededItemCount, operation.FailedItemCount, operation.SkippedItemCount);
 
         return Result.Success(new OutcomeResponse(
             operation.Id,
@@ -412,54 +439,54 @@ public sealed class BulkUserAdministrationCommandHandler(
                 break;
 
             case BulkActionType.AssignRole when parameters.RoleId.HasValue:
-            {
-                var existing = await roles.GetActiveAssignmentAsync(
-                    subject.Id, parameters.RoleId.Value, cancellationToken);
-
-                // Already held is a SKIP rather than a failure: the end state the operator
-                // asked for is already true.
-                if (existing is not null)
                 {
-                    throw new InvalidOperationException("They already hold that role.");
+                    var existing = await roles.GetActiveAssignmentAsync(
+                        subject.Id, parameters.RoleId.Value, cancellationToken);
+
+                    // Already held is a SKIP rather than a failure: the end state the operator
+                    // asked for is already true.
+                    if (existing is not null)
+                    {
+                        throw new InvalidOperationException("They already hold that role.");
+                    }
+
+                    await roles.AddUserRoleAsync(new UserRole
+                    {
+                        TenantId = subject.TenantId,
+                        BusinessUnitId = subject.BusinessUnitId,
+                        UserId = subject.Id,
+                        RoleId = parameters.RoleId.Value,
+                        Status = UserRoleAssignmentStatus.Active,
+                        AssignedAtUtc = now,
+                        AssignedByUserId = currentUser.UserId,
+                        EffectiveFromUtc = now,
+                        EffectiveToUtc = parameters.AccessEndsAtUtc,
+                        Justification = parameters.Reason ?? $"Assigned by bulk job {operation.OperationNumber}."
+                    }, cancellationToken);
+
+                    subject.SecurityStamp = Guid.NewGuid().ToString("N");
+                    break;
                 }
-
-                await roles.AddUserRoleAsync(new UserRole
-                {
-                    TenantId = subject.TenantId,
-                    BusinessUnitId = subject.BusinessUnitId,
-                    UserId = subject.Id,
-                    RoleId = parameters.RoleId.Value,
-                    Status = UserRoleAssignmentStatus.Active,
-                    AssignedAtUtc = now,
-                    AssignedByUserId = currentUser.UserId,
-                    EffectiveFromUtc = now,
-                    EffectiveToUtc = parameters.AccessEndsAtUtc,
-                    Justification = parameters.Reason ?? $"Assigned by bulk job {operation.OperationNumber}."
-                }, cancellationToken);
-
-                subject.SecurityStamp = Guid.NewGuid().ToString("N");
-                break;
-            }
 
             case BulkActionType.RemoveRole when parameters.RoleId.HasValue:
-            {
-                var assignment = await roles.GetActiveAssignmentAsync(
-                    subject.Id, parameters.RoleId.Value, cancellationToken);
-
-                if (assignment is null)
                 {
-                    throw new InvalidOperationException("They do not hold that role.");
+                    var assignment = await roles.GetActiveAssignmentAsync(
+                        subject.Id, parameters.RoleId.Value, cancellationToken);
+
+                    if (assignment is null)
+                    {
+                        throw new InvalidOperationException("They do not hold that role.");
+                    }
+
+                    assignment.Status = UserRoleAssignmentStatus.Revoked;
+                    assignment.RevokedAtUtc = now;
+                    assignment.RevokedByUserId = currentUser.UserId;
+                    assignment.RevocationReason =
+                        parameters.Reason ?? $"Removed by bulk job {operation.OperationNumber}.";
+
+                    subject.SecurityStamp = Guid.NewGuid().ToString("N");
+                    break;
                 }
-
-                assignment.Status = UserRoleAssignmentStatus.Revoked;
-                assignment.RevokedAtUtc = now;
-                assignment.RevokedByUserId = currentUser.UserId;
-                assignment.RevocationReason =
-                    parameters.Reason ?? $"Removed by bulk job {operation.OperationNumber}.";
-
-                subject.SecurityStamp = Guid.NewGuid().ToString("N");
-                break;
-            }
 
             case BulkActionType.ForceSignOut:
                 subject.SecurityStamp = Guid.NewGuid().ToString("N");

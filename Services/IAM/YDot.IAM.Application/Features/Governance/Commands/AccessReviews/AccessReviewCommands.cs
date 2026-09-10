@@ -9,6 +9,7 @@ using YDot.IAM.Application.Features.Governance.Mappings;
 using YDot.IAM.Domain.Entities;
 using YDot.IAM.Domain.Enums;
 using YDot.IAM.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Settings;
 
@@ -60,7 +61,8 @@ public sealed class AccessReviewCommandHandler(
     ICurrentUser currentUser,
     IDateTimeProvider clock,
     IOptions<ClientAppSettings> clientApp,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<AccessReviewCommandHandler> logger)
 {
     public async Task<Result<AccessReviewCampaignResponse>> HandleAsync(
         CreateAccessReviewCampaignCommand command, CancellationToken cancellationToken)
@@ -69,9 +71,11 @@ public sealed class AccessReviewCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Creating access review campaign. Name: {CampaignName}, DueAtUtc: {DueAtUtc}.", request.Name, request.DueAtUtc);
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Access review campaign creation rejected because tenant selection is required.");
             return Result.Failure<AccessReviewCampaignResponse>(Error.TenantSelectionRequired());
         }
 
@@ -90,6 +94,7 @@ public sealed class AccessReviewCommandHandler(
 
         if (await governance.CampaignCodeExistsAsync(code, tenantId, null, cancellationToken))
         {
+            logger.LogWarning("Access review campaign creation rejected because the campaign code already exists. TenantId: {TenantId}, Code: {Code}.", tenantId, code);
             return Result.Failure<AccessReviewCampaignResponse>(
                 Error.Duplicate($"A campaign with code {code} already exists."));
         }
@@ -169,6 +174,8 @@ public sealed class AccessReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access review campaign created successfully. CampaignId: {CampaignId}, ReviewCount: {ReviewCount}.", campaign.Id, created);
+
         return Result.Success(new AccessReviewCampaignResponse(
             campaign.Id, campaign.Code, campaign.Name, campaign.Description,
             campaign.Status, GovernanceMappingConfig.Humanise(campaign.Status.ToString()),
@@ -184,14 +191,17 @@ public sealed class AccessReviewCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var request = command.Request;
+        logger.LogInformation("Creating access review. SubjectUserId: {SubjectUserId}, ReviewerUserId: {ReviewerUserId}.", request.SubjectUserId, request.ReviewerUserId);
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Access review operation rejected because tenant selection is required.");
             return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
         }
 
         if (request.SubjectUserId == request.ReviewerUserId)
         {
+            logger.LogWarning("Access review creation rejected due to self-review. UserId: {UserId}.", request.SubjectUserId);
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "Somebody cannot review their own access."));
         }
@@ -201,12 +211,14 @@ public sealed class AccessReviewCommandHandler(
         var subject = await users.GetWithAccessAsync(request.SubjectUserId, cancellationToken);
         if (subject is null)
         {
+            logger.LogWarning("Access review creation failed because the subject user was not found. UserId: {UserId}.", request.SubjectUserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         var reviewer = await users.GetByIdAsync(request.ReviewerUserId, cancellationToken);
         if (reviewer is null)
         {
+            logger.LogWarning("Access review creation failed because the reviewer was not found. ReviewerUserId: {ReviewerUserId}.", request.ReviewerUserId);
             return Result.Failure<OutcomeResponse>(
                 Error.NotFound("That reviewer was not found in this organisation."));
         }
@@ -236,6 +248,8 @@ public sealed class AccessReviewCommandHandler(
 
         await NotifyReviewerAsync(review, reviewer, cancellationToken);
 
+        logger.LogInformation("Access review created successfully. ReviewId: {ReviewId}, ReviewNumber: {ReviewNumber}.", review.Id, review.ReviewNumber);
+
         return Result.Success(new OutcomeResponse(
             review.Id, review.Status.ToString(), review.Version,
             $"Review {review.ReviewNumber} raised.",
@@ -255,15 +269,18 @@ public sealed class AccessReviewCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Deciding access review. ReviewId: {ReviewId}, Decision: {Decision}, ApplyImmediately: {ApplyImmediately}.", command.Id, request.Decision, request.ApplyImmediately);
 
         var review = await governance.GetAccessReviewAsync(command.Id, cancellationToken);
         if (review is null)
         {
+            logger.LogWarning("Access review not found. ReviewId: {ReviewId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That review was not found."));
         }
 
         if (review.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Access review concurrency conflict. ReviewId: {ReviewId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -317,6 +334,8 @@ public sealed class AccessReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access review decision recorded successfully. ReviewId: {ReviewId}, Decision: {Decision}.", review.Id, request.Decision);
+
         return Result.Success(new OutcomeResponse(
             review.Id, review.Status.ToString(), review.Version,
             request.Decision == AccessReviewDecision.Revoke && request.ApplyImmediately
@@ -341,6 +360,8 @@ public sealed class AccessReviewCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Delegating access review. ReviewId: {ReviewId}, NewReviewerId: {NewReviewerId}.", command.Id, command.Request.ReviewerUserId);
+
         return HandOverAsync(
             command.Id,
             command.Request.ReviewerUserId,
@@ -363,6 +384,8 @@ public sealed class AccessReviewCommandHandler(
         EscalateAccessReviewCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Escalating access review. ReviewId: {ReviewId}, EscalateToUserId: {EscalateToUserId}.", command.Id, command.Request.EscalateToUserId);
 
         return HandOverAsync(
             command.Id,
@@ -390,15 +413,18 @@ public sealed class AccessReviewCommandHandler(
         CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
+        logger.LogInformation("{Action} access review. ReviewId: {ReviewId}, NewReviewerId: {NewReviewerId}.", escalated ? "Escalating" : "Delegating", reviewId, newReviewerId);
 
         var review = await governance.GetAccessReviewAsync(reviewId, cancellationToken);
         if (review is null)
         {
+            logger.LogWarning("Access review not found. ReviewId: {ReviewId}.", reviewId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That review was not found."));
         }
 
         if (review.Version != expectedVersion)
         {
+            logger.LogWarning("Access review concurrency conflict. ReviewId: {ReviewId}.", reviewId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -428,6 +454,7 @@ public sealed class AccessReviewCommandHandler(
         // handed the review for it.
         if (newReviewerId == review.SubjectUserId)
         {
+            logger.LogWarning("Access review handover rejected because the new reviewer is the subject. ReviewId: {ReviewId}, SubjectUserId: {SubjectUserId}.", reviewId, review.SubjectUserId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 "A review cannot be given to the person whose access is being reviewed."));
         }
@@ -459,6 +486,8 @@ public sealed class AccessReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access review handover completed. ReviewId: {ReviewId}, NewReviewerId: {NewReviewerId}, Escalated: {Escalated}.", review.Id, newReviewerId, escalated);
+
         return Result.Success(new OutcomeResponse(
             review.Id, review.Status.ToString(), review.Version,
             escalated
@@ -472,14 +501,18 @@ public sealed class AccessReviewCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Cancelling access review. ReviewId: {ReviewId}.", command.Id);
+
         var review = await governance.GetAccessReviewAsync(command.Id, cancellationToken);
         if (review is null)
         {
+            logger.LogWarning("Access review not found. ReviewId: {ReviewId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That review was not found."));
         }
 
         if (review.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access review concurrency conflict. ReviewId: {ReviewId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -500,6 +533,8 @@ public sealed class AccessReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access review cancelled successfully. ReviewId: {ReviewId}.", review.Id);
+
         return Result.Success(new OutcomeResponse(
             review.Id, review.Status.ToString(), review.Version, "Review cancelled.", ["View"]));
     }
@@ -518,15 +553,18 @@ public sealed class AccessReviewCommandHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         var now = clock.UtcNow;
+        logger.LogInformation("Closing access review campaign. CampaignId: {CampaignId}.", command.Id);
 
         var campaign = await governance.GetCampaignAsync(command.Id, cancellationToken);
         if (campaign is null)
         {
+            logger.LogWarning("Access review campaign not found. CampaignId: {CampaignId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That campaign was not found."));
         }
 
         if (campaign.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Access review concurrency conflict. ReviewId: {ReviewId}.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -582,6 +620,8 @@ public sealed class AccessReviewCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Access review campaign closed successfully. CampaignId: {CampaignId}, OutstandingCount: {OutstandingCount}, RevokedCount: {RevokedCount}.", campaign.Id, outstanding.Count, revoked);
+
         return Result.Success(new OutcomeResponse(
             campaign.Id, campaign.Status.ToString(), campaign.Version,
             revoked > 0
@@ -594,6 +634,7 @@ public sealed class AccessReviewCommandHandler(
     private async Task ApplyRevocationAsync(
         AccessReview review, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Applying access review revocation. ReviewId: {ReviewId}, SubjectUserId: {SubjectUserId}.", review.Id, review.SubjectUserId);
         if (review.UserRoleId.HasValue || review.RoleId.HasValue)
         {
             var assignments = await roles.GetUserRolesAsync(review.SubjectUserId, cancellationToken);
@@ -630,6 +671,7 @@ public sealed class AccessReviewCommandHandler(
         CreateAccessReviewCampaignRequest request, Guid tenantId, DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        logger.LogInformation("Building access review candidates. TenantId: {TenantId}.", tenantId);
         var candidates = new List<ReviewCandidate>();
 
         var userIds = request.UserIds is { Count: > 0 }
@@ -710,9 +752,16 @@ public sealed class AccessReviewCommandHandler(
     private async Task<Guid?> ResolveFallbackReviewerAsync(
         Guid tenantId, Guid subjectId, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Resolving fallback reviewer. TenantId: {TenantId}, SubjectUserId: {SubjectUserId}.", tenantId, subjectId);
         var admin = await users.FindTenantAdminAsync(tenantId, cancellationToken);
 
-        return admin is null || admin.Id == subjectId ? null : admin.Id;
+        if (admin is null || admin.Id == subjectId)
+        {
+            logger.LogWarning("No valid fallback reviewer found. TenantId: {TenantId}, SubjectUserId: {SubjectUserId}.", tenantId, subjectId);
+            return null;
+        }
+
+        return admin.Id;
     }
 
     private static string BuildSnapshot(User subject)

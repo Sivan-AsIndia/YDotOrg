@@ -2,6 +2,7 @@
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.DTOs;
 using YDot.IAM.Application.Features.Menus.DTOs;
@@ -32,14 +33,23 @@ public sealed record DeleteMenuDefinitionCommand(Guid MenuId, long ExpectedVersi
 /// WHO MAY TOUCH WHAT, and why the split matters:
 ///
 /// <code>
-/// MenuDefinition  SuperAdmin only   what screens exist in this build
-/// TenantMenu      TenantAdmin       which of them this Organisation offers, and what it calls them
+/// MenuDefinition  owner = null      the platform catalogue: what this build ships.
+///                                   SuperAdmin only, through platform.menu-catalogue.manage.
+/// MenuDefinition  owner = a Tenant  nodes one Organisation added for itself.
+///                                   That Organisation only, through iam.menus.manage-structure.
+/// TenantMenu      TenantAdmin       which nodes this Organisation offers, and what it calls them
 /// RoleMenu        TenantAdmin       which roles inside it see each one
 /// </code>
 ///
-/// An Organisation editing the CATALOGUE would change what every other Organisation sees, so
-/// that endpoint is platform-only. An Organisation editing its own two tables affects nobody
-/// else, which is exactly the separation the three-table shape buys.
+/// AN ORGANISATION MAY NOW ADD NODES, AND STILL MAY NOT TOUCH THE CATALOGUE. Those are different
+/// powers over different rows and the difference is the whole of the access model here: a
+/// catalogue row is rendered in every Organisation's sidebar, so one charity editing it would be
+/// editing every other charity's navigation. An owned row is rendered in exactly one.
+///
+/// OWNERSHIP IS DECIDED BY THE ROW ON A WRITE, NOT BY THE CALLER. `AuthoriseWriteAsync` reads the
+/// node's owner and asks whether this caller may write THAT - which is the only ordering that
+/// cannot be talked around, because a caller who holds both permissions still cannot edit
+/// somebody else's node by being in the wrong Organisation when they ask.
 /// </summary>
 public sealed class MenuCommandHandler(
     IMenuRepository menus,
@@ -50,26 +60,109 @@ public sealed class MenuCommandHandler(
     ITenantContext tenantContext,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
+    ILogger<MenuCommandHandler> logger,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>
+    /// Whose node a newly created one becomes.
+    ///
+    /// THE ORGANISATION CONTEXT DECIDES, and that is deliberate rather than incidental. A caller
+    /// operating inside an Organisation - which includes a platform administrator who has stepped
+    /// into one through the Tenant switcher - is working on that Organisation's navigation, so
+    /// what they add belongs to it. Only a caller with no Organisation at all is working on the
+    /// catalogue, and only then does the platform permission come into it.
+    ///
+    /// The alternative was a scope flag on the request, and that is worse: it lets the client
+    /// choose which set of rows to write into, which is exactly the decision a client should
+    /// never be trusted with.
+    /// </summary>
+    private Result<Guid?> ResolveWriteOwner()
+    {
+        if (tenantContext.HasTenant)
+        {
+            return currentUser.IsSuperAdmin
+                   || currentUser.HasPermission(PermissionCodes.MenusManageStructure)
+                ? Result.Success<Guid?>(tenantContext.TenantId)
+                : Result.Failure<Guid?>(Error.Forbidden(
+                    "You do not have permission to add menu items for this organisation."));
+        }
+
+        return currentUser.IsSuperAdmin
+               || currentUser.HasPermission(PermissionCodes.Platform.MenuCatalogueManage)
+            ? Result.Success<Guid?>(null)
+            : Result.Failure<Guid?>(Error.Forbidden(
+                "You do not have permission to change the platform menu catalogue."));
+    }
+
+    /// <summary>
+    /// Whether this caller may edit or delete THIS node.
+    ///
+    /// ASKED OF THE ROW, NOT OF THE CALLER, which is the half that actually protects anything. A
+    /// permission check alone answers "may this person edit menus" and says nothing about WHICH -
+    /// so an Organisation administrator holding iam.menus.manage-structure would have been able
+    /// to edit a platform catalogue row, and with it every other Organisation's sidebar, by
+    /// passing its id.
+    ///
+    /// A CATALOGUE ROW IS NOT FOUND rather than refused, for an Organisation caller. Telling them
+    /// "forbidden" would confirm the node exists and let its id be probed; the platform tree is
+    /// not theirs to know about node by node.
+    /// </summary>
+    private Result AuthoriseWrite(MenuDefinition definition)
+    {
+        if (definition.OwnerTenantId is null)
+        {
+            return currentUser.IsSuperAdmin
+                   || currentUser.HasPermission(PermissionCodes.Platform.MenuCatalogueManage)
+                ? Result.Success()
+                : Result.Failure(Error.NotFound("That menu node was not found."));
+        }
+
+        if (definition.OwnerTenantId != tenantContext.TenantId)
+        {
+            return Result.Failure(Error.NotFound("That menu node was not found."));
+        }
+
+        return currentUser.IsSuperAdmin
+               || currentUser.HasPermission(PermissionCodes.MenusManageStructure)
+            ? Result.Success()
+            : Result.Failure(Error.Forbidden(
+                "You do not have permission to change this organisation's menu items."));
+    }
+
     public async Task<Result<MenuDefinitionResponse>> HandleAsync(
         CreateMenuDefinitionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating menu definition. Code: {Code}.", command.Request.Code);
+
         var request = command.Request;
+
+        // WHOSE NODE IS THIS GOING TO BE. Decided before anything is validated, because the
+        // answer changes what "the code already exists" even means.
+        var owner = ResolveWriteOwner();
+        if (owner.IsFailure)
+        {
+            return Result.Failure<MenuDefinitionResponse>(owner.Error!);
+        }
+
+        var ownerTenantId = owner.Value;
 
         var code = CodeValue.TryParse(request.Code)?.Value;
         if (string.IsNullOrWhiteSpace(code))
         {
+            logger.LogWarning("Menu definition creation rejected because the menu code is invalid.");
             return Result.Failure<MenuDefinitionResponse>(
                 Error.Validation("That menu code is not valid.",
                     [new ValidationError(nameof(request.Code),
                         "Use upper-case letters, digits, underscores or hyphens.")]));
         }
 
-        if (await menus.DefinitionCodeExistsAsync(code, null, cancellationToken))
+        // SCOPED TO THE OWNER. Two Organisations both adding a "REPORTS" node is not a clash, and
+        // refusing the second would tell one charity that another had already used the name.
+        if (await menus.DefinitionCodeExistsAsync(code, null, ownerTenantId, cancellationToken))
         {
+            logger.LogWarning("Menu definition creation rejected because the code already exists. Code: {Code}.", code);
             return Result.Failure<MenuDefinitionResponse>(
                 Error.Duplicate($"A menu node with code {code} already exists."));
         }
@@ -80,6 +173,16 @@ public sealed class MenuCommandHandler(
         {
             var parent = await menus.GetDefinitionAsync(request.ParentMenuId.Value, cancellationToken);
             if (parent is null)
+            {
+                logger.LogWarning("Menu definition creation rejected because the parent was not found. ParentMenuId: {ParentMenuId}.", request.ParentMenuId);
+                return Result.Failure<MenuDefinitionResponse>(
+                    Error.NotFound("That parent menu was not found."));
+            }
+
+            // A NODE MAY HANG BENEATH THE PLATFORM'S TREE, NEVER BENEATH ANOTHER ORGANISATION'S.
+            // Adding "Our Reports" under the shipped Fundraising menu is the ordinary case and
+            // has to work; reaching into a different charity's tree is not a case at all.
+            if (parent.OwnerTenantId is not null && parent.OwnerTenantId != ownerTenantId)
             {
                 return Result.Failure<MenuDefinitionResponse>(
                     Error.NotFound("That parent menu was not found."));
@@ -103,6 +206,7 @@ public sealed class MenuCommandHandler(
         }
         else if (request.Level != MenuLevel.Menu)
         {
+            logger.LogWarning("Menu definition creation rejected because a root node was not a Menu.");
             return Result.Failure<MenuDefinitionResponse>(Error.Validation(
                 "A node with no parent must be a top-level Menu.",
                 [new ValidationError(nameof(request.Level), "Choose Menu, or give it a parent.")]));
@@ -115,6 +219,7 @@ public sealed class MenuCommandHandler(
             var permission = await permissions.GetByCodeAsync(request.RequiredPermissionCode, cancellationToken);
             if (permission is null)
             {
+                logger.LogWarning("Menu definition creation rejected because the required permission was not found. PermissionCode: {PermissionCode}.", request.RequiredPermissionCode);
                 return Result.Failure<MenuDefinitionResponse>(Error.Validation(
                     "That permission code was not recognised.",
                     [new ValidationError(nameof(request.RequiredPermissionCode),
@@ -139,7 +244,14 @@ public sealed class MenuCommandHandler(
             IsEnabledByDefault = request.IsEnabledByDefault,
             IsMandatory = request.IsMandatory,
             OpensInNewTab = request.OpensInNewTab,
-            BadgeKey = request.BadgeKey
+            BadgeKey = request.BadgeKey,
+
+            OwnerTenantId = ownerTenantId,
+
+            // A PERSON WROTE THIS, NOT THE CATALOGUE. The seeder retires only what it wrote
+            // itself, so this is what stops the next restart filing the node away - see
+            // MenuDefinition.IsSystemDefined.
+            IsSystemDefined = false
         };
 
         await menus.AddDefinitionAsync(definition, cancellationToken);
@@ -151,13 +263,16 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Menu definition created successfully. MenuId: {MenuId}.", definition.Id);
+
         return Result.Success(new MenuDefinitionResponse(
             definition.Id, definition.Code, definition.Name, definition.Description,
             definition.ParentMenuId, null, definition.Level, definition.ModuleCode,
             definition.Route, definition.Icon, definition.RequiredPermissionCode,
             definition.DisplayOrder, definition.Status, definition.IsPlatformOnly,
             definition.IsEnabledByDefault, definition.IsMandatory, definition.OpensInNewTab,
-            definition.BadgeKey, definition.Version, []));
+            definition.BadgeKey, definition.Version, definition.OwnerTenantId,
+            definition.IsSystemDefined, []));
     }
 
     public async Task<Result<OutcomeResponse>> HandleAsync(
@@ -165,16 +280,26 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating menu definition. MenuId: {MenuId}.", command.MenuId);
+
         var request = command.Request;
 
         var definition = await menus.GetDefinitionAsync(command.MenuId, cancellationToken);
         if (definition is null)
         {
+            logger.LogWarning("Menu node not found. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That menu node was not found."));
+        }
+
+        var authorised = AuthoriseWrite(definition);
+        if (authorised.IsFailure)
+        {
+            return Result.Failure<OutcomeResponse>(authorised.Error!);
         }
 
         if (definition.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Menu definition update rejected due to version conflict. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -252,6 +377,8 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Menu definition updated successfully. MenuId: {MenuId}.", definition.Id);
+
         return Result.Success(new OutcomeResponse(
             definition.Id, definition.Status.ToString(), definition.Version, "Menu node saved.", []));
     }
@@ -278,14 +405,23 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting menu definition. MenuId: {MenuId}.", command.MenuId);
+
         var definition = await menus.GetDefinitionAsync(command.MenuId, cancellationToken);
         if (definition is null)
         {
             return Result.Failure<OutcomeResponse>(Error.NotFound("That menu node was not found."));
         }
 
+        var permitted = AuthoriseWrite(definition);
+        if (permitted.IsFailure)
+        {
+            return Result.Failure<OutcomeResponse>(permitted.Error!);
+        }
+
         if (definition.Version != command.ExpectedVersion)
         {
+            logger.LogWarning("Menu definition deletion rejected due to version conflict. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -294,6 +430,7 @@ public sealed class MenuCommandHandler(
         var children = catalogue.Count(node => node.ParentMenuId == definition.Id);
         if (children > 0)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node has children. MenuId: {MenuId}, Children: {Children}.", command.MenuId, children);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 $"{definition.Name} has {children} item(s) beneath it.",
                 [new ValidationError(nameof(command.MenuId),
@@ -302,13 +439,32 @@ public sealed class MenuCommandHandler(
 
         if (definition.IsMandatory)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node is mandatory. MenuId: {MenuId}.", command.MenuId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 $"{definition.Name} is required and cannot be removed."));
         }
 
-        var references = await menus.CountDefinitionReferencesAsync(definition.Id, cancellationToken);
+        // AN ORGANISATION'S OWN NODE TAKES ITS OWN SETTINGS WITH IT.
+        //
+        // The reference guard below exists to stop a PLATFORM node being deleted out from under
+        // every Organisation that has configured it - there, "retire it instead" is genuinely the
+        // right operation, because the rows belong to other people. For a node this Organisation
+        // added, every referencing row is its own: the setting that says whether to show it and
+        // the mappings that say which roles see it. They mean nothing without the node, and
+        // keeping them would make the node undeletable from the moment it was created - which is
+        // exactly what happened the first time this was tried.
+        if (definition.OwnerTenantId is { } ownerTenantId)
+        {
+            await menus.CascadeDeleteOwnedDefinitionAsync(definition.Id, ownerTenantId, cancellationToken);
+        }
+
+        var references = definition.OwnerTenantId is null
+            ? await menus.CountDefinitionReferencesAsync(definition.Id, cancellationToken)
+            : 0;
+
         if (references > 0)
         {
+            logger.LogWarning("Menu definition deletion rejected because the node is in use. MenuId: {MenuId}, References: {References}.", command.MenuId, references);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 $"{definition.Name} is in use: {references} organisation setting(s) and role "
                 + "mapping(s) refer to it.",
@@ -324,6 +480,8 @@ public sealed class MenuCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Menu definition deleted successfully. MenuId: {MenuId}.", definition.Id);
 
         return Result.Success(new OutcomeResponse(
             definition.Id, "Deleted", definition.Version,
@@ -349,8 +507,11 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Configuring tenant menu.");
+
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Tenant menu configuration requires a tenant context.");
             return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
         }
 
@@ -358,6 +519,7 @@ public sealed class MenuCommandHandler(
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Tenant not found while configuring tenant menu. TenantId: {TenantId}.", tenantId);
             return Result.Failure<OutcomeResponse>(Error.TenantNotFound());
         }
 
@@ -434,6 +596,7 @@ public sealed class MenuCommandHandler(
 
             if (mustStayEnabled.Contains(definition.Id) && !item.IsEnabled)
             {
+                logger.LogWarning("Tenant menu configuration rejected because a mandatory menu item was disabled. MenuId: {MenuId}.", definition.Id);
                 return Result.Failure<OutcomeResponse>(Error.Forbidden(definition.IsMandatory
                     ? $"{definition.Name} is required and cannot be switched off."
                     : $"{definition.Name} cannot be switched off: a required item sits under it."));
@@ -486,6 +649,8 @@ public sealed class MenuCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Tenant menu configuration saved. TenantId: {TenantId}, Changed: {Changed}, HeldBackByParent: {HeldBackByParent}.", tenantId, changed, heldBackByParent);
+
         return Result.Success(new OutcomeResponse(
             tenantId, tenant.Status.ToString(), tenant.Version,
             heldBackByParent == 0
@@ -508,6 +673,8 @@ public sealed class MenuCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Mapping menus to role. RoleId: {RoleId}.", command.RoleId);
+
         var request = command.Request;
         var now = clock.UtcNow;
 
@@ -523,12 +690,14 @@ public sealed class MenuCommandHandler(
         // their own Organisation. The dropdown never offered it; nor should the endpoint.
         if (role.IsPlatformRole)
         {
+            logger.LogWarning("Platform role menu mapping rejected. RoleId: {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Forbidden(
                 "A platform role's navigation is not an organisation's to configure."));
         }
 
         if (role.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Role menu mapping rejected due to version conflict. RoleId: {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -700,6 +869,8 @@ public sealed class MenuCommandHandler(
         {
             message += $" {unknown} were not recognised.";
         }
+
+        logger.LogInformation("Role menu mapping saved. RoleId: {RoleId}, Mapped: {Mapped}, Hidden: {Hidden}, Skipped: {Skipped}, HeldBackByParent: {HeldBackByParent}, Unrecognised: {Unrecognised}.", role.Id, mapped, hidden, skipped, heldBackByParent, unknown);
 
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version, message, []));

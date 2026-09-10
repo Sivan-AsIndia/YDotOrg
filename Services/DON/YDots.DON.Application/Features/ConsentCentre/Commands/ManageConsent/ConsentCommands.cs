@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -39,7 +40,8 @@ public sealed class ConsentCommandHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<ConsentCommandHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -49,20 +51,28 @@ public sealed class ConsentCommandHandler(
     {
         var request = command.Request;
 
+        logger.LogInformation("Grant consent operation started for DonorId {DonorId}.", request.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(request.DonorId, cancellationToken);
         if (donor is null || donor.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Grant consent failed for DonorId {DonorId} because the donor was not found inside the current scope.", request.DonorId);
+
             return Result.Failure<ConsentListItemResponse>(Error.DonorNotFound());
         }
 
         if (donor.Status is DonorStatus.Archived or DonorStatus.Merged)
         {
+            logger.LogWarning("Grant consent failed for DonorId {DonorId} because the donor is in state {DonorStatus}.", request.DonorId, donor.Status);
+
             return Result.Failure<ConsentListItemResponse>(Error.InvalidTransition(
                 $"A donor in state {donor.Status} cannot record new consent."));
         }
 
         if (!Enum.TryParse<ConsentChannel>(request.Channel, ignoreCase: true, out var channel))
         {
+            logger.LogWarning("Grant consent failed for DonorId {DonorId} because the supplied consent channel is invalid.", request.DonorId);
+
             return Result.Failure<ConsentListItemResponse>(Error.Validation(
                 "Review Channel. Choose a value from the approved catalogue.",
                 [new ValidationError(nameof(request.Channel), "Choose a channel from the list.")]));
@@ -70,6 +80,8 @@ public sealed class ConsentCommandHandler(
 
         if (request.ExpiryAtUtc is not null && request.ExpiryAtUtc <= request.EffectiveAtUtc)
         {
+            logger.LogWarning("Grant consent failed for DonorId {DonorId} because the expiry time is not later than the effective time.", request.DonorId);
+
             return Result.Failure<ConsentListItemResponse>(Error.Validation(
                 "Review Expiry time. It has to be later than the effective time.",
                 [new ValidationError(nameof(request.ExpiryAtUtc), "Choose a later date and time.")]));
@@ -124,6 +136,8 @@ public sealed class ConsentCommandHandler(
 
         consent.Donor = donor;
 
+        logger.LogInformation("Grant consent completed successfully for DonorId {DonorId} and ConsentId {ConsentId}.", donor.Id, consent.Id);
+
         return Result.Success(consent.ToListItemResponse(currentUser.CanSeeEvidence()));
     }
 
@@ -131,21 +145,29 @@ public sealed class ConsentCommandHandler(
         WithdrawConsentCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Withdraw consent operation started for ConsentId {ConsentId}.", command.ConsentId);
+
         var consent = await consentRepository.GetByIdAsync(command.ConsentId, cancellationToken);
 
         if (consent is null || consent.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Withdraw consent failed for ConsentId {ConsentId} because the consent record was not found inside the current scope.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(
                 Error.NotFound("That consent record was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != consent.Version)
         {
+            logger.LogWarning("Withdraw consent failed for ConsentId {ConsentId} because of a concurrency conflict.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(Error.Concurrency());
         }
 
         if (consent.Status != ConsentStatus.Active)
         {
+            logger.LogWarning("Withdraw consent failed for ConsentId {ConsentId} because the consent is in state {ConsentStatus}.", command.ConsentId, consent.Status);
+
             return Result.Failure<ConsentListItemResponse>(Error.InvalidTransition(
                 $"Only an active consent can be withdrawn. This record is {consent.Status}."));
         }
@@ -180,6 +202,8 @@ public sealed class ConsentCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Withdraw consent completed successfully for ConsentId {ConsentId}.", command.ConsentId);
+
         return Result.Success(consent.ToListItemResponse(currentUser.CanSeeEvidence()));
     }
 
@@ -187,21 +211,29 @@ public sealed class ConsentCommandHandler(
         CorrectConsentCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Correct consent operation started for ConsentId {ConsentId}.", command.ConsentId);
+
         var original = await consentRepository.GetByIdAsync(command.ConsentId, cancellationToken);
 
         if (original is null || original.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Correct consent failed for ConsentId {ConsentId} because the consent record was not found inside the current scope.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(
                 Error.NotFound("That consent record was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != original.Version)
         {
+            logger.LogWarning("Correct consent failed for ConsentId {ConsentId} because of a concurrency conflict.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(Error.Concurrency());
         }
 
         if (original.Status == ConsentStatus.Superseded)
         {
+            logger.LogWarning("Correct consent failed for ConsentId {ConsentId} because the consent has already been superseded.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(Error.InvalidTransition(
                 "This record has already been superseded. Correct the current row instead."));
         }
@@ -212,6 +244,8 @@ public sealed class ConsentCommandHandler(
 
         if (corrected.ExpiryAtUtc is not null && corrected.ExpiryAtUtc <= corrected.EffectiveAtUtc)
         {
+            logger.LogWarning("Correct consent failed for ConsentId {ConsentId} because the expiry time is not later than the effective time.", command.ConsentId);
+
             return Result.Failure<ConsentListItemResponse>(Error.Validation(
                 "Review Expiry time. It has to be later than the effective time.",
                 [new ValidationError(nameof(command.Request.ExpiryAtUtc), "Choose a later date and time.")]));
@@ -230,6 +264,8 @@ public sealed class ConsentCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         corrected.Donor = original.Donor;
+
+        logger.LogInformation("Correct consent completed successfully for original ConsentId {ConsentId}; corrected ConsentId {CorrectedConsentId}.", command.ConsentId, corrected.Id);
 
         return Result.Success(corrected.ToListItemResponse(currentUser.CanSeeEvidence()));
     }

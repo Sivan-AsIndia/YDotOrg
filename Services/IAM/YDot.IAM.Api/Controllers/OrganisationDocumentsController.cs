@@ -33,7 +33,8 @@ namespace YDot.IAM.Api.Controllers;
 [Authorize]
 public sealed class OrganisationDocumentsController(
     DocumentSubmissionCommandHandler commands,
-    DocumentSubmissionQueryHandler queries) : ApiControllerBase
+    DocumentSubmissionQueryHandler queries,
+    ILogger<OrganisationDocumentsController> logger) : ApiControllerBase
 {
     // =================================================================================
     // Shared: what may be uploaded
@@ -49,8 +50,17 @@ public sealed class OrganisationDocumentsController(
     [HttpGet("document-upload-policy")]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<DocumentUploadPolicyResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetUploadPolicyAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetDocumentUploadPolicyQuery(), cancellationToken));
+    public async Task<IActionResult> GetUploadPolicyAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting document upload policy.");
+
+        var result = await queries.HandleAsync(new GetDocumentUploadPolicyQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get document upload policy.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // Tenant: the Organisation assembling and sending its own paperwork
@@ -60,8 +70,17 @@ public sealed class OrganisationDocumentsController(
     [HasPermission(PermissionCodes.OrganisationView)]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<DocumentSubmissionResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMineAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetMyDocumentSubmissionsQuery(), cancellationToken));
+    public async Task<IActionResult> GetMineAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting current organisation's document submissions.");
+
+        var result = await queries.HandleAsync(new GetMyDocumentSubmissionsQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get current organisation's document submissions.");
+
+        return FromResult(result);
+    }
 
     /// <summary>Opens a Draft submission. Files are attached afterwards, one call each.</summary>
     [HttpPost("mine/document-submissions")]
@@ -69,10 +88,21 @@ public sealed class OrganisationDocumentsController(
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<DocumentSubmissionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CreateMineAsync(
-        [FromBody] CreateDocumentSubmissionRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await commands.HandleAsync(new CreateDocumentSubmissionCommand(request), cancellationToken),
-            "Submission started. Attach your files, then send it for review.");
+        [FromBody] CreateDocumentSubmissionRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Creating document submission for current organisation.");
+
+        var result = await commands.HandleAsync(new CreateDocumentSubmissionCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission creation failed for current organisation.");
+        else
+            logger.LogInformation("Document submission created successfully for current organisation.");
+
+        return FromResult(result, "Submission started. Attach your files, then send it for review.");
+    }
 
     /// <summary>
     /// Attaches one file.
@@ -91,8 +121,12 @@ public sealed class OrganisationDocumentsController(
     public async Task<IActionResult> UploadFileAsync(
         Guid submissionId, IFormFile file, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Uploading document submission file. SubmissionId: {SubmissionId}", submissionId);
+
         if (file is null || file.Length == 0)
         {
+            logger.LogWarning("Document submission file upload failed because no file was received. SubmissionId: {SubmissionId}", submissionId);
+
             return FromResult(Result.Failure<DocumentSubmissionResponse>(Error.Validation(
                 "No file was received.",
                 [new ValidationError("File", "Choose a file to upload.")])));
@@ -100,7 +134,7 @@ public sealed class OrganisationDocumentsController(
 
         await using var content = file.OpenReadStream();
 
-        return FromResult(await commands.HandleAsync(
+        var result = await commands.HandleAsync(
             new UploadSubmissionFileCommand(
                 submissionId,
                 // The browser sends the name in quotes on some platforms, and a path on others.
@@ -108,7 +142,14 @@ public sealed class OrganisationDocumentsController(
                 file.ContentType ?? "application/octet-stream",
                 file.Length,
                 content),
-            cancellationToken));
+            cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission file upload failed. SubmissionId: {SubmissionId}", submissionId);
+        else
+            logger.LogInformation("Document submission file uploaded successfully. SubmissionId: {SubmissionId}", submissionId);
+
+        return FromResult(result);
     }
 
     [HttpDelete("mine/document-submissions/{submissionId:guid}/files/{documentId:guid}")]
@@ -116,11 +157,20 @@ public sealed class OrganisationDocumentsController(
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<DocumentSubmissionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RemoveFileAsync(
-        Guid submissionId, Guid documentId, CancellationToken cancellationToken) =>
-        FromResult(
-            await commands.HandleAsync(
-                new RemoveSubmissionFileCommand(submissionId, documentId), cancellationToken),
-            "File removed.");
+        Guid submissionId, Guid documentId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Removing document submission file. SubmissionId: {SubmissionId}, DocumentId: {DocumentId}", submissionId, documentId);
+
+        var result = await commands.HandleAsync(
+            new RemoveSubmissionFileCommand(submissionId, documentId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission file removal failed. SubmissionId: {SubmissionId}, DocumentId: {DocumentId}", submissionId, documentId);
+        else
+            logger.LogInformation("Document submission file removed successfully. SubmissionId: {SubmissionId}, DocumentId: {DocumentId}", submissionId, documentId);
+
+        return FromResult(result, "File removed.");
+    }
 
     /// <summary>
     /// Discards a draft submission the organisation has decided against.
@@ -137,12 +187,21 @@ public sealed class OrganisationDocumentsController(
     public async Task<IActionResult> DiscardMineAsync(
         Guid submissionId,
         [FromQuery] long expectedVersion,
-        CancellationToken cancellationToken) =>
-        FromResult(
-            await commands.HandleAsync(
-                new DiscardDocumentSubmissionCommand(submissionId, expectedVersion),
-                cancellationToken),
-            "Draft discarded.");
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Discarding document submission draft. SubmissionId: {SubmissionId}, ExpectedVersion: {ExpectedVersion}", submissionId, expectedVersion);
+
+        var result = await commands.HandleAsync(
+            new DiscardDocumentSubmissionCommand(submissionId, expectedVersion),
+            cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission draft discard failed. SubmissionId: {SubmissionId}, ExpectedVersion: {ExpectedVersion}", submissionId, expectedVersion);
+        else
+            logger.LogInformation("Document submission draft discarded successfully. SubmissionId: {SubmissionId}", submissionId);
+
+        return FromResult(result, "Draft discarded.");
+    }
 
     [HttpPost("mine/document-submissions/{submissionId:guid}/submit")]
     [HasPermission(PermissionCodes.OrganisationSubmit)]
@@ -151,11 +210,22 @@ public sealed class OrganisationDocumentsController(
     public async Task<IActionResult> SubmitMineAsync(
         Guid submissionId,
         [FromBody] SubmitDocumentSubmissionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(
-            await commands.HandleAsync(
-                new SubmitDocumentSubmissionCommand(submissionId, request), cancellationToken),
-            "Sent for review. You will be told the outcome.");
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Submitting document submission for review. SubmissionId: {SubmissionId}", submissionId);
+
+        var result = await commands.HandleAsync(
+            new SubmitDocumentSubmissionCommand(submissionId, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission failed to send for review. SubmissionId: {SubmissionId}", submissionId);
+        else
+            logger.LogInformation("Document submission sent for review successfully. SubmissionId: {SubmissionId}", submissionId);
+
+        return FromResult(result, "Sent for review. You will be told the outcome.");
+    }
 
     /// <summary>
     /// A short-lived link to one of the caller's own files.
@@ -169,9 +239,18 @@ public sealed class OrganisationDocumentsController(
     [ProducesResponseType(typeof(ApiResponse<DocumentDownloadLinkResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyFileLinkAsync(
         Guid submissionId, Guid documentId, [FromQuery] bool inline,
-        CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetDocumentDownloadLinkQuery(submissionId, documentId, inline), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting document download link. SubmissionId: {SubmissionId}, DocumentId: {DocumentId}, Inline: {Inline}", submissionId, documentId, inline);
+
+        var result = await queries.HandleAsync(
+            new GetDocumentDownloadLinkQuery(submissionId, documentId, inline), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get document download link. SubmissionId: {SubmissionId}, DocumentId: {DocumentId}", submissionId, documentId);
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // Platform: SuperAdmin reviewing
@@ -181,9 +260,18 @@ public sealed class OrganisationDocumentsController(
     [HasPermission(PermissionCodes.Platform.TenantsReview)]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<DocumentSubmissionResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetForOrganisationAsync(
-        Guid tenantId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetOrganisationDocumentSubmissionsQuery(tenantId), cancellationToken));
+        Guid tenantId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting organisation document submissions. TenantId: {TenantId}", tenantId);
+
+        var result = await queries.HandleAsync(
+            new GetOrganisationDocumentSubmissionsQuery(tenantId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get organisation document submissions. TenantId: {TenantId}", tenantId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// A link for the reviewer.
@@ -197,19 +285,37 @@ public sealed class OrganisationDocumentsController(
     [ProducesResponseType(typeof(ApiResponse<DocumentDownloadLinkResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReviewFileLinkAsync(
         Guid tenantId, Guid submissionId, Guid documentId, [FromQuery] bool inline,
-        CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetDocumentDownloadLinkQuery(submissionId, documentId, inline), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting review document download link. TenantId: {TenantId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}, Inline: {Inline}", tenantId, submissionId, documentId, inline);
+
+        var result = await queries.HandleAsync(
+            new GetDocumentDownloadLinkQuery(submissionId, documentId, inline), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get review document download link. TenantId: {TenantId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}", tenantId, submissionId, documentId);
+
+        return FromResult(result);
+    }
 
     [HttpPost("{tenantId:guid}/document-submissions/{submissionId:guid}/start-review")]
     [HasPermission(PermissionCodes.Platform.TenantsReview)]
     [ProducesResponseType(typeof(ApiResponse<DocumentSubmissionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> StartReviewAsync(
-        Guid tenantId, Guid submissionId, CancellationToken cancellationToken) =>
-        FromResult(
-            await commands.HandleAsync(
-                new StartDocumentSubmissionReviewCommand(submissionId), cancellationToken),
-            "Review started.");
+        Guid tenantId, Guid submissionId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Starting document submission review. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+
+        var result = await commands.HandleAsync(
+            new StartDocumentSubmissionReviewCommand(submissionId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission review start failed. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+        else
+            logger.LogInformation("Document submission review started successfully. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+
+        return FromResult(result, "Review started.");
+    }
 
     /// <summary>Approve, reject, or ask for a better copy. A reason is required for the last two.</summary>
     [HttpPost("{tenantId:guid}/document-submissions/{submissionId:guid}/decide")]
@@ -219,7 +325,20 @@ public sealed class OrganisationDocumentsController(
     public async Task<IActionResult> DecideAsync(
         Guid tenantId, Guid submissionId,
         [FromBody] DecideDocumentSubmissionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new DecideDocumentSubmissionCommand(submissionId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Deciding document submission. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+
+        var result = await commands.HandleAsync(
+            new DecideDocumentSubmissionCommand(submissionId, request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Document submission decision failed. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+        else
+            logger.LogInformation("Document submission decision completed successfully. TenantId: {TenantId}, SubmissionId: {SubmissionId}", tenantId, submissionId);
+
+        return FromResult(result);
+    }
 }

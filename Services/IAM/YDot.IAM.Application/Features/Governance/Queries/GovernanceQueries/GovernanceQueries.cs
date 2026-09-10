@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -72,15 +73,18 @@ public sealed class GovernanceQueryHandler(
     ITokenHasher tokenHasher,
     IAuditService audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<GovernanceQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<AccessRequestListItemResponse>>> HandleAsync(
         SearchAccessRequestsQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await governanceRead.SearchRequestsAsync(query.Filter, currentUser.UserId, cancellationToken));
+        logger.LogInformation("Searching access requests.");
+        var result = await governanceRead.SearchRequestsAsync(query.Filter, currentUser.UserId, cancellationToken);
+        logger.LogInformation("Access requests retrieved. TotalCount: {TotalCount}.", result.TotalCount);
+        return Result.Success(result);
     }
 
     public async Task<Result<AccessRequestDetailResponse>> HandleAsync(
@@ -88,11 +92,15 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving access request. RequestId: {RequestId}.", query.Id);
         var detail = await governanceRead.GetRequestAsync(query.Id, cancellationToken);
-
-        return detail is null
-            ? Result.Failure<AccessRequestDetailResponse>(Error.NotFound("That request was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Access request not found. RequestId: {RequestId}.", query.Id);
+            return Result.Failure<AccessRequestDetailResponse>(Error.NotFound("That request was not found."));
+        }
+        logger.LogInformation("Access request retrieved. RequestId: {RequestId}.", query.Id);
+        return Result.Success(detail);
     }
 
     public async Task<Result<PagedResponse<AccessReviewListItemResponse>>> HandleAsync(
@@ -100,8 +108,10 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await governanceRead.SearchReviewsAsync(query.Filter, currentUser.UserId, cancellationToken));
+        logger.LogInformation("Searching access reviews.");
+        var result = await governanceRead.SearchReviewsAsync(query.Filter, currentUser.UserId, cancellationToken);
+        logger.LogInformation("Access reviews retrieved. TotalCount: {TotalCount}.", result.TotalCount);
+        return Result.Success(result);
     }
 
     public async Task<Result<AccessReviewDetailResponse>> HandleAsync(
@@ -109,11 +119,15 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving access review. ReviewId: {ReviewId}.", query.Id);
         var detail = await governanceRead.GetReviewAsync(query.Id, cancellationToken);
-
-        return detail is null
-            ? Result.Failure<AccessReviewDetailResponse>(Error.NotFound("That review was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Access review not found. ReviewId: {ReviewId}.", query.Id);
+            return Result.Failure<AccessReviewDetailResponse>(Error.NotFound("That review was not found."));
+        }
+        logger.LogInformation("Access review retrieved. ReviewId: {ReviewId}.", query.Id);
+        return Result.Success(detail);
     }
 
     public async Task<Result<IReadOnlyList<AccessReviewCampaignResponse>>> HandleAsync(
@@ -125,11 +139,15 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving access review campaign. CampaignId: {CampaignId}.", query.Id);
         var campaign = await governanceRead.GetCampaignAsync(query.Id, cancellationToken);
-
-        return campaign is null
-            ? Result.Failure<AccessReviewCampaignResponse>(Error.NotFound("That campaign was not found."))
-            : Result.Success(campaign);
+        if (campaign is null)
+        {
+            logger.LogWarning("Access review campaign not found. CampaignId: {CampaignId}.", query.Id);
+            return Result.Failure<AccessReviewCampaignResponse>(Error.NotFound("That campaign was not found."));
+        }
+        logger.LogInformation("Access review campaign retrieved. CampaignId: {CampaignId}.", query.Id);
+        return Result.Success(campaign);
     }
 
     public async Task<Result<LoginIdentifierChangeResponse>> HandleAsync(
@@ -137,11 +155,15 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving login identifier change. RequestId: {RequestId}.", query.Id);
         var detail = await governanceRead.GetIdentifierChangeAsync(query.Id, cancellationToken);
-
-        return detail is null
-            ? Result.Failure<LoginIdentifierChangeResponse>(Error.NotFound("That request was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Login identifier change not found. RequestId: {RequestId}.", query.Id);
+            return Result.Failure<LoginIdentifierChangeResponse>(Error.NotFound("That request was not found."));
+        }
+        logger.LogInformation("Login identifier change retrieved. RequestId: {RequestId}.", query.Id);
+        return Result.Success(detail);
     }
 
     public async Task<Result<IReadOnlyList<LoginIdentifierChangeResponse>>> HandleAsync(
@@ -153,11 +175,14 @@ public sealed class GovernanceQueryHandler(
         if (query.UserId != currentUser.UserId
             && !currentUser.HasPermission(PermissionCodes.UsersChangeLoginIdentifier))
         {
+            logger.LogWarning("Login identifier history access denied. UserId: {UserId}.", query.UserId);
             return Result.Failure<IReadOnlyList<LoginIdentifierChangeResponse>>(Error.Forbidden());
         }
 
-        return Result.Success(
-            await governanceRead.GetIdentifierChangesForUserAsync(query.UserId, cancellationToken));
+        logger.LogInformation("Retrieving login identifier change history. UserId: {UserId}.", query.UserId);
+        var result = await governanceRead.GetIdentifierChangesForUserAsync(query.UserId, cancellationToken);
+        logger.LogInformation("Login identifier change history retrieved. UserId: {UserId}, Count: {Count}.", query.UserId, result.Count);
+        return Result.Success(result);
     }
 
     public async Task<Result<PagedResponse<BulkOperationListItemResponse>>> HandleAsync(
@@ -165,7 +190,10 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await bulkRead.SearchAsync(query.Pagination, cancellationToken));
+        logger.LogInformation("Searching bulk operations.");
+        var result = await bulkRead.SearchAsync(query.Pagination, cancellationToken);
+        logger.LogInformation("Bulk operations retrieved. TotalCount: {TotalCount}.", result.TotalCount);
+        return Result.Success(result);
     }
 
     public async Task<Result<BulkOperationDetailResponse>> HandleAsync(
@@ -173,11 +201,15 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving bulk operation. BulkOperationId: {BulkOperationId}.", query.Id);
         var detail = await bulkRead.GetDetailAsync(query.Id, cancellationToken);
-
-        return detail is null
-            ? Result.Failure<BulkOperationDetailResponse>(Error.NotFound("That job was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Bulk operation not found. BulkOperationId: {BulkOperationId}.", query.Id);
+            return Result.Failure<BulkOperationDetailResponse>(Error.NotFound("That job was not found."));
+        }
+        logger.LogInformation("Bulk operation retrieved. BulkOperationId: {BulkOperationId}.", query.Id);
+        return Result.Success(detail);
     }
 
     /// <summary>
@@ -191,7 +223,10 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await auditRead.GetTargetTypesAsync(cancellationToken));
+        logger.LogInformation("Retrieving audit target types.");
+        var result = await auditRead.GetTargetTypesAsync(cancellationToken);
+        logger.LogInformation("Audit target types retrieved. Count: {Count}.", result.Count);
+        return Result.Success(result);
     }
 
     public async Task<Result<PagedResponse<AuditEventResponse>>> HandleAsync(
@@ -201,8 +236,10 @@ public sealed class GovernanceQueryHandler(
 
         var canSeeSensitive = currentUser.HasPermission(PermissionCodes.AuditViewSensitive);
 
-        return Result.Success(
-            await auditRead.SearchAsync(query.Filter, canSeeSensitive, cancellationToken));
+        logger.LogInformation("Searching audit events. CanSeeSensitive: {CanSeeSensitive}.", canSeeSensitive);
+        var result = await auditRead.SearchAsync(query.Filter, canSeeSensitive, cancellationToken);
+        logger.LogInformation("Audit events retrieved. TotalCount: {TotalCount}.", result.TotalCount);
+        return Result.Success(result);
     }
 
     public async Task<Result<AuditEventResponse>> HandleAsync(
@@ -211,11 +248,15 @@ public sealed class GovernanceQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
 
         var canSeeSensitive = currentUser.HasPermission(PermissionCodes.AuditViewSensitive);
+        logger.LogInformation("Retrieving audit event. AuditEventId: {AuditEventId}, CanSeeSensitive: {CanSeeSensitive}.", query.Id, canSeeSensitive);
         var detail = await auditRead.GetAsync(query.Id, canSeeSensitive, cancellationToken);
-
-        return detail is null
-            ? Result.Failure<AuditEventResponse>(Error.NotFound("That audit entry was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Audit event not found. AuditEventId: {AuditEventId}.", query.Id);
+            return Result.Failure<AuditEventResponse>(Error.NotFound("That audit entry was not found."));
+        }
+        logger.LogInformation("Audit event retrieved. AuditEventId: {AuditEventId}.", query.Id);
+        return Result.Success(detail);
     }
 
     public async Task<Result<IReadOnlyList<AuditEventResponse>>> HandleAsync(
@@ -223,8 +264,10 @@ public sealed class GovernanceQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await auditRead.GetForTargetAsync(query.TargetType, query.TargetId, query.Take, cancellationToken));
+        logger.LogInformation("Retrieving audit trail for target. TargetType: {TargetType}, TargetId: {TargetId}, Take: {Take}.", query.TargetType, query.TargetId, query.Take);
+        var result = await auditRead.GetForTargetAsync(query.TargetType, query.TargetId, query.Take, cancellationToken);
+        logger.LogInformation("Audit trail retrieved. TargetType: {TargetType}, TargetId: {TargetId}, Count: {Count}.", query.TargetType, query.TargetId, result.Count);
+        return Result.Success(result);
     }
 
     /// <summary>
@@ -240,6 +283,7 @@ public sealed class GovernanceQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
 
         var canSeeSensitive = currentUser.HasPermission(PermissionCodes.AuditViewSensitive);
+        logger.LogInformation("Starting audit event export. CanSeeSensitive: {CanSeeSensitive}.", canSeeSensitive);
 
         var filter = query.Filter;
         filter.Page = 1;
@@ -251,6 +295,7 @@ public sealed class GovernanceQueryHandler(
         do
         {
             page = await auditRead.SearchAsync(filter, canSeeSensitive, cancellationToken);
+            logger.LogInformation("Audit export page retrieved. Page: {Page}, RowCount: {RowCount}.", filter.Page, page.Items.Count);
 
             rows.AddRange(page.Items.Select(item => new AuditExportRow(
                 item.OccurredAtUtc.ToString("u", System.Globalization.CultureInfo.InvariantCulture),
@@ -281,6 +326,7 @@ public sealed class GovernanceQueryHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Audit event export completed. RowCount: {RowCount}.", rows.Count);
         return Result.Success(file);
     }
 }

@@ -231,7 +231,7 @@ export class SavedViewBuilderComponent {
   protected readonly selectedModule = signal('Donations');
 
   protected readonly baseViews = signal<readonly string[]>(this.moduleConfigs['Donations'].baseViews);
-  protected readonly selectedBaseView = signal(this.moduleConfigs['Donations'].baseViews[0]);
+  protected readonly selectedBaseView = signal('');
 
   // ===================================================================
   // Filter definition (4.8.2) / Context and filters region (4.8.1).
@@ -343,7 +343,7 @@ export class SavedViewBuilderComponent {
     'Anita Rao · Access Administrator',
     'Ravi Kumar · Finance Manager',
   ];
-  protected readonly viewOwner = signal('Priya Nair · Programme Manager');
+  protected readonly viewOwner = signal('');
   protected readonly visibility = signal<'Private' | 'Shared'>('Private');
   protected readonly sharedRoles: readonly string[] = [
     'Programme Manager',
@@ -420,7 +420,11 @@ export class SavedViewBuilderComponent {
 
   /** The view is valid when a compatible arrangement exists within scope (4.8.3). */
   protected readonly isValid = computed(
-    () => this.selectedModule().length > 0 && this.columnsCount() > 0 && this.uiState() !== 'no-access',
+    () =>
+      this.selectedModule().length > 0 &&
+      this.viewOwner().length > 0 &&
+      this.columnsCount() > 0 &&
+      this.uiState() !== 'no-access',
   );
 
   /** Whether the primary action (Preview) is currently allowed (4.8.1, 4.8.3). */
@@ -449,7 +453,7 @@ export class SavedViewBuilderComponent {
     }
     // Base view — module-related default and options.
     this.baseViews.set(config.baseViews);
-    this.selectedBaseView.set(config.baseViews[0]);
+    this.selectedBaseView.set('');
     // Filter fields — module-related.
     this.filterFields.set(config.filterFields);
     // Columns — module-related default arrangement.

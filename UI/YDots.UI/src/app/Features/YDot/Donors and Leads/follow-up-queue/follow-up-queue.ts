@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
   Component,
   HostListener,
@@ -12,6 +13,16 @@ import { FormsModule } from "@angular/forms";
 import { forkJoin, catchError, map, of } from "rxjs";
 import { DonorApiService } from "../../../../Service/donor-api.service";
 import { apiErrorMessage } from "../../../../Shared/models/api-response.model";
+=======
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { readableIdentifier } from '../../../../Shared/models/identifier';
+import { ActivatedRoute, Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { forkJoin, catchError, map, of } from 'rxjs';
+import { DonorApiService } from '../../../../Service/donor-api.service';
+import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+>>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
 import {
   DonLookupItem,
   FollowUp as ApiFollowUp,
@@ -44,7 +55,24 @@ export interface HistoryEvent {
 }
 
 export interface FollowUp {
+  /**
+   * The API id. A GUID, so it is what requests carry and NEVER what a screen prints.
+   *
+   * See `reference` below - that is the one to render.
+   */
   id: string;
+
+  /**
+   * The human reference - FUP-2026-0007 - which is what this follow-up is called.
+   *
+   * IT WAS MISSING, AND `id` WAS BEING PRINTED IN ITS PLACE. The queue's row label, its kanban
+   * card and the detail drawer all rendered `f.id`, which is the row's GUID: the card that should
+   * read "FUP-2026-0007" read "3f9a1c22-..." instead, in the one place somebody would quote when
+   * asking a colleague about it. The server has always returned `followUpReference`; nothing was
+   * carrying it across.
+   */
+  reference: string;
+
   recordId?: string;
   recordName: string;
   recordType: RecordType;
@@ -365,6 +393,11 @@ export class FollowUpQueueComponent {
 
     return {
       id: item.id,
+
+      // THE READABLE HALF, carried alongside the id so the screen never has to print the GUID.
+      // Falls back to nothing rather than to the id - see Shared/models/identifier.
+      reference: readableIdentifier(item.followUpReference, ''),
+
       recordId: item.leadId ?? item.donorId ?? undefined,
       recordName:
         item.donorDisplayName ?? item.leadReference ?? item.followUpReference,

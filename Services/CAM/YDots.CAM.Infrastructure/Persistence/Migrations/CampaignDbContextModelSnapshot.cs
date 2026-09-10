@@ -351,6 +351,11 @@ namespace YDots.CAM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("business_unit_id");
 
+                    b.Property<decimal>("CampaignAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("campaign_amount");
+
                     b.Property<Guid?>("CityId")
                         .HasColumnType("uuid")
                         .HasColumnName("city_id");
@@ -485,6 +490,8 @@ namespace YDots.CAM.Infrastructure.Persistence.Migrations
                     b.ToTable("cam_campaigns", null, t =>
                         {
                             t.HasCheckConstraint("ck_cam_campaigns_budget", "budget_amount IS NULL OR budget_amount >= 0");
+
+                            t.HasCheckConstraint("ck_cam_campaigns_campaign_amount", "campaign_amount >= 0");
 
                             t.HasCheckConstraint("ck_cam_campaigns_dates", "end_date >= start_date");
 

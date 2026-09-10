@@ -6,6 +6,7 @@ using YDot.PAY.Application.Common.Results;
 using YDot.PAY.Application.Features.Donations.Commands.ManageDonation;
 using YDot.PAY.Application.Features.Donations.DTOs;
 using YDot.PAY.Application.Features.Donations.Queries;
+using YDot.PAY.Application.Features.Payments.DTOs;
 using YDot.PAY.Application.Features.Receipts.Commands.ManageReceipt;
 using YDot.PAY.Application.Features.Receipts.DTOs;
 using YDot.PAY.Application.Features.Refunds.Commands.ManageRefund;
@@ -31,7 +32,8 @@ public sealed class DonationsController(
     DonationQueryHandler queries,
     DonationCommandHandler donations,
     ReceiptCommandHandler receipts,
-    RefundCommandHandler refunds) : ApiControllerBase
+    RefundCommandHandler refunds,
+    ILogger<DonationsController> logger) : ApiControllerBase
 {
     /// <summary>The donation register.</summary>
     [HttpGet]
@@ -39,8 +41,17 @@ public sealed class DonationsController(
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<DonationListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] DonationSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchDonationsQuery(filter), cancellationToken));
+        [FromQuery] DonationSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching donations.");
+
+        var result = await queries.HandleAsync(
+            new SearchDonationsQuery(filter), cancellationToken);
+
+        logger.LogInformation("Donation search completed successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Counts and totals for the register's summary tiles.
@@ -52,8 +63,17 @@ public sealed class DonationsController(
     [HttpGet("statistics")]
     [HasPermission(PermissionCodes.DonationsView)]
     [ProducesResponseType(typeof(ApiResponse<DonationStatisticsResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetStatisticsAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetDonationStatisticsQuery(), cancellationToken));
+    public async Task<IActionResult> GetStatisticsAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting donation statistics.");
+
+        var result = await queries.HandleAsync(
+            new GetDonationStatisticsQuery(), cancellationToken);
+
+        logger.LogInformation("Donation statistics loaded successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The CSV export.
@@ -69,16 +89,34 @@ public sealed class DonationsController(
     [HasPermission(PermissionCodes.DonationsExport)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] DonationSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportDonationsQuery(filter), cancellationToken));
+        [FromQuery] DonationSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting donations.");
+
+        var result = await queries.HandleAsync(
+            new ExportDonationsQuery(filter), cancellationToken);
+
+        logger.LogInformation("Donation export request completed.");
+
+        return FileFromResult(result);
+    }
 
     /// <summary>One donation in full, with its receipts, refunds and chargebacks.</summary>
     [HttpGet("{id:guid}", Name = nameof(GetDonationAsync))]
     [HasPermission(PermissionCodes.DonationsView)]
     [ProducesResponseType(typeof(ApiResponse<DonationDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDonationAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetDonationQuery(id), cancellationToken));
+    public async Task<IActionResult> GetDonationAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting donation details.");
+
+        var result = await queries.HandleAsync(
+            new GetDonationQuery(id), cancellationToken);
+
+        logger.LogInformation("Donation detail request completed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Records a gift taken outside the gateway: a cheque, a bank transfer, cash at an event.
@@ -93,8 +131,12 @@ public sealed class DonationsController(
     public async Task<IActionResult> RecordOfflineAsync(
         [FromBody] RecordOfflineDonationRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Record offline donation action started.");
+
         var result = await donations.HandleAsync(
             new RecordOfflineDonationCommand(request), cancellationToken);
+
+        logger.LogInformation("Record offline donation action completed.");
 
         return result.IsFailure
             ? FromResult(result)
@@ -113,10 +155,17 @@ public sealed class DonationsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ReconcileAsync(
-        Guid id, [FromBody] ReconcileDonationRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await donations.HandleAsync(new ReconcileDonationCommand(id, request), cancellationToken),
-            "Donation reconciled.");
+        Guid id, [FromBody] ReconcileDonationRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Reconcile donation action started.");
+
+        var result = await donations.HandleAsync(
+            new ReconcileDonationCommand(id, request), cancellationToken);
+
+        logger.LogInformation("Reconcile donation action completed.");
+
+        return FromResult(result, "Donation reconciled.");
+    }
 
     /// <summary>
     /// Issues the tax receipt for a donation - section 24.
@@ -130,10 +179,17 @@ public sealed class DonationsController(
     [ProducesResponseType(typeof(ApiResponse<ReceiptDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> IssueReceiptAsync(
-        Guid id, [FromBody] IssueReceiptRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await receipts.HandleAsync(new IssueReceiptCommand(id, request), cancellationToken),
-            "Receipt issued.");
+        Guid id, [FromBody] IssueReceiptRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Issue receipt action started.");
+
+        var result = await receipts.HandleAsync(
+            new IssueReceiptCommand(id, request), cancellationToken);
+
+        logger.LogInformation("Issue receipt action completed.");
+
+        return FromResult(result, "Receipt issued.");
+    }
 
     /// <summary>
     /// Raises a refund against a donation.
@@ -146,8 +202,15 @@ public sealed class DonationsController(
     [ProducesResponseType(typeof(ApiResponse<RefundCaseDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RequestRefundAsync(
-        Guid id, [FromBody] RequestRefundRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await refunds.HandleAsync(new RequestRefundCommand(id, request), cancellationToken),
-            "Refund requested.");
+        Guid id, [FromBody] RequestRefundRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Request refund action started.");
+
+        var result = await refunds.HandleAsync(
+            new RequestRefundCommand(id, request), cancellationToken);
+
+        logger.LogInformation("Request refund action completed.");
+
+        return FromResult(result, "Refund requested.");
+    }
 }

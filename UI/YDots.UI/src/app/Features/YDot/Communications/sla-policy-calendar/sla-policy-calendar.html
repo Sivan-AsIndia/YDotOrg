@@ -314,6 +314,7 @@
                     [class.field__input--error]="formErrors()['queueOrPriority']"
                     [value]="queueOrPriority()"
                     (change)="queueOrPriority.set($any($event.target).value)">
+                    <option value="" disabled>Select Applicable Queue Or Priority</option>
                     @for (q of queueOptions; track q.label) {
                       <option [value]="q.label" [disabled]="!!q.disabledReason">
                         {{ q.label }}{{ q.disabledReason ? ' — ' + q.disabledReason : '' }}
@@ -343,6 +344,7 @@
                        the IANA key; the offset in the label comes from the catalogue, so it
                        cannot drift the way the four hand-typed offsets here used to. -->
                   <select id="field-timeZone" class="field__input" [value]="timeZone()" (change)="timeZone.set($any($event.target).value)">
+                    <option value="" disabled>Select Time Zone</option>
                     @for (zone of geo.timeZones(); track zone.id) {
                       <option [value]="zone.ianaKey">{{ zone.name }}</option>
                     }

@@ -918,6 +918,7 @@
                         [class.is-invalid]="fieldErrors()['settlementCurrencyCode']"
                         [ngModel]="form().settlementCurrencyCode"
                         (ngModelChange)="patch('settlementCurrencyCode', $event)">
+                      <option value="" disabled>Select Settlement Currency</option>
                   @for (currency of currencies; track currency) {
                     <option [value]="currency">{{ currency }}</option>
                   }

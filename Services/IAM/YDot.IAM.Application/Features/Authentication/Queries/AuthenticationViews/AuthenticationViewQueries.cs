@@ -1,10 +1,11 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.Common.Settings;
 using YDot.IAM.Application.Features.Authentication.DTOs;
 using YDot.IAM.Application.Features.Authentication.Mappings;
-using Microsoft.Extensions.Options;
 
 namespace YDot.IAM.Application.Features.Authentication.Queries.AuthenticationViews;
 
@@ -31,7 +32,8 @@ public sealed class AuthenticationViewQueryHandler(
     IBusinessUnitRepository businessUnits,
     ITenantContext tenantContext,
     IOptions<SecuritySettings> securityOptions,
-    IOptions<TenancySettings> tenancyOptions)
+    IOptions<TenancySettings> tenancyOptions,
+    ILogger<AuthenticationViewQueryHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
     private readonly TenancySettings _tenancy = tenancyOptions.Value;
@@ -41,9 +43,13 @@ public sealed class AuthenticationViewQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Resolving authentication tenant.");
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Authentication tenant resolution failed because the platform is not configured.");
+
             return Result.Failure<TenantResolutionResponse>(
                 Error.Dependency("The platform is not configured."));
         }
@@ -55,6 +61,8 @@ public sealed class AuthenticationViewQueryHandler(
 
         if (string.IsNullOrWhiteSpace(hostName))
         {
+            logger.LogDebug("No host name was provided. Resolving to the platform host.");
+
             return Result.Success(
                 AuthenticationMappingConfig.ToResolutionResponse(null, businessUnit, isPlatformHost: true));
         }
@@ -67,11 +75,22 @@ public sealed class AuthenticationViewQueryHandler(
 
         if (isPlatformHost)
         {
+            logger.LogInformation("Host resolved as the platform host.");
+
             return Result.Success(
                 AuthenticationMappingConfig.ToResolutionResponse(null, businessUnit, isPlatformHost: true));
         }
 
         var tenant = await tenants.ResolveByHostAsync(normalised, cancellationToken);
+
+        if (tenant is null)
+        {
+            logger.LogInformation("No tenant was resolved for the supplied host.");
+        }
+        else
+        {
+            logger.LogInformation("Authentication tenant resolved successfully.");
+        }
 
         // An unrecognised host is NOT an error and NOT a guess. It resolves to nothing, and
         // the client shows the platform sign-in page. Falling back to "the first Organisation"
@@ -90,14 +109,22 @@ public sealed class AuthenticationViewQueryHandler(
     public async Task<Result<PasswordPolicyResponse>> HandleAsync(
         GetPasswordPolicyQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving authentication password policy.");
+
         int? tenantMinimum = null;
 
         if (tenantContext.TenantId.HasValue)
         {
+            logger.LogInformation("Resolving tenant-specific password policy.");
+
             var tenant = await tenants.GetByIdAsync(tenantContext.TenantId.Value, cancellationToken);
             tenantMinimum = tenant?.PasswordMinimumLength;
         }
 
-        return Result.Success(_security.ToPolicyResponse(tenantMinimum));
+        var policy = _security.ToPolicyResponse(tenantMinimum);
+
+        logger.LogInformation("Authentication password policy retrieved.");
+
+        return Result.Success(policy);
     }
 }

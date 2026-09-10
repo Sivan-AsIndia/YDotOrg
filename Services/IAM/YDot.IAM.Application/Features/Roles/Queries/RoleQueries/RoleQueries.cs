@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -37,14 +38,21 @@ public sealed class RoleQueryHandler(
     IExportService exports,
     ITokenHasher tokenHasher,
     IAuditService audit,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<RoleQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<RoleListItemResponse>>> HandleAsync(
         SearchRolesQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchAsync(query.Filter, cancellationToken));
+        logger.LogInformation("Searching roles.");
+
+        var result = await readService.SearchAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation("Role search completed successfully. TotalCount {TotalCount}.", result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<RoleDetailResponse>> HandleAsync(
@@ -52,24 +60,45 @@ public sealed class RoleQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving role detail. RoleId {RoleId}.", query.RoleId);
+
         var detail = await readService.GetDetailAsync(query.RoleId, cancellationToken);
 
-        return detail is null
-            ? Result.Failure<RoleDetailResponse>(Error.NotFound("That role was not found."))
-            : Result.Success(detail);
+        if (detail is null)
+        {
+            logger.LogWarning("Role detail could not be retrieved because RoleId {RoleId} was not found.", query.RoleId);
+            return Result.Failure<RoleDetailResponse>(Error.NotFound("That role was not found."));
+        }
+
+        logger.LogInformation("Role detail retrieved successfully. RoleId {RoleId}.", query.RoleId);
+
+        return Result.Success(detail);
     }
 
     public async Task<Result<IReadOnlyList<RoleLookupResponse>>> HandleAsync(
-        LookupRolesQuery query, CancellationToken cancellationToken) =>
-        Result.Success(await readService.LookupAsync(cancellationToken));
+        LookupRolesQuery query, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Retrieving role lookup options.");
+
+        var roles = await readService.LookupAsync(cancellationToken);
+
+        logger.LogInformation("Role lookup options retrieved successfully. Count {Count}.", roles.Count);
+
+        return Result.Success(roles);
+    }
 
     public async Task<Result<PagedResponse<RoleMemberResponse>>> HandleAsync(
         GetRoleMembersQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(
-            await readService.GetMembersAsync(query.RoleId, query.Pagination, cancellationToken));
+        logger.LogInformation("Retrieving role members. RoleId {RoleId}, Page {Page}.", query.RoleId, query.Pagination.Page);
+
+        var result = await readService.GetMembersAsync(query.RoleId, query.Pagination, cancellationToken);
+
+        logger.LogInformation("Role members retrieved successfully. RoleId {RoleId}, TotalCount {TotalCount}.", query.RoleId, result.TotalCount);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<PermissionMatrixResponse>> HandleAsync(
@@ -77,7 +106,13 @@ public sealed class RoleQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.GetPermissionMatrixAsync(query.RoleId, cancellationToken));
+        logger.LogInformation("Retrieving permission matrix. RoleId {RoleId}.", query.RoleId);
+
+        var result = await readService.GetPermissionMatrixAsync(query.RoleId, cancellationToken);
+
+        logger.LogInformation("Permission matrix retrieved successfully. RoleId {RoleId}.", query.RoleId);
+
+        return Result.Success(result);
     }
 
     public async Task<Result<PagedResponse<PermissionListItemResponse>>> HandleAsync(
@@ -85,7 +120,13 @@ public sealed class RoleQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchPermissionsAsync(query.Filter, cancellationToken));
+        logger.LogInformation("Searching permissions.");
+
+        var result = await readService.SearchPermissionsAsync(query.Filter, cancellationToken);
+
+        logger.LogInformation("Permission search completed successfully. TotalCount {TotalCount}.", result.TotalCount);
+
+        return Result.Success(result);
     }
 
     /// <summary>
@@ -99,6 +140,8 @@ public sealed class RoleQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Starting role catalogue export.");
+
         var filter = query.Filter;
         filter.PageSize = 100;
         filter.Page = 1;
@@ -111,6 +154,8 @@ public sealed class RoleQueryHandler(
         do
         {
             page = await readService.SearchAsync(filter, cancellationToken);
+
+            logger.LogInformation("Retrieved role export page {Page} of {TotalPages}. RowCount {RowCount}.", filter.Page, page.TotalPages, page.Items.Count);
 
             rows.AddRange(page.Items.Select(role => new RoleExportRow(
                 role.Code,
@@ -137,6 +182,8 @@ public sealed class RoleQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Role catalogue export completed successfully. RowCount {RowCount}.", rows.Count);
 
         return Result.Success(file);
     }

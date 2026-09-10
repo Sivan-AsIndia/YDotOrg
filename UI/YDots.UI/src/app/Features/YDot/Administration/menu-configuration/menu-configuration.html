@@ -1,0 +1,451 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+<div class="container-fluid px-4 py-3">
+<div class="mc-page" [attr.data-mode]="mode()">
+
+  <!-- ============ HEADER ============ -->
+  <header class="mc-header">
+    <div class="mc-header-text">
+      <h1 class="mc-title">Menu configuration</h1>
+      <p class="mc-subtitle">
+        Build the navigation, decide what this organisation uses, and choose what each role sees.
+      </p>
+    </div>
+
+    @if (canManageStructure()) {
+      <button type="button" class="btn btn-primary mc-add-top" (click)="openCreator(null)">
+        <i class="ri-add-line" aria-hidden="true"></i> Add menu
+      </button>
+    }
+  </header>
+
+  <!-- ============ THE RULE, STATED ONCE ============
+       Everybody who opens this screen eventually asks the same two questions - "why can they
+       still reach it" and "why can they not see it" - so both answers are on the page rather
+       than in a tooltip somebody has to find. -->
+  <aside class="mc-explainer" role="note">
+    <i class="ri-information-line" aria-hidden="true"></i>
+    <div>
+      <p>
+        What somebody sees is the overlap of four things: <strong>what the product ships</strong>,
+        <strong>what this organisation switches on</strong>, <strong>what their role is given</strong>,
+        and <strong>what their permissions allow</strong>.
+      </p>
+      <p class="mc-explainer-warn">
+        Hiding a menu item tidies the navigation — it does not grant or remove access, which is
+        checked on every request regardless.
+      </p>
+    </div>
+  </aside>
+
+  <!-- ============ MODE SWITCH + TOOLBAR ============ -->
+  <div class="mc-toolbar">
+    <div class="mc-modes" role="tablist" aria-label="What to configure">
+      <button type="button" role="tab" class="mc-mode" [class.is-active]="mode() === 'organisation'"
+              [attr.aria-selected]="mode() === 'organisation'" (click)="setMode('organisation')">
+        <i class="ri-building-line" aria-hidden="true"></i>
+        This organisation
+        <span class="mc-mode-count">{{ enabledCount() }}/{{ totalCount() }}</span>
+      </button>
+
+      <button type="button" role="tab" class="mc-mode" [class.is-active]="mode() === 'roles'"
+              [attr.aria-selected]="mode() === 'roles'" (click)="setMode('roles')">
+        <i class="ri-shield-user-line" aria-hidden="true"></i>
+        Role visibility
+        @if (selectedRoleId()) { <span class="mc-mode-count">{{ mappedCount() }}</span> }
+      </button>
+    </div>
+
+    <div class="mc-toolbar-right">
+      @if (mode() === 'roles') {
+        <select class="form-select form-select-sm mc-role-select" aria-label="Role"
+                [ngModel]="selectedRoleId()" (ngModelChange)="onRoleSelected($event)">
+          <option value="">Choose a role…</option>
+          @for (role of roles(); track role.id) {
+            <option [value]="role.id">{{ role.name }}</option>
+          }
+        </select>
+      }
+
+      <div class="mc-search">
+        <i class="ri-search-line" aria-hidden="true"></i>
+        <input type="search" class="form-control form-control-sm"
+               placeholder="Search menu, route or permission…"
+               [ngModel]="search()" (ngModelChange)="search.set($event)"
+               aria-label="Search the menu" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MESSAGES ============ -->
+  @if (errorMessage()) {
+    <div class="alert alert-danger mc-alert" role="alert">
+      <span>{{ errorMessage() }}</span>
+      @if (staleData()) {
+        <button type="button" class="btn btn-sm btn-outline-danger" (click)="load()">Reload</button>
+      }
+    </div>
+  }
+
+  @if (loading()) {
+    <p class="mc-state">Loading the menu…</p>
+  } @else if (loadFailed()) {
+    <div class="mc-state mc-state-error">
+      <p>The menu could not be loaded.</p>
+      <button type="button" class="btn btn-sm btn-outline-secondary" (click)="load()">Try again</button>
+    </div>
+  } @else {
+
+  <!-- ============ BODY: TREE + INSPECTOR ============ -->
+  <div class="mc-body" [class.has-inspector]="draft() !== null">
+
+    <section class="mc-tree" aria-label="Menu structure">
+
+      <!-- Column headings, so the right-hand control is labelled rather than a bare switch. -->
+      <div class="mc-tree-head">
+        <span class="mc-th-name">Menu item</span>
+        <span class="mc-th-meta">Route &amp; permission</span>
+        <span class="mc-th-action">
+          @if (mode() === 'organisation') { Used here } @else { Visible to role }
+        </span>
+      </div>
+
+      @if (mode() === 'roles' && !selectedRoleId()) {
+        <p class="mc-state">Choose a role to see and change what it can reach.</p>
+      } @else if (mode() === 'roles' && loadingRoleMapping()) {
+        <p class="mc-state">Loading {{ selectedRoleName() }}…</p>
+      } @else {
+
+        @for (row of rows(); track trackRow($index, row)) {
+          <div class="mc-row" [attr.data-depth]="row.depth"
+               [class.is-off]="mode() === 'organisation' && !isEnabled(row.id)"
+               [class.is-selected]="draft()?.id === row.id">
+
+            <!-- ---- Name, indented by depth ---- -->
+            <div class="mc-cell-name" [style.padding-inline-start.rem]="row.depth * 1.5">
+              @if (row.hasChildren) {
+                <button type="button" class="mc-twisty" (click)="toggleExpanded(row.id)"
+                        [attr.aria-expanded]="isExpanded(row.id)"
+                        [attr.aria-label]="(isExpanded(row.id) ? 'Collapse ' : 'Expand ') + pendingName(row.node)">
+                  <i [class]="isExpanded(row.id) ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'"></i>
+                </button>
+              } @else {
+                <span class="mc-twisty mc-twisty-empty" aria-hidden="true"></span>
+              }
+
+              <!-- ICONS ONLY WHERE THE SIDEBAR DRAWS ONE. A child row showing an icon here
+                   that never appears in the real menu would teach the wrong thing. -->
+              @if (row.depth === 0) {
+                <span class="mc-row-icon" aria-hidden="true">
+                  @if (iconClassFor(row.node)) { <i [class]="iconClassFor(row.node)"></i> }
+                </span>
+              }
+
+              <span class="mc-row-label">
+                <span class="mc-row-name">{{ pendingName(row.node) }}</span>
+
+                <span class="mc-row-tags">
+                  <span class="mc-tag mc-tag-level">{{ levelLabel(row.node.level) }}</span>
+
+                  @if (row.node.isOrganisationOwned) {
+                    <span class="mc-tag mc-tag-own"
+                          title="Your organisation added this item. You can edit or delete it here.">
+                      Yours
+                    </span>
+                  }
+
+                  @if (hasOverride(row.node)) {
+                    <span class="mc-tag mc-tag-custom"
+                          title="Customised for this organisation. The product's own name, icon and order are unchanged.">
+                      Customised
+                    </span>
+                  }
+
+                  @if (row.node.isMandatory) {
+                    <!-- WAS "Always on", WHICH SAID NOTHING ABOUT WHY. It is part of the product
+                         rather than a preference: turn the dashboard off and people have nowhere
+                         to land after signing in. -->
+                    <span class="mc-tag mc-tag-required"
+                          title="Part of the product. People need it to sign in and reach their own account, so it cannot be switched off.">
+                      Required
+                    </span>
+                  }
+                </span>
+              </span>
+            </div>
+
+            <!-- ---- Route and permission ---- -->
+            <div class="mc-cell-meta">
+              @if (row.node.route) {
+                <code class="mc-route">{{ row.node.route }}</code>
+              } @else {
+                <span class="mc-meta-muted">Opens its children</span>
+              }
+
+              @if (row.node.requiredPermissionCode) {
+                <code class="mc-perm" title="Only people whose role holds this permission ever see the item.">
+                  {{ row.node.requiredPermissionCode }}
+                </code>
+              }
+            </div>
+
+            <!-- ---- The control, which is what the mode changes ---- -->
+            <div class="mc-cell-action">
+
+              @if (mode() === 'organisation') {
+                @if (row.node.isMandatory) {
+                  <span class="mc-locked" title="Required by the product — it cannot be switched off.">
+                    <i class="ri-lock-line" aria-hidden="true"></i> Required
+                  </span>
+                } @else {
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" [checked]="isEnabled(row.id)"
+                           [disabled]="!canConfigure()" (change)="toggleEnabled(row.id)"
+                           [attr.aria-label]="'Use ' + pendingName(row.node) + ' in this organisation'"
+                           title="On means the item exists for this organisation. Off removes it from every menu here, whatever any role is given." />
+                  </div>
+                }
+              } @else {
+                @if (!isEnabled(row.id)) {
+                  <!-- WAS "Off for this organisation", which read as a state of the switch beside
+                       it. It is a state of the OTHER mode, and naming it is the whole point. -->
+                  <span class="mc-hidden-org"
+                        title="Switched off under &quot;This organisation&quot;. Your mapping is saved and takes effect the moment it is switched back on.">
+                    <i class="ri-eye-off-line" aria-hidden="true"></i> Hidden org-wide
+                  </span>
+                }
+
+                @if (!isPermitted(row.id)) {
+                  <span class="mc-blocked"
+                        title="This role does not hold the permission the item needs, so mapping it would show nobody anything. Grant the permission on Roles and Permissions first.">
+                    <i class="ri-forbid-2-line" aria-hidden="true"></i> No permission
+                  </span>
+                }
+
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" [checked]="isMapped(row.id)"
+                         [disabled]="!canMapRoles() || !isPermitted(row.id)"
+                         (change)="toggleMapped(row.id)"
+                         [attr.aria-label]="'Show ' + pendingName(row.node) + ' to ' + selectedRoleName()" />
+                </div>
+
+                @if (row.depth === 0 && row.node.route) {
+                  <button type="button" class="mc-landing" [class.is-on]="landingMenuId() === row.id"
+                          (click)="setLanding(row.id)"
+                          title="Where this role lands after signing in.">
+                    <i class="ri-home-4-line" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+
+              <!-- ---- Row actions ---- -->
+              @if (mode() === 'organisation') {
+                <div class="mc-row-actions">
+                  <button type="button" class="mc-icon-btn" (click)="move(row.id, -1)"
+                          [disabled]="!canConfigure()" title="Move up" aria-label="Move up">
+                    <i class="ri-arrow-up-line"></i>
+                  </button>
+                  <button type="button" class="mc-icon-btn" (click)="move(row.id, 1)"
+                          [disabled]="!canConfigure()" title="Move down" aria-label="Move down">
+                    <i class="ri-arrow-down-line"></i>
+                  </button>
+                  <button type="button" class="mc-icon-btn" (click)="openEditor(row.node)"
+                          title="Rename, change the icon, route or permission" aria-label="Edit">
+                    <i class="ri-pencil-line"></i>
+                  </button>
+
+                  @if (canManageStructure() && childLevel(row.node.level)) {
+                    <button type="button" class="mc-icon-btn" (click)="openCreator(row.node)"
+                            [title]="'Add a ' + levelLabel(childLevel(row.node.level)) + ' under ' + pendingName(row.node)"
+                            aria-label="Add child item">
+                      <i class="ri-add-line"></i>
+                    </button>
+                  }
+
+                  @if (canManageStructure() && row.node.isOrganisationOwned) {
+                    <button type="button" class="mc-icon-btn mc-icon-danger"
+                            (click)="askDelete(row.id)" title="Delete this item" aria-label="Delete">
+                      <i class="ri-delete-bin-line"></i>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (rows().length === 0) {
+          <p class="mc-state">Nothing matches “{{ search() }}”.</p>
+        }
+      }
+    </section>
+
+    <!-- ============ INSPECTOR ============ -->
+    @if (draft(); as d) {
+      <aside class="mc-inspector" aria-label="Menu item details">
+        <header class="mc-inspector-head">
+          <div>
+            <h2 class="mc-inspector-title">
+              @if (d.kind === 'create') { New {{ levelLabel(d.level) | lowercase }} }
+              @else { Edit menu item }
+            </h2>
+            @if (d.kind === 'edit' && !draftIsOwned()) {
+              <p class="mc-inspector-note">
+                This item is part of the product. Changes here apply to your organisation only —
+                the original is untouched everywhere else.
+              </p>
+            }
+          </div>
+          <button type="button" class="mc-icon-btn" (click)="closeEditor()" aria-label="Close">
+            <i class="ri-close-line"></i>
+          </button>
+        </header>
+
+        <div class="mc-inspector-body">
+
+          @if (d.kind === 'create') {
+            <label class="mc-field">
+              <span class="mc-label">Code <span class="mc-req">*</span></span>
+              <input type="text" class="form-control form-control-sm" maxlength="80"
+                     placeholder="REPORTS_MONTHLY"
+                     [ngModel]="d.code" (ngModelChange)="patchDraft({ code: $event })" />
+              <span class="mc-hint">Upper case, digits, underscores. It never changes and is not shown to anybody.</span>
+            </label>
+          }
+
+          <label class="mc-field">
+            <span class="mc-label">
+              @if (draftIsOwned()) { Name <span class="mc-req">*</span> } @else { Name for this organisation }
+            </span>
+            <input type="text" class="form-control form-control-sm" maxlength="160"
+                   [placeholder]="draftIsOwned() ? 'Monthly reports' : (draftNode()?.catalogueName ?? '')"
+                   [ngModel]="d.name" (ngModelChange)="patchDraft({ name: $event })" />
+            @if (!draftIsOwned()) {
+              <span class="mc-hint">Leave empty to use the product's name: {{ draftNode()?.catalogueName }}</span>
+            }
+          </label>
+
+          <div class="mc-field">
+            <span class="mc-label">Icon</span>
+            <!-- ONLY THE TOP LEVEL DRAWS ONE, and the hint says so rather than letting somebody
+                 choose an icon that will never appear. -->
+            <app-icon-picker
+              [value]="d.icon"
+              [inheritedIcon]="draftIsOwned() ? null : (draftNode()?.resolvedIcon ?? null)"
+              (changed)="patchDraft({ icon: $event })" />
+            @if (d.level !== 'menu') {
+              <span class="mc-hint">Only top-level menus show an icon in the sidebar.</span>
+            }
+          </div>
+
+          <label class="mc-field">
+            <span class="mc-label">Route</span>
+            <input type="text" class="form-control form-control-sm" maxlength="300"
+                   placeholder="/app/…"
+                   [ngModel]="d.route" (ngModelChange)="patchDraft({ route: $event })"
+                   [disabled]="!draftIsOwned()" />
+            <span class="mc-hint">
+              @if (draftIsOwned()) {
+                Leave empty for a heading that only opens its children. A route the application
+                does not have becomes a dead link.
+              } @else {
+                Set by the product and not editable for your organisation.
+              }
+            </span>
+          </label>
+
+          <label class="mc-field">
+            <span class="mc-label">Needs permission</span>
+            <select class="form-select form-select-sm"
+                    [ngModel]="d.permission" (ngModelChange)="patchDraft({ permission: $event })"
+                    [disabled]="!draftIsOwned()">
+              <option value="">Select Permission</option>
+              @for (option of permissionOptions(); track option.code) {
+                <option [value]="option.code">{{ option.name }} — {{ option.code }}</option>
+              }
+            </select>
+            <span class="mc-hint">
+              Only people whose role holds it ever see the item. It does not grant anything.
+            </span>
+          </label>
+
+          <label class="mc-field">
+            <span class="mc-label">Position</span>
+            <input type="number" class="form-control form-control-sm" min="0" step="10"
+                   [ngModel]="d.order" (ngModelChange)="patchDraft({ order: asText($event) })" />
+            <span class="mc-hint">Lower numbers come first. The arrows on each row do this for you.</span>
+          </label>
+        </div>
+
+        <footer class="mc-inspector-foot">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="closeEditor()">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-sm btn-primary" (click)="applyEditor()"
+                  [disabled]="savingNode()">
+            @if (savingNode()) { Saving… }
+            @else if (d.kind === 'create') { Add item }
+            @else { Save changes }
+          </button>
+        </footer>
+      </aside>
+    }
+  </div>
+
+  <!-- ============ SAVE BAR ============ -->
+  @if (mode() === 'organisation' && hasConfigurationChanges()) {
+    <div class="mc-savebar" role="status">
+      <span><i class="ri-information-line" aria-hidden="true"></i> Changes are not stored until you save.</span>
+      <div class="mc-savebar-actions">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelConfiguration()"
+                [disabled]="saving()">Discard</button>
+        <button type="button" class="btn btn-sm btn-primary" (click)="saveConfiguration()"
+                [disabled]="saving() || !canConfigure()">
+          @if (saving()) { Saving… } @else { Save changes }
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (mode() === 'roles' && selectedRoleId() && hasMappingChanges()) {
+    <div class="mc-savebar" role="status">
+      <span><i class="ri-information-line" aria-hidden="true"></i>
+        {{ mappedCount() }} item(s) visible to {{ selectedRoleName() }}.</span>
+      <div class="mc-savebar-actions">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelMapping()"
+                [disabled]="saving()">Discard</button>
+        <button type="button" class="btn btn-sm btn-primary" (click)="saveMapping()"
+                [disabled]="saving() || !canMapRoles()">
+          @if (saving()) { Saving… } @else { Save mapping }
+        </button>
+      </div>
+    </div>
+  }
+  }
+
+  <!-- ============ DELETE CONFIRM ============ -->
+  @if (confirmingDelete(); as id) {
+    <div class="mc-modal-backdrop" (click)="cancelDelete()">
+      <div class="mc-modal" role="dialog" aria-modal="true" aria-labelledby="mc-del-title"
+           (click)="$event.stopPropagation()">
+        <h2 class="mc-modal-title" id="mc-del-title">Delete this menu item?</h2>
+        <p class="mc-modal-lead">
+          It disappears from the sidebar for everybody in this organisation. Any role mapping for
+          it goes too. This cannot be undone — switching it off instead is reversible.
+        </p>
+        <div class="mc-modal-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelDelete()">
+            Keep it
+          </button>
+          <button type="button" class="btn btn-sm btn-danger" (click)="confirmDelete()"
+                  [disabled]="savingNode()">
+            @if (savingNode()) { Deleting… } @else { Delete }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+</div>
+</div>
+</main>

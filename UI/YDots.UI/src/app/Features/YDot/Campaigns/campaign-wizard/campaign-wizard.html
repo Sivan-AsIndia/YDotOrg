@@ -286,6 +286,47 @@
                       }
                     </div>
 
+                    <!-- Campaign amount — the fixed figure this campaign is stated at, and the
+                         number a donor is shown the moment they choose it on either donation
+                         form. NOT the fundraising target: that belongs to Target & Budget and is
+                         still collected nowhere.
+
+                         inputmode="decimal" rather than type="number": a number input accepts
+                         "1e5" and "--3" from a keyboard and then reports an empty string for
+                         both, so the value is filtered on the way in instead. -->
+                    <div class="field">
+                      <label class="field-label" for="f-campaign-amount"
+                        >Campaign amount <span class="req" aria-hidden="true">*</span></label
+                      >
+                      <div class="amount-control">
+                        @if (currencyCode()) {
+                          <span class="amount-prefix" aria-hidden="true">{{ currencyCode() }}</span>
+                        }
+                        <input
+                          id="f-campaign-amount"
+                          type="text"
+                          inputmode="decimal"
+                          class="control"
+                          autocomplete="off"
+                          [ngModel]="campaignAmount()"
+                          (ngModelChange)="setCampaignAmount($event)"
+                          [attr.aria-invalid]="wasAttempted(0) && !campaignAmountValid() ? 'true' : null"
+                          placeholder="e.g. 5000.00"
+                        />
+                      </div>
+                      @if (wasAttempted(0) && !campaignAmount().trim()) {
+                        <p class="field-error">Enter Campaign amount.</p>
+                      } @else if (wasAttempted(0) && !campaignAmountValid()) {
+                        <p class="field-error">
+                          Review Campaign amount. It has to be greater than zero.
+                        </p>
+                      } @else {
+                        <p class="field-hint">
+                          The amount this campaign is stated at{{ currencyCode() ? ', in ' + currencyCode() : '' }}. Donors see it when they choose this campaign.
+                        </p>
+                      }
+                    </div>
+
                     <!-- Purpose — rich-text editor with character counter, 10–1,000 -->
                     <div class="field field-wide">
                       <label class="field-label" for="f-purpose"
@@ -1285,6 +1326,10 @@
                           <dd class="mono">{{ campaignCode() || '—' }}</dd>
                         </div>
                         <div>
+                          <dt>Campaign amount</dt>
+                          <dd class="mono">{{ campaignAmountLabel() }}</dd>
+                        </div>
+                        <div>
                           <dt>Purpose</dt>
                           <dd>{{ purpose().trim() || '—' }}</dd>
                         </div>
@@ -1472,6 +1517,10 @@
                 <div>
                   <dt>Campaign Code</dt>
                   <dd class="mono">{{ campaignCode() || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Campaign Amount</dt>
+                  <dd class="mono">{{ campaignAmountLabel() }}</dd>
                 </div>
                 <div>
                   <dt>Owner</dt>

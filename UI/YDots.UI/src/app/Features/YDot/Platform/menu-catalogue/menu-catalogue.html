@@ -240,6 +240,7 @@
                   <label class="form-label small" for="mc-level">Level</label>
                   <select id="mc-level" class="form-select" [disabled]="!isCreating()"
                           [ngModel]="form().level" (ngModelChange)="patch('level', $event)">
+                    <option value="" disabled>Select Level</option>
                     <option value="menu">Menu</option>
                     <option value="subMenu">Submenu</option>
                     <option value="childSubMenu">Child submenu</option>
@@ -251,11 +252,12 @@
                   <label class="form-label small" for="mc-parent">Sits under</label>
                   <select id="mc-parent" class="form-select" [disabled]="!isCreating()"
                           [ngModel]="form().parentMenuId" (ngModelChange)="patch('parentMenuId', $event)">
-                    <option value="">Nothing — this is a top-level menu</option>
+                    <option value="">Select Parent Menu</option>
                     @for (option of parentOptions(); track option.id) {
                       <option [value]="option.id">{{ option.label }}</option>
                     }
                   </select>
+                  <small class="text-muted">Leave unselected for a top-level menu.</small>
                 </div>
 
                 <div class="col-md-4">
@@ -334,6 +336,7 @@
                     <label class="form-label small" for="mc-status">Status</label>
                     <select id="mc-status" class="form-select"
                             [ngModel]="form().status" (ngModelChange)="patch('status', $event)">
+                      <option value="" disabled>Select Status</option>
                       <option value="active">Active</option>
                       <option value="draft">Draft</option>
                       <option value="hidden">Hidden</option>

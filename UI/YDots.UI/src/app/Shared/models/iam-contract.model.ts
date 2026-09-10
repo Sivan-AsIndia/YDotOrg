@@ -1183,6 +1183,13 @@ export interface MenuDefinitionResponse {
   opensInNewTab?: boolean;
   badgeKey?: string | null;
   version?: number;
+
+  /** Null for a platform catalogue row; the organisation that added it otherwise. */
+  ownerTenantId?: string | null;
+
+  /** False when a person added this node rather than the shipped catalogue. */
+  isSystemDefined?: boolean;
+
   children?: MenuDefinitionResponse[] | null;
 }
 
@@ -2345,6 +2352,16 @@ export interface TenantMenuNodeResponse {
   displayNameOverride?: string | null;
   iconOverride?: string | null;
   displayOrderOverride?: number | null;
+
+  /** True when this organisation added the node itself and may edit or delete it. */
+  isOrganisationOwned?: boolean;
+
+  /** Concurrency stamp, required to edit or delete an organisation-owned node. */
+  version?: number;
+
+  /** The node's parent, so the editor can re-parent without walking the tree. */
+  parentMenuDefinitionId?: string | null;
+
   children?: TenantMenuNodeResponse[] | null;
 }
 

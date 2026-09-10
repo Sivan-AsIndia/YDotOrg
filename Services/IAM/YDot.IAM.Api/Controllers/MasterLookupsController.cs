@@ -48,7 +48,9 @@ namespace YDot.IAM.Api.Controllers;
 [Route("api/v1/masters/lookups")]
 [Authorize(Policy = PolicyNames.ActiveUserOnly)]
 [AllowedWhileOnboarding]
-public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : ApiControllerBase
+public sealed class MasterLookupsController(
+    GlobalMasterQueryHandler queries,
+    ILogger<MasterLookupsController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Every active country, each carrying its default currency and primary time zone.
@@ -59,8 +61,17 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     /// </summary>
     [HttpGet("countries")]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<CountryLookupResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetCountriesAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupCountriesQuery(), cancellationToken));
+    public async Task<IActionResult> GetCountriesAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting country lookup.");
+
+        var result = await queries.HandleAsync(new LookupCountriesQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Country lookup failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The active states beneath one country — the second step of the cascade.
@@ -72,8 +83,17 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     [HttpGet("states")]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<MasterLookupResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStatesAsync(
-        [FromQuery] Guid countryId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupStateProvincesQuery(countryId), cancellationToken));
+        [FromQuery] Guid countryId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting state lookup. CountryId: {CountryId}", countryId);
+
+        var result = await queries.HandleAsync(new LookupStateProvincesQuery(countryId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("State lookup failed. CountryId: {CountryId}", countryId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The active cities — the third step of the cascade.
@@ -88,9 +108,24 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     public async Task<IActionResult> GetCitiesAsync(
         [FromQuery] Guid? countryId,
         [FromQuery] Guid? stateProvinceId,
-        CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new LookupGeoCitiesQuery(countryId, stateProvinceId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Getting city lookup. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}",
+            countryId, stateProvinceId);
+
+        var result = await queries.HandleAsync(
+            new LookupGeoCitiesQuery(countryId, stateProvinceId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning(
+                "City lookup failed. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}",
+                countryId, stateProvinceId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The active currencies, with one country's default flagged and sorted first.
@@ -102,8 +137,17 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     [HttpGet("currencies")]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<CurrencyLookupResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCurrenciesAsync(
-        [FromQuery] Guid? countryId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupCurrenciesQuery(countryId), cancellationToken));
+        [FromQuery] Guid? countryId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting currency lookup. CountryId: {CountryId}", countryId);
+
+        var result = await queries.HandleAsync(new LookupCurrenciesQuery(countryId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Currency lookup failed. CountryId: {CountryId}", countryId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The active time zones, narrowed to a country's own when it has any mapped.
@@ -130,8 +174,17 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     [HttpGet("timezones")]
     [ProducesResponseType(typeof(ApiResponse<TimeZoneLookupListResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTimeZonesAsync(
-        [FromQuery] Guid? countryId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupTimeZonesQuery(countryId), cancellationToken));
+        [FromQuery] Guid? countryId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting time zone lookup. CountryId: {CountryId}", countryId);
+
+        var result = await queries.HandleAsync(new LookupTimeZonesQuery(countryId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Time zone lookup failed. CountryId: {CountryId}", countryId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The active languages, narrowed to a country's own when it has any mapped.
@@ -155,8 +208,17 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     [HttpGet("languages")]
     [ProducesResponseType(typeof(ApiResponse<LanguageLookupListResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLanguagesAsync(
-        [FromQuery] Guid? countryId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new LookupLanguagesQuery(countryId), cancellationToken));
+        [FromQuery] Guid? countryId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting language lookup. CountryId: {CountryId}", countryId);
+
+        var result = await queries.HandleAsync(new LookupLanguagesQuery(countryId), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Language lookup failed. CountryId: {CountryId}", countryId);
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Every picker above in one payload, for a form opening cold.
@@ -171,7 +233,22 @@ public sealed class MasterLookupsController(GlobalMasterQueryHandler queries) : 
     public async Task<IActionResult> GetGeoAsync(
         [FromQuery] Guid? countryId,
         [FromQuery] Guid? stateProvinceId,
-        CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetGeoLookupQuery(countryId, stateProvinceId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Getting geo lookup. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}",
+            countryId, stateProvinceId);
+
+        var result = await queries.HandleAsync(
+            new GetGeoLookupQuery(countryId, stateProvinceId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning(
+                "Geo lookup failed. CountryId: {CountryId}, StateProvinceId: {StateProvinceId}",
+                countryId, stateProvinceId);
+        }
+
+        return FromResult(result);
+    }
 }

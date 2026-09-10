@@ -112,7 +112,7 @@ export class CreateUserComponent implements OnInit {
   // ---- The form ------------------------------------------------------------------------------
   readonly form = signal({
     // Identity
-    accountCategory: 'Employee',
+    accountCategory: '',
     title: '',
     firstName: '',
     middleName: '',
@@ -121,12 +121,12 @@ export class CreateUserComponent implements OnInit {
     preferredName: '',
     email: '',
     username: '',
-    mobileCountryCode: '+91',
+    mobileCountryCode: '',
     mobileNumber: '',
     employeeNumber: '',
 
     // Organisation
-    engagementType: 'FullTime',
+    engagementType: '',
     organisationUnitId: '',
     departmentId: '',
     designation: '',
@@ -136,13 +136,13 @@ export class CreateUserComponent implements OnInit {
 
     // Access
     primaryRoleId: '',
-    dataScopeType: 'Organisation',
+    dataScopeType: '',
     accessStartsAt: new Date().toISOString().slice(0, 10),
     accessEndsAt: '',
     businessJustification: '',
 
     // Security
-    mfaRequirement: 'Optional',
+    mfaRequirement: '',
     sendInvitationNow: true,
     welcomeMessage: '',
   });
@@ -296,12 +296,16 @@ export class CreateUserComponent implements OnInit {
     const f = this.form();
 
     const core = Boolean(
+      f.accountCategory &&
       f.firstName.trim() && f.lastName.trim() && f.displayName.trim() && f.email.trim() && f.username.trim(),
     );
 
     const conditional =
       (!this.employeeNumberRequired() || Boolean(f.employeeNumber.trim())) &&
-      (!this.mobileRequired() || Boolean(f.mobileNumber.trim()));
+      (!this.mobileRequired() || Boolean(f.mobileNumber.trim())) &&
+      // A mobile number without its country code is the exact payload the API rejects, and the
+      // code is no longer defaulted to +91 - so it has to be asked for once a number is typed.
+      (!f.mobileNumber.trim() || Boolean(f.mobileCountryCode));
 
     return core && conditional;
   });
@@ -320,17 +324,25 @@ export class CreateUserComponent implements OnInit {
    * beside the empty list says where to create them, but nobody should be unable to invite their
    * first colleague for want of an org chart.
    */
-  readonly organisationComplete = computed(() => true);
+  readonly organisationComplete = computed(() => Boolean(this.form().engagementType));
 
   readonly accessComplete = computed(() => {
     const f = this.form();
     // The API insists on a justification of at least ten characters: granting access without a
     // recorded reason is exactly what an access review later has no answer for.
-    return Boolean(f.primaryRoleId && f.businessJustification.trim().length >= 10);
+    return Boolean(f.primaryRoleId && f.dataScopeType && f.businessJustification.trim().length >= 10);
   });
 
+  /** Security step: two-step verification is an enum the API requires, so it must be chosen. */
+  readonly securityComplete = computed(() => Boolean(this.form().mfaRequirement));
+
   readonly canSubmit = computed(
-    () => this.identityComplete() && this.organisationComplete() && this.accessComplete() && !this.submitting(),
+    () =>
+      this.identityComplete() &&
+      this.organisationComplete() &&
+      this.accessComplete() &&
+      this.securityComplete() &&
+      !this.submitting(),
   );
 
   // =========================================================================================
@@ -349,12 +361,9 @@ export class CreateUserComponent implements OnInit {
         this.view.set(reference);
         this.enums.set(enums);
 
-        // Defaults come from what the server actually offers, rather than from strings guessed
-        // here that may not exist in this Organisation.
-        this.form.update((current) => ({
-          ...current,
-          organisationUnitId: reference.organisationUnits?.[0]?.id ?? '',
-        }));
+        // Organisation unit deliberately keeps its "Select Organisation Unit" placeholder
+        // rather than pre-picking the first unit: the field is optional and is sent as null
+        // when left blank, so a guessed default only risks filing someone under the wrong unit.
       },
       error: (error: Error) => {
         this.loading.set(false);
@@ -507,6 +516,7 @@ export class CreateUserComponent implements OnInit {
       case 0: return this.identityComplete();
       case 1: return this.organisationComplete();
       case 2: return this.accessComplete();
+      case 3: return this.securityComplete();
       default: return true;
     }
   }
@@ -530,6 +540,11 @@ export class CreateUserComponent implements OnInit {
       case 'displayName': return !f.displayName.trim();
       case 'email': return !f.email.trim();
       case 'username': return !f.username.trim();
+      case 'accountCategory': return !f.accountCategory;
+      case 'engagementType': return !f.engagementType;
+      case 'dataScopeType': return !f.dataScopeType;
+      case 'mfaRequirement': return !f.mfaRequirement;
+      case 'mobileCountryCode': return Boolean(f.mobileNumber.trim()) && !f.mobileCountryCode;
       case 'primaryRoleId': return !f.primaryRoleId;
       case 'businessJustification': return f.businessJustification.trim().length < 10;
       // Only invalid when the chosen account category actually demands them.

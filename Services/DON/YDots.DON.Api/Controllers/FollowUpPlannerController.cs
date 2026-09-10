@@ -18,6 +18,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class FollowUpPlannerController : ApiControllerBase
 {
+    private readonly ILogger<FollowUpPlannerController> _logger;
+
+    public FollowUpPlannerController(ILogger<FollowUpPlannerController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the planned follow-ups plus every catalogue the form needs.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.FollowUpPlannerView)]
@@ -27,8 +34,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
     public async Task<IActionResult> GetPlanner(
         [FromQuery] FollowUpSearchFilter filter,
         [FromServices] FollowUpPlannerQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetFollowUpPlannerQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up planner retrieval started.");
+
+        var result = await handler.HandleAsync(new GetFollowUpPlannerQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up planner retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up planner retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// GET the consent warning for a donor or lead. The screen calls this as soon as a record is
@@ -43,8 +65,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         [FromQuery] Guid? donorId,
         [FromQuery] Guid? leadId,
         [FromServices] FollowUpPlannerQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetConsentWarningQuery(donorId, leadId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up consent warning retrieval started.");
+
+        var result = await handler.HandleAsync(new GetConsentWarningQuery(donorId, leadId), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up consent warning retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up consent warning retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET one follow-up.</summary>
     [HttpGet("{id:guid}", Name = "GetFollowUpById")]
@@ -55,8 +92,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] FollowUpPlannerQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetFollowUpDetailQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up detail retrieval started. FollowUpId={FollowUpId}", id);
+
+        var result = await handler.HandleAsync(new GetFollowUpDetailQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up detail retrieval completed successfully. FollowUpId={FollowUpId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up detail retrieval failed. FollowUpId={FollowUpId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// POST schedule follow-up. The primary action. Refused by the server when the chosen
@@ -74,7 +126,18 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         [FromServices] FollowUpCommandHandler handler,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Follow-up scheduling started.");
+
         var result = await handler.HandleAsync(new ScheduleFollowUpCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up scheduling completed successfully. FollowUpId={FollowUpId}", result.Value?.Id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up scheduling failed.");
+        }
 
         return CreatedFromResult(result, "GetFollowUpById", new { id = result.Value?.Id ?? Guid.Empty },
             "The follow-up was scheduled.");
@@ -92,9 +155,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         Guid id,
         [FromBody] AssignFollowUpRequest request,
         [FromServices] FollowUpCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new AssignFollowUpCommand(id, request), cancellationToken),
-            "The follow-up was assigned.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up assignment started. FollowUpId={FollowUpId}", id);
+
+        var result = await handler.HandleAsync(new AssignFollowUpCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up assignment completed successfully. FollowUpId={FollowUpId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up assignment failed. FollowUpId={FollowUpId}", id);
+        }
+
+        return FromResult(result, "The follow-up was assigned.");
+    }
 
     /// <summary>POST mark complete. Also writes the conversation into the donor interaction log.</summary>
     [HttpPost("{id:guid}/mark-complete")]
@@ -108,9 +185,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         Guid id,
         [FromBody] CompleteFollowUpRequest request,
         [FromServices] FollowUpCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CompleteFollowUpCommand(id, request), cancellationToken),
-            "The follow-up was completed.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up completion started. FollowUpId={FollowUpId}", id);
+
+        var result = await handler.HandleAsync(new CompleteFollowUpCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up completion completed successfully. FollowUpId={FollowUpId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up completion failed. FollowUpId={FollowUpId}", id);
+        }
+
+        return FromResult(result, "The follow-up was completed.");
+    }
 
     /// <summary>POST reschedule.</summary>
     [HttpPost("{id:guid}/reschedule")]
@@ -124,9 +215,23 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         Guid id,
         [FromBody] RescheduleFollowUpRequest request,
         [FromServices] FollowUpCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new RescheduleFollowUpCommand(id, request), cancellationToken),
-            "The follow-up was rescheduled.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up rescheduling started. FollowUpId={FollowUpId}", id);
+
+        var result = await handler.HandleAsync(new RescheduleFollowUpCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up rescheduling completed successfully. FollowUpId={FollowUpId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up rescheduling failed. FollowUpId={FollowUpId}", id);
+        }
+
+        return FromResult(result, "The follow-up was rescheduled.");
+    }
 
     /// <summary>POST cancel task. Danger action: named reason required.</summary>
     [HttpPost("{id:guid}/cancel-task")]
@@ -140,7 +245,21 @@ public sealed class FollowUpPlannerController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] FollowUpCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CancelFollowUpCommand(id, request), cancellationToken),
-            "The follow-up was cancelled.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Follow-up cancellation started. FollowUpId={FollowUpId}", id);
+
+        var result = await handler.HandleAsync(new CancelFollowUpCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Follow-up cancellation completed successfully. FollowUpId={FollowUpId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Follow-up cancellation failed. FollowUpId={FollowUpId}", id);
+        }
+
+        return FromResult(result, "The follow-up was cancelled.");
+    }
 }

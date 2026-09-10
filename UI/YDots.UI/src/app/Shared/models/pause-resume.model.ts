@@ -55,6 +55,23 @@ export interface ActionConfig {
   readonly placement: 'primary' | 'danger';
   readonly permissionKey: keyof PauseResumePermissions;
   readonly permissionCode: string;
+
+  /**
+   * The name the SERVER uses for this transition in `CampaignDetail.permittedActions`.
+   *
+   * THE ONLY THING A LIFECYCLE BUTTON MAY BE GATED ON, and adding it here is what let this panel
+   * stop deciding for itself. `permittedActions` folds together three questions no browser can
+   * answer alone - the campaign's status, the permissions on the token, and whether this caller
+   * is independent of whoever created, submitted or requested - and the server recomputes it on
+   * every read. A local permission check answers only the middle one, which is how an Approver
+   * was offered a close approval on their own request and how an Organisation Administrator was
+   * shown a panel with nothing on it.
+   *
+   * Values: Approve, Activate, Pause, Resume, RequestClose, ApproveClose (and the non-lifecycle
+   * View, ViewHistory, Export, Edit, Submit, Delete this panel has no buttons for).
+   */
+  readonly serverAction: string;
+
   /** Campaign lifecycle states this action is compatible with. */
   readonly allowedStates: readonly CampaignStatus[];
   readonly requiresReasonCategory: boolean;

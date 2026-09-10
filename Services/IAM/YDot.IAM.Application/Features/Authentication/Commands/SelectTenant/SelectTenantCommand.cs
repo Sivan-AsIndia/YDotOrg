@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -60,12 +61,15 @@ public sealed class SelectTenantCommandHandler(
     IAuditService audit,
     ICurrentUser currentUser,
     ITenantContext tenantContext,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<SelectTenantCommandHandler> logger)
 {
     public async Task<Result<SelectTenantResponse>> HandleAsync(
         SelectTenantCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Tenant selection started. {UserId} {TenantId} {SessionId}", currentUser.UserId, command.Request.TenantId, currentUser.SessionId);
 
         // ---- Only a global caller may do this ------------------------------------------------
         if (!currentUser.IsSuperAdmin || tenantContext.Scope != AccessScopeType.Global)
@@ -78,23 +82,31 @@ public sealed class SelectTenantCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Tenant selection denied because the caller is not a SuperAdmin in global scope. {UserId} {TenantId}", currentUser.UserId, command.Request.TenantId);
+
             return Result.Failure<SelectTenantResponse>(Error.SuperAdminOnly());
         }
 
         if (currentUser.SessionId is null)
         {
+            logger.LogWarning("Tenant selection failed because the current session is unavailable. {UserId} {TenantId}", currentUser.UserId, command.Request.TenantId);
+
             return Result.Failure<SelectTenantResponse>(Error.SessionExpired());
         }
 
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Tenant selection failed because the platform business unit is not configured. {UserId} {TenantId}", currentUser.UserId, command.Request.TenantId);
+
             return Result.Failure<SelectTenantResponse>(Error.Dependency("The platform is not configured."));
         }
 
         var tenant = await tenants.GetByIdAsync(command.Request.TenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Tenant selection failed because the organisation was not found. {UserId} {TenantId}", currentUser.UserId, command.Request.TenantId);
+
             return Result.Failure<SelectTenantResponse>(Error.TenantNotFound());
         }
 
@@ -103,6 +115,8 @@ public sealed class SelectTenantCommandHandler(
         // there is nothing to operate on.
         if (tenant.Status == TenantStatus.Archived)
         {
+            logger.LogWarning("Tenant selection failed because the organisation is archived. {UserId} {TenantId}", currentUser.UserId, tenant.Id);
+
             return Result.Failure<SelectTenantResponse>(
                 Error.TenantInactive("That organisation is archived and cannot be entered."));
         }
@@ -110,6 +124,8 @@ public sealed class SelectTenantCommandHandler(
         var user = await users.GetWithAccessAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Tenant selection failed because the current user was not found. {UserId} {TenantId}", currentUser.UserId, tenant.Id);
+
             return Result.Failure<SelectTenantResponse>(Error.Unauthorised());
         }
 
@@ -136,6 +152,8 @@ public sealed class SelectTenantCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Tenant selected successfully. {UserId} {TenantId} {SessionId}", currentUser.UserId, tenant.Id, tokens.SessionId);
 
         return Result.Success(new SelectTenantResponse(
             tokens.AccessToken,
@@ -169,6 +187,8 @@ public sealed class SelectTenantCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Exiting tenant scope started. {UserId} {SessionId} {TenantId}", currentUser.UserId, currentUser.SessionId, tenantContext.TenantId);
+
         // Only a global caller has anywhere to go back to. A Tenant user asking to leave their
         // own Organisation is asking for something that does not exist.
         if (!currentUser.IsSuperAdmin || tenantContext.Scope != AccessScopeType.Global)
@@ -181,23 +201,31 @@ public sealed class SelectTenantCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Exit tenant scope denied because the caller is not a SuperAdmin in global scope. {UserId}", currentUser.UserId);
+
             return Result.Failure<SelectTenantResponse>(Error.SuperAdminOnly());
         }
 
         if (currentUser.SessionId is null)
         {
+            logger.LogWarning("Exit tenant scope failed because the current session is unavailable. {UserId}", currentUser.UserId);
+
             return Result.Failure<SelectTenantResponse>(Error.SessionExpired());
         }
 
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Exit tenant scope failed because the platform business unit is not configured. {UserId}", currentUser.UserId);
+
             return Result.Failure<SelectTenantResponse>(Error.Dependency("The platform is not configured."));
         }
 
         var user = await users.GetWithAccessAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Exit tenant scope failed because the current user was not found. {UserId}", currentUser.UserId);
+
             return Result.Failure<SelectTenantResponse>(Error.Unauthorised());
         }
 
@@ -220,6 +248,8 @@ public sealed class SelectTenantCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Tenant scope exited successfully. {UserId} {PreviousTenantId} {SessionId}", currentUser.UserId, previousTenantId, tokens.SessionId);
 
         return Result.Success(new SelectTenantResponse(
             tokens.AccessToken,
@@ -244,12 +274,16 @@ public sealed class SelectTenantCommandHandler(
     {
         if (!currentUser.IsSuperAdmin || tenantContext.Scope != AccessScopeType.Global)
         {
+            logger.LogDebug("Selectable tenants returned empty because caller is not in global scope. {UserId}", currentUser.UserId);
+
             return Result.Success<IReadOnlyList<TenantOptionResponse>>([]);
         }
 
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogWarning("Selectable tenants could not be retrieved because the platform business unit is not configured. {UserId}", currentUser.UserId);
+
             return Result.Success<IReadOnlyList<TenantOptionResponse>>([]);
         }
 

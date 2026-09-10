@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Abstractions.Services;
@@ -56,7 +57,8 @@ public sealed class DonorCommandHandler(
     IOutboxWriter outboxWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IDateTimeProvider clock)
+    IDateTimeProvider clock,
+    ILogger<DonorCommandHandler> logger)
 {
     private const string CreateEndpoint = "POST /api/v1/donors";
 
@@ -64,6 +66,8 @@ public sealed class DonorCommandHandler(
         CreateDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Create donor started.");
+
         var request = command.Request;
 
         // Section 10 idempotency. An importer that retries after a timeout must not create a
@@ -73,11 +77,16 @@ public sealed class DonorCommandHandler(
             var replay = await idempotencyRepository.FindAsync(currentUser.IdempotencyKey, CreateEndpoint, cancellationToken);
             if (replay is not null)
             {
+                logger.LogInformation("Create donor idempotency replay detected for ResourceId {ResourceId}.", replay.ResourceId);
+
                 var existing = await donorRepository.GetByIdAsync(replay.ResourceId, cancellationToken);
                 if (existing is not null)
                 {
+                    logger.LogInformation("Create donor completed through idempotency replay for DonorId {DonorId}.", existing.Id);
                     return Result.Success(BuildDetail(existing));
                 }
+
+                logger.LogWarning("Create donor idempotency record references missing ResourceId {ResourceId}.", replay.ResourceId);
             }
         }
 
@@ -87,6 +96,7 @@ public sealed class DonorCommandHandler(
 
         if (await donorRepository.ExistsByBusinessKeyAsync(businessKey, null, cancellationToken))
         {
+            logger.LogWarning("Create donor failed because a donor with the same business key already exists.");
             return Result.Failure<DonorDetailResponse>(Error.Duplicate(
                 "A donor with the same e-mail, phone or name already exists. Open the existing record or change the value."));
         }
@@ -98,6 +108,7 @@ public sealed class DonorCommandHandler(
         if (!string.IsNullOrWhiteSpace(request.DonorNumber)
             && await donorRepository.DonorNumberExistsAsync(donorNumber, cancellationToken))
         {
+            logger.LogWarning("Create donor failed because DonorNumber {DonorNumber} is already in use.", donorNumber);
             return Result.Failure<DonorDetailResponse>(Error.Duplicate(
                 $"Donor number {donorNumber} is already in use."));
         }
@@ -138,6 +149,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Create donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -145,25 +158,31 @@ public sealed class DonorCommandHandler(
         UpdateDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Update donor started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Update donor failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Update donor failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(scopeFailure);
         }
 
         if (command.Request.ExpectedVersion != donor.Version)
         {
+            logger.LogWarning("Update donor failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.Concurrency());
         }
 
         if (donor.Status is DonorStatus.Archived or DonorStatus.Merged)
         {
+            logger.LogWarning("Update donor failed for DonorId {DonorId} because the donor is in terminal state {DonorStatus}.", command.DonorId, donor.Status);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 $"A donor in state {donor.Status} can no longer be edited."));
         }
@@ -175,6 +194,7 @@ public sealed class DonorCommandHandler(
         if (!string.Equals(businessKey, donor.NormalizedBusinessKey, StringComparison.Ordinal)
             && await donorRepository.ExistsByBusinessKeyAsync(businessKey, donor.Id, cancellationToken))
         {
+            logger.LogWarning("Update donor failed for DonorId {DonorId} because another donor already uses the supplied business key.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.Duplicate(
                 "Another donor already uses that e-mail, phone or name."));
         }
@@ -193,6 +213,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Update donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -200,32 +222,39 @@ public sealed class DonorCommandHandler(
         SubmitDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Submit donor started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Submit donor failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Submit donor failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(scopeFailure);
         }
 
         var versionFailure = CheckVersion(donor, command.Request.ExpectedVersion);
         if (versionFailure is not null)
         {
+            logger.LogWarning("Submit donor failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(versionFailure);
         }
 
         if (donor.ApprovalState == ApprovalState.PendingApproval)
         {
+            logger.LogWarning("Submit donor failed for DonorId {DonorId} because the donor is already waiting for approval.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 "This donor is already waiting for approval."));
         }
 
         if (donor.Status != DonorStatus.Prospect)
         {
+            logger.LogWarning("Submit donor failed for DonorId {DonorId} because the donor is in state {DonorStatus}.", command.DonorId, donor.Status);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 $"Only a Prospect donor can be submitted. This donor is {donor.Status}."));
         }
@@ -243,6 +272,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Submit donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -250,26 +281,32 @@ public sealed class DonorCommandHandler(
         ApproveDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Donor approval decision started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Donor approval failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Donor approval failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(scopeFailure);
         }
 
         var versionFailure = CheckVersion(donor, command.Request.ExpectedVersion);
         if (versionFailure is not null)
         {
+            logger.LogWarning("Donor approval failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(versionFailure);
         }
 
         if (donor.ApprovalState != ApprovalState.PendingApproval)
         {
+            logger.LogWarning("Donor approval failed for DonorId {DonorId} because the donor is not pending approval.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 "Only a submitted donor can be approved or rejected."));
         }
@@ -278,6 +315,8 @@ public sealed class DonorCommandHandler(
         // independent approver." The creator is refused even when they hold the permission.
         if (donor.CreatedByUserId == currentUser.UserId)
         {
+            logger.LogWarning("Donor approval denied for DonorId {DonorId} because the requesting user is the record creator.", command.DonorId);
+
             await auditWriter.WriteAsync(
                 new AuditEntry(AuditActionCodes.DonorApproved, nameof(Donor), donor.Id, AuditResult.Denied,
                     "Segregation of duties: the creator attempted to approve their own record."),
@@ -325,6 +364,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Donor approval decision completed successfully for DonorId {DonorId}. Approved {Approved}.", donor.Id, command.Request.Approved);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -332,26 +373,32 @@ public sealed class DonorCommandHandler(
         CancelDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Cancel donor started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Cancel donor failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Cancel donor failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(scopeFailure);
         }
 
         var versionFailure = CheckVersion(donor, command.Request.ExpectedVersion);
         if (versionFailure is not null)
         {
+            logger.LogWarning("Cancel donor failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(versionFailure);
         }
 
         if (donor.Status is DonorStatus.Archived or DonorStatus.Merged or DonorStatus.Restricted)
         {
+            logger.LogWarning("Cancel donor failed for DonorId {DonorId} because the donor is already in terminal state {DonorStatus}.", command.DonorId, donor.Status);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 $"A donor in state {donor.Status} cannot be cancelled again."));
         }
@@ -380,6 +427,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Cancel donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -387,31 +436,38 @@ public sealed class DonorCommandHandler(
         ArchiveDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Archive donor started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Archive donor failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Archive donor failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure(scopeFailure);
         }
 
         var versionFailure = CheckVersion(donor, command.Request.ExpectedVersion);
         if (versionFailure is not null)
         {
+            logger.LogWarning("Archive donor failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure(versionFailure);
         }
 
         if (donor.Status == DonorStatus.Archived)
         {
+            logger.LogWarning("Archive donor failed for DonorId {DonorId} because the donor is already archived.", command.DonorId);
             return Result.Failure(Error.InvalidTransition("This donor is already archived."));
         }
 
         if (donor.Status == DonorStatus.Merged)
         {
+            logger.LogWarning("Archive donor failed for DonorId {DonorId} because the donor is already merged.", command.DonorId);
             return Result.Failure(Error.InvalidTransition(
                 "A merged donor is already terminal and cannot be archived separately."));
         }
@@ -434,6 +490,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Archive donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success();
     }
 
@@ -441,25 +499,31 @@ public sealed class DonorCommandHandler(
         CorrectDonorCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Correct donor started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Correct donor failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Correct donor failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(scopeFailure);
         }
 
         if (command.Request.ExpectedVersion != donor.Version)
         {
+            logger.LogWarning("Correct donor failed for DonorId {DonorId} because the expected version does not match the current version.", command.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.Concurrency());
         }
 
         if (donor.Status is DonorStatus.Archived or DonorStatus.Merged)
         {
+            logger.LogWarning("Correct donor failed for DonorId {DonorId} because the donor is in terminal state {DonorStatus}.", command.DonorId, donor.Status);
             return Result.Failure<DonorDetailResponse>(Error.InvalidTransition(
                 $"A donor in state {donor.Status} can no longer be corrected."));
         }
@@ -529,6 +593,8 @@ public sealed class DonorCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Correct donor completed successfully for DonorId {DonorId}.", donor.Id);
+
         return Result.Success(BuildDetail(donor));
     }
 
@@ -536,15 +602,19 @@ public sealed class DonorCommandHandler(
         DeleteDonorDraftCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Delete donor draft started for DonorId {DonorId}.", command.DonorId);
+
         var donor = await donorRepository.GetWithChildrenAsync(command.DonorId, cancellationToken);
         if (donor is null)
         {
+            logger.LogWarning("Delete donor draft failed for DonorId {DonorId} because the donor was not found.", command.DonorId);
             return Result.Failure<OutcomeResponse>(Error.DonorNotFound());
         }
 
         var scopeFailure = CheckScope(donor);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Delete donor draft failed for DonorId {DonorId} because the donor is outside the current scope.", command.DonorId);
             return Result.Failure<OutcomeResponse>(scopeFailure);
         }
 
@@ -552,12 +622,14 @@ public sealed class DonorCommandHandler(
         // history reference. Anything else uses cancel or archive instead.
         if (donor.Status != DonorStatus.Prospect || donor.ApprovalState != ApprovalState.NotSubmitted)
         {
+            logger.LogWarning("Delete donor draft failed for DonorId {DonorId} because the donor is not an unused unsubmitted Prospect.", command.DonorId);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Permanent delete is only available for an unsubmitted draft. Use cancel or archive instead."));
         }
 
         if (donor.Consents.Count > 0 || donor.Interactions.Count > 0)
         {
+            logger.LogWarning("Delete donor draft failed for DonorId {DonorId} because the draft has existing consent or interaction history.", command.DonorId);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This draft already has consent or interaction history and cannot be deleted. Use cancel instead."));
         }
@@ -571,6 +643,8 @@ public sealed class DonorCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Delete donor draft completed successfully for DonorId {DonorId}.", donor.Id);
 
         return Result.Success(new OutcomeResponse(
             reference,

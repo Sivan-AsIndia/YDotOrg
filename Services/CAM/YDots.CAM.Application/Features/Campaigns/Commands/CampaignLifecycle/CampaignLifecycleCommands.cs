@@ -93,11 +93,15 @@ public sealed class CampaignLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Submitting campaign {CampaignId} for approval.", command.CampaignId);
+
         var loaded = await LoadForTransitionAsync(
             command.CampaignId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to submit campaign {CampaignId} because the campaign could not be loaded or the version was stale.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -105,6 +109,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (campaign.Status != CampaignStatus.Draft)
         {
+            logger.LogWarning("Unable to submit campaign {CampaignId} because its current status is {Status}.", campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Draft campaign can be submitted. This one is {campaign.Status}."));
         }
@@ -156,6 +162,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Campaign {CampaignId} submitted successfully by user {UserId}.", campaign.Id, currentUser.UserId);
+
         return await BuildOutcomeAsync(campaign, message, cancellationToken);
     }
 
@@ -168,11 +176,15 @@ public sealed class CampaignLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Approving campaign {CampaignId}.", command.CampaignId);
+
         var loaded = await LoadForTransitionAsync(
             command.CampaignId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to approve campaign {CampaignId} because the campaign could not be loaded or the version was stale.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -180,6 +192,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (campaign.Status != CampaignStatus.Submitted)
         {
+            logger.LogWarning("Unable to approve campaign {CampaignId} because its current status is {Status}.", campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only a Submitted campaign can be approved. This one is {campaign.Status}."));
         }
@@ -189,6 +203,8 @@ public sealed class CampaignLifecycleCommandHandler(
         // later review wants to see.
         if (!campaign.CanBeApprovedBy(currentUser.UserId))
         {
+            logger.LogWarning("User {UserId} attempted to approve campaign {CampaignId} they created or submitted.", currentUser.UserId, campaign.Id);
+
             await audit.WriteAsync(
                 AuditActionCodes.CampaignApproved, nameof(Campaign), campaign.Id,
                 AuditResult.Denied, "Attempted to approve a campaign they created or submitted.",
@@ -240,6 +256,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Campaign {CampaignId} approved successfully by user {UserId}. New status: {Status}.", campaign.Id, currentUser.UserId, target);
+
         return await BuildOutcomeAsync(
             campaign,
             target == CampaignStatus.Scheduled
@@ -257,11 +275,15 @@ public sealed class CampaignLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Activating campaign {CampaignId}.", command.CampaignId);
+
         var loaded = await LoadForTransitionAsync(
             command.CampaignId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to activate campaign {CampaignId} because the campaign could not be loaded or the version was stale.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -272,6 +294,8 @@ public sealed class CampaignLifecycleCommandHandler(
         // forward by hand.
         if (campaign.Status is not (CampaignStatus.Approved or CampaignStatus.Scheduled))
         {
+            logger.LogWarning("Unable to activate campaign {CampaignId} because its current status is {Status}.", campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only an Approved or Scheduled campaign can be activated. This one is {campaign.Status}."));
         }
@@ -280,6 +304,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (campaign.EndDate < today)
         {
+            logger.LogWarning("Unable to activate campaign {CampaignId} because its campaign window ended on {EndDate}.", campaign.Id, campaign.EndDate);
+
             return Result.Failure<OutcomeResponse>(Error.CampaignWindowClosed(
                 $"This campaign ended on {campaign.EndDate:yyyy-MM-dd}. Extend its dates before activating it."));
         }
@@ -302,6 +328,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (outstanding.Count > 0 && readinessApplies)
         {
+            logger.LogWarning("Unable to activate campaign {CampaignId} because {OutstandingCount} required readiness check(s) have not passed.", campaign.Id, outstanding.Count);
+
             return Result.Failure<OutcomeResponse>(Error.ReadinessIncomplete(
                 $"{outstanding.Count} required readiness check(s) have not passed.",
                 [.. outstanding.Select(check =>
@@ -322,6 +350,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Campaign {CampaignId} activated successfully by user {UserId}.", campaign.Id, currentUser.UserId);
+
         return await BuildOutcomeAsync(campaign, "Campaign activated.", cancellationToken);
     }
 
@@ -333,6 +363,8 @@ public sealed class CampaignLifecycleCommandHandler(
         PauseCampaignCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Pausing campaign {CampaignId}.", command.CampaignId);
 
         return TransitionAsync(
             command.CampaignId,
@@ -350,6 +382,8 @@ public sealed class CampaignLifecycleCommandHandler(
         ResumeCampaignCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Resuming campaign {CampaignId}.", command.CampaignId);
 
         return TransitionAsync(
             command.CampaignId,
@@ -379,11 +413,15 @@ public sealed class CampaignLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Requesting close for campaign {CampaignId}.", command.CampaignId);
+
         var loaded = await LoadForTransitionAsync(
             command.CampaignId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to request close for campaign {CampaignId} because the campaign could not be loaded or the version was stale.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -391,12 +429,16 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (campaign.Status is not (CampaignStatus.Active or CampaignStatus.Paused))
         {
+            logger.LogWarning("Unable to request close for campaign {CampaignId} because its current status is {Status}.", campaign.Id, campaign.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"Only an Active or Paused campaign can be closed. This one is {campaign.Status}."));
         }
 
         if (await campaigns.GetPendingCloseRequestAsync(campaign.Id, cancellationToken) is not null)
         {
+            logger.LogWarning("Unable to request close for campaign {CampaignId} because a close request is already pending.", campaign.Id);
+
             return Result.Failure<OutcomeResponse>(
                 Error.Duplicate("A close request is already pending for this campaign."));
         }
@@ -420,6 +462,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (missing.Count > 0)
         {
+            logger.LogWarning("Unable to request close for campaign {CampaignId} because the required close reason fields are missing.", campaign.Id);
+
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("A close request needs a reason.", missing));
         }
@@ -438,6 +482,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Close request created for campaign {CampaignId} by user {UserId}.", campaign.Id, currentUser.UserId);
+
         return await BuildOutcomeAsync(campaign, "Close request submitted for approval.", cancellationToken);
     }
 
@@ -447,11 +493,15 @@ public sealed class CampaignLifecycleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Approving close request for campaign {CampaignId}.", command.CampaignId);
+
         var loaded = await LoadForTransitionAsync(
             command.CampaignId, command.Request.ExpectedVersion, cancellationToken);
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to approve close request for campaign {CampaignId} because the campaign could not be loaded or the version was stale.", command.CampaignId);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -461,6 +511,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (closeRequest is null)
         {
+            logger.LogWarning("Unable to approve close request for campaign {CampaignId} because no pending close request exists.", campaign.Id);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "There is no pending close request for this campaign."));
         }
@@ -469,6 +521,8 @@ public sealed class CampaignLifecycleCommandHandler(
         // whoever raised the close cannot be the one who approves it.
         if (!closeRequest.CanBeApprovedBy(currentUser.UserId))
         {
+            logger.LogWarning("User {UserId} attempted to approve their own close request for campaign {CampaignId}.", currentUser.UserId, campaign.Id);
+
             await audit.WriteAsync(
                 AuditActionCodes.CampaignCloseApproved, nameof(Campaign), campaign.Id,
                 AuditResult.Denied, "Attempted to approve their own close request.", cancellationToken);
@@ -526,6 +580,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (loaded.IsFailure)
         {
+            logger.LogWarning("Unable to transition campaign {CampaignId} to {NewStatus} because the campaign could not be loaded or the version was stale.", campaignId, newStatus);
+
             return Result.Failure<OutcomeResponse>(loaded.Error!);
         }
 
@@ -533,6 +589,8 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (!requiredStatus.Contains(campaign.Status))
         {
+            logger.LogWarning("Unable to transition campaign {CampaignId} from {CurrentStatus} to {NewStatus}. Required status: {RequiredStatus}.", campaign.Id, campaign.Status, newStatus, string.Join(", ", requiredStatus));
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition($"{refusal} This one is {campaign.Status}."));
         }
@@ -548,6 +606,8 @@ public sealed class CampaignLifecycleCommandHandler(
             auditCode, nameof(Campaign), campaign.Id, request.DetailedReason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Campaign {CampaignId} transitioned from {PreviousStatus} to {NewStatus} by user {UserId}.", campaign.Id, requiredStatus.FirstOrDefault(), newStatus, currentUser.UserId);
 
         return await BuildOutcomeAsync(campaign, successMessage, cancellationToken);
     }
@@ -568,12 +628,19 @@ public sealed class CampaignLifecycleCommandHandler(
 
         if (campaign is null)
         {
+            logger.LogWarning("Campaign {CampaignId} was not found for lifecycle transition.", campaignId);
+
             return Result.Failure<Campaign>(Error.NotFound("That campaign was not found."));
         }
 
-        return campaign.Version == expectedVersion
-            ? campaign
-            : Result.Failure<Campaign>(Error.Concurrency());
+        if (campaign.Version != expectedVersion)
+        {
+            logger.LogWarning("Campaign {CampaignId} has a version conflict. Expected version {ExpectedVersion}.", campaignId, expectedVersion);
+
+            return Result.Failure<Campaign>(Error.Concurrency());
+        }
+
+        return campaign;
     }
 
     private async Task RecordLifecycleAsync(

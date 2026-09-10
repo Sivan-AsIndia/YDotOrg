@@ -29,7 +29,9 @@ namespace YDot.PAY.Api.Controllers;
 [Route("api/v1/donation-intents")]
 [Produces("application/json")]
 public sealed class DonationIntentsController(
-    DonationIntentCommandHandler intents, DonationQueryHandler queries) : ApiControllerBase
+    DonationIntentCommandHandler intents,
+    DonationQueryHandler queries,
+    ILogger<DonationIntentsController> logger) : ApiControllerBase
 {
     /// <summary>The intent register.</summary>
     [HttpGet]
@@ -37,8 +39,17 @@ public sealed class DonationIntentsController(
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<DonationIntentListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] DonationIntentSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchDonationIntentsQuery(filter), cancellationToken));
+        [FromQuery] DonationIntentSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching donation intents.");
+
+        var result = await queries.HandleAsync(
+            new SearchDonationIntentsQuery(filter), cancellationToken);
+
+        logger.LogInformation("Donation intent search completed successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// One intent in full, with its whole attempt history - section 24.
@@ -52,8 +63,17 @@ public sealed class DonationIntentsController(
     [ProducesResponseType(typeof(ApiResponse<DonationIntentDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDonationIntentAsync(
-        Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetDonationIntentQuery(id), cancellationToken));
+        Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting donation intent details.");
+
+        var result = await queries.HandleAsync(
+            new GetDonationIntentQuery(id), cancellationToken);
+
+        logger.LogInformation("Donation intent detail request completed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Sends the payment link again.
@@ -67,11 +87,17 @@ public sealed class DonationIntentsController(
     [ProducesResponseType(typeof(ApiResponse<PaymentLinkResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ResendLinkAsync(
-        Guid id, [FromBody] ResendPaymentLinkBody body, CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(
-                new ResendPaymentLinkCommand(id, body.ExpectedVersion), cancellationToken),
-            "Payment link re-sent.");
+        Guid id, [FromBody] ResendPaymentLinkBody body, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Resend payment link action started.");
+
+        var result = await intents.HandleAsync(
+            new ResendPaymentLinkCommand(id, body.ExpectedVersion), cancellationToken);
+
+        logger.LogInformation("Resend payment link action completed.");
+
+        return FromResult(result, "Payment link re-sent.");
+    }
 
     /// <summary>
     /// Cancels an intent.
@@ -85,10 +111,17 @@ public sealed class DonationIntentsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CancelAsync(
-        Guid id, [FromBody] CancelDonationIntentRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await intents.HandleAsync(new CancelDonationIntentCommand(id, request), cancellationToken),
-            "Donation intent cancelled.");
+        Guid id, [FromBody] CancelDonationIntentRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Cancel donation intent action started.");
+
+        var result = await intents.HandleAsync(
+            new CancelDonationIntentCommand(id, request), cancellationToken);
+
+        logger.LogInformation("Cancel donation intent action completed.");
+
+        return FromResult(result, "Donation intent cancelled.");
+    }
 
     /// <summary>
     /// Section 23: the payment support queue.
@@ -103,9 +136,17 @@ public sealed class DonationIntentsController(
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<PaymentSupportCaseResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSupportQueueAsync(
-        [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken) =>
-        FromResult(
-            await queries.HandleAsync(new GetPaymentSupportQueueQuery(pagination), cancellationToken));
+        [FromQuery] PaginationRequest pagination, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting payment support queue.");
+
+        var result = await queries.HandleAsync(
+            new GetPaymentSupportQueueQuery(pagination), cancellationToken);
+
+        logger.LogInformation("Payment support queue loaded successfully.");
+
+        return FromResult(result);
+    }
 }
 
 /// <summary>

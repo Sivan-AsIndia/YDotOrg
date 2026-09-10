@@ -350,6 +350,7 @@
             <div class="field">
               <label for="field-receivedChannel">Received channel <span class="req">*</span></label>
               <select id="field-receivedChannel" [ngModel]="form().receivedChannel" (ngModelChange)="updateForm('receivedChannel', $event)">
+                    <option value="" disabled>Select Received Channel</option>
                 @for (c of channels; track c) {
                   <option [value]="c">{{ c }}</option>
                 }

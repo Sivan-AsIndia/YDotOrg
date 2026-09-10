@@ -18,6 +18,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class DuplicateReviewController : ApiControllerBase
 {
+    private readonly ILogger<DuplicateReviewController> _logger;
+
+    public DuplicateReviewController(ILogger<DuplicateReviewController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the review queue plus its filter options.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.DuplicateReviewView)]
@@ -27,8 +34,23 @@ public sealed class DuplicateReviewController : ApiControllerBase
     public async Task<IActionResult> GetList(
         [FromQuery] DuplicateReviewSearchFilter filter,
         [FromServices] DuplicateReviewQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetDuplicateReviewListQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Duplicate review list retrieval started.");
+
+        var result = await handler.HandleAsync(new GetDuplicateReviewListQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Duplicate review list retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Duplicate review list retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET one review: both candidates, the evidence and the merge preview.</summary>
     [HttpGet("{id:guid}", Name = "GetDuplicateReviewById")]
@@ -39,8 +61,23 @@ public sealed class DuplicateReviewController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] DuplicateReviewQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetDuplicateReviewDetailQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Duplicate review detail retrieval started. DuplicateReviewId={DuplicateReviewId}", id);
+
+        var result = await handler.HandleAsync(new GetDuplicateReviewDetailQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Duplicate review detail retrieval completed successfully. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Duplicate review detail retrieval failed. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST a new review for two candidate donors.</summary>
     [HttpPost]
@@ -55,7 +92,18 @@ public sealed class DuplicateReviewController : ApiControllerBase
         [FromServices] DuplicateReviewCommandHandler handler,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Duplicate review creation started.");
+
         var result = await handler.HandleAsync(new CreateDuplicateReviewCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Duplicate review creation completed successfully. DuplicateReviewId={DuplicateReviewId}", result.Value?.Id);
+        }
+        else
+        {
+            _logger.LogWarning("Duplicate review creation failed.");
+        }
 
         return CreatedFromResult(result, "GetDuplicateReviewById", new { id = result.Value?.Id ?? Guid.Empty },
             "The duplicate review was raised.");
@@ -76,9 +124,23 @@ public sealed class DuplicateReviewController : ApiControllerBase
         Guid id,
         [FromBody] MergeDecisionRequest request,
         [FromServices] DuplicateReviewCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new MergeDuplicateCommand(id, request), cancellationToken),
-            "The duplicate decision was recorded.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Duplicate review decision started. DuplicateReviewId={DuplicateReviewId}", id);
+
+        var result = await handler.HandleAsync(new MergeDuplicateCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Duplicate review decision completed successfully. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Duplicate review decision failed. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+
+        return FromResult(result, "The duplicate decision was recorded.");
+    }
 
     /// <summary>POST reject candidate. Danger action: the pair is recorded as not a match.</summary>
     [HttpPost("{id:guid}/reject-candidate")]
@@ -92,7 +154,21 @@ public sealed class DuplicateReviewController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] DuplicateReviewCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new RejectDuplicateCandidateCommand(id, request), cancellationToken),
-            "The candidate was rejected.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Duplicate candidate rejection started. DuplicateReviewId={DuplicateReviewId}", id);
+
+        var result = await handler.HandleAsync(new RejectDuplicateCandidateCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Duplicate candidate rejection completed successfully. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Duplicate candidate rejection failed. DuplicateReviewId={DuplicateReviewId}", id);
+        }
+
+        return FromResult(result, "The candidate was rejected.");
+    }
 }

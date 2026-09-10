@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -75,7 +76,8 @@ public sealed class AcceptInvitationCommandHandler(
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
     IOptions<SecuritySettings> securityOptions,
-    IOptions<ClientAppSettings> clientOptions)
+    IOptions<ClientAppSettings> clientOptions,
+    ILogger<AcceptInvitationCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
     private readonly ClientAppSettings _client = clientOptions.Value;
@@ -85,11 +87,15 @@ public sealed class AcceptInvitationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Invitation acceptance started");
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
         {
+            logger.LogWarning("Invitation acceptance failed because password confirmation did not match");
+
             return Result.Failure<AcceptInvitationResponse>(
                 Error.Validation("The passwords do not match.",
                     [new ValidationError(nameof(request.ConfirmPassword), "The passwords do not match.")]));
@@ -101,16 +107,19 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (invitation is null)
         {
+            logger.LogWarning("Invitation acceptance failed because the invitation was not found");
             return Result.Failure<AcceptInvitationResponse>(Error.InvitationInvalid());
         }
 
         if (invitation.Status == InvitationStatus.Accepted)
         {
+            logger.LogWarning("Invitation acceptance failed because invitation {InvitationId} was already accepted", invitation.Id);
             return Result.Failure<AcceptInvitationResponse>(Error.InvitationAlreadyAccepted());
         }
 
         if (!invitation.IsRedeemable(now))
         {
+            logger.LogWarning("Invitation acceptance failed because invitation {InvitationId} was expired", invitation.Id);
             return Result.Failure<AcceptInvitationResponse>(Error.InvitationExpired());
         }
 
@@ -118,12 +127,14 @@ public sealed class AcceptInvitationCommandHandler(
         var user = await users.FindByIdInTenantAsync(invitation.UserId, invitation.TenantId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Invitation acceptance failed because user {UserId} was not found", invitation.UserId);
             return Result.Failure<AcceptInvitationResponse>(Error.InvitationInvalid());
         }
 
         var businessUnit = await businessUnits.GetByIdAsync(invitation.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Invitation acceptance failed because business unit {BusinessUnitId} was not found", invitation.BusinessUnitId);
             return Result.Failure<AcceptInvitationResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -137,6 +148,8 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (policyFailures.Count > 0)
         {
+            logger.LogWarning("Invitation acceptance failed password policy validation for user {UserId}", user.Id);
+
             return Result.Failure<AcceptInvitationResponse>(
                 Error.WeakPassword("That password does not meet the requirements.",
                     [.. policyFailures.Select(message => new ValidationError(nameof(request.Password), message))]));
@@ -264,6 +277,8 @@ public sealed class AcceptInvitationCommandHandler(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        logger.LogInformation("Invitation accepted successfully for user {UserId}, tenant {TenantId}, invitation type {InvitationType}, profile required {RequiresProfile}, MFA enrolled {MfaEnrolled}", user.Id, user.TenantId, invitation.InvitationType, requiresProfile, user.MfaEnabled);
+
         return Result.Success(new AcceptInvitationResponse(
             Succeeded: true,
             tokens.AccessToken,
@@ -297,9 +312,12 @@ public sealed class AcceptInvitationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Invitation preview requested");
+
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Invitation preview failed because the default business unit is not configured");
             return Result.Failure<InvitationPreviewResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -308,6 +326,7 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (invitation is null)
         {
+            logger.LogWarning("Invitation preview requested for an invalid invitation");
             return Result.Success(
                 AuthenticationMappingConfig.InvalidInvitation(businessUnit, _security));
         }
@@ -315,6 +334,8 @@ public sealed class AcceptInvitationCommandHandler(
         var user = await users.FindByIdInTenantAsync(invitation.UserId, invitation.TenantId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Invitation preview failed because invitation user {UserId} was not found", invitation.UserId);
+
             return Result.Success(AuthenticationMappingConfig.InvalidInvitation(
                 businessUnit, _security, invitation.InvitationType, invitation.ExpiresAtUtc));
         }
@@ -343,6 +364,8 @@ public sealed class AcceptInvitationCommandHandler(
         // though no Organisation is resolved on an anonymous request.
         var dialingCodes = await GetDialingCodesAsync(cancellationToken);
 
+        logger.LogInformation("Invitation preview loaded for invitation {InvitationId}, tenant {TenantId}", invitation.Id, invitation.TenantId);
+
         return Result.Success(AuthenticationMappingConfig.ToPreviewResponse(
             invitation, user, tenant, businessUnit, clock.UtcNow, _security,
             roleSummary, department?.Name, unit?.Name, dialingCodes));
@@ -370,6 +393,7 @@ public sealed class AcceptInvitationCommandHandler(
         }
         catch (InvalidOperationException)
         {
+            logger.LogWarning("Unable to load country dialing codes for invitation preview");
             return [];
         }
     }
@@ -421,9 +445,12 @@ public sealed class AcceptInvitationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Invitation MFA enrolment started");
+
         var context = await ResolveActivationContextAsync(command.Request.Token, cancellationToken);
         if (context.Error is not null)
         {
+            logger.LogWarning("Invitation MFA enrolment failed during activation context resolution");
             return Result.Failure<MfaEnrolmentResponse>(context.Error);
         }
 
@@ -440,6 +467,8 @@ public sealed class AcceptInvitationCommandHandler(
 
             if (mobile is null)
             {
+                logger.LogWarning("Invitation MFA enrolment failed because the supplied mobile number was invalid for user {UserId}", user.Id);
+
                 return Result.Failure<MfaEnrolmentResponse>(
                     Error.Validation("That mobile number is not valid.",
                         [new ValidationError(nameof(command.Request.MobileNumber),
@@ -457,6 +486,11 @@ public sealed class AcceptInvitationCommandHandler(
         if (result.IsSuccess)
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Invitation MFA enrolment initiated successfully for user {UserId}, method {MethodType}", user.Id, command.Request.MethodType);
+        }
+        else
+        {
+            logger.LogWarning("Invitation MFA enrolment failed for user {UserId}, method {MethodType}", user.Id, command.Request.MethodType);
         }
 
         return result;
@@ -473,9 +507,12 @@ public sealed class AcceptInvitationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Invitation MFA enrolment verification started");
+
         var context = await ResolveActivationContextAsync(command.Request.Token, cancellationToken);
         if (context.Error is not null)
         {
+            logger.LogWarning("Invitation MFA enrolment verification failed during activation context resolution");
             return Result.Failure<OutcomeResponse>(context.Error);
         }
 
@@ -490,10 +527,13 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (confirmed.IsFailure)
         {
+            logger.LogWarning("Invitation MFA enrolment verification failed for user {UserId}", user.Id);
             return Result.Failure<OutcomeResponse>(confirmed.Error!);
         }
 
         var method = confirmed.Value!;
+
+        logger.LogInformation("Invitation MFA enrolment verified successfully for user {UserId}, method {MethodId}", user.Id, method.Id);
 
         return Result.Success(new OutcomeResponse(
             method.Id,
@@ -513,6 +553,8 @@ public sealed class AcceptInvitationCommandHandler(
         RequestNewInvitationCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Replacement invitation requested");
 
         var now = clock.UtcNow;
 
@@ -534,6 +576,8 @@ public sealed class AcceptInvitationCommandHandler(
             || user is null
             || businessUnit is null)
         {
+            logger.LogWarning("Replacement invitation request could not be processed because the invitation was invalid or unavailable");
+
             return Result.Success(new OutcomeResponse(
                 Guid.Empty, "Sent", 0,
                 "If that invitation is still open, a new link is on its way.",
@@ -569,6 +613,8 @@ public sealed class AcceptInvitationCommandHandler(
             BuildActivationUrl(invitation, tenant, businessUnit, replacementToken),
             cancellationToken);
 
+        logger.LogInformation("Replacement invitation sent successfully for invitation {InvitationId}, user {UserId}, tenant {TenantId}", invitation.Id, user.Id, invitation.TenantId);
+
         return Result.Success(new OutcomeResponse(
             invitation.Id, invitation.Status.ToString(), invitation.Version,
             "If that invitation is still open, a new link is on its way.",
@@ -588,6 +634,8 @@ public sealed class AcceptInvitationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Invitation activation cancellation requested");
+
         var invitation = await invitations.GetByTokenHashAsync(
             tokenHasher.Hash(command.Request.Token ?? string.Empty), cancellationToken);
 
@@ -603,6 +651,12 @@ public sealed class AcceptInvitationCommandHandler(
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Invitation activation cancelled for invitation {InvitationId}, user {UserId}", invitation.Id, invitation.UserId);
+        }
+        else
+        {
+            logger.LogInformation("Invitation activation cancellation completed with no active invitation");
         }
 
         return Result.Success(new OutcomeResponse(
@@ -625,28 +679,33 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (invitation is null)
         {
+            logger.LogWarning("Activation context resolution failed because invitation was not found");
             return new ActivationContext(Error.InvitationInvalid());
         }
 
         if (invitation.Status == InvitationStatus.Accepted)
         {
+            logger.LogWarning("Activation context resolution failed because invitation {InvitationId} was already accepted", invitation.Id);
             return new ActivationContext(Error.InvitationAlreadyAccepted());
         }
 
         if (!invitation.IsRedeemable(clock.UtcNow))
         {
+            logger.LogWarning("Activation context resolution failed because invitation {InvitationId} was expired", invitation.Id);
             return new ActivationContext(Error.InvitationExpired());
         }
 
         var user = await users.FindByIdInTenantAsync(invitation.UserId, invitation.TenantId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Activation context resolution failed because user {UserId} was not found", invitation.UserId);
             return new ActivationContext(Error.InvitationInvalid());
         }
 
         var businessUnit = await businessUnits.GetByIdAsync(invitation.BusinessUnitId, cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Activation context resolution failed because business unit {BusinessUnitId} was not found", invitation.BusinessUnitId);
             return new ActivationContext(Error.Dependency("The platform is not configured."));
         }
 
@@ -690,6 +749,7 @@ public sealed class AcceptInvitationCommandHandler(
         var existing = await roles.GetUserRolesInTenantAsync(user.Id, user.TenantId, cancellationToken);
         if (existing.Any(assignment => assignment.IsEffective(now)))
         {
+            logger.LogInformation("Initial role assignment skipped because user {UserId} already has an effective role", user.Id);
             return;
         }
 
@@ -706,6 +766,7 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (roleId is null)
         {
+            logger.LogWarning("No initial role could be resolved for user {UserId}, invitation {InvitationId}", user.Id, invitation.Id);
             return;
         }
 
@@ -722,6 +783,8 @@ public sealed class AcceptInvitationCommandHandler(
             EffectiveFromUtc = now,
             Justification = "Granted on invitation acceptance."
         }, cancellationToken);
+
+        logger.LogInformation("Initial role {RoleId} assigned to user {UserId} during invitation acceptance", roleId.Value, user.Id);
     }
 
     /// <summary>

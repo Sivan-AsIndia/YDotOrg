@@ -610,7 +610,7 @@
                       </div>
                       <div class="detail-row">
                         <span>Created by</span>
-                        <strong>{{ sc.createdByUserId || '—' }}</strong>
+                        <strong>{{ changedBy(sc.createdByUserId) }}</strong>
                       </div>
                       <div class="detail-row">
                         <span>Created</span>
@@ -625,7 +625,7 @@
                       @if (sc.updatedByUserId) {
                         <div class="detail-row">
                           <span>Updated by</span>
-                          <strong>{{ sc.updatedByUserId }}</strong>
+                          <strong>{{ changedBy(sc.updatedByUserId) }}</strong>
                         </div>
                       }
                     </div>

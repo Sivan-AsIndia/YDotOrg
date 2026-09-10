@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -41,12 +42,15 @@ public sealed class CurrencyCommandHandler(
     IGlobalMasterRepository masters,
     IAuditService audit,
     GlobalMasterWriteGuard guard,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<CurrencyCommandHandler> logger)
 {
     public async Task<Result<CurrencyDetailResponse>> HandleAsync(
         CreateCurrencyCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Creating currency.");
 
         var request = command.Request;
         var scopeTenantId = guard.WriteScopeTenantId;
@@ -54,6 +58,8 @@ public sealed class CurrencyCommandHandler(
         var code = CurrencyCodeValue.TryParse(request.CurrencyCode)?.Value;
         if (code is null)
         {
+            logger.LogWarning("Currency creation failed because the currency code is invalid.");
+
             return Result.Failure<CurrencyDetailResponse>(Error.Validation(
                 "That currency code is not valid.",
                 [new ValidationError(
@@ -63,6 +69,10 @@ public sealed class CurrencyCommandHandler(
 
         if (await masters.CodeExistsAsync<Currency>(code, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning(
+                "Currency creation failed because the currency code already exists. Code: {Code}.",
+                code);
+
             return Result.Failure<CurrencyDetailResponse>(
                 Error.Duplicate($"A currency with code {code} already exists in this catalogue."));
         }
@@ -85,6 +95,11 @@ public sealed class CurrencyCommandHandler(
             },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation(
+            "Currency created successfully. CurrencyId: {CurrencyId}, Code: {Code}.",
+            currency.Id,
+            currency.Code);
+
         return currency.ToDetailResponse(countryUsageCount: 0, isSuperAdmin: guard.IsSuperAdmin);
     }
 
@@ -93,17 +108,29 @@ public sealed class CurrencyCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Updating currency. CurrencyId: {CurrencyId}.",
+            command.CurrencyId);
+
         var request = command.Request;
 
         var currency = await masters.GetCurrencyAsync(command.CurrencyId, cancellationToken);
         if (currency is null)
         {
+            logger.LogWarning(
+                "Currency update failed because the currency was not found. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That currency was not found."));
         }
 
         var guarded = GuardWrite(currency, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Currency update rejected by the write guard. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -129,6 +156,12 @@ public sealed class CurrencyCommandHandler(
             },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation(
+            "Currency updated successfully. CurrencyId: {CurrencyId}, Code: {Code}, DecimalPlacesChanged: {DecimalPlacesChanged}.",
+            currency.Id,
+            currency.Code,
+            previousDecimalPlaces != currency.DecimalPlaces);
+
         return await BuildOutcomeAsync(currency, "Currency updated.", cancellationToken);
     }
 
@@ -137,22 +170,40 @@ public sealed class CurrencyCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Changing currency status. CurrencyId: {CurrencyId}, RequestedStatus: {RequestedStatus}.",
+            command.CurrencyId,
+            command.Request.Status);
+
         var request = command.Request;
 
         var currency = await masters.GetCurrencyAsync(command.CurrencyId, cancellationToken);
         if (currency is null)
         {
+            logger.LogWarning(
+                "Currency status change failed because the currency was not found. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That currency was not found."));
         }
 
         var guarded = GuardWrite(currency, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Currency status change rejected by the write guard. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
         if (currency.Status == request.Status)
         {
+            logger.LogWarning(
+                "Currency status change rejected because the currency is already in the requested status. CurrencyId: {CurrencyId}, Status: {Status}.",
+                command.CurrencyId,
+                request.Status);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition($"That currency is already {request.Status}."));
         }
@@ -179,6 +230,12 @@ public sealed class CurrencyCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Currency status changed successfully. CurrencyId: {CurrencyId}, NewStatus: {NewStatus}, CountriesAffected: {CountriesAffected}.",
+            currency.Id,
+            request.Status,
+            usageCount);
+
         return new OutcomeResponse(
             currency.Id,
             currency.Status.ToString(),
@@ -196,17 +253,29 @@ public sealed class CurrencyCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Deleting currency. CurrencyId: {CurrencyId}.",
+            command.CurrencyId);
+
         var request = command.Request;
 
         var currency = await masters.GetCurrencyAsync(command.CurrencyId, cancellationToken);
         if (currency is null)
         {
+            logger.LogWarning(
+                "Currency deletion failed because the currency was not found. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That currency was not found."));
         }
 
         var guarded = GuardWrite(currency, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "Currency deletion rejected by the write guard. CurrencyId: {CurrencyId}.",
+                command.CurrencyId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -217,6 +286,11 @@ public sealed class CurrencyCommandHandler(
 
         if (free.IsFailure)
         {
+            logger.LogWarning(
+                "Currency deletion rejected because countries are still using it. CurrencyId: {CurrencyId}, UsageCount: {UsageCount}.",
+                command.CurrencyId,
+                usageCount);
+
             return Result.Failure<OutcomeResponse>(free.Error!);
         }
 
@@ -234,6 +308,11 @@ public sealed class CurrencyCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation(
+            "Currency deleted successfully. CurrencyId: {CurrencyId}, Code: {Code}.",
+            currency.Id,
+            currency.Code);
+
         return new OutcomeResponse(
             currency.Id, currency.Status.ToString(), currency.Version, "Currency deleted.", []);
     }
@@ -242,9 +321,25 @@ public sealed class CurrencyCommandHandler(
     {
         var writable = guard.EnsureWritable(currency, $"The currency {currency.Code}");
 
-        return writable.IsFailure
-            ? writable
-            : GlobalMasterWriteGuard.EnsureVersionMatches(currency, expectedVersion);
+        if (writable.IsFailure)
+        {
+            logger.LogWarning(
+                "Currency write rejected by ownership or write guard. CurrencyId: {CurrencyId}.",
+                currency.Id);
+
+            return writable;
+        }
+
+        var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(currency, expectedVersion);
+
+        if (versioned.IsFailure)
+        {
+            logger.LogWarning(
+                "Currency write rejected because the entity version does not match. CurrencyId: {CurrencyId}.",
+                currency.Id);
+        }
+
+        return versioned;
     }
 
     private async Task<OutcomeResponse> BuildOutcomeAsync(

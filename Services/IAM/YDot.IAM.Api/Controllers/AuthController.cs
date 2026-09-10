@@ -47,7 +47,8 @@ public sealed class AuthController(
     AuthenticationViewQueryHandler views,
     NavigationQueryHandler navigation,
     RefreshTokenCookieWriter cookies,
-    IOptions<SecuritySettings> securityOptions) : ApiControllerBase
+    IOptions<SecuritySettings> securityOptions,
+    ILogger<AuthController> logger) : ApiControllerBase
 {
     private readonly SecuritySettings _security = securityOptions.Value;
 
@@ -69,6 +70,8 @@ public sealed class AuthController(
     public async Task<IActionResult> SignInAsync(
         [FromBody] SignInRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Sign-in attempt started.");
+
         // The trusted-device cookie is read here rather than expected in the body: it is
         // HttpOnly, so the client could not send it even if it wanted to.
         var withDeviceToken = request with
@@ -90,7 +93,13 @@ public sealed class AuthController(
         if (result.IsSuccess && !string.IsNullOrWhiteSpace(deviceToken))
         {
             cookies.WriteTrustedDevice(Response, deviceToken, _security.TrustedDeviceDays);
+            logger.LogDebug("Trusted device cookie issued after successful sign-in.");
         }
+
+        if (result.IsFailure)
+            logger.LogWarning("Sign-in failed.");
+        else
+            logger.LogInformation("Sign-in completed successfully.");
 
         return IssueTokens(result);
     }
@@ -105,6 +114,8 @@ public sealed class AuthController(
     public async Task<IActionResult> VerifyMfaAsync(
         [FromBody] VerifyMfaRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("MFA challenge verification started.");
+
         TrustedDeviceTokenAccessor.Begin();
 
         var result = await mfaVerification.HandleAsync(new VerifyMfaCommand(request), cancellationToken);
@@ -116,7 +127,13 @@ public sealed class AuthController(
         if (result.IsSuccess && !string.IsNullOrWhiteSpace(deviceToken))
         {
             cookies.WriteTrustedDevice(Response, deviceToken, _security.TrustedDeviceDays);
+            logger.LogDebug("Trusted device cookie issued after successful MFA verification.");
         }
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA challenge verification failed.");
+        else
+            logger.LogInformation("MFA challenge verified successfully.");
 
         return IssueTokens(result);
     }
@@ -125,9 +142,20 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<MfaChallengeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResendMfaChallengeAsync(
-        [FromBody] ResendMfaChallengeRequest request, CancellationToken cancellationToken) =>
-        FromResult(await mfaVerification.HandleAsync(
-            new ResendMfaChallengeCommand(request), cancellationToken));
+        [FromBody] ResendMfaChallengeRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Resending MFA challenge.");
+
+        var result = await mfaVerification.HandleAsync(
+            new ResendMfaChallengeCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA challenge resend failed.");
+        else
+            logger.LogInformation("MFA challenge resent successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Abandons a half-finished sign-in.
@@ -139,17 +167,39 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CancelMfaChallengeAsync(
-        [FromBody] CancelMfaChallengeRequest request, CancellationToken cancellationToken) =>
-        FromResult(await mfaVerification.HandleAsync(
-            new CancelMfaChallengeCommand(request), cancellationToken));
+        [FromBody] CancelMfaChallengeRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Cancelling MFA challenge.");
+
+        var result = await mfaVerification.HandleAsync(
+            new CancelMfaChallengeCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA challenge cancellation failed.");
+        else
+            logger.LogInformation("MFA challenge cancelled successfully.");
+
+        return FromResult(result);
+    }
 
     [HttpPost("mfa-challenge/recovery-code")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<SignInResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RedeemRecoveryCodeAsync(
-        [FromBody] RedeemRecoveryCodeRequest request, CancellationToken cancellationToken) =>
-        IssueTokens(await mfaVerification.HandleAsync(
-            new RedeemRecoveryCodeCommand(request), cancellationToken));
+        [FromBody] RedeemRecoveryCodeRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("MFA recovery code redemption started.");
+
+        var result = await mfaVerification.HandleAsync(
+            new RedeemRecoveryCodeCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("MFA recovery code redemption failed.");
+        else
+            logger.LogInformation("MFA recovery code redeemed successfully.");
+
+        return IssueTokens(result);
+    }
 
     // =================================================================================
     // Tokens
@@ -168,6 +218,8 @@ public sealed class AuthController(
     public async Task<IActionResult> RefreshAsync(
         [FromBody] RefreshTokenRequest? request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Refreshing authentication tokens.");
+
         var presented = cookies.Read(Request, request?.RefreshToken);
 
         var result = await tokens.HandleAsync(
@@ -178,11 +230,15 @@ public sealed class AuthController(
             // The session is over, so the cookie is cleared rather than left to be presented
             // again on every subsequent request.
             cookies.Clear(Response);
+            logger.LogWarning("Token refresh failed; refresh cookie cleared.");
+
             return FromResult(result);
         }
 
         var issued = result.Value!;
         cookies.Write(Response, issued.RefreshToken, issued.RefreshTokenExpiresAtUtc);
+
+        logger.LogInformation("Authentication tokens refreshed successfully.");
 
         return FromResult(Result.Success(issued with { RefreshToken = string.Empty }));
     }
@@ -194,10 +250,17 @@ public sealed class AuthController(
     public async Task<IActionResult> SignOutAsync(
         [FromBody] SignOutRequest? request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Signing out current user.");
+
         var result = await tokens.HandleAsync(
             new SignOutCommand(request ?? new SignOutRequest()), cancellationToken);
 
         cookies.Clear(Response);
+
+        if (result.IsFailure)
+            logger.LogWarning("Sign-out failed.");
+        else
+            logger.LogInformation("User signed out successfully.");
 
         return FromResult(result);
     }
@@ -212,8 +275,17 @@ public sealed class AuthController(
     [Authorize]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<SessionStatusResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSessionAsync(CancellationToken cancellationToken) =>
-        FromResult(await tokens.GetSessionStatusAsync(cancellationToken));
+    public async Task<IActionResult> GetSessionAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting current session status.");
+
+        var result = await tokens.GetSessionStatusAsync(cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get current session status.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // Section 13 SuperAdmin organisation switching
@@ -230,10 +302,22 @@ public sealed class AuthController(
     [ProducesResponseType(typeof(ApiResponse<SelectTenantResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SelectTenantAsync(
-        [FromBody] SelectTenantRequest request, CancellationToken cancellationToken) =>
-        FromResult(
-            await tenantSelection.HandleAsync(new SelectTenantCommand(request), cancellationToken),
-            "Organisation selected.");
+        [FromBody] SelectTenantRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Selecting Organisation operating context.");
+
+        var result = await tenantSelection.HandleAsync(
+            new SelectTenantCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Organisation selection failed.");
+        else
+            logger.LogInformation("Organisation operating context selected successfully.");
+
+        return FromResult(result, "Organisation selected.");
+    }
 
     /// <summary>
     /// SuperAdmin leaving an Organisation and returning to platform scope.
@@ -249,18 +333,38 @@ public sealed class AuthController(
     [Authorize(Policy = PolicyNames.SuperAdminOnly)]
     [ProducesResponseType(typeof(ApiResponse<SelectTenantResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ExitTenantAsync(CancellationToken cancellationToken) =>
-        FromResult(
-            await tenantSelection.HandleAsync(new ExitTenantCommand(), cancellationToken),
-            "You are back at platform level.");
+    public async Task<IActionResult> ExitTenantAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exiting Organisation operating context.");
+
+        var result = await tenantSelection.HandleAsync(
+            new ExitTenantCommand(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Exiting Organisation operating context failed.");
+        else
+            logger.LogInformation("Organisation operating context exited successfully.");
+
+        return FromResult(result, "You are back at platform level.");
+    }
 
     /// <summary>The Organisations the caller may enter. Empty for a Tenant user.</summary>
     [HttpGet("/api/v1/auth/selectable-tenants")]
     [Authorize]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<TenantOptionResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSelectableTenantsAsync(CancellationToken cancellationToken) =>
-        FromResult(await tenantSelection.HandleAsync(new GetSelectableTenantsQuery(), cancellationToken));
+    public async Task<IActionResult> GetSelectableTenantsAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting selectable Organisations.");
+
+        var result = await tenantSelection.HandleAsync(
+            new GetSelectableTenantsQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get selectable Organisations.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // IAM-AUTH-02 Accept invitation and activate account
@@ -276,8 +380,18 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<InvitationPreviewResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> PreviewInvitationAsync(
-        [FromQuery] string token, CancellationToken cancellationToken) =>
-        FromResult(await invitations.HandleAsync(new PreviewInvitationQuery(token), cancellationToken));
+        [FromQuery] string token, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Previewing invitation.");
+
+        var result = await invitations.HandleAsync(
+            new PreviewInvitationQuery(token), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Invitation preview failed.");
+
+        return FromResult(result);
+    }
 
     [HttpPost("accept-invitation-and-activate-account")]
     [AllowAnonymous]
@@ -285,11 +399,16 @@ public sealed class AuthController(
     public async Task<IActionResult> AcceptInvitationAsync(
         [FromBody] AcceptInvitationRequest request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Accepting invitation and activating account.");
+
         var result = await invitations.HandleAsync(
             new AcceptInvitationCommand(request), cancellationToken);
 
         if (result.IsFailure)
         {
+            logger.LogWarning("Invitation acceptance failed.");
             return FromResult(result);
         }
 
@@ -300,6 +419,8 @@ public sealed class AuthController(
             cookies.Write(
                 Response, response.RefreshToken, DateTimeOffset.UtcNow.AddDays(14));
         }
+
+        logger.LogInformation("Invitation accepted and account activated successfully.");
 
         return FromResult(
             Result.Success(response with { RefreshToken = null }),
@@ -321,9 +442,22 @@ public sealed class AuthController(
     [ProducesResponseType(typeof(ApiResponse<MfaEnrolmentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BeginInvitationMfaEnrolmentAsync(
-        [FromBody] BeginInvitationMfaEnrolmentRequest request, CancellationToken cancellationToken) =>
-        FromResult(await invitations.HandleAsync(
-            new BeginInvitationMfaEnrolmentCommand(request), cancellationToken));
+        [FromBody] BeginInvitationMfaEnrolmentRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Starting MFA enrolment during invitation activation.");
+
+        var result = await invitations.HandleAsync(
+            new BeginInvitationMfaEnrolmentCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Invitation MFA enrolment failed.");
+        else
+            logger.LogInformation("Invitation MFA enrolment started successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Confirms the factor enrolled during activation, before the account is activated.
@@ -336,9 +470,22 @@ public sealed class AuthController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> VerifyInvitationMfaEnrolmentAsync(
-        [FromBody] VerifyInvitationMfaEnrolmentRequest request, CancellationToken cancellationToken) =>
-        FromResult(await invitations.HandleAsync(
-            new VerifyInvitationMfaEnrolmentCommand(request), cancellationToken));
+        [FromBody] VerifyInvitationMfaEnrolmentRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Verifying MFA enrolment during invitation activation.");
+
+        var result = await invitations.HandleAsync(
+            new VerifyInvitationMfaEnrolmentCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Invitation MFA enrolment verification failed.");
+        else
+            logger.LogInformation("Invitation MFA enrolment verified successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Asks for a replacement invitation.
@@ -353,9 +500,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RequestNewInvitationAsync(
-        [FromBody] RequestNewInvitationRequest request, CancellationToken cancellationToken) =>
-        FromResult(await invitations.HandleAsync(
-            new RequestNewInvitationCommand(request), cancellationToken));
+        [FromBody] RequestNewInvitationRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Requesting new invitation.");
+
+        var result = await invitations.HandleAsync(
+            new RequestNewInvitationCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("New invitation request failed.");
+        else
+            logger.LogInformation("New invitation requested successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Leaves the activation flow without completing it.
@@ -368,9 +528,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CancelActivationAsync(
-        [FromBody] CancelActivationRequest request, CancellationToken cancellationToken) =>
-        FromResult(await invitations.HandleAsync(
-            new CancelActivationCommand(request), cancellationToken));
+        [FromBody] CancelActivationRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Cancelling invitation activation.");
+
+        var result = await invitations.HandleAsync(
+            new CancelActivationCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Invitation activation cancellation failed.");
+        else
+            logger.LogInformation("Invitation activation cancelled successfully.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // IAM-AUTH-03 and IAM-AUTH-04 Password recovery
@@ -386,9 +559,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ForgotPasswordAsync(
-        [FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(
-            new ForgotPasswordCommand(request), cancellationToken));
+        [FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Starting password recovery.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new ForgotPasswordCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Password recovery initiation failed.");
+        else
+            logger.LogInformation("Password recovery initiation completed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Whether a recovery link is still usable, and the rules the new password must satisfy.
@@ -403,9 +589,18 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<ResetPasswordViewResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetResetPasswordViewAsync(
-        [FromQuery] string token, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(
-            new GetResetPasswordViewQuery(token), cancellationToken));
+        [FromQuery] string token, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting password reset view.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new GetResetPasswordViewQuery(token), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get password reset view.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Sends a fresh recovery link when the current one has lapsed.
@@ -417,9 +612,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RequestNewRecoveryLinkAsync(
-        [FromBody] RequestNewRecoveryLinkRequest request, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(
-            new RequestNewRecoveryLinkCommand(request), cancellationToken));
+        [FromBody] RequestNewRecoveryLinkRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Requesting new password recovery link.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new RequestNewRecoveryLinkCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("New password recovery link request failed.");
+        else
+            logger.LogInformation("New password recovery link requested successfully.");
+
+        return FromResult(result);
+    }
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
@@ -427,6 +635,10 @@ public sealed class AuthController(
     public async Task<IActionResult> ResetPasswordAsync(
         [FromBody] ResetPasswordRequest request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Resetting password through recovery flow.");
+
         var result = await passwordRecovery.HandleAsync(
             new ResetPasswordCommand(request), cancellationToken);
 
@@ -434,6 +646,11 @@ public sealed class AuthController(
         if (result.IsSuccess)
         {
             cookies.Clear(Response);
+            logger.LogInformation("Password reset completed and authentication cookie cleared.");
+        }
+        else
+        {
+            logger.LogWarning("Password reset failed.");
         }
 
         return FromResult(result);
@@ -444,24 +661,59 @@ public sealed class AuthController(
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<PasswordOperationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePasswordAsync(
-        [FromBody] ChangePasswordRequest request, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(
-            new ChangePasswordCommand(request), cancellationToken));
+        [FromBody] ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Changing current user's password.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new ChangePasswordCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Current user's password change failed.");
+        else
+            logger.LogInformation("Current user's password changed successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>Confirms an e-mail address from the link.</summary>
     [HttpPost("confirm-email")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<PasswordOperationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ConfirmEmailAsync(
-        [FromQuery] string token, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(new ConfirmEmailCommand(token), cancellationToken));
+        [FromQuery] string token, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Confirming email address.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new ConfirmEmailCommand(token), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Email confirmation failed.");
+        else
+            logger.LogInformation("Email address confirmed successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>The password rules, so the client strength meter matches the server.</summary>
     [HttpGet("password-policy")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<PasswordPolicyResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPasswordPolicyAsync(CancellationToken cancellationToken) =>
-        FromResult(await views.HandleAsync(new GetPasswordPolicyQuery(), cancellationToken));
+    public async Task<IActionResult> GetPasswordPolicyAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting password policy.");
+
+        var result = await views.HandleAsync(
+            new GetPasswordPolicyQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get password policy.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // IAM-AUTH-06 and IAM-AUTH-07
@@ -478,9 +730,18 @@ public sealed class AuthController(
     public IActionResult GetRecoveryGuidance(
         [FromQuery] string? reason,
         [FromQuery] DateTimeOffset? retryAfterUtc,
-        [FromQuery] string? supportEmail) =>
-        FromResult(reauthentication.GetRecoveryGuidance(reason, retryAfterUtc, supportEmail, null));
+        [FromQuery] string? supportEmail)
+    {
+        logger.LogDebug("Getting account recovery guidance.");
 
+        var result = reauthentication.GetRecoveryGuidance(
+            reason, retryAfterUtc, supportEmail, null);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get account recovery guidance.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Starts recovery from the account-unavailable screen.
@@ -493,9 +754,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<ForgotPasswordResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> StartRecoveryAsync(
-        [FromBody] StartRecoveryRequest request, CancellationToken cancellationToken) =>
-        FromResult(await passwordRecovery.HandleAsync(
-            new StartRecoveryCommand(request), cancellationToken));
+        [FromBody] StartRecoveryRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Starting account recovery.");
+
+        var result = await passwordRecovery.HandleAsync(
+            new StartRecoveryCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Account recovery initiation failed.");
+        else
+            logger.LogInformation("Account recovery initiated successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Sends a message to the service desk from somebody who cannot get in.
@@ -507,9 +781,22 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ContactSupportAsync(
-        [FromBody] ContactSupportRequest request, CancellationToken cancellationToken) =>
-        FromResult(await reauthentication.HandleAsync(
-            new ContactSupportCommand(request), cancellationToken));
+        [FromBody] ContactSupportRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Contacting support from account recovery flow.");
+
+        var result = await reauthentication.HandleAsync(
+            new ContactSupportCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Support contact request failed.");
+        else
+            logger.LogInformation("Support contact request completed successfully.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// What the step-up screen shows: why it is asking, and how long is left.
@@ -522,9 +809,18 @@ public sealed class AuthController(
     public async Task<IActionResult> GetReauthenticationViewAsync(
         [FromQuery] string? protectedActionSummary,
         [FromQuery] string? draftToken,
-        CancellationToken cancellationToken) =>
-        FromResult(await reauthentication.HandleAsync(
-            new GetReauthenticationViewQuery(protectedActionSummary, draftToken), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting reauthentication view.");
+
+        var result = await reauthentication.HandleAsync(
+            new GetReauthenticationViewQuery(protectedActionSummary, draftToken), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get reauthentication view.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Parks a half-filled form before sending somebody to confirm their identity.
@@ -541,15 +837,23 @@ public sealed class AuthController(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        logger.LogInformation("Saving protected action draft.");
+
         var result = await reauthentication.HandleAsync(
             new CreateProtectedDraftCommand(request.ActionCode, request.TargetId, request.Payload),
             cancellationToken);
 
-        return result.IsFailure
-            ? FromResult(result)
-            : FromResult(Result.Success(new SaveProtectedDraftResponse(
-                result.Value!,
-                "Your work has been kept. It will be restored once you confirm who you are.")));
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Protected action draft save failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Protected action draft saved successfully.");
+
+        return FromResult(Result.Success(new SaveProtectedDraftResponse(
+            result.Value!,
+            "Your work has been kept. It will be restored once you confirm who you are.")));
     }
 
     [HttpPost("session-timeout-and-reauthentication")]
@@ -557,9 +861,22 @@ public sealed class AuthController(
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<ReauthenticateResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ReauthenticateAsync(
-        [FromBody] ReauthenticateRequest request, CancellationToken cancellationToken) =>
-        FromResult(await reauthentication.HandleAsync(
-            new ReauthenticateCommand(request), cancellationToken));
+        [FromBody] ReauthenticateRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        logger.LogInformation("Reauthentication attempt started.");
+
+        var result = await reauthentication.HandleAsync(
+            new ReauthenticateCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Reauthentication failed.");
+        else
+            logger.LogInformation("Reauthentication completed successfully.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // Host resolution and navigation
@@ -576,8 +893,18 @@ public sealed class AuthController(
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<TenantResolutionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveTenantAsync(
-        [FromQuery] string? host, CancellationToken cancellationToken) =>
-        FromResult(await views.HandleAsync(new ResolveTenantQuery(host), cancellationToken));
+        [FromQuery] string? host, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Resolving Organisation from host.");
+
+        var result = await views.HandleAsync(
+            new ResolveTenantQuery(host), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Organisation host resolution failed.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// The navigation the caller should render.
@@ -589,16 +916,35 @@ public sealed class AuthController(
     [Authorize]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<NavigationResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetNavigationAsync(CancellationToken cancellationToken) =>
-        FromResult(await navigation.HandleAsync(new GetNavigationQuery(), cancellationToken));
+    public async Task<IActionResult> GetNavigationAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting authenticated user navigation.");
+
+        var result = await navigation.HandleAsync(
+            new GetNavigationQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get authenticated user navigation.");
+
+        return FromResult(result);
+    }
 
     /// <summary>The signed-in caller, for the client shell.</summary>
     [HttpGet("/api/v1/auth/me")]
     [Authorize]
     [AllowedWhileOnboarding]
     [ProducesResponseType(typeof(ApiResponse<SessionStatusResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetCurrentUserAsync(CancellationToken cancellationToken) =>
-        FromResult(await tokens.GetSessionStatusAsync(cancellationToken));
+    public async Task<IActionResult> GetCurrentUserAsync(CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting current authenticated user session.");
+
+        var result = await tokens.GetSessionStatusAsync(cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get current authenticated user session.");
+
+        return FromResult(result);
+    }
 
     // =================================================================================
     // Shared
@@ -615,6 +961,7 @@ public sealed class AuthController(
     {
         if (result.IsFailure)
         {
+            logger.LogWarning("Authentication token issuance failed.");
             return FromResult(result);
         }
 
@@ -623,7 +970,10 @@ public sealed class AuthController(
         if (!string.IsNullOrWhiteSpace(response.RefreshToken) && response.RefreshTokenExpiresAtUtc.HasValue)
         {
             cookies.Write(Response, response.RefreshToken, response.RefreshTokenExpiresAtUtc.Value);
+            logger.LogDebug("Refresh token written to HttpOnly cookie.");
         }
+
+        logger.LogInformation("Authentication token issuance completed successfully.");
 
         return FromResult(Result.Success(StripRefreshToken(response)), response.Message);
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Constants;
@@ -61,7 +62,8 @@ public sealed record ReferenceDataResponse(
 public sealed class ReferenceDataQueryHandler(
     ICampaignRepository campaignRepository,
     ILeadRepository leadRepository,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<ReferenceDataQueryHandler> logger)
 {
     public Task<Result<ReferenceDataResponse>> HandleAsync(
         GetReferenceDataQuery query,
@@ -69,6 +71,8 @@ public sealed class ReferenceDataQueryHandler(
     {
         _ = query;
         _ = cancellationToken;
+
+        logger.LogInformation("Getting donor reference data catalogues.");
 
         var response = new ReferenceDataResponse(
             ToLookup<DonorType>(),
@@ -96,6 +100,8 @@ public sealed class ReferenceDataQueryHandler(
             ToLookup<DocumentClassification>(),
             SupportedLanguages.All);
 
+        logger.LogInformation("Donor reference data catalogues loaded successfully.");
+
         return Task.FromResult(Result.Success(response));
     }
 
@@ -104,6 +110,13 @@ public sealed class ReferenceDataQueryHandler(
         CancellationToken cancellationToken = default)
     {
         var rows = query.MaximumRows is <= 0 or > 50 ? 20 : query.MaximumRows;
+
+        if (query.MaximumRows is <= 0 or > 50)
+        {
+            logger.LogWarning("Campaign reference-data search received an invalid maximum row count. Using the default value.");
+        }
+
+        logger.LogInformation("Searching campaigns for reference-data lookup. MaximumRows: {MaximumRows}", rows);
 
         var campaigns = await campaignRepository.SearchAsync(
             currentUser.OrganisationId, query.Search, rows, cancellationToken);
@@ -115,6 +128,8 @@ public sealed class ReferenceDataQueryHandler(
                 campaign.StartsAtUtc, campaign.EndsAtUtc))
         ];
 
+        logger.LogInformation("Campaign reference-data search completed successfully. ResultCount: {ResultCount}", items.Count);
+
         return Result.Success(items);
     }
 
@@ -122,16 +137,27 @@ public sealed class ReferenceDataQueryHandler(
         SearchLeadsQuery query,
         CancellationToken cancellationToken = default)
     {
+        var rows = query.MaximumRows is <= 0 or > 50 ? 20 : query.MaximumRows;
+
+        if (query.MaximumRows is <= 0 or > 50)
+        {
+            logger.LogWarning("Lead reference-data search received an invalid maximum row count. Using the default value.");
+        }
+
+        logger.LogInformation("Searching leads for reference-data lookup. MaximumRows: {MaximumRows}", rows);
+
         var filter = new DTOs.LeadSearchFilter
         {
             Search = query.Search,
             Page = 1,
-            PageSize = query.MaximumRows is <= 0 or > 50 ? 20 : query.MaximumRows
+            PageSize = rows
         };
 
         var page = await leadRepository.SearchAsync(filter, currentUser.Scope, cancellationToken);
 
         IReadOnlyList<LeadLookupResponse> items = [.. page.Items.Select(lead => lead.ToLookupResponse())];
+
+        logger.LogInformation("Lead reference-data search completed successfully. ResultCount: {ResultCount}", items.Count);
 
         return Result.Success(items);
     }

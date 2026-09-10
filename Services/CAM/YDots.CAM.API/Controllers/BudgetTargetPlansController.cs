@@ -26,7 +26,8 @@ namespace YDots.CAM.API.Controllers;
 [Authorize(Policy = PolicyNames.TenantContextRequired)]
 public sealed class BudgetTargetPlansController(
     BudgetPlanCommandHandler commands,
-    BudgetPlanQueryHandler queries) : ApiControllerBase
+    BudgetPlanQueryHandler queries,
+    ILogger<BudgetTargetPlansController> logger) : ApiControllerBase
 {
     // =============================================================================================
     // Reading
@@ -36,15 +37,37 @@ public sealed class BudgetTargetPlansController(
     [HasPermission(PermissionCodes.BudgetPlansView)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<BudgetPlanListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] BudgetPlanSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchBudgetPlansQuery(filter), cancellationToken));
+        [FromQuery] BudgetPlanSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Searching budget plans.");
+
+        var result = await queries.HandleAsync(new SearchBudgetPlansQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Budget plan search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("budget-plans/{id:guid}", Name = nameof(GetPlanAsync))]
     [HasPermission(PermissionCodes.BudgetPlansView)]
     [ProducesResponseType(typeof(ApiResponse<BudgetPlanDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPlanAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetBudgetPlanQuery(id), cancellationToken));
+    public async Task<IActionResult> GetPlanAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting budget plan {BudgetPlanId}.", id);
+
+        var result = await queries.HandleAsync(new GetBudgetPlanQuery(id), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get budget plan {BudgetPlanId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// A campaign's committed budget.
@@ -57,16 +80,42 @@ public sealed class BudgetTargetPlansController(
     [ProducesResponseType(typeof(ApiResponse<CampaignBudgetSummaryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCampaignSummaryAsync(
-        Guid campaignId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetCampaignBudgetSummaryQuery(campaignId), cancellationToken));
+        Guid campaignId, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting budget summary for campaign {CampaignId}.", campaignId);
+
+        var result = await queries.HandleAsync(
+            new GetCampaignBudgetSummaryQuery(campaignId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get budget summary for campaign {CampaignId}.", campaignId);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("budget-plans/export")]
     [HasPermission(PermissionCodes.BudgetPlansExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] BudgetPlanSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportBudgetPlansQuery(filter), cancellationToken));
+        [FromQuery] BudgetPlanSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting budget plans.");
+
+        var result = await queries.HandleAsync(new ExportBudgetPlansQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Budget plan export failed.");
+        }
+        else
+        {
+            logger.LogInformation("Budget plan export completed successfully.");
+        }
+
+        return FileFromResult(result);
+    }
 
     // =============================================================================================
     // Writing
@@ -86,13 +135,21 @@ public sealed class BudgetTargetPlansController(
     public async Task<IActionResult> AllocateAsync(
         [FromBody] AllocateBudgetPlanRequest request, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Allocating a new budget plan.");
+
         var result = await commands.HandleAsync(
             new AllocateBudgetPlanCommand(request), cancellationToken);
 
-        return result.IsFailure
-            ? FromResult(result)
-            : CreatedFromResult(
-                result, nameof(GetPlanAsync), new { id = result.Value!.Id }, "Budget plan allocated.");
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Budget plan allocation failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Budget plan {BudgetPlanId} allocated successfully.", result.Value!.Id);
+
+        return CreatedFromResult(
+            result, nameof(GetPlanAsync), new { id = result.Value!.Id }, "Budget plan allocated.");
     }
 
     /// <summary>
@@ -106,8 +163,24 @@ public sealed class BudgetTargetPlansController(
     [ProducesResponseType(typeof(ApiResponse<BudgetPlanDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ReviseAsync(
-        Guid id, [FromBody] ReviseBudgetPlanRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(new ReviseBudgetPlanCommand(id, request), cancellationToken));
+        Guid id, [FromBody] ReviseBudgetPlanRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Creating a new revision for budget plan {BudgetPlanId}.", id);
+
+        var result = await commands.HandleAsync(
+            new ReviseBudgetPlanCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to create a new revision for budget plan {BudgetPlanId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("New revision created successfully for budget plan {BudgetPlanId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>Edits a draft version in place. Refused on anything already submitted.</summary>
     [HttpPut("budget-plan-versions/{versionId:guid}")]
@@ -117,9 +190,24 @@ public sealed class BudgetTargetPlansController(
     public async Task<IActionResult> UpdateVersionAsync(
         Guid versionId,
         [FromBody] UpdateBudgetPlanVersionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new UpdateBudgetPlanVersionCommand(versionId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Updating budget plan version {BudgetPlanVersionId}.", versionId);
+
+        var result = await commands.HandleAsync(
+            new UpdateBudgetPlanVersionCommand(versionId, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to update budget plan version {BudgetPlanVersionId}.", versionId);
+        }
+        else
+        {
+            logger.LogInformation("Budget plan version {BudgetPlanVersionId} updated successfully.", versionId);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpPost("budget-plan-versions/{versionId:guid}/submit")]
     [HasPermission(PermissionCodes.BudgetPlansSubmit)]
@@ -128,9 +216,24 @@ public sealed class BudgetTargetPlansController(
     public async Task<IActionResult> SubmitVersionAsync(
         Guid versionId,
         [FromBody] SubmitBudgetPlanVersionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new SubmitBudgetPlanVersionCommand(versionId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Submitting budget plan version {BudgetPlanVersionId}.", versionId);
+
+        var result = await commands.HandleAsync(
+            new SubmitBudgetPlanVersionCommand(versionId, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to submit budget plan version {BudgetPlanVersionId}.", versionId);
+        }
+        else
+        {
+            logger.LogInformation("Budget plan version {BudgetPlanVersionId} submitted successfully.", versionId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Approves a version, making its figures the plan's committed budget.
@@ -146,9 +249,24 @@ public sealed class BudgetTargetPlansController(
     public async Task<IActionResult> ApproveVersionAsync(
         Guid versionId,
         [FromBody] BudgetPlanDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new ApproveBudgetPlanVersionCommand(versionId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Approving budget plan version {BudgetPlanVersionId}.", versionId);
+
+        var result = await commands.HandleAsync(
+            new ApproveBudgetPlanVersionCommand(versionId, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to approve budget plan version {BudgetPlanVersionId}.", versionId);
+        }
+        else
+        {
+            logger.LogInformation("Budget plan version {BudgetPlanVersionId} approved successfully.", versionId);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpPost("budget-plan-versions/{versionId:guid}/reject")]
     [HasPermission(PermissionCodes.BudgetPlansReject)]
@@ -158,7 +276,22 @@ public sealed class BudgetTargetPlansController(
     public async Task<IActionResult> RejectVersionAsync(
         Guid versionId,
         [FromBody] BudgetPlanDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new RejectBudgetPlanVersionCommand(versionId, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Rejecting budget plan version {BudgetPlanVersionId}.", versionId);
+
+        var result = await commands.HandleAsync(
+            new RejectBudgetPlanVersionCommand(versionId, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to reject budget plan version {BudgetPlanVersionId}.", versionId);
+        }
+        else
+        {
+            logger.LogInformation("Budget plan version {BudgetPlanVersionId} rejected successfully.", versionId);
+        }
+
+        return FromResult(result);
+    }
 }

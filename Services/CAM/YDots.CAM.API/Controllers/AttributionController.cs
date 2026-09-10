@@ -27,14 +27,26 @@ namespace YDots.CAM.API.Controllers;
 [Authorize(Policy = PolicyNames.TenantContextRequired)]
 public sealed class AttributionController(
     AttributionCommandHandler commands,
-    AttributionQueryHandler queries) : ApiControllerBase
+    AttributionQueryHandler queries,
+    ILogger<AttributionController> logger) : ApiControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.AttributionView)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<AttributionListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] AttributionSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchAttributionQuery(filter), cancellationToken));
+        [FromQuery] AttributionSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Searching attribution records.");
+
+        var result = await queries.HandleAsync(new SearchAttributionQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Attribution search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// One donation's full attribution trail.
@@ -47,8 +59,19 @@ public sealed class AttributionController(
     [HasPermission(PermissionCodes.AttributionView)]
     [ProducesResponseType(typeof(ApiResponse<AttributionDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAsync(Guid donationId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetAttributionQuery(donationId), cancellationToken));
+    public async Task<IActionResult> GetAsync(Guid donationId, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting attribution details for donation {DonationId}.", donationId);
+
+        var result = await queries.HandleAsync(new GetAttributionQuery(donationId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get attribution details for donation {DonationId}.", donationId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// How income breaks down by channel, source, medium and asset.
@@ -60,16 +83,41 @@ public sealed class AttributionController(
     [HasPermission(PermissionCodes.AttributionView)]
     [ProducesResponseType(typeof(ApiResponse<AttributionSummaryResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSummaryAsync(
-        [FromQuery] Guid? campaignId, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetAttributionSummaryQuery(campaignId), cancellationToken));
+        [FromQuery] Guid? campaignId, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting attribution summary for CampaignId {CampaignId}.", campaignId);
+
+        var result = await queries.HandleAsync(new GetAttributionSummaryQuery(campaignId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get attribution summary for CampaignId {CampaignId}.", campaignId);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("export")]
     [HasPermission(PermissionCodes.AttributionExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] AttributionSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportAttributionQuery(filter), cancellationToken));
+        [FromQuery] AttributionSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting attribution records.");
+
+        var result = await queries.HandleAsync(new ExportAttributionQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Attribution export failed.");
+        }
+        else
+        {
+            logger.LogInformation("Attribution export completed successfully.");
+        }
+
+        return FileFromResult(result);
+    }
 
     /// <summary>
     /// Asks for a donation's attribution to be looked at again.
@@ -85,9 +133,24 @@ public sealed class AttributionController(
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RequestCorrectionAsync(
         [FromBody] RequestAttributionCorrectionRequest request,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new RequestAttributionCorrectionCommand(request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Requesting attribution correction.");
+
+        var result = await commands.HandleAsync(
+            new RequestAttributionCorrectionCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Attribution correction request failed.");
+        }
+        else
+        {
+            logger.LogInformation("Attribution correction request created successfully.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Closes a correction request.
@@ -102,11 +165,26 @@ public sealed class AttributionController(
     public async Task<IActionResult> ResolveCorrectionAsync(
         Guid id,
         [FromBody] ResolveAttributionCorrectionBody body,
-        CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Resolving attribution correction request {CorrectionRequestId}.", id);
+
+        var result = await commands.HandleAsync(
             new ResolveAttributionCorrectionCommand(
                 id, body.ResolutionNote, body.AttributionChanged, body.ExpectedVersion),
-            cancellationToken));
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to resolve attribution correction request {CorrectionRequestId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Attribution correction request {CorrectionRequestId} resolved successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 }
 
 /// <summary>The body of a resolve call.</summary>

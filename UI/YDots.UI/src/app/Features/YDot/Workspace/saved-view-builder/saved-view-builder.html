@@ -139,6 +139,7 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18" stroke="currentColor" stroke-width="1.6"/></svg>
                 </span>
                 <select id="svb-module" class="svb-select svb-select-lead" [ngModel]="selectedModule()" (ngModelChange)="onModuleChange($event)">
+                  <option value="" disabled>Select Module</option>
                   @for (m of modules; track m.value) { <option [value]="m.value">{{ m.label }}</option> }
                 </select>
                 <span class="svb-caret" aria-hidden="true">⌄</span>
@@ -149,6 +150,7 @@
               <div class="svb-baseview-row">
                 <div class="svb-select-wrap">
                   <select id="svb-baseview" class="svb-select" [ngModel]="selectedBaseView()" (ngModelChange)="selectedBaseView.set($event)">
+                    <option value="">Select Base View</option>
                     @for (b of baseViews(); track b) { <option [value]="b">{{ b }}</option> }
                   </select>
                   <span class="svb-caret" aria-hidden="true">⌄</span>
@@ -440,6 +442,7 @@
               <label class="svb-label" for="svb-owner">Owner</label>
               <div class="svb-select-wrap">
                 <select id="svb-owner" class="svb-select" [ngModel]="viewOwner()" (ngModelChange)="viewOwner.set($event)">
+                  <option value="" disabled>Select Owner</option>
                   @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
                 </select>
                 <span class="svb-caret" aria-hidden="true">⌄</span>

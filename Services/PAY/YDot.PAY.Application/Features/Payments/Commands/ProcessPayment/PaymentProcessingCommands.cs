@@ -104,12 +104,13 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Received gateway webhook from {GatewayName}.", command.GatewayName);
+
         var parsed = paymentGateway.ParseWebhook(command.Payload);
 
         if (parsed is null)
         {
-            logger.LogWarning(
-                "A webhook from {GatewayName} could not be parsed and was ignored.", command.GatewayName);
+            logger.LogWarning("A webhook from {GatewayName} could not be parsed and was ignored.", command.GatewayName);
 
             return Result.Failure<Guid>(Error.Validation("The webhook payload could not be read."));
         }
@@ -121,8 +122,7 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (existing is not null)
         {
-            logger.LogInformation(
-                "Gateway event {GatewayEventId} was already received. Ignoring the redelivery.",
+            logger.LogInformation("Gateway event {GatewayEventId} was already received. Ignoring the redelivery.",
                 parsed.GatewayEventId);
 
             return Result.Success(existing.Id);
@@ -187,8 +187,7 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (!signatureVerified)
         {
-            logger.LogWarning(
-                "Gateway event {GatewayEventId} failed signature verification and will not be "
+            logger.LogWarning("Gateway event {GatewayEventId} failed signature verification and will not be "
                 + "processed. This is either a misconfiguration or a forgery attempt.",
                 parsed.GatewayEventId);
 
@@ -226,6 +225,8 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Applying payment event {PaymentEventId}.", command.PaymentEventId);
+
         try
         {
             return await ApplyEventAsync(command.PaymentEventId, cancellationToken);
@@ -254,9 +255,7 @@ public sealed class PaymentProcessingCommandHandler(
             //
             // CANCELLATION IS NOT SWALLOWED. A cancelled request is the caller going away, not a
             // payment that failed, and turning it into a recorded failure would be a lie.
-            logger.LogError(
-                exception,
-                "Payment event {PaymentEventId} could not be applied: {Reason}",
+            logger.LogError(exception,"Payment event {PaymentEventId} could not be applied: {Reason}",
                 command.PaymentEventId,
                 DescribeFailure(exception));
 
@@ -276,17 +275,24 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (paymentEvent is null)
             {
+                logger.LogWarning("Payment event {PaymentEventId} was not found.", paymentEventId);
+
                 return Result.Failure<OutcomeResponse>(Error.NotFound("That payment event was not found."));
             }
 
             if (paymentEvent.Status == PaymentEventStatus.Processed)
             {
+                logger.LogWarning("Payment event {PaymentEventId} has already been processed.", paymentEventId);
+
                 return Result.Failure<OutcomeResponse>(
                     Error.InvalidTransition("That payment event has already been applied."));
             }
 
             if (!paymentEvent.SignatureVerified)
             {
+                logger.LogWarning("Payment event {PaymentEventId} was rejected because its signature is not verified.",
+                    paymentEventId);
+
                 return Result.Failure<OutcomeResponse>(Error.Forbidden(
                     "This event's signature could not be verified, so it will not be applied."));
             }
@@ -299,6 +305,9 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (attempt is null)
             {
+                logger.LogWarning("Payment event {PaymentEventId} could not be matched to a payment attempt.",
+                    paymentEventId);
+
                 // An event we cannot match to an attempt is not a failure of ours - it may be for
                 // a payment created outside this system entirely. It sits in the queue for a
                 // person rather than being retried forever.
@@ -316,6 +325,9 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (intent is null)
             {
+                logger.LogWarning("Payment event {PaymentEventId} references a payment attempt without a donation intent.",
+                    paymentEventId);
+
                 paymentEvent.Status = PaymentEventStatus.Failed;
                 paymentEvent.ProcessingError = "The attempt has no donation intent.";
 
@@ -370,6 +382,17 @@ public sealed class PaymentProcessingCommandHandler(
                 token);
 
             await unitOfWork.SaveChangesAsync(token);
+
+            if (outcome.IsFailure)
+            {
+                logger.LogWarning("Payment event {PaymentEventId} processing failed: {Message}.",
+                    paymentEventId,outcome.Error!.Message);
+            }
+            else
+            {
+                logger.LogInformation("Payment event {PaymentEventId} processed successfully.",
+                    paymentEventId);
+            }
 
             return outcome.IsFailure
                 ? Result.Failure<OutcomeResponse>(outcome.Error!)
@@ -448,8 +471,7 @@ public sealed class PaymentProcessingCommandHandler(
         {
             paymentEvent.Status = PaymentEventStatus.Duplicate;
 
-            logger.LogInformation(
-                "Capture event for intent {IntentReference} ignored: donation {DonationReference} "
+            logger.LogInformation("Capture event for intent {IntentReference} ignored: donation {DonationReference} "
                 + "already exists.", intent.IntentReference, existing.DonationReference);
 
             return Result.Success("This payment was already recorded.");
@@ -969,6 +991,10 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning(
+                "Settlement event {PaymentEventId} could not find a recorded donation.",
+                paymentEvent.Id);
+
             return Result.Failure<string>(Error.NotFound(
                 "A settlement event arrived for a payment with no recorded donation."));
         }
@@ -980,6 +1006,10 @@ public sealed class PaymentProcessingCommandHandler(
         {
             donation.Status = DonationStatus.Settled;
         }
+
+        logger.LogInformation(
+            "Donation {DonationReference} marked as settled.",
+            donation.DonationReference);
 
         await audit.WriteAnonymousAsync(
             AuditActionCodes.DonationSettled,
@@ -1025,11 +1055,19 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Confirming checkout payment for intent {IntentReference}.",
+            command.IntentReference);
+
         var intent = await donations.GetIntentByReferenceAsync(
             command.IntentReference, cancellationToken);
 
         if (intent is null)
         {
+            logger.LogWarning(
+                "Checkout confirmation could not find intent {IntentReference}.",
+                command.IntentReference);
+
             return Result.Failure<PaymentVerificationResponse>(
                 Error.NotFound("That donation was not found."));
         }
@@ -1038,6 +1076,10 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (attempt is null)
         {
+            logger.LogWarning(
+                "Checkout confirmation could not find a payment attempt for intent {IntentReference}.",
+                command.IntentReference);
+
             return Result.Failure<PaymentVerificationResponse>(
                 Error.NotFound("That payment was not found."));
         }
@@ -1046,6 +1088,10 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (account is null)
         {
+            logger.LogWarning(
+                "Checkout confirmation could not proceed because no active payment gateway is configured for intent {IntentReference}.",
+                command.IntentReference);
+
             return Result.Failure<PaymentVerificationResponse>(Error.PaymentGatewayNotConfigured());
         }
 
@@ -1080,6 +1126,10 @@ public sealed class PaymentProcessingCommandHandler(
 
         attempt.GatewayReference = command.Request.PaymentReference;
 
+        logger.LogInformation(
+            "Checkout confirmation signature verified for intent {IntentReference}.",
+            intent.IntentReference);
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // THE ORDINARY VERIFICATION PATH FROM HERE. It asks the provider, records the donation,
@@ -1108,6 +1158,8 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting payment verification.");
+
         var request = command.Request;
 
         PaymentAttempt? attempt;
@@ -1129,6 +1181,8 @@ public sealed class PaymentProcessingCommandHandler(
         }
         else
         {
+            logger.LogWarning("Payment verification rejected because neither a payment attempt nor an intent reference was supplied.");
+
             return Result.Failure<PaymentVerificationResponse>(Error.Validation(
                 "Name either a donation reference or a payment attempt.",
                 [new ValidationError("intentReference", "Supply a donation reference.")]));
@@ -1136,6 +1190,8 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (intent is null || attempt is null)
         {
+            logger.LogWarning("Payment verification could not find the requested payment.");
+
             return Result.Failure<PaymentVerificationResponse>(
                 Error.NotFound("That payment was not found."));
         }
@@ -1144,6 +1200,10 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (account is null || string.IsNullOrWhiteSpace(attempt.GatewayReference))
         {
+            logger.LogWarning(
+                "Payment verification for intent {IntentReference} could not reach a configured gateway reference; returning local state.",
+                intent.IntentReference);
+
             // Nothing to verify against. The local state is the best answer available.
             return BuildVerificationResponse(intent, attempt, null, cancellationToken);
         }
@@ -1272,6 +1332,11 @@ public sealed class PaymentProcessingCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Payment verification completed for intent {IntentReference} with status {Status}.",
+            intent.IntentReference,
+            verification.Status);
+
         return BuildVerificationResponse(intent, attempt, verification, cancellationToken);
     }
 
@@ -1292,15 +1357,24 @@ public sealed class PaymentProcessingCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Starting safe payment retry for intent {IntentId}.",
+            command.IntentId);
+
         var intent = await donations.GetIntentAsync(command.IntentId, cancellationToken);
 
         if (intent is null)
         {
+            logger.LogWarning("Safe retry could not find intent {IntentId}.", command.IntentId);
+
             return Result.Failure<SafeRetryResponse>(Error.NotFound("That donation was not found."));
         }
 
         if (intent.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Safe retry for intent {IntentId} rejected because the record version is stale.",
+                command.IntentId);
+
             return Result.Failure<SafeRetryResponse>(Error.Concurrency());
         }
 
@@ -1314,6 +1388,9 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (intent.Status == DonationIntentStatus.Paid)
         {
+            logger.LogWarning("Safe retry for intent {IntentReference} rejected because the donation is already paid.",
+                intent.IntentReference);
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new SafeRetryResponse(
@@ -1338,6 +1415,9 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (verified.IsFailure)
             {
+                logger.LogWarning("Safe retry verification failed for intent {IntentReference}: {Message}.",
+                    intent.IntentReference,verified.Error!.Message);
+
                 return Result.Failure<SafeRetryResponse>(verified.Error!);
             }
 
@@ -1345,6 +1425,10 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (refreshed.Status == DonationIntentStatus.Paid)
             {
+                logger.LogInformation(
+                    "Safe retry verification found that intent {IntentReference} was already paid.",
+                    refreshed.IntentReference);
+
                 return new SafeRetryResponse(
                     refreshed.Id,
                     refreshed.IntentReference,
@@ -1360,6 +1444,10 @@ public sealed class PaymentProcessingCommandHandler(
 
             if (stillPending is not null && stillPending.Status == PaymentAttemptStatus.Pending)
             {
+                logger.LogWarning(
+                    "Safe retry for intent {IntentReference} remains blocked because the previous payment is still pending.",
+                    refreshed.IntentReference);
+
                 return new SafeRetryResponse(
                     refreshed.Id,
                     refreshed.IntentReference,
@@ -1377,11 +1465,17 @@ public sealed class PaymentProcessingCommandHandler(
 
         if (intent.IsTerminal)
         {
+            logger.LogWarning("Safe retry for intent {IntentReference} rejected because the intent is terminal with status {Status}.",
+                intent.IntentReference,intent.Status);
+
             return Result.Failure<SafeRetryResponse>(Error.InvalidTransition(
                 $"This donation is {intent.Status} and cannot be retried."));
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Safe retry completed for intent {IntentReference}.",
+            intent.IntentReference);
 
         return new SafeRetryResponse(
             intent.Id,

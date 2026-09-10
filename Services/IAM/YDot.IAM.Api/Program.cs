@@ -159,6 +159,24 @@ finally
 /// </summary>
 internal static class DatabaseInitialisation
 {
+
+    internal static IHostBuilder UseIamSerilog(this IHostBuilder host) =>
+    host.UseSerilog((context, services, configuration) =>
+    {
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.FromLogContext()
+            .Enrich.WithProperty("ServiceName", "IAM")
+            .WriteTo.Console();
+
+        var seqUrl = context.Configuration["Seq:ServerUrl"];
+
+        if (!string.IsNullOrWhiteSpace(seqUrl))
+        {
+            configuration.WriteTo.Seq(seqUrl);
+        }
+    });
     /// <summary>
     /// Applies pending migrations and runs the seeder, both gated by configuration.
     ///
@@ -218,6 +236,15 @@ internal static class DatabaseInitialisation
                 // find no root to attach to and skip everything with a warning.
                 var masterSeeder = scope.ServiceProvider.GetRequiredService<GlobalMasterSeeder>();
                 await masterSeeder.SeedAsync();
+
+                // THIRD, AND LAST. The demonstration access requests and the recertification
+                // campaign name the sample Organisation's users and roles by id, so they need
+                // IamDbSeeder to have created and SAVED both - which is why this cannot be a
+                // step inside it.
+                var governanceSeeder = scope.ServiceProvider
+                    .GetRequiredService<AccessGovernanceSeeder>();
+
+                await governanceSeeder.SeedAsync();
             }
 
             // The document bucket, created if missing and switched to versioned. Deliberately

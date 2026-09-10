@@ -82,8 +82,16 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Total Amount</span>
+<<<<<<< HEAD
         <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
         <span class="pr-tile-note">In selected scope</span>
+=======
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-gold))">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
+        <!-- SUCCESSFUL MONEY ONLY, and the note has to say so. A failed or pending payment moved
+             nothing, so the total sits below the sum of the amounts in the table - which reads
+             as an error unless the tile explains itself. -->
+        <span class="pr-tile-note">Received in scope</span>
+>>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V20C26 6 54 4 86 14 118 24 146 22 174 12 194 5 210 12 220 16V30Z" fill="currentColor"/></svg>
     </div>
@@ -93,8 +101,17 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Successful</span>
+<<<<<<< HEAD
         <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">{{ successfulCount() }}</span>
         <span class="pr-tile-note">Receipt sent</span>
+=======
+        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-meadow))">{{ successfulCount() }}</span>
+        <!-- ISSUED, NOT SENT. The count is of receipts that exist; whether each one reached its
+             donor is the receipt-status column's business, and it has four answers rather than
+             one. The note claimed delivery this number does not measure - a receipt whose
+             e-mail bounced was counted here under the words "Receipt sent". -->
+        <span class="pr-tile-note">Receipt issued</span>
+>>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V22C44 26 78 10 114 12 150 14 182 2 220 14V30Z" fill="currentColor"/></svg>
     </div>
@@ -442,7 +459,22 @@
               <button type="button" class="btn btn-danger btn-sm  pr-btn-block" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
                 {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry' }}
               </button>
-              <p class="pr-hint">Retries the same payment. A second failure sends this to Payment Support &amp; Safe Retry.</p>
+              <!-- THE HINT NAMES BOTH HALVES, because the safe half is the one that surprises
+                   people. Verification can come back "already paid", and then no link is sent
+                   and no button did anything - which reads as a broken retry unless the screen
+                   said in advance that checking first is what it does. -->
+              @if (canResendLink()) {
+                <p class="pr-hint">
+                  Checks with the provider first, then e-mails a fresh payment link to
+                  {{ e.donorEmail }}. Nothing is sent if that check finds the donor was already
+                  charged. A second failure sends this to Payment Support &amp; Safe Retry.
+                </p>
+              } @else {
+                <p class="pr-hint">
+                  Checks with the provider whether the last attempt really failed. It does not
+                  charge anything and does not send a payment link.
+                </p>
+              }
             }
             <!-- CONTINUE TO PAY, likewise: the table gives it to Donor/Initiator only. -->
             @if (e.paymentStatus === 'Pending' && canContinuePayment()) {

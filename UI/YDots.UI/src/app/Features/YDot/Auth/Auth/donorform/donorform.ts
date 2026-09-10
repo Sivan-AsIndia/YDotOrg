@@ -50,6 +50,37 @@ interface ScopeOption {
   readonly reference: string;
   readonly name: string;
   readonly context: string;
+
+  /**
+   * The campaign's GUID, where the source of the option knows it.
+   *
+   * WHY IT HAD TO BE ADDED. The API's `campaignId` is a Guid, and the only translation from the
+   * readable code to it was `CampaignStoreService.apiId()` - which is the AUTHENTICATED register
+   * and is deliberately not resolved for a visitor with no session. So on the one form that
+   * exists for people with no session, the campaign a link named was selected on screen, locked,
+   * and then sent as null: every anonymous donation from a `?campaign=` link was recorded against
+   * no campaign at all.
+   *
+   * The public campaigns endpoint returns the id on every row and always did; the picker was
+   * throwing it away. Optional because the signed-in branch still resolves through the store.
+   */
+  readonly apiId?: string | null;
+
+  /**
+   * The campaign amount - the fixed figure this appeal is stated at.
+   *
+   * IT TRAVELS WITH THE OPTION rather than being looked up when one is chosen, because the two
+   * sources this picker is fed from are different shapes and only one of them is reachable
+   * without a session. Carrying it here means the Campaign amount field fills the same way for an
+   * anonymous donor following a QR code and for a signed-in fundraiser choosing from the register.
+   *
+   * ZERO OR UNDEFINED MEANS NOT STATED - a campaign created before the column existed - and the
+   * field shows nothing rather than "0.00".
+   */
+  readonly amount?: number;
+
+  /** The ISO currency the amount is stated in, so the field can print a symbol beside it. */
+  readonly currencyCode?: string;
 }
 
 interface CatalogueOption {
@@ -163,15 +194,59 @@ export class DonorformComponent {
    */
   protected readonly trackingReference = signal<string>('');
 
+  /** The raw `?campaign=` value, exactly as the link carried it. Empty when it carried none. */
+  protected readonly campaignCodeFromLink = signal<string>('');
+
   /**
-   * True when the link named the campaign, so the picker is bound and locked.
+   * True when the link named a campaign THAT WE FOUND, so the picker is bound and locked.
    *
    * THE FLOW DOCUMENT ASKS FOR EXACTLY THIS: "If the shared link carries a campaign name, that
    * campaign is auto-bound as the default on the donation form and cannot be edited or changed
    * by the donor. If the link does not carry a campaign name, the form shows a Campaign dropdown
    * so the donor can select the campaign themselves."
+   *
+   * IT IS DERIVED FROM THE RESOLUTION, NOT FROM THE PRESENCE OF THE PARAMETER, and that is the
+   * correction. It used to be set the moment a `?campaign=` was seen - before anything had
+   * looked the code up - so a link naming a campaign that does not exist, has closed, or was
+   * simply mistyped locked an EMPTY picker: the donor was shown a required field they could not
+   * fill, on a page whose only purpose is to take their money. `?campaign=DUMMY` was a dead end.
+   *
+   * A link that cannot be honoured now falls back to the behaviour of a link that named nothing
+   * at all - the full picker, open - which is the one outcome that always leaves the donor able
+   * to give.
    */
-  protected readonly campaignLockedByLink = signal(false);
+  protected readonly campaignLockedByLink = computed(() => this.campaignBoundFromLink());
+
+  /**
+   * Whether the campaign now selected is the one the LINK resolved to.
+   *
+   * WHY THIS IS NOT "a link code is present AND something is selected", which is what it looked
+   * like it could be. On `?campaign=DUMMY` the picker is deliberately left open so the donor can
+   * choose - and the moment they chose, that test would have become true and the dropdown would
+   * have locked itself behind them, on their own selection. They would have had exactly one
+   * chance to pick, with no way back if they picked wrong.
+   *
+   * Only a successful match in `bindCampaignFromCode` sets this. A donor's own choice never
+   * does, so a link we could not honour leaves the picker usable for as long as they need it.
+   */
+  private readonly campaignBoundFromLink = signal(false);
+
+  /**
+   * The link named a campaign and the list has answered without it.
+   *
+   * SAID OUT LOUD RATHER THAN SILENTLY IGNORED. The donor followed a link to a particular
+   * appeal; if that appeal is not on offer they should be told why they are being asked to
+   * choose, instead of wondering whether they opened the wrong link.
+   *
+   * IT WAITS FOR THE LIST. `campaignOptions()` is empty until the public campaigns call returns,
+   * and announcing "not open" in that window would flash a falsehood on every load.
+   */
+  protected readonly campaignLinkUnresolved = computed(
+    () =>
+      this.campaignCodeFromLink() !== ''
+      && !this.campaignBoundFromLink()
+      && this.campaignOptions().length > 0,
+  );
 
   /**
    * A campaign id taken straight from the link, when the link carries one.
@@ -265,6 +340,15 @@ export class DonorformComponent {
         reference: campaign.code,
         name: campaign.name,
         context: 'Open for donations',
+
+        // THE ID TRAVELS WITH THE OPTION. See the note on ScopeOption.apiId - without it an
+        // anonymous donor's gift reaches the server with campaignId null.
+        apiId: campaign.id,
+
+        // AND SO DOES THE AMOUNT, so the Campaign amount field beside the picker fills from the
+        // same answer that named the campaign, with no second call and nothing to resolve.
+        amount: campaign.campaignAmount,
+        currencyCode: campaign.currencyCode,
       }));
     }
 
@@ -275,6 +359,17 @@ export class DonorformComponent {
         reference: c.code,
         name: c.name,
         context: c.status,
+
+        // CARRIED HERE TOO, so `?campaign=<guid>` resolves to a real option for a signed-in
+        // caller exactly as it does for an anonymous one - and therefore locks, rather than
+        // falling through to the id-only path that locked an empty picker.
+        apiId: store.apiId(c.code) ?? null,
+
+        amount: c.campaignAmount,
+
+        // The register's currency name reads "INR - Indian Rupee"; the ISO code is the half worth
+        // printing beside a figure.
+        currencyCode: (c.currencyName ?? '').split('—')[0].split('-')[0].trim() || undefined,
       }));
   });
 
@@ -322,6 +417,112 @@ export class DonorformComponent {
     });
   }
 
+  // ===========================================================================================
+  // Campaign amount
+  // ===========================================================================================
+  //
+  // THE FIGURE THE CHOSEN CAMPAIGN IS STATED AT, AND THE AMOUNT THIS DONOR WILL PAY.
+  //
+  // THE SEPARATE "Donation amount" FIELD HAS GONE. A campaign now states what it asks for, and a
+  // donor giving to it pays that - so a second box asking them to type a number was asking a
+  // question the campaign had already answered, and inviting the two to disagree.
+  //
+  // ITS ENABLED STATE FOLLOWS THE CAMPAIGN PICKER'S EXACTLY. A link that names a campaign locks
+  // both; a form with no campaign on its link leaves both open, and this one fills the moment a
+  // campaign is chosen. That pairing is the point: two controls describing one decision should
+  // never be in different states.
+
+  /** The selected campaign's stated amount, or null when it has none. */
+  protected readonly campaignAmount = computed(() => {
+    const amount = this.selectedCampaign()?.amount;
+    return typeof amount === 'number' && amount > 0 ? amount : null;
+  });
+
+  /** The currency the amount is stated in. Falls back to the form's own currency selection. */
+  protected readonly campaignAmountCurrency = computed(
+    () => this.selectedCampaign()?.currencyCode ?? '',
+  );
+
+  /**
+   * The amount as the disabled control shows it.
+   *
+   * THREE DIFFERENT EMPTY STATES, said differently, because they mean different things to
+   * somebody looking at a form they are being asked to complete: no campaign chosen yet, a
+   * campaign that does not state an amount, and a campaign chosen for them by their link.
+   */
+  protected readonly campaignAmountLabel = computed(() => {
+    const amount = this.campaignAmount();
+
+    if (amount === null) {
+      return '';
+    }
+
+    const formatted = amount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const code = this.campaignAmountCurrency();
+
+    return code ? `${code} ${formatted}` : formatted;
+  });
+
+  /**
+   * The options the Campaign amount dropdown offers.
+   *
+   * EXACTLY ONE, OR NONE - it mirrors the campaign picker rather than offering a choice of its
+   * own, because the amount is a property of the campaign and not a second decision. Rendering it
+   * as a select keeps it visually identical to the other controls on the form and makes the
+   * auto-selection visible: the donor can see the value was chosen for them.
+   */
+  protected readonly campaignAmountOptions = computed(() => {
+    const label = this.campaignAmountLabel();
+    return label ? [label] : [];
+  });
+
+  /** Disabled whenever the campaign picker is, and additionally when there is nothing to show. */
+  protected readonly campaignAmountDisabled = computed(
+    () => this.formLocked() || this.campaignLockedByLink() || this.campaignAmount() === null,
+  );
+
+  /**
+   * True when a campaign is chosen and states no amount, so there is nothing to charge.
+   *
+   * IT IS THE ONE WAY THIS FORM CAN NOW BE UNPAYABLE. Campaigns created before the amount column
+   * existed hold zero, which means "never stated" rather than "free" - so rather than sending a
+   * gift of nothing to the gateway, the form says so against the campaign field and refuses.
+   */
+  protected readonly campaignStatesNoAmount = computed(
+    () => !!this.selectedCampaign() && this.campaignAmount() === null,
+  );
+
+  /**
+   * Keeps the payable amount and the currency in step with the chosen campaign.
+   *
+   * THE CURRENCY MOVES WITH THE AMOUNT, and it has to. The figure is stated in the campaign's own
+   * currency, so leaving the donor free to pick a different one would send "5000" with a currency
+   * that never applied to it - a real charge, in the wrong denomination, that nothing downstream
+   * could detect. The currency control below is disabled for the same reason and at the same
+   * times.
+   *
+   * A REOPENED INTENT WINS. See `amountFromIntent`.
+   */
+  private syncAmountToCampaign(): void {
+    if (this.amountFromIntent()) {
+      return;
+    }
+
+    const amount = this.campaignAmount();
+
+    this.donationAmount.set(amount === null ? '' : String(amount));
+
+    const code = this.campaignAmountCurrency();
+
+    if (code) {
+      this.currency.set(code);
+    }
+  }
+
   protected readonly campaignQuery = signal('');
   protected readonly selectedCampaign = signal<ScopeOption | null>(null);
   protected readonly campaignPickerOpen = signal(false);
@@ -341,6 +542,11 @@ export class DonorformComponent {
     this.selectedCampaign.set(option);
     this.campaignPickerOpen.set(false);
     this.campaignQuery.set('');
+
+    // THE AMOUNT AND THE CURRENCY FOLLOW THE CAMPAIGN. Called here rather than from an effect so
+    // the two move in the same change detection pass as the choice that caused them - a donor
+    // should never see the old amount beside the new campaign, however briefly.
+    this.syncAmountToCampaign();
   }
   protected toggleCampaignPicker(): void {
     // LOCKED BY THE LINK IS ALSO LOCKED, not just locked by the lifecycle. A link that names the
@@ -408,9 +614,40 @@ export class DonorformComponent {
     return `${v[0]}••••${v.slice(at - 1)}`;
   });
 
+  /**
+   * What this donor will be charged.
+   *
+   * IT IS NO LONGER TYPED. The campaign states the amount and the donor pays it, so the field
+   * that used to ask for one has gone from the form entirely - this signal is now written from
+   * the chosen campaign (see the effect in the constructor) and read by `buildIntentRequest`.
+   *
+   * IT IS STILL A SIGNAL AND NOT A COMPUTED, because there is a second source: reopening an
+   * existing intent restores the amount that intent was created with, and that has to win. A
+   * donor who started a gift last week and came back through "Continue to payment" is paying what
+   * they committed to, not what the campaign happens to say today - re-pricing an intent
+   * underneath somebody mid-flight is exactly the thing a payment record exists to prevent.
+   */
   protected readonly donationAmount = signal<string>('');
+
+  /**
+   * True once a reopened intent has supplied the amount, which stops the campaign overwriting it.
+   *
+   * See the note above. Without this the effect would fire as soon as the campaign was matched
+   * back onto the picker and quietly re-price a donation the donor is part-way through paying.
+   */
+  private readonly amountFromIntent = signal(false);
+
   protected readonly amountOverLimitAllowed = signal(false);
   protected readonly maxDonationAmount = signal(500000);
+
+  /**
+   * The stated amount is outside what this form may take.
+   *
+   * IT STILL APPLIES, even though nobody types the figure any more: a campaign created with an
+   * amount above the organisation's ceiling would otherwise reach the gateway unchecked. What
+   * changed is where it is REPORTED - the campaign field, since that is the only control the
+   * donor can act on.
+   */
   protected readonly amountInvalid = computed(() => {
     const raw = this.donationAmount().trim();
     if (!raw) {
@@ -664,13 +901,21 @@ export class DonorformComponent {
         message: 'Review Email or mobile. The value does not meet the stated format or range.',
       });
     }
-    if (!this.donationAmount().trim()) {
-      errors.push({ field: 'donationAmount', label: 'Donation amount', message: 'Enter Donation amount.' });
+    // THE AMOUNT IS THE CAMPAIGN'S, SO SO IS THE ERROR. There is no Donation amount field left to
+    // point at, and telling somebody to "enter" a figure the form never asks them for would send
+    // them looking for a control that is not on the page. Both messages name the campaign, which
+    // is the only thing they can actually change.
+    if (this.campaignStatesNoAmount()) {
+      errors.push({
+        field: 'campaign',
+        label: 'Campaign or appeal',
+        message: 'This appeal does not state an amount to give. Choose another one.',
+      });
     } else if (this.amountInvalid()) {
       errors.push({
-        field: 'donationAmount',
-        label: 'Donation amount',
-        message: 'Review Donation amount. The value does not meet the stated format or range.',
+        field: 'campaign',
+        label: 'Campaign or appeal',
+        message: "This appeal's amount is outside the range this form can take. Contact the organisation.",
       });
     }
     if (!this.currency()) {
@@ -794,8 +1039,14 @@ export class DonorformComponent {
       currencyCode: this.currency(),
       // THE LINK'S OWN ID WINS - see `campaignIdFromLink`. This form is the one a lead opens
       // with no session, so it is the branch that matters most here.
+      // WHAT IS SELECTED ON SCREEN IS WHAT IS SENT, and that ordering matters now that an
+      // unresolvable link leaves the donor free to choose. With the link's id first, somebody
+      // who arrived on `?campaign=<unknown guid>` and then picked an appeal from the open
+      // dropdown would have had their choice silently overridden by the dead id from the link.
+      // The store is last and answers only for a signed-in caller.
       campaignId:
-        this.campaignIdFromLink()
+        this.selectedCampaign()?.apiId
+        ?? this.campaignIdFromLink()
         ?? (campaignRef ? this.campaignStoreOrNull()?.apiId(campaignRef) ?? null : null),
       trackingReference: this.trackingReference() || null,
       taxIdentifier: this.panOrTaxId().trim() || null,
@@ -865,7 +1116,14 @@ export class DonorformComponent {
     // THE DONATION SURVIVES THE DETOUR. It is already created and already carries the campaign,
     // amount and consent, so the return URL names it and the in-app screen reopens it - the
     // donor confirms and pays once, rather than filling the form in twice.
-    if (intent.requiresSignIn) {
+    // ALREADY SIGNED IN MEANS THE DETOUR IS POINTLESS. `requiresSignIn` answers "does this
+    // address have an account here", which is true for a signed-in donor typing their own
+    // address - and sending them to a sign-in form they are already through would take them
+    // away from a donation they were in the middle of making, to prove something the session
+    // in their browser already proves. The public form is reachable while signed in (a
+    // fundraiser capturing a gift, a donor who wandered back to it), so this branch has to ask
+    // about the SESSION and not only about the account.
+    if (intent.requiresSignIn && !this.isInternalView()) {
       this.uiState.set('success');
       this.pushActivity('This address already has an account; sent to sign in.');
 
@@ -1029,15 +1287,33 @@ export class DonorformComponent {
    * A FAILED CONFIRMATION IS NOT A FAILED PAYMENT, and the donor must never be told it is. The
    * money may well have moved; what failed was our chance to hear about it on this request. Both
    * branches go to the result page, which asks again and keeps asking.
+   *
+   * THE NAVIGATION HAPPENS FIRST, AND THAT IS THE POINT OF THIS METHOD'S SHAPE. It used to wait
+   * for the confirm to answer before moving, so for the length of that round trip the donor was
+   * looking at the donation form they had just paid from - name, amount and consent still filled
+   * in, "Continue to payment" still on it. Somebody who has just been charged and is shown the
+   * payment form again has every reason to believe it failed, and the one thing they must not do
+   * then is pay a second time.
+   *
+   * NOTHING DEPENDS ON THIS COMPONENT SURVIVING TO HEAR THE ANSWER. The request is started before
+   * the navigation, so it is in flight; nothing unsubscribes it, so leaving does not cancel it.
+   * And were it lost entirely the payment would still settle - the result page verifies by asking
+   * the PROVIDER, a pull that needs nothing from this browser.
    */
   private confirmCheckout(session: CheckoutSession, confirmation: ConfirmCheckoutRequest): void {
-    this.uiState.set('loading');
     this.pushActivity('Payment completed at the gateway; confirming.');
 
+    // STARTED FIRST so the request is already in flight when this component goes away.
     this.payments.confirmCheckout(session.intentReference, confirmation).subscribe({
-      next: () => this.goToResult(session.intentReference),
-      error: () => this.goToResult(session.intentReference),
+      next: () => undefined,
+
+      // Swallowed on purpose: the donor is already on the result page, which asks the provider
+      // directly and keeps asking. Reporting a failed confirm here would put an error in front
+      // of somebody whose money moved perfectly well.
+      error: () => undefined,
     });
+
+    this.goToResult(session.intentReference);
   }
 
   /**
@@ -1140,13 +1416,16 @@ export class DonorformComponent {
   }
 
   constructor() {
-    this.readLinkContext();
-    this.loadPublicCampaigns();
-
+    // RESET BEFORE READING THE LINK, not after. The reset clears what a link decided about the
+    // campaign - it has to, or the picker is left locked around a cleared selection - so doing
+    // it second would throw away the context just read and leave a perfectly good
+    // `?campaign=` link behaving like a bare one.
     if (!this.route.snapshot.queryParamMap.get('intent')) {
       this.resetDonationFields();
     }
 
+    this.readLinkContext();
+    this.loadPublicCampaigns();
     this.loadConfig();
 
     // AND AGAIN ON EVERY LATER ARRIVAL. A lead sent back to this form after paying reaches this
@@ -1155,6 +1434,11 @@ export class DonorformComponent {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((current) => {
       if (this.intentReference() && !current.get('intent')) {
         this.resetDonationFields();
+
+        // RE-READ FROM THE URL THAT JUST ARRIVED. The reset dropped the previous link's campaign
+        // along with the gift; whatever this navigation carries - a campaign, or nothing - is
+        // what the form should now be bound to.
+        this.readLinkContext();
       }
     });
   }
@@ -1178,7 +1462,17 @@ export class DonorformComponent {
     this.selectedCampaign.set(null);
     this.campaignQuery.set('');
     this.campaignPickerOpen.set(false);
+
+    // THE LINK'S HOLD ON THE PICKER GOES WITH THE SELECTION IT MADE. Clearing the campaign while
+    // leaving `campaignBoundFromLink` set would leave the picker locked around nothing - a
+    // required field, disabled and empty, which is the exact dead end the DUMMY link used to
+    // produce. The caller re-reads the link context afterwards, so a URL that still names a
+    // campaign binds again a moment later.
+    this.campaignCodeFromLink.set('');
+    this.campaignBoundFromLink.set(false);
+    this.campaignIdFromLink.set(null);
     this.donationAmount.set('');
+    this.amountFromIntent.set(false);
     this.consentChecked.set(false);
     this.consentEffectiveTime.set('');
     this.intentReference.set('');
@@ -1218,11 +1512,13 @@ export class DonorformComponent {
     const campaignCode = (params.get('campaign') ?? '').trim();
 
     if (campaignCode) {
+      this.campaignCodeFromLink.set(campaignCode);
+
       // BOUND AS SOON AS THE REGISTER ANSWERS. The store loads asynchronously for a signed-in
-      // caller and stays empty for an anonymous one, so the match is attempted now and again
-      // after load rather than once and only once.
+      // caller and the public list is a round trip for an anonymous one, so the match is
+      // attempted now and again after load rather than once and only once. The LOCK is not set
+      // here any more - it follows from whether that match succeeds.
       this.bindCampaignFromCode(campaignCode);
-      this.campaignLockedByLink.set(true);
 
       if (DonorformComponent.isGuid(campaignCode)) {
         this.campaignIdFromLink.set(campaignCode);
@@ -1230,18 +1526,43 @@ export class DonorformComponent {
     }
   }
 
-  /** Selects the campaign a link named, once the register can answer for it. */
+  /**
+   * Selects the campaign a link named, once the register can answer for it.
+   *
+   * THREE THINGS ARE ACCEPTED IN `?campaign=`: the code somebody reads off the register, the
+   * campaign's name, and its GUID. The id was matched by nothing here, so a link built by the
+   * tracking asset manager - which carries ids - never bound its campaign in the picker and
+   * relied entirely on `campaignIdFromLink`, which meant it displayed as unselected.
+   *
+   * NO MATCH LEAVES THE PICKER ALONE, deliberately. That is what turns an unusable
+   * `?campaign=DUMMY` into an ordinary open dropdown rather than a locked empty one.
+   */
   private bindCampaignFromCode(code: string): void {
-    const wanted = code.toLowerCase();
+    const wanted = code.trim().toLowerCase();
+
+    if (!wanted) {
+      return;
+    }
 
     const match = this.campaignOptions().find(
       (option) =>
-        option.reference.toLowerCase() === wanted || option.name.toLowerCase() === wanted,
+        option.reference.toLowerCase() === wanted
+        || option.name.toLowerCase() === wanted
+        || (option.apiId ?? '').toLowerCase() === wanted,
     );
 
     if (match) {
       this.selectedCampaign.set(match);
       this.campaignPickerOpen.set(false);
+
+      // THE LINK BOUND IT, so the picker locks. This is the only place that is ever true - see
+      // campaignBoundFromLink.
+      this.campaignBoundFromLink.set(true);
+
+      // And the amount and currency come with it, exactly as they do for a donor who picks by
+      // hand. A link-bound campaign is the case this form exists for, so it must not be the one
+      // that arrives with no amount to charge.
+      this.syncAmountToCampaign();
     }
   }
 
@@ -1307,8 +1628,12 @@ export class DonorformComponent {
         this.fullName.set(intent.donorName);
         this.emailOrMobile.set(intent.email ?? '');
         this.mobileNumber.set(intent.mobile ?? '');
+        // THE INTENT'S OWN AMOUNT, AND IT IS PINNED. `amountFromIntent` stops the campaign
+        // overwriting it once the picker resolves the campaign name below - a donor returning to
+        // finish a gift pays what they committed to, not what the appeal says this morning.
         this.donationAmount.set(String(intent.amount.amount));
         this.currency.set(intent.amount.currencyCode);
+        this.amountFromIntent.set(true);
         this.isExistingDonor.set(intent.existingDonorMatched === true);
         this.lifecycleState.set('Submitted');
 

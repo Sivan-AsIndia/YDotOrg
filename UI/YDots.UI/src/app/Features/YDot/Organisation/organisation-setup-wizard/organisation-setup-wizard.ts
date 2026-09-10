@@ -82,8 +82,12 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
     subdomain: '',
     code: '',
     organisationType: '',
+<<<<<<< HEAD
     description: '',
     contactPhoneCountryCode: '+91',
+=======
+    contactPhoneCountryCode: '',
+>>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
     contactPhone: '',
     timeZone: 'Asia/Kolkata',
     defaultCurrency: 'INR',
@@ -395,8 +399,13 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
 
   createAnother(): void {
     this.form.set({
+<<<<<<< HEAD
       name: '', legalName: '', subdomain: '', code: '', organisationType: '', description: '',
       contactPhoneCountryCode: '+91', contactPhone: '',
+=======
+      name: '', legalName: '', subdomain: '', code: '', organisationType: '',
+      contactPhoneCountryCode: '', contactPhone: '',
+>>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
       timeZone: 'Asia/Kolkata', defaultCurrency: 'INR', defaultCulture: 'en-IN',
       maximumUsers: null, defaultMfaRequirement: 'optional',
       adminFirstName: '', adminLastName: '', adminEmail: '', adminUsername: '',

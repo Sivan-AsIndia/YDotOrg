@@ -320,7 +320,7 @@ export class UnifiedInboxComponent {
       type,
       conversation,
       reason: '',
-      targetQueue: this.inScopeQueueNames.find((q) => q !== conversation.queue) || '',
+      targetQueue: '',
       targetOwner: '',
       message: '',
       typedConfirm: '',

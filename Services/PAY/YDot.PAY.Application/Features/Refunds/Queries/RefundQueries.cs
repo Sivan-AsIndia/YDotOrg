@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.PAY.Application.Common.Abstractions.Persistence;
 using YDot.PAY.Application.Common.Abstractions.Security;
 using YDot.PAY.Application.Common.Abstractions.Services;
@@ -30,7 +31,8 @@ public sealed class RefundQueryHandler(
     ICsvExportService exports,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<RefundQueryHandler> logger)
 {
     private const int MaximumExportPages = 500;
 
@@ -44,8 +46,14 @@ public sealed class RefundQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchRefundsAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Searching refund cases.");
+
+        var result = await readService.SearchRefundsAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Refund case search completed successfully.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<RefundCaseDetailResponse>> HandleAsync(
@@ -53,12 +61,20 @@ public sealed class RefundQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving refund case {RefundCaseId}.", query.RefundCaseId);
+
         var refundCase = await readService.GetRefundDetailAsync(
             query.RefundCaseId, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
 
-        return refundCase is null
-            ? Result.Failure<RefundCaseDetailResponse>(Error.NotFound("That refund was not found."))
-            : Result.Success(refundCase);
+        if (refundCase is null)
+        {
+            logger.LogWarning("Refund case {RefundCaseId} was not found.", query.RefundCaseId);
+            return Result.Failure<RefundCaseDetailResponse>(Error.NotFound("That refund was not found."));
+        }
+
+        logger.LogInformation("Refund case {RefundCaseId} retrieved successfully.", query.RefundCaseId);
+
+        return Result.Success(refundCase);
     }
 
     public async Task<Result<ExportFile>> HandleAsync(
@@ -67,6 +83,8 @@ public sealed class RefundQueryHandler(
         ArgumentNullException.ThrowIfNull(query);
 
         var canSeeSensitive = CanSeeSensitiveDonor;
+
+        logger.LogInformation("Starting refund case export.");
 
         var filter = query.Filter;
         filter.PageSize = ExportPageSize;
@@ -94,6 +112,12 @@ public sealed class RefundQueryHandler(
             filter.Page++;
         }
 
+        if (filter.Page > MaximumExportPages)
+        {
+            logger.LogWarning("Refund export reached the maximum export page limit of {MaximumExportPages}.",
+                MaximumExportPages);
+        }
+
         var file = exports.ToCsv(rows, "refunds");
 
         await audit.WriteAsync(
@@ -105,6 +129,9 @@ public sealed class RefundQueryHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Refund case export completed successfully with {RowCount} rows.",
+            rows.Count);
+
         return Result.Success(file);
     }
 
@@ -113,8 +140,14 @@ public sealed class RefundQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return Result.Success(await readService.SearchChargebacksAsync(
-            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken));
+        logger.LogInformation("Searching chargeback cases.");
+
+        var result = await readService.SearchChargebacksAsync(
+            query.Filter, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
+
+        logger.LogInformation("Chargeback case search completed successfully.");
+
+        return Result.Success(result);
     }
 
     public async Task<Result<ChargebackCaseDetailResponse>> HandleAsync(
@@ -122,12 +155,21 @@ public sealed class RefundQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving chargeback case {ChargebackCaseId}.", query.ChargebackCaseId);
+
         var chargeback = await readService.GetChargebackDetailAsync(
             query.ChargebackCaseId, currentUser.Scope, CanSeeSensitiveDonor, cancellationToken);
 
-        return chargeback is null
-            ? Result.Failure<ChargebackCaseDetailResponse>(
-                Error.NotFound("That chargeback was not found."))
-            : Result.Success(chargeback);
+        if (chargeback is null)
+        {
+            logger.LogWarning("Chargeback case {ChargebackCaseId} was not found.", query.ChargebackCaseId);
+            return Result.Failure<ChargebackCaseDetailResponse>(
+                Error.NotFound("That chargeback was not found."));
+        }
+
+        logger.LogInformation("Chargeback case {ChargebackCaseId} retrieved successfully.",
+            query.ChargebackCaseId);
+
+        return Result.Success(chargeback);
     }
 }

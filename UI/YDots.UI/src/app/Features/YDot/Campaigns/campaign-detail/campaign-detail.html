@@ -172,6 +172,10 @@
                requires one, but no wizard step asks for it and nothing on this screen shows an
                amount, so the row only ever restated a default. -->
           <div class="cd-fact"><dt>Owner</dt><dd>{{ ownerLine() }}</dd></div>
+          <!-- THE ONE MONEY FIGURE A SCREEN ACTUALLY COLLECTS. See the card's note above for why
+               Target & Budget is still absent; this is a different field, captured on wizard step
+               1, and it is what a donor is shown when they pick this campaign. -->
+          <div class="cd-fact"><dt>Campaign amount</dt><dd>{{ campaignAmountLabel() }}</dd></div>
           <div class="cd-fact"><dt>Purpose</dt><dd>{{ purpose() }}</dd></div>
           <div class="cd-fact"><dt>Date range</dt><dd>{{ formatDate(launchDate()) }} — {{ formatDate(endDate()) }}</dd></div>
           <div class="cd-fact"><dt>Channel</dt><dd>{{ channelsLabel() }}</dd></div>

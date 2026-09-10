@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -51,7 +52,8 @@ public sealed class MyProfileFeatureHandler(
     IUserRepository users,
     IAuditService audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<MyProfileFeatureHandler> logger)
 {
     public async Task<Result<OutcomeResponse>> HandleAsync(
         UpdateMyProfileCommand command, CancellationToken cancellationToken)
@@ -60,9 +62,12 @@ public sealed class MyProfileFeatureHandler(
 
         var request = command.Request;
 
+        logger.LogInformation("Updating current user's profile. UserId: {UserId}, ExpectedVersion: {ExpectedVersion}.", currentUser.UserId, request.ExpectedVersion);
+
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Current user profile update failed because the user was not found. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<OutcomeResponse>(Error.Unauthorised());
         }
 
@@ -71,11 +76,13 @@ public sealed class MyProfileFeatureHandler(
         // first.
         if (user.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Current user profile update rejected due to concurrency conflict. UserId: {UserId}, CurrentVersion: {CurrentVersion}, ExpectedVersion: {ExpectedVersion}.", user.Id, user.Version, request.ExpectedVersion);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (string.IsNullOrWhiteSpace(request.DisplayName))
         {
+            logger.LogWarning("Current user profile update failed validation because the display name is missing. UserId: {UserId}.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("Enter a display name.",
                     [new ValidationError(nameof(request.DisplayName), "A display name is required.")]));
@@ -90,6 +97,7 @@ public sealed class MyProfileFeatureHandler(
 
             if (mobile is null)
             {
+                logger.LogWarning("Current user profile update failed validation because the mobile number is invalid. UserId: {UserId}.", user.Id);
                 return Result.Failure<OutcomeResponse>(
                     Error.Validation("Enter a valid mobile number with its country code.",
                         [new ValidationError(nameof(request.MobileNumber), "That mobile number is not valid.")]));
@@ -115,6 +123,8 @@ public sealed class MyProfileFeatureHandler(
             request.Reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Current user profile updated successfully. UserId: {UserId}, Version: {Version}.", user.Id, user.Version);
 
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version, "Your profile has been saved.", ["View"]));

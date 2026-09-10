@@ -46,6 +46,11 @@ public static class CampaignMappingConfig
             // again without a migration.
             TargetAmount = 0m,
             BudgetAmount = null,
+
+            // THE CAMPAIGN AMOUNT IS THE ONE MONEY FIGURE A SCREEN ACTUALLY COLLECTS. It is step
+            // 1's own field, so unlike the two above it is written from the request.
+            CampaignAmount = request.CampaignAmount,
+
             CurrencyId = request.CurrencyId,
             CountryId = request.CountryId,
 
@@ -94,6 +99,11 @@ public static class CampaignMappingConfig
         // TargetAmount and BudgetAmount are LEFT ALONE. They are not on the update contract while
         // Target & Budget is on hold, and assigning them from a request that no longer carries them
         // is what silently zeroed a stored target on every edit.
+        //
+        // CampaignAmount IS assigned, because it IS on the contract and the wizard sends it on
+        // every save - the hazard the two lines above describe does not apply to a field the
+        // screen actually collects.
+        campaign.CampaignAmount = request.CampaignAmount;
         campaign.CurrencyId = request.CurrencyId;
         campaign.CountryId = request.CountryId;
         campaign.StateId = NullIfEmpty(request.StateId);
@@ -201,6 +211,7 @@ public static class CampaignMappingConfig
             campaign.EndDate,
             campaign.TargetAmount,
             campaign.BudgetAmount,
+            campaign.CampaignAmount,
             campaign.CurrencyId,
             currencyCode,
             campaign.Status,
@@ -252,6 +263,7 @@ public static class CampaignMappingConfig
             campaign.StartDate,
             campaign.EndDate,
             campaign.TargetAmount,
+            campaign.CampaignAmount,
             campaign.CurrencyId,
             currencyCode,
             campaign.BudgetAmount,
@@ -343,6 +355,7 @@ public static class CampaignMappingConfig
             campaign.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             campaign.TargetAmount.ToString(CultureInfo.InvariantCulture),
             campaign.BudgetAmount?.ToString(CultureInfo.InvariantCulture),
+            campaign.CampaignAmount.ToString(CultureInfo.InvariantCulture),
             campaign.Status.ToString(),
             campaign.Owners.Count.ToString(CultureInfo.InvariantCulture),
             trackingAssetCount.ToString(CultureInfo.InvariantCulture),

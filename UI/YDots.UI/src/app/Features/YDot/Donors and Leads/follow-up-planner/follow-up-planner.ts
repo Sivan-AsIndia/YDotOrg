@@ -137,10 +137,10 @@ export class FollowUpPlannerComponent {
   protected readonly campaign = computed(() => '');
   protected readonly preferredLanguage = computed(() => this.existing()?.preferredLanguage ?? '');
 
-  protected readonly followUpType = signal('Email');
+  protected readonly followUpType = signal('');
   protected readonly scheduledDate = signal('');
   protected readonly scheduledTime = signal('');
-  protected readonly priority = signal('Medium');
+  protected readonly priority = signal('');
   protected readonly owner = signal('');
   protected readonly purpose = signal('');
   protected readonly expectedOutcome = signal('');

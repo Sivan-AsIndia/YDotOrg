@@ -17,12 +17,23 @@ namespace YDot.IAM.Api.Controllers;
 /// </summary>
 [Route("api/v1/reference-data")]
 [Authorize]
-public sealed class ReferenceDataController(ReferenceDataQueryHandler queries) : ApiControllerBase
+public sealed class ReferenceDataController(
+    ReferenceDataQueryHandler queries,
+    ILogger<ReferenceDataController> logger) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<ReferenceDataResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetReferenceDataQuery(), cancellationToken));
+    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting reference data.");
+
+        var result = await queries.HandleAsync(new GetReferenceDataQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get reference data.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Every enumeration the UI renders as a dropdown, with display labels.
@@ -32,6 +43,15 @@ public sealed class ReferenceDataController(ReferenceDataQueryHandler queries) :
     /// </summary>
     [HttpGet("enums")]
     [ProducesResponseType(typeof(ApiResponse<EnumOptionsResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetEnumsAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetEnumOptionsQuery(), cancellationToken));
+    public async Task<IActionResult> GetEnumsAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting enum options.");
+
+        var result = await queries.HandleAsync(new GetEnumOptionsQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get enum options.");
+
+        return FromResult(result);
+    }
 }

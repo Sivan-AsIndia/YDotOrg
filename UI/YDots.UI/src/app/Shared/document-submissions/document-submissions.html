@@ -48,6 +48,7 @@
         <label class="ds-label" for="ds-type">What is this evidence of?</label>
         <select id="ds-type" class="ds-input" [ngModel]="newDocumentType()"
                 (ngModelChange)="newDocumentType.set($event)">
+          <option value="" disabled>Select Document Type</option>
           @for (type of documentTypes; track type.value) {
             <option [value]="type.value">{{ type.label }}</option>
           }

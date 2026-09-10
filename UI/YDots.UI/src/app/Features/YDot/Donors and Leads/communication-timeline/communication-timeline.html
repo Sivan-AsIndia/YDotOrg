@@ -458,6 +458,7 @@
       <label class="ct-field">
         <span class="ct-field-label">Communication Type <em>*</em></span>
         <select class="ct-select" [ngModel]="form().type" (ngModelChange)="updateForm('type', $event)">
+          <option value="" disabled>Select Communication Type</option>
           @for (type of communicationTypes; track type) {
             <option [value]="type">{{ type }}</option>
           }
@@ -485,6 +486,7 @@
       <label class="ct-field">
         <span class="ct-field-label">Direction <em>*</em></span>
         <select class="ct-select" [ngModel]="form().direction" (ngModelChange)="updateForm('direction', $event)">
+          <option value="" disabled>Select Direction</option>
           <option value="Incoming">Incoming</option>
           <option value="Outgoing">Outgoing</option>
         </select>
@@ -493,6 +495,7 @@
       <label class="ct-field">
         <span class="ct-field-label">Outcome <em>*</em></span>
         <select class="ct-select" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)">
+          <option value="" disabled>Select Outcome</option>
           @for (outcome of outcomes; track outcome) {
             <option [value]="outcome">{{ outcome }}</option>
           }
@@ -503,6 +506,7 @@
         <label class="ct-field">
           <span class="ct-field-label">Engagement Level <em>*</em></span>
           <select class="ct-select" [ngModel]="form().engagement" (ngModelChange)="updateForm('engagement', $event)">
+            <option value="" disabled>Select Engagement Level</option>
             @for (level of engagementLevels; track level) {
               <option [value]="level">{{ level }}</option>
             }
@@ -512,6 +516,7 @@
         <label class="ct-field">
           <span class="ct-field-label">Communication Quality <em>*</em></span>
           <select class="ct-select" [ngModel]="form().quality" (ngModelChange)="updateForm('quality', $event)">
+            <option value="" disabled>Select Communication Quality</option>
             @for (quality of qualities; track quality) {
               <option [value]="quality">{{ quality }}</option>
             }
@@ -579,6 +584,7 @@
     <label class="ct-field">
       <span class="ct-field-label">New Temperature <em>*</em></span>
       <select class="ct-select" [ngModel]="newTemperature()" (ngModelChange)="newTemperature.set($event)">
+        <option value="" disabled>Select New Temperature</option>
         @for (temperature of temperatures; track temperature) {
           <option [value]="temperature">{{ temperature }}</option>
         }
@@ -615,6 +621,7 @@
     <label class="ct-field">
       <span class="ct-field-label">New Donation Potential <em>*</em></span>
       <select class="ct-select" [ngModel]="newDonationPotential()" (ngModelChange)="newDonationPotential.set($event)">
+        <option value="" disabled>Select New Donation Potential</option>
         @for (potential of donationPotentials; track potential) {
           <option [value]="potential">{{ potential }}</option>
         }

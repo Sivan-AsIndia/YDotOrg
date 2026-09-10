@@ -5,6 +5,7 @@ import { RouterModule, Router } from '@angular/router';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { AccessRequestApiService } from '../../../../Service/access-request-api.service';
 import { UserDirectoryApiService } from '../../../../Service/user-directory-api.service';
+import { RoleCatalogueApiService } from '../../../../Service/role-catalogue-api.service';
 import {
   AccessRequestItemApi,
   AccessRequestListResponse,
@@ -66,6 +67,7 @@ export class AccessRequestComponent {
   private readonly toast = inject(ToastService);
   private readonly api = inject(AccessRequestApiService);
   private readonly userApi = inject(UserDirectoryApiService);
+  private readonly roleApi = inject(RoleCatalogueApiService);
   private readonly tokens = inject(AuthTokenService);
 
   /** Who is looking, so a row can say "you raised this" rather than a vaguer refusal. */
@@ -87,11 +89,20 @@ export class AccessRequestComponent {
 
   // ===== New Request Modal =====
   showNewRequestModal = signal(false);
+
+  /**
+   * The New Request dialog's fields.
+   *
+   * `requestType` STARTS AT 'roleAssignment' AND NOT AT 'NewAccess'. The server's
+   * `AccessRequestType` admits four values - roleAssignment, permissionGrant, dataScopeGrant and
+   * temporaryElevation - and 'NewAccess' is none of them. It matched no `<option>`, so the
+   * select rendered blank on open, and it was sent verbatim on submit.
+   */
   newRequestForm = signal({
-    requestType: 'NewAccess',
+    requestType: '',
     userId: '',
     requestedRole: '',
-    scopeType: 'organisation',
+    scopeType: '',
     scopeValue: '',
     effectiveFrom: '',
     effectiveTo: '',
@@ -115,6 +126,7 @@ export class AccessRequestComponent {
   constructor() {
     this.loadData();
     this.loadUserDirectory();
+    this.loadRoleCatalogue();
     effect(() => { this.applyFilters(); });
   }
 
@@ -192,8 +204,63 @@ export class AccessRequestComponent {
     { id: 'explicitRecord', code: 'explicitRecord', name: 'Named records only', isActive: true },
   ];
 
-  /** The roles that can be asked for, from the reference data this screen already loads. */
+  /** The roles that can be asked for. Populated by `loadRoleCatalogue` below. */
   readonly availableRoles = signal<LookupItem[]>([]);
+
+  /**
+   * The roles the New Request dialog offers.
+   *
+   * FETCHED, UNLIKE THE THREE VOCABULARIES ABOVE, and that is the whole difference. A status or
+   * a scope type is a code path and can be named here; a role is a row somebody creates, so the
+   * only honest source is the catalogue. This signal was declared, read into `roleOptions` and
+   * never written to, which is why the dialog's one required dropdown offered nothing but its
+   * own placeholder and no access request could be raised through the screen at all.
+   *
+   * `/roles/lookup` RATHER THAN THE FULL SEARCH: the server already excludes platform roles and
+   * retired ones, so what comes back is exactly the set that can actually be asked for.
+   *
+   * NON-BLOCKING, like the user directory. The queue is worth rendering without the dialog's
+   * dropdown; a failure here leaves the list usable and only the Requested Role picker empty,
+   * which is the same shape of degradation the directory load already accepts.
+   */
+  private loadRoleCatalogue(): void {
+    this.roleApi.getRoleLookup().subscribe({
+      next: (roles) => {
+        this.availableRoles.set(roles.map((role) => ({
+          id: role.id ?? '',
+          code: role.code ?? '',
+          name: role.name ?? role.code ?? '',
+          isActive: true,
+
+          // What the option's parenthesis shows. A role name alone does not say whether it is
+          // the privileged one, and "how much does this grant" is the question somebody
+          // approving the request will ask first.
+          description: role.isPrivileged === true
+            ? `Privileged - ${role.permissionCount ?? 0} permissions`
+            : `${role.permissionCount ?? 0} permissions`,
+        })));
+
+        this.refreshRoleOptions();
+      },
+      error: () => { /* Non-blocking: the queue renders without the dialog's role list. */ },
+    });
+  }
+
+  /**
+   * Puts the loaded roles onto the view model the template reads.
+   *
+   * NEEDED BECAUSE THE TWO LOADS RACE. `data()` is assembled by `loadData`, which takes the
+   * roles from `availableRoles()` at the moment it completes - so whichever of the two calls
+   * finishes second has to write into the other's result. `loadData` reads the signal, and this
+   * writes into `data()`, which covers both orders.
+   */
+  private refreshRoleOptions(): void {
+    const current = this.data();
+
+    if (current) {
+      this.data.set({ ...current, roleOptions: this.availableRoles() });
+    }
+  }
 
   private loadUserDirectory(): void {
     const filter: UserSearchFilter = { pageIndex: 1, pageSize: 100 };
@@ -309,10 +376,10 @@ export class AccessRequestComponent {
   // ===== NEW REQUEST =====
   openNewRequest(): void {
     this.newRequestForm.set({
-      requestType: 'NewAccess',
+      requestType: '',
       userId: '',
       requestedRole: '',
-      scopeType: 'organisation',
+      scopeType: '',
       scopeValue: '',
       effectiveFrom: '',
       effectiveTo: '',
@@ -334,8 +401,8 @@ export class AccessRequestComponent {
 
   submitNewRequest(): void {
     const form = this.newRequestForm();
-    if (!form.userId || !form.requestedRole || !form.businessJustification.trim()) {
-      this.toast.show('Validation Error', 'User, requested role and justification are required.', 'warning');
+    if (!form.requestType || !form.userId || !form.requestedRole || !form.businessJustification.trim()) {
+      this.toast.show('Validation Error', 'Request type, user, requested role and justification are required.', 'warning');
       return;
     }
 

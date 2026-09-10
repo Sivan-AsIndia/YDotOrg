@@ -66,17 +66,26 @@ public sealed class ReceiptCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Starting receipt issuance for donation {DonationId}.",
+            command.DonationId);
+
         var donation = await donations.GetDonationAsync(command.DonationId, cancellationToken);
 
         if (donation is null)
         {
-            return Result.Failure<ReceiptDetailResponse>(Error.NotFound("That donation was not found."));
+            logger.LogWarning("Receipt issuance rejected because donation {DonationId} was not found.",
+                command.DonationId);
+
+            return Result.Failure<ReceiptDetailResponse>(
+                Error.NotFound("That donation was not found."));
         }
 
-        // A VOIDED OR FULLY REFUNDED DONATION IS NOT RECEIPTABLE. Issuing a receipt for money
-        // that went back would let a donor claim relief they are not entitled to.
         if (!donation.IsReceiptable)
         {
+            logger.LogWarning("Receipt issuance rejected for donation {DonationId} because it is not receiptable.",
+                command.DonationId);
+
             return Result.Failure<ReceiptDetailResponse>(Error.ReceiptNotEligible(
                 $"A donation that is {donation.Status} cannot be receipted."));
         }
@@ -85,26 +94,28 @@ public sealed class ReceiptCommandHandler(
 
         if (existing is not null)
         {
+            logger.LogWarning("Receipt issuance rejected for donation {DonationId} because a valid receipt already exists.",
+                command.DonationId);
+
             return Result.Failure<ReceiptDetailResponse>(Error.ReceiptAlreadyIssued());
         }
 
-        // The receiptable figure is what was actually GIVEN - the donation less anything already
-        // refunded - not the original amount.
         var receiptableAmount = donation.RefundableAmount;
 
         if (receiptableAmount.IsZero)
         {
+            logger.LogWarning("Receipt issuance rejected for donation {DonationId} because the receiptable amount is zero.",
+                command.DonationId);
+
             return Result.Failure<ReceiptDetailResponse>(Error.ReceiptNotEligible(
                 "This donation has been fully refunded, so there is nothing to receipt."));
         }
 
-        return await unitOfWork.ExecuteInTransactionAsync(async token =>
+        var result = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
             var now = clock.UtcNow;
             var financialYear = clock.FinancialYearFor(donation.DonatedAtUtc);
 
-            // INSIDE THE TRANSACTION, and row-locked by the implementation. Two receipts issued
-            // in the same instant must not take the same number.
             var sequence = await receipts.AllocateNextReceiptNumberAsync(
                 donation.TenantId, financialYear, token);
 
@@ -119,15 +130,10 @@ public sealed class ReceiptCommandHandler(
                 DeliveryStatus = ReceiptDeliveryStatus.NotSent,
                 FinancialYear = financialYear,
                 Amount = receiptableAmount,
-
-                // The donor AS AT THE DONATION, copied from the donation which copied it from the
-                // intent. Three copies sounds wasteful until a donor changes their name and every
-                // historic receipt silently changes with it.
                 DonorName = donation.DonorName,
                 DonorEmail = donation.DonorEmail,
                 DonorAddress = donation.DonorAddress,
                 DonorTaxIdentifier = donation.DonorTaxIdentifier,
-
                 OrganisationTaxReference = Clean(command.Request.OrganisationTaxReference),
                 TaxExemptionReference = Clean(command.Request.TaxExemptionReference),
                 IssuedAtUtc = now,
@@ -145,10 +151,10 @@ public sealed class ReceiptCommandHandler(
 
             await unitOfWork.SaveChangesAsync(token);
 
-            // Rendering and delivery are best-effort: the receipt is validly issued the moment it
-            // is numbered and recorded, and a PDF that would not render is a follow-up rather
-            // than a reason to withhold a document the donor is entitled to.
             await RenderAndDeliverAsync(receipt, donation, command.Request.DeliverImmediately, token);
+
+            logger.LogInformation("Receipt {ReceiptNumber} issued successfully for donation {DonationReference}.",
+                receipt.ReceiptNumber,donation.DonationReference);
 
             return Result.Success(receipt.ToDetailResponse(
                 donation.DonationReference,
@@ -156,6 +162,8 @@ public sealed class ReceiptCommandHandler(
                 canSeeSensitiveDonor: true,
                 PermittedActions(receipt)));
         }, cancellationToken);
+
+        return result;
     }
 
     // =====================================================================================
@@ -174,20 +182,33 @@ public sealed class ReceiptCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting correction of receipt {ReceiptId}.",
+            command.ReceiptId);
+
         var original = await receipts.GetAsync(command.ReceiptId, cancellationToken);
 
         if (original is null)
         {
-            return Result.Failure<ReceiptDetailResponse>(Error.NotFound("That receipt was not found."));
+            logger.LogWarning("Receipt correction rejected because receipt {ReceiptId} was not found.",
+                command.ReceiptId);
+
+            return Result.Failure<ReceiptDetailResponse>(
+                Error.NotFound("That receipt was not found."));
         }
 
         if (original.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Receipt correction rejected for receipt {ReceiptId} because the record version is stale.",
+                command.ReceiptId);
+
             return Result.Failure<ReceiptDetailResponse>(Error.Concurrency());
         }
 
         if (!original.CanBeCorrected)
         {
+            logger.LogWarning("Receipt correction rejected for receipt {ReceiptId} because its status is {Status}.",
+                command.ReceiptId,original.Status);
+
             return Result.Failure<ReceiptDetailResponse>(Error.ReceiptNotCorrectable(
                 $"A receipt that is {original.Status} cannot be corrected."));
         }
@@ -196,11 +217,14 @@ public sealed class ReceiptCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning("Receipt correction rejected for receipt {ReceiptId} because its linked donation was not found.",
+                command.ReceiptId);
+
             return Result.Failure<ReceiptDetailResponse>(Error.Dependency(
                 "That receipt is not linked to a donation."));
         }
 
-        return await unitOfWork.ExecuteInTransactionAsync(async token =>
+        var result = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
             var now = clock.UtcNow;
             var financialYear = original.FinancialYear;
@@ -213,25 +237,17 @@ public sealed class ReceiptCommandHandler(
                 TenantId = original.TenantId,
                 BusinessUnitId = original.BusinessUnitId,
                 DonationId = original.DonationId,
-
-                // Version 2 supersedes version 1, and so on. The chain is what an auditor walks.
                 VersionNumber = original.VersionNumber + 1,
                 SupersedesReceiptId = original.Id,
-
                 ReceiptNumber = FormatReceiptNumber(financialYear, sequence),
                 Status = ReceiptStatus.Issued,
                 DeliveryStatus = ReceiptDeliveryStatus.NotSent,
                 FinancialYear = financialYear,
-
-                // The AMOUNT IS RE-READ FROM THE DONATION rather than carried over, so a
-                // correction issued after a partial refund shows what was actually kept.
                 Amount = donation.RefundableAmount,
-
                 DonorName = Clean(command.Request.DonorName) ?? original.DonorName,
                 DonorEmail = original.DonorEmail,
                 DonorAddress = Clean(command.Request.DonorAddress) ?? original.DonorAddress,
-                DonorTaxIdentifier =
-                    Clean(command.Request.DonorTaxIdentifier) ?? original.DonorTaxIdentifier,
+                DonorTaxIdentifier = Clean(command.Request.DonorTaxIdentifier) ?? original.DonorTaxIdentifier,
                 CampaignOrFundName = original.CampaignOrFundName,
                 OrganisationTaxReference = original.OrganisationTaxReference,
                 TaxExemptionReference = original.TaxExemptionReference,
@@ -242,8 +258,6 @@ public sealed class ReceiptCommandHandler(
 
             await receipts.AddAsync(corrected, token);
 
-            // The original is SUPERSEDED, not voided: it was validly issued and the donor may
-            // have acted on it. Voided means "never valid", which is a different statement.
             original.Status = ReceiptStatus.Corrected;
 
             await audit.WriteAsync(
@@ -263,12 +277,17 @@ public sealed class ReceiptCommandHandler(
 
             await RenderAndDeliverAsync(corrected, donation, command.Request.DeliverImmediately, token);
 
+            logger.LogInformation("Receipt {ReceiptNumber} corrected successfully. Original receipt {OriginalReceiptId} was superseded.",
+                corrected.ReceiptNumber,original.Id);
+
             return Result.Success(corrected.ToDetailResponse(
                 donation.DonationReference,
                 original.ReceiptNumber,
                 canSeeSensitiveDonor: true,
                 PermittedActions(corrected)));
         }, cancellationToken);
+
+        return result;
     }
 
     // =====================================================================================
@@ -287,20 +306,33 @@ public sealed class ReceiptCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting void operation for receipt {ReceiptId}.",
+            command.ReceiptId);
+
         var receipt = await receipts.GetAsync(command.ReceiptId, cancellationToken);
 
         if (receipt is null)
         {
-            return Result.Failure<OutcomeResponse>(Error.NotFound("That receipt was not found."));
+            logger.LogWarning("Receipt void operation rejected because receipt {ReceiptId} was not found.",
+                command.ReceiptId);
+
+            return Result.Failure<OutcomeResponse>(
+                Error.NotFound("That receipt was not found."));
         }
 
         if (receipt.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Receipt void operation rejected for receipt {ReceiptId} because the record version is stale.",
+                command.ReceiptId);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (receipt.Status is ReceiptStatus.Voided)
         {
+            logger.LogWarning("Receipt void operation rejected for receipt {ReceiptId} because it is already voided.",
+                command.ReceiptId);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition("That receipt is already voided."));
         }
@@ -319,6 +351,9 @@ public sealed class ReceiptCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Receipt {ReceiptNumber} voided successfully.",
+            receipt.ReceiptNumber);
 
         return BuildOutcome(receipt, "Receipt voided.");
     }
@@ -339,21 +374,37 @@ public sealed class ReceiptCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting resend operation for receipt {ReceiptId}.",
+            command.ReceiptId);
+
         var receipt = await receipts.GetAsync(command.ReceiptId, cancellationToken);
 
         if (receipt is null)
         {
-            return Result.Failure<OutcomeResponse>(Error.NotFound("That receipt was not found."));
+            logger.LogWarning("Receipt resend rejected because receipt {ReceiptId} was not found.",
+                command.ReceiptId);
+
+            return Result.Failure<OutcomeResponse>(
+                Error.NotFound("That receipt was not found."));
         }
 
         if (!receipt.IsValid)
         {
+            logger.LogWarning("Receipt resend rejected for receipt {ReceiptId} because its status is {Status}.",
+                command.ReceiptId,receipt.Status);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A receipt that is {receipt.Status} cannot be sent."));
         }
 
         var destination = Clean(command.Request.Destination) ?? receipt.DonorEmail;
         var isOverride = !string.Equals(destination, receipt.DonorEmail, StringComparison.OrdinalIgnoreCase);
+
+        if (isOverride)
+        {
+            logger.LogWarning("Receipt {ReceiptNumber} is being resent using an overridden delivery destination.",
+                receipt.ReceiptNumber);
+        }
 
         var delivery = await DeliverAsync(receipt, command.Request.Channel, destination, cancellationToken);
 
@@ -366,16 +417,23 @@ public sealed class ReceiptCommandHandler(
                 receipt.ReceiptNumber,
                 command.Request.Channel,
                 DestinationOverridden = isOverride,
-
-                // Recorded in full ONLY when it was overridden, because that is the case somebody
-                // will need to review. The donor's own address is already on the receipt.
                 Destination = isOverride ? destination : null,
-
                 delivery.Succeeded
             },
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (delivery.Succeeded)
+        {
+            logger.LogInformation("Receipt {ReceiptNumber} resent successfully.",
+                receipt.ReceiptNumber);
+        }
+        else
+        {
+            logger.LogWarning("Receipt {ReceiptNumber} resend failed.",
+                receipt.ReceiptNumber);
+        }
 
         return BuildOutcome(
             receipt,
@@ -405,12 +463,14 @@ public sealed class ReceiptCommandHandler(
             if (rendered.Succeeded)
             {
                 receipt.DocumentUrl = rendered.DocumentUrl;
+
+                logger.LogInformation("Receipt {ReceiptNumber} document rendered successfully.",
+                    receipt.ReceiptNumber);
             }
             else
             {
-                logger.LogWarning(
-                    "Receipt {ReceiptNumber} could not be rendered: {Reason}. The receipt is still "
-                    + "validly issued.", receipt.ReceiptNumber, rendered.FailureReason);
+                logger.LogWarning("Receipt {ReceiptNumber} could not be rendered: {Reason}. The receipt is still " + "validly issued.",
+                    receipt.ReceiptNumber,rendered.FailureReason);
             }
 
             if (deliver && _settings.AutoDeliverReceipt)
@@ -425,7 +485,8 @@ public sealed class ReceiptCommandHandler(
             logger.LogError(
                 exception,
                 "Rendering or delivering receipt {ReceiptNumber} failed. The receipt is still "
-                + "validly issued and this needs following up.", receipt.ReceiptNumber);
+                + "validly issued and this needs following up.",
+                receipt.ReceiptNumber);
         }
     }
 
@@ -453,6 +514,10 @@ public sealed class ReceiptCommandHandler(
         }
         catch (Exception exception)
         {
+            logger.LogError(exception,
+                "Receipt {ReceiptNumber} delivery through {Channel} encountered an exception.",
+                receipt.ReceiptNumber,channel);
+
             result = new ReceiptDeliveryResult(false, null, exception.Message);
         }
 
@@ -461,21 +526,19 @@ public sealed class ReceiptCommandHandler(
             delivery.Status = ReceiptDeliveryStatus.Delivered;
             delivery.DeliveredAtUtc = clock.UtcNow;
             delivery.ProviderReference = result.ProviderReference;
-
             receipt.DeliveryStatus = ReceiptDeliveryStatus.Delivered;
+
+            logger.LogInformation("Receipt {ReceiptNumber} delivered successfully through {Channel}.",
+                receipt.ReceiptNumber,channel);
         }
         else
         {
             delivery.Status = ReceiptDeliveryStatus.Failed;
             delivery.FailureReason = result.FailureReason;
-
-            // The RECEIPT's delivery status follows the attempt, so the register can show the
-            // queue of donors who are entitled to a document that never reached them.
             receipt.DeliveryStatus = ReceiptDeliveryStatus.Failed;
 
-            logger.LogWarning(
-                "Receipt {ReceiptNumber} could not be delivered to {Channel}: {Reason}",
-                receipt.ReceiptNumber, channel, result.FailureReason);
+            logger.LogWarning("Receipt {ReceiptNumber} could not be delivered through {Channel}: {Reason}.",
+                receipt.ReceiptNumber,channel,result.FailureReason);
         }
 
         await receipts.AddDeliveryAsync(delivery, cancellationToken);
@@ -504,7 +567,8 @@ public sealed class ReceiptCommandHandler(
         $"{_settings.ReceiptNumberPrefix}/{financialYear}/{sequence:00000}";
 
     private OutcomeResponse BuildOutcome(Receipt receipt, string message) =>
-        new(receipt.Id,
+        new(
+            receipt.Id,
             receipt.Status.ToString(),
             receipt.Version,
             message,

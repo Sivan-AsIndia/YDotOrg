@@ -153,6 +153,7 @@
                   <dt>Assigned user</dt>
                   <dd>
                     <select class="form-select form-select-sm fup-select" [ngModel]="owner()" (ngModelChange)="owner.set($event)" aria-label="Assigned user">
+                      <option value="" disabled>Select Assigned User</option>
                       @for (option of ownerOptions(); track option.value) {
                         <option [value]="option.value">{{ option.label }}</option>
                       }
@@ -163,6 +164,7 @@
                   <dt>Follow-up type</dt>
                   <dd>
                     <select class="form-select form-select-sm fup-select" [ngModel]="followUpType()" (ngModelChange)="followUpType.set($event)" aria-label="Follow-up type">
+                      <option value="" disabled>Select Follow-Up Type</option>
                       <option value="Call">Call</option><option value="Meeting">Meeting</option><option value="Visit">Visit</option>
                       <option value="Email">Email</option><option value="WhatsApp">WhatsApp</option><option value="Verification">Verification</option><option value="Custom">Custom</option>
                     </select>
@@ -172,6 +174,7 @@
                   <dt>Priority</dt>
                   <dd>
                     <select class="form-select form-select-sm fup-select" [ngModel]="priority()" (ngModelChange)="priority.set($event)" aria-label="Priority">
+                      <option value="" disabled>Select Priority</option>
                       <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
                     </select>
                   </dd>

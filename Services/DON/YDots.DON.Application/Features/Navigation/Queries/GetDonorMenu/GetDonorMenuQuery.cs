@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Constants;
 using YDots.DON.Application.Common.Results;
@@ -35,7 +36,9 @@ public sealed record DonorMenuResponse(
 /// The rule from UI section 2 still holds: hiding a menu entry is a convenience, never the
 /// authorisation. Each route is rechecked by [HasPermission] when it is actually called.
 /// </summary>
-public sealed class GetDonorMenuQueryHandler(ICurrentUser currentUser)
+public sealed class GetDonorMenuQueryHandler(
+    ICurrentUser currentUser,
+    ILogger<GetDonorMenuQueryHandler> logger)
 {
     public Task<Result<DonorMenuResponse>> HandleAsync(
         GetDonorMenuQuery query,
@@ -43,6 +46,8 @@ public sealed class GetDonorMenuQueryHandler(ICurrentUser currentUser)
     {
         _ = query;
         _ = cancellationToken;
+
+        logger.LogInformation("Getting donor navigation menu.");
 
         var permissions = currentUser.Permissions;
 
@@ -65,6 +70,8 @@ public sealed class GetDonorMenuQueryHandler(ICurrentUser currentUser)
             currentUser.HasPermission(PermissionCodes.DonorsViewSensitiveContact),
             currentUser.HasPermission(PermissionCodes.DonorsViewConfidentialEvidence),
             currentUser.HasPermission(PermissionCodes.DonorsExport));
+
+        logger.LogInformation("Donor navigation menu loaded successfully. MenuItemCount: {MenuItemCount}", items.Count);
 
         return Task.FromResult(Result.Success(response));
     }

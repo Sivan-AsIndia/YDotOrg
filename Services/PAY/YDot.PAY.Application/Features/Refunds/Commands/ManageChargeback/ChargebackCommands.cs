@@ -42,8 +42,8 @@ public sealed record ResolveChargebackCommand(Guid ChargebackCaseId, ResolveChar
 /// organisation did not choose it. There is a DEADLINE to respond, and missing it loses the case
 /// by default whatever the merits. And losing usually costs a fee on top of the money.
 ///
-/// THE DEADLINE IS THE FIELD THE WHOLE CASE TURNS ON. It is stored, the queue sorts by it, and
-/// the response carries the days remaining pre-computed - because a deadline somebody has to
+/// THE DEADLINE IS THE FIELD THE WHOLE CASE TURNS ON. It is stored, the queue sorts by it, and the
+/// response carries the days remaining pre-computed - because a deadline somebody has to
 /// work out for themselves is a deadline that gets missed.
 ///
 /// THE DONATION IS MARKED ChargedBack IMMEDIATELY, before any decision. The money is already gone
@@ -80,11 +80,14 @@ public sealed class ChargebackCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Opening a chargeback case.");
+
         var attempt = await donations.GetAttemptByGatewayReferenceAsync(
             command.GatewayReference, cancellationToken);
 
         if (attempt is null)
         {
+            logger.LogWarning("Unable to open chargeback because no payment matches the gateway reference.");
             return Result.Failure<ChargebackCaseDetailResponse>(Error.NotFound(
                 "No payment matches that gateway reference."));
         }
@@ -93,6 +96,7 @@ public sealed class ChargebackCommandHandler(
 
         if (donation is null)
         {
+            logger.LogWarning("Unable to open chargeback because the payment has no recorded donation.");
             return Result.Failure<ChargebackCaseDetailResponse>(Error.NotFound(
                 "That payment has no recorded donation to charge back."));
         }
@@ -106,6 +110,8 @@ public sealed class ChargebackCommandHandler(
 
             if (existing is not null)
             {
+                logger.LogInformation("Existing chargeback case found for the dispute notification. Returning the existing case.");
+
                 return existing.ToDetailResponse(
                     donation, clock.UtcNow, canSeeSensitiveDonor: true, PermittedActions(existing));
             }
@@ -115,6 +121,7 @@ public sealed class ChargebackCommandHandler(
 
         if (reference.IsFailure)
         {
+            logger.LogError("Failed to generate a unique chargeback case reference.");
             return Result.Failure<ChargebackCaseDetailResponse>(reference.Error!);
         }
 
@@ -161,10 +168,8 @@ public sealed class ChargebackCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogWarning(
-            "Chargeback {CaseReference} opened against donation {DonationReference}. "
-            + "Evidence is due by {EvidenceDue}.",
-            chargeback.CaseReference, donation.DonationReference, chargeback.EvidenceDueAtUtc);
+        logger.LogInformation("Chargeback {CaseReference} opened successfully. Evidence is due by {EvidenceDue}.",
+            chargeback.CaseReference, chargeback.EvidenceDueAtUtc);
 
         return chargeback.ToDetailResponse(
             donation, now, canSeeSensitiveDonor: true, PermittedActions(chargeback));
@@ -179,20 +184,25 @@ public sealed class ChargebackCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Assigning chargeback {ChargebackCaseId}.", command.ChargebackCaseId);
+
         var chargeback = await refunds.GetChargebackAsync(command.ChargebackCaseId, cancellationToken);
 
         if (chargeback is null)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} was not found for assignment.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That chargeback was not found."));
         }
 
         if (chargeback.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} assignment failed due to a concurrency conflict.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (!chargeback.IsOpen)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} cannot be reassigned because it is {Status}.", command.ChargebackCaseId, chargeback.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A chargeback that is {chargeback.Status} cannot be reassigned."));
         }
@@ -215,6 +225,10 @@ public sealed class ChargebackCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Chargeback {CaseReference} assigned successfully.",
+            chargeback.CaseReference);
+
         return BuildOutcome(chargeback, "Chargeback assigned.");
     }
 
@@ -234,20 +248,25 @@ public sealed class ChargebackCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Submitting evidence for chargeback {ChargebackCaseId}.", command.ChargebackCaseId);
+
         var chargeback = await refunds.GetChargebackAsync(command.ChargebackCaseId, cancellationToken);
 
         if (chargeback is null)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} was not found for evidence submission.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That chargeback was not found."));
         }
 
         if (chargeback.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Evidence submission for chargeback {ChargebackCaseId} failed due to a concurrency conflict.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (!chargeback.IsOpen)
         {
+            logger.LogWarning("Evidence cannot be submitted for chargeback {ChargebackCaseId} because it is {Status}.", command.ChargebackCaseId, chargeback.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"A chargeback that is {chargeback.Status} is no longer accepting evidence."));
         }
@@ -256,6 +275,7 @@ public sealed class ChargebackCommandHandler(
 
         if (chargeback.EvidenceDueAtUtc.HasValue && chargeback.EvidenceDueAtUtc.Value < now)
         {
+            logger.LogWarning("Evidence submission for chargeback {ChargebackCaseId} was rejected because the deadline has passed.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.ChargebackDeadlinePassed(
                 $"The evidence deadline for this chargeback passed on "
                 + $"{chargeback.EvidenceDueAtUtc.Value:yyyy-MM-dd}."));
@@ -276,6 +296,9 @@ public sealed class ChargebackCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Evidence submitted successfully for chargeback {CaseReference}.",
+            chargeback.CaseReference);
+
         return BuildOutcome(chargeback, "Evidence submitted. The case is now with the bank.");
     }
 
@@ -295,20 +318,25 @@ public sealed class ChargebackCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Resolving chargeback {ChargebackCaseId}.", command.ChargebackCaseId);
+
         var chargeback = await refunds.GetChargebackAsync(command.ChargebackCaseId, cancellationToken);
 
         if (chargeback is null)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} was not found for resolution.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That chargeback was not found."));
         }
 
         if (chargeback.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Resolution of chargeback {ChargebackCaseId} failed due to a concurrency conflict.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (!chargeback.IsOpen)
         {
+            logger.LogWarning("Chargeback {ChargebackCaseId} cannot be resolved because it is already {Status}.", command.ChargebackCaseId, chargeback.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"That chargeback is already {chargeback.Status}."));
         }
@@ -317,6 +345,7 @@ public sealed class ChargebackCommandHandler(
             or ChargebackStatus.Lost
             or ChargebackStatus.Accepted))
         {
+            logger.LogWarning("Invalid resolution outcome supplied for chargeback {ChargebackCaseId}.", command.ChargebackCaseId);
             return Result.Failure<OutcomeResponse>(Error.Validation(
                 "A chargeback resolves as Won, Lost or Accepted.",
                 [new ValidationError(
@@ -365,6 +394,9 @@ public sealed class ChargebackCommandHandler(
             _ => "Chargeback conceded. The money has been reversed."
         };
 
+        logger.LogInformation("Chargeback {CaseReference} resolved successfully with outcome {Outcome}.",
+            chargeback.CaseReference, command.Request.Outcome);
+
         return BuildOutcome(chargeback, message);
     }
 
@@ -384,6 +416,9 @@ public sealed class ChargebackCommandHandler(
                 return candidate;
             }
         }
+
+        logger.LogError("Failed to generate a unique chargeback case reference after {ReferenceAttempts} attempts.",
+            ReferenceAttempts);
 
         return Result.Failure<string>(Error.Dependency(
             "A unique case reference could not be generated."));

@@ -290,7 +290,8 @@
             <div class="field">
               <label for="field-replyChannel">Reply channel</label>
               <select id="field-replyChannel" [(ngModel)]="replyChannel" name="replyChannel" (ngModelChange)="onChannelChange()" [attr.aria-invalid]="!!fieldErrors.replyChannel" [attr.aria-describedby]="fieldErrors.replyChannel ? 'err-replyChannel' : null">
-                <option *ngFor="let c of replyChannels" [value]="c.id">{{ c.label }}</option>
+                <option value="" disabled>Select Reply Channel</option>
+                    <option *ngFor="let c of replyChannels" [value]="c.id">{{ c.label }}</option>
               </select>
               <p class="field-error" id="err-replyChannel" *ngIf="fieldErrors.replyChannel">{{ fieldErrors.replyChannel }}</p>
             </div>

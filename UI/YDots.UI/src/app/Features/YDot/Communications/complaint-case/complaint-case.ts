@@ -134,7 +134,7 @@ function buildCase(overrides: Partial<ComplaintCase> = {}): ComplaintCase {
     complaintTypeCode: 'CMT-DIST-01',
     complaintTypeLabel: 'Distribution shortfall',
     severity: 'high',
-    receivedChannel: 'Phone',
+    receivedChannel: '',
     receivedAt: '29 Jul 2026, 10:20 am',
     complainant: 'Ravi Kumar (on behalf of household #4021)',
     summary:

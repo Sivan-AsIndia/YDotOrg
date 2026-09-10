@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -35,19 +36,22 @@ public sealed record DeleteStateProvinceCommand(Guid StateProvinceId, DeleteMast
 ///
 /// A STATE MAY HANG OFF A PLATFORM COUNTRY. That combination is deliberate and it is the
 /// common case: an Organisation adding a district of its own beneath the seeded India row is
-/// exactly what the tenant overlay is for. What it may NOT do is edit that India row, which
-/// is a different question and one <see cref="GlobalMasterWriteGuard"/> answers.
+/// exactly what the tenant overlay is for. What it may NOT do is edit that India row, which is
+/// a different question and one <see cref="GlobalMasterWriteGuard"/> answers.
 /// </summary>
 public sealed class StateProvinceCommandHandler(
     IGlobalMasterRepository masters,
     IAuditService audit,
     GlobalMasterWriteGuard guard,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<StateProvinceCommandHandler> logger)
 {
     public async Task<Result<StateProvinceDetailResponse>> HandleAsync(
         CreateStateProvinceCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Creating state or province.");
 
         var request = command.Request;
         var scopeTenantId = guard.WriteScopeTenantId;
@@ -55,6 +59,8 @@ public sealed class StateProvinceCommandHandler(
         var code = CodeValue.TryParse(request.StateProvinceCode)?.Value;
         if (code is null)
         {
+            logger.LogWarning("State creation failed because the state code is invalid.");
+
             return Result.Failure<StateProvinceDetailResponse>(Error.Validation(
                 "That state code is not valid.",
                 [new ValidationError(
@@ -65,12 +71,20 @@ public sealed class StateProvinceCommandHandler(
         var country = await masters.GetCountryAsync(request.CountryId, cancellationToken);
         if (country is null)
         {
+            logger.LogWarning(
+                "State creation failed because the country was not found. CountryId: {CountryId}.",
+                request.CountryId);
+
             return Result.Failure<StateProvinceDetailResponse>(
                 Error.NotFound("That country was not found."));
         }
 
         if (await masters.CodeExistsAsync<StateProvince>(code, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning(
+                "State creation failed because the state code already exists. Code: {Code}.",
+                code);
+
             return Result.Failure<StateProvinceDetailResponse>(
                 Error.Duplicate($"A state with code {code} already exists in this catalogue."));
         }
@@ -78,6 +92,10 @@ public sealed class StateProvinceCommandHandler(
         var timeZoneName = await ResolveTimeZoneNameAsync(request.DefaultTimeZoneId, cancellationToken);
         if (request.DefaultTimeZoneId.HasValue && timeZoneName is null)
         {
+            logger.LogWarning(
+                "State creation failed because the specified time zone was not found. TimeZoneId: {TimeZoneId}.",
+                request.DefaultTimeZoneId);
+
             return Result.Failure<StateProvinceDetailResponse>(
                 Error.NotFound("That time zone was not found."));
         }
@@ -95,6 +113,9 @@ public sealed class StateProvinceCommandHandler(
             new { state.Code, Country = country.Code, Scope = scopeTenantId is null ? "Platform" : "Organisation" },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation("State created successfully. StateProvinceId: {StateProvinceId}, Code: {Code}, CountryId: {CountryId}.",
+            state.Id,state.Code,state.CountryId);
+
         return state.ToDetailResponse(
             country.Code, country.Name, timeZoneName, cityCount: 0, isSuperAdmin: guard.IsSuperAdmin);
     }
@@ -104,17 +125,26 @@ public sealed class StateProvinceCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating state or province. StateProvinceId: {StateProvinceId}.",
+            command.StateProvinceId);
+
         var request = command.Request;
 
         var state = await masters.GetStateProvinceAsync(command.StateProvinceId, cancellationToken);
         if (state is null)
         {
+            logger.LogWarning("State update failed because the state was not found. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That state was not found."));
         }
 
         var guarded = GuardWrite(state, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning( "State update rejected by the write guard. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -122,6 +152,9 @@ public sealed class StateProvinceCommandHandler(
         if (request.DefaultTimeZoneId.HasValue
             && await ResolveTimeZoneNameAsync(request.DefaultTimeZoneId, cancellationToken) is null)
         {
+            logger.LogWarning("State update failed because the specified time zone was not found. StateProvinceId: {StateProvinceId}, TimeZoneId: {TimeZoneId}.",
+                command.StateProvinceId,request.DefaultTimeZoneId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That time zone was not found."));
         }
 
@@ -137,6 +170,9 @@ public sealed class StateProvinceCommandHandler(
             new { state.Code },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation("State updated successfully. StateProvinceId: {StateProvinceId}, Code: {Code}.",
+            state.Id,state.Code);
+
         return await BuildOutcomeAsync(state, "State updated.", cancellationToken);
     }
 
@@ -145,22 +181,34 @@ public sealed class StateProvinceCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Changing state status. StateProvinceId: {StateProvinceId}, RequestedStatus: {RequestedStatus}.",
+            command.StateProvinceId,command.Request.Status);
+
         var request = command.Request;
 
         var state = await masters.GetStateProvinceAsync(command.StateProvinceId, cancellationToken);
         if (state is null)
         {
+            logger.LogWarning("State status change failed because the state was not found. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That state was not found."));
         }
 
         var guarded = GuardWrite(state, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning("State status change rejected by the write guard. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
         if (state.Status == request.Status)
         {
+            logger.LogWarning("State status change rejected because the state is already in the requested status. StateProvinceId: {StateProvinceId}, Status: {Status}.",
+                command.StateProvinceId,request.Status);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition($"That state is already {request.Status}."));
         }
@@ -180,6 +228,9 @@ public sealed class StateProvinceCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("State status changed successfully. StateProvinceId: {StateProvinceId}, NewStatus: {NewStatus}.",
+            state.Id,request.Status);
+
         return await BuildOutcomeAsync(
             state,
             request.Status == MasterDataStatus.Active ? "State activated." : "State deactivated.",
@@ -191,17 +242,26 @@ public sealed class StateProvinceCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting state or province. StateProvinceId: {StateProvinceId}.",
+            command.StateProvinceId);
+
         var request = command.Request;
 
         var state = await masters.GetStateProvinceAsync(command.StateProvinceId, cancellationToken);
         if (state is null)
         {
+            logger.LogWarning("State deletion failed because the state was not found. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That state was not found."));
         }
 
         var guarded = GuardWrite(state, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning("State deletion rejected by the write guard. StateProvinceId: {StateProvinceId}.",
+                command.StateProvinceId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -212,6 +272,9 @@ public sealed class StateProvinceCommandHandler(
 
         if (free.IsFailure)
         {
+            logger.LogWarning("State deletion rejected because dependent cities exist. StateProvinceId: {StateProvinceId}, CityCount: {CityCount}.",
+                command.StateProvinceId,cityCount);
+
             return Result.Failure<OutcomeResponse>(free.Error!);
         }
 
@@ -229,6 +292,9 @@ public sealed class StateProvinceCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("State deleted successfully. StateProvinceId: {StateProvinceId}, Code: {Code}.",
+            state.Id,state.Code);
+
         return new OutcomeResponse(
             state.Id, state.Status.ToString(), state.Version, "State deleted.", []);
     }
@@ -238,9 +304,23 @@ public sealed class StateProvinceCommandHandler(
     {
         var writable = guard.EnsureWritable(state, $"The state {state.Name}");
 
-        return writable.IsFailure
-            ? writable
-            : GlobalMasterWriteGuard.EnsureVersionMatches(state, expectedVersion);
+        if (writable.IsFailure)
+        {
+            logger.LogWarning("State write rejected by ownership or write guard. StateProvinceId: {StateProvinceId}.",
+                state.Id);
+
+            return writable;
+        }
+
+        var versioned = GlobalMasterWriteGuard.EnsureVersionMatches(state, expectedVersion);
+
+        if (versioned.IsFailure)
+        {
+            logger.LogWarning("State write rejected because the entity version does not match. StateProvinceId: {StateProvinceId}.",
+                state.Id);
+        }
+
+        return versioned;
     }
 
     /// <summary>

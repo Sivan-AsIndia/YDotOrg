@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -49,7 +50,8 @@ public sealed class UserAccessCommandHandler(
     ITenantContext tenantContext,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<UserAccessCommandHandler> logger)
 {
     public async Task<Result<OutcomeResponse>> HandleAsync(
         AssignUserRolesCommand command, CancellationToken cancellationToken)
@@ -58,20 +60,24 @@ public sealed class UserAccessCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Assign user roles started for user {UserId}.", command.UserId);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Assign user roles rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         if (user.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Assign user roles rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (user.IsSystemAccount)
         {
+            logger.LogWarning("Assign user roles rejected for system account {UserId}.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("System accounts cannot have their roles changed."));
         }
@@ -80,6 +86,7 @@ public sealed class UserAccessCommandHandler(
         // escalation, and a legitimate need goes through an access request instead.
         if (user.Id == currentUser.UserId && !currentUser.IsSuperAdmin)
         {
+            logger.LogWarning("Assign user roles rejected because user {UserId} attempted to change their own roles.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("You cannot change your own roles. Raise an access request instead."));
         }
@@ -94,6 +101,7 @@ public sealed class UserAccessCommandHandler(
 
         if (requestedRoles.Count != requestedIds.Count)
         {
+            logger.LogWarning("Assign user roles rejected for user {UserId} because one or more requested roles were not found in the organisation.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("One or more of those roles was not found in this organisation.",
                     [new ValidationError(nameof(request.RoleIds), "Choose roles from this organisation.")]));
@@ -115,6 +123,7 @@ public sealed class UserAccessCommandHandler(
 
         if (platformRoles.Count > 0 && user.TenantId is not null)
         {
+            logger.LogWarning("Assign user roles rejected for user {UserId} because platform roles cannot be granted to organisation members.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden(
                     "Platform roles cannot be granted to a member of an organisation."));
@@ -123,6 +132,7 @@ public sealed class UserAccessCommandHandler(
         var notAssignable = requestedRoles.Where(role => !role.IsAssignable).ToList();
         if (notAssignable.Count > 0)
         {
+            logger.LogWarning("Assign user roles rejected for user {UserId} because one or more requested roles are not assignable.", user.Id);
             return Result.Failure<OutcomeResponse>(
                 Error.Validation("One or more of those roles is not active.",
                     [.. notAssignable.Select(role =>
@@ -135,6 +145,7 @@ public sealed class UserAccessCommandHandler(
 
         if (conflicts.Count > 0)
         {
+            logger.LogWarning("Assign user roles rejected for user {UserId} due to segregation-of-duties conflicts. ConflictCount={ConflictCount}.", user.Id, conflicts.Count);
             return Result.Failure<OutcomeResponse>(Error.SegregationOfDuties(
                 "Those roles cannot be held together: " + string.Join("; ", conflicts)));
         }
@@ -198,10 +209,12 @@ public sealed class UserAccessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Assign user roles completed for user {UserId}. Added={AddedCount}, Revoked={RevokedCount}.", user.Id, added.Count, revoked.Count);
+
         var summary = (added.Count, revoked.Count) switch
         {
             (0, 0) => "No role changes were needed.",
-            (> 0, 0) => $"Added {added.Count} role(s).",
+            ( > 0, 0) => $"Added {added.Count} role(s).",
             (0, > 0) => $"Removed {revoked.Count} role(s).",
             _ => $"Added {added.Count} and removed {revoked.Count} role(s)."
         };
@@ -218,15 +231,18 @@ public sealed class UserAccessCommandHandler(
 
         var request = command.Request;
         var now = clock.UtcNow;
+        logger.LogInformation("Assign user data scopes started for user {UserId}.", command.UserId);
 
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Assign user data scopes rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<OutcomeResponse>(Error.UserNotFound());
         }
 
         if (user.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Assign user data scopes rejected for user {UserId} due to concurrency conflict.", user.Id);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -286,6 +302,8 @@ public sealed class UserAccessCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Assign user data scopes completed for user {UserId}. Added={AddedCount}, Removed={RemovedCount}.", user.Id, added, removed);
+
         return Result.Success(new OutcomeResponse(
             user.Id, user.Status.ToString(), user.Version,
             added == 0 && removed == 0
@@ -307,9 +325,12 @@ public sealed class UserAccessCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Preview user access started for user {UserId}.", command.UserId);
+
         var user = await users.GetByIdAsync(command.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Preview user access rejected because user {UserId} was not found.", command.UserId);
             return Result.Failure<UserAccessComparisonResponse>(Error.UserNotFound());
         }
 
@@ -320,6 +341,8 @@ public sealed class UserAccessCommandHandler(
 
         var conflicts = await effectiveAccess.CheckSegregationOfDutiesAsync(
             user.Id, proposed, cancellationToken);
+
+        logger.LogInformation("Preview user access completed for user {UserId}. ProposedRoles={ProposedRoleCount}, Conflicts={ConflictCount}.", user.Id, proposed.Count, conflicts.Count);
 
         return Result.Success(new UserAccessComparisonResponse(
             comparison.Gained,

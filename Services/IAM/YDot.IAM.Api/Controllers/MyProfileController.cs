@@ -47,14 +47,26 @@ namespace YDot.IAM.Api.Controllers;
 // nobody, and it is the screen they land on.
 [AllowedWhileOnboarding]
 public sealed class MyProfileController(
-    UserQueryHandler queries, MyProfileFeatureHandler handler) : ApiControllerBase
+    UserQueryHandler queries,
+    MyProfileFeatureHandler handler,
+    ILogger<MyProfileController> logger) : ApiControllerBase
 {
     /// <summary>The caller's own record: identity, organisation, roles and data scopes.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetMyProfileQuery(), cancellationToken));
+    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting current user's profile.");
+
+        var result = await queries.HandleAsync(
+            new GetMyProfileQuery(), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Failed to get current user's profile.");
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Saves the caller's own profile.
@@ -75,7 +87,16 @@ public sealed class MyProfileController(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return FromResult(await handler.HandleAsync(
-            new UpdateMyProfileCommand(request), cancellationToken));
+        logger.LogInformation("Updating current user's profile.");
+
+        var result = await handler.HandleAsync(
+            new UpdateMyProfileCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+            logger.LogWarning("Current user's profile update failed.");
+        else
+            logger.LogInformation("Current user's profile updated successfully.");
+
+        return FromResult(result);
     }
 }

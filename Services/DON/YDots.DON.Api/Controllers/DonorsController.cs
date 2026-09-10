@@ -23,6 +23,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class DonorsController : ApiControllerBase
 {
+    private readonly ILogger<DonorsController> _logger;
+
+    public DonorsController(ILogger<DonorsController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the donor list. View permission plus data scope.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.DonorsView)]
@@ -33,8 +40,23 @@ public sealed class DonorsController : ApiControllerBase
     public async Task<IActionResult> Search(
         [FromQuery] DonorSearchFilter filter,
         [FromServices] DonorQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SearchDonorsQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor search started.");
+
+        var result = await handler.HandleAsync(new SearchDonorsQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor search completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Donor search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET the dropdown rows for the donor selectors on the other screens.</summary>
     [HttpGet("lookup")]
@@ -45,8 +67,23 @@ public sealed class DonorsController : ApiControllerBase
         [FromQuery] string? search,
         [FromQuery] int maximumRows,
         [FromServices] DonorQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new LookupDonorsQuery(search, maximumRows), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor lookup started.");
+
+        var result = await handler.HandleAsync(new LookupDonorsQuery(search, maximumRows), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor lookup completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Donor lookup failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET a controlled CSV of the rows the caller can already see.</summary>
     [HttpGet("export")]
@@ -56,8 +93,23 @@ public sealed class DonorsController : ApiControllerBase
     public async Task<IActionResult> Export(
         [FromQuery] DonorSearchFilter filter,
         [FromServices] DonorQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FileFromResult(await handler.HandleAsync(new ExportDonorsQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor export started.");
+
+        var result = await handler.HandleAsync(new ExportDonorsQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor export completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Donor export failed.");
+        }
+
+        return FileFromResult(result);
+    }
 
     /// <summary>GET one donor. View permission plus record scope.</summary>
     [HttpGet("{id:guid}", Name = "GetDonorById")]
@@ -69,8 +121,23 @@ public sealed class DonorsController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] DonorQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetDonorDetailQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor detail retrieval started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new GetDonorDetailQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor detail retrieval completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor detail retrieval failed. DonorId={DonorId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST a new donor. Create permission plus the duplicate check.</summary>
     [HttpPost]
@@ -85,7 +152,18 @@ public sealed class DonorsController : ApiControllerBase
         [FromServices] DonorCommandHandler handler,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Donor creation started.");
+
         var result = await handler.HandleAsync(new CreateDonorCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor creation completed successfully. DonorId={DonorId}", result.Value?.Id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor creation failed.");
+        }
 
         return CreatedFromResult(result, "GetDonorById", new { id = result.Value?.Id ?? Guid.Empty },
             "The donor record was created.");
@@ -103,9 +181,23 @@ public sealed class DonorsController : ApiControllerBase
         Guid id,
         [FromBody] UpdateDonorRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new UpdateDonorCommand(id, request), cancellationToken),
-            "The donor record was updated.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor update started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new UpdateDonorCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor update completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor update failed. DonorId={DonorId}", id);
+        }
+
+        return FromResult(result, "The donor record was updated.");
+    }
 
     /// <summary>POST submit. Moves the record to PendingApproval.</summary>
     [HttpPost("{id:guid}/submit")]
@@ -119,9 +211,23 @@ public sealed class DonorsController : ApiControllerBase
         Guid id,
         [FromBody] TransitionRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SubmitDonorCommand(id, request), cancellationToken),
-            "The donor record was submitted for approval.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor submission started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new SubmitDonorCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor submission completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor submission failed. DonorId={DonorId}", id);
+        }
+
+        return FromResult(result, "The donor record was submitted for approval.");
+    }
 
     /// <summary>
     /// POST approve or reject. The creator is refused even when they hold the permission —
@@ -138,9 +244,23 @@ public sealed class DonorsController : ApiControllerBase
         Guid id,
         [FromBody] DecisionRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new ApproveDonorCommand(id, request), cancellationToken),
-            request.Approved ? "The donor record was approved." : "The donor record was rejected.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor approval decision started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new ApproveDonorCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor approval decision completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor approval decision failed. DonorId={DonorId}", id);
+        }
+
+        return FromResult(result, request.Approved ? "The donor record was approved." : "The donor record was rejected.");
+    }
 
     /// <summary>POST cancel. The reason is mandatory; the record moves to Restricted, never away.</summary>
     [HttpPost("{id:guid}/cancel")]
@@ -154,9 +274,23 @@ public sealed class DonorsController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CancelDonorCommand(id, request), cancellationToken),
-            "The donor record was cancelled.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor cancellation started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new CancelDonorCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor cancellation completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor cancellation failed. DonorId={DonorId}", id);
+        }
+
+        return FromResult(result, "The donor record was cancelled.");
+    }
 
     /// <summary>POST archive. Terminal state, so the contract returns 204 with no body.</summary>
     [HttpPost("{id:guid}/archive")]
@@ -170,6 +304,21 @@ public sealed class DonorsController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] DonorCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        NoContentFromResult(await handler.HandleAsync(new ArchiveDonorCommand(id, request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor archive started. DonorId={DonorId}", id);
+
+        var result = await handler.HandleAsync(new ArchiveDonorCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor archive completed successfully. DonorId={DonorId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Donor archive failed. DonorId={DonorId}", id);
+        }
+
+        return NoContentFromResult(result);
+    }
 }

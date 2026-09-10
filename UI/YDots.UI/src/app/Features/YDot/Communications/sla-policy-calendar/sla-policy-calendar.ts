@@ -168,7 +168,7 @@ export class SlaPolicyCalendarComponent {
     'Major Gifts — Concierge SLA',
   ];
 
-  queueOrPriority = signal('Donor Care — Priority 1');
+  queueOrPriority = signal('');
   queueOptions = [
     { label: 'Donor Care — Priority 1', disabledReason: null },
     { label: 'Donor Care — Priority 2', disabledReason: null },
@@ -190,7 +190,7 @@ export class SlaPolicyCalendarComponent {
    */
   protected readonly geo = createGeoCascade();
 
-  timeZone = signal('Asia/Kolkata');
+  timeZone = signal('');
 
   /**
    * The chosen zone as a person reads it: "(+05:30) India Standard Time".
@@ -269,6 +269,9 @@ export class SlaPolicyCalendarComponent {
     }
     if (forceInvalid || !this.escalationRoute().trim()) {
       errors['escalationRoute'] = 'Enter Escalation route.';
+    }
+    if (forceInvalid || !this.timeZone()) {
+      errors['timeZone'] = 'Enter Time zone.';
     }
 
     this.formErrors.set(errors);

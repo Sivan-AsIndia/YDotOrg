@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -79,7 +80,8 @@ public sealed class DocumentSubmissionCommandHandler(
     ICurrentUser currentUser,
     ITenantContext tenantContext,
     IDateTimeProvider clock,
-    IOptions<DocumentStorageSettings> storageOptions)
+    IOptions<DocumentStorageSettings> storageOptions,
+    ILogger<DocumentSubmissionCommandHandler> logger)
 {
     private readonly DocumentStorageSettings _storage = storageOptions.Value;
 
@@ -92,8 +94,11 @@ public sealed class DocumentSubmissionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating document submission. UserId: {UserId}.", currentUser.UserId);
+
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Document submission creation rejected because tenant selection is required. UserId: {UserId}.", currentUser.UserId);
             return Result.Failure<DocumentSubmissionResponse>(Error.TenantSelectionRequired());
         }
 
@@ -102,6 +107,7 @@ public sealed class DocumentSubmissionCommandHandler(
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Document submission creation failed because the selected tenant was not found. UserId: {UserId}, TenantId: {TenantId}.", currentUser.UserId, tenantId);
             return Result.Failure<DocumentSubmissionResponse>(Error.TenantNotFound());
         }
 
@@ -111,6 +117,7 @@ public sealed class DocumentSubmissionCommandHandler(
         // nobody reviewing the new file. See Tenant.AcceptsDocumentSubmissions.
         if (!tenant.AcceptsDocumentSubmissions)
         {
+            logger.LogWarning("Document submission creation rejected because the tenant no longer accepts document submissions. UserId: {UserId}, TenantId: {TenantId}.", currentUser.UserId, tenantId);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 "This Organisation's registration has already been decided, so its documents are "
                 + "settled. A new submission cannot be started."));
@@ -136,6 +143,8 @@ public sealed class DocumentSubmissionCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Document submission created successfully. UserId: {UserId}, TenantId: {TenantId}, SubmissionId: {SubmissionId}.", currentUser.UserId, tenantId, submission.Id);
+
         return Result.Success(await DescribeAsync(submission, tenant, cancellationToken));
     }
 
@@ -150,9 +159,12 @@ public sealed class DocumentSubmissionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Uploading document submission file. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
+
         var submission = await tenants.GetSubmissionAsync(command.SubmissionId, cancellationToken);
         if (submission is null)
         {
+            logger.LogWarning("Document submission file upload failed because the submission was not found. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
             return Result.Failure<DocumentSubmissionResponse>(
                 Error.NotFound("That submission was not found."));
         }
@@ -160,11 +172,13 @@ public sealed class DocumentSubmissionCommandHandler(
         var owned = EnsureOwnedByCaller(submission);
         if (owned is not null)
         {
+            logger.LogWarning("Document submission file upload rejected due to ownership or tenant access rules. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
             return Result.Failure<DocumentSubmissionResponse>(owned);
         }
 
         if (!submission.IsEditable)
         {
+            logger.LogWarning("Document submission file upload rejected because the submission is not editable. UserId: {UserId}, SubmissionId: {SubmissionId}, Status: {Status}.", currentUser.UserId, submission.Id, submission.Status);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 "This submission is with the reviewers and cannot be changed. "
                 + "Wait for the outcome, or start a new submission."));
@@ -172,6 +186,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (submission.Documents.Count >= _storage.MaximumFilesPerSubmission)
         {
+            logger.LogWarning("Document submission file upload rejected because the maximum file count was reached. UserId: {UserId}, SubmissionId: {SubmissionId}, FileCount: {FileCount}.", currentUser.UserId, submission.Id, submission.Documents.Count);
             return Result.Failure<DocumentSubmissionResponse>(Error.Validation(
                 $"A submission may carry at most {_storage.MaximumFilesPerSubmission} files.",
                 [new ValidationError("Files", "Remove a file before adding another.")]));
@@ -180,12 +195,14 @@ public sealed class DocumentSubmissionCommandHandler(
         var invalid = ValidateFile(command.FileName, command.ContentType, command.SizeBytes);
         if (invalid is not null)
         {
+            logger.LogWarning("Document submission file upload rejected by file validation. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.Id);
             return Result.Failure<DocumentSubmissionResponse>(invalid);
         }
 
         var tenant = await tenants.GetByIdAsync(submission.TenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Document submission file upload failed because the tenant was not found. UserId: {UserId}, TenantId: {TenantId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.TenantId, submission.Id);
             return Result.Failure<DocumentSubmissionResponse>(Error.TenantNotFound());
         }
 
@@ -194,6 +211,7 @@ public sealed class DocumentSubmissionCommandHandler(
         // add evidence after it.
         if (!tenant.AcceptsDocumentSubmissions)
         {
+            logger.LogWarning("Document submission file upload rejected because the tenant no longer accepts document submissions. UserId: {UserId}, TenantId: {TenantId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.TenantId, submission.Id);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 "This Organisation's registration has already been decided, so its documents are "
                 + "settled. No further files can be added."));
@@ -215,6 +233,7 @@ public sealed class DocumentSubmissionCommandHandler(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            logger.LogError(exception, "Document submission file could not be stored. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.Id);
             return Result.Failure<DocumentSubmissionResponse>(Error.Dependency(
                 "The file could not be stored. Try again in a moment."));
         }
@@ -223,6 +242,7 @@ public sealed class DocumentSubmissionCommandHandler(
         // form part does not get to smuggle a larger file past the check above.
         if (stored.SizeBytes > _storage.MaximumFileSizeBytes)
         {
+            logger.LogWarning("Document submission file upload rejected because the stored file exceeded the configured size limit. UserId: {UserId}, SubmissionId: {SubmissionId}, SizeBytes: {SizeBytes}.", currentUser.UserId, submission.Id, stored.SizeBytes);
             await SafeRemoveAsync(stored, cancellationToken);
 
             return Result.Failure<DocumentSubmissionResponse>(Error.Validation(
@@ -265,6 +285,8 @@ public sealed class DocumentSubmissionCommandHandler(
         // one-file submission reported "2 files" and the reviewer saw the same PDF written out
         // twice under it.
 
+        logger.LogInformation("Document submission file uploaded successfully. UserId: {UserId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}, SizeBytes: {SizeBytes}.", currentUser.UserId, submission.Id, document.Id, document.FileSizeBytes);
+
         return Result.Success(await DescribeAsync(submission, tenant, cancellationToken));
     }
 
@@ -272,6 +294,8 @@ public sealed class DocumentSubmissionCommandHandler(
         RemoveSubmissionFileCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Removing document submission file. UserId: {UserId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}.", currentUser.UserId, command.SubmissionId, command.DocumentId);
 
         var submission = await tenants.GetSubmissionAsync(command.SubmissionId, cancellationToken);
         if (submission is null)
@@ -295,6 +319,7 @@ public sealed class DocumentSubmissionCommandHandler(
         var document = submission.Documents.FirstOrDefault(item => item.Id == command.DocumentId);
         if (document is null)
         {
+            logger.LogWarning("Document submission file removal failed because the document was not found in the submission. UserId: {UserId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}.", currentUser.UserId, submission.Id, command.DocumentId);
             return Result.Failure<DocumentSubmissionResponse>(
                 Error.NotFound("That file is not part of this submission."));
         }
@@ -312,6 +337,8 @@ public sealed class DocumentSubmissionCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var tenant = await tenants.GetByIdAsync(submission.TenantId, cancellationToken);
+
+        logger.LogInformation("Document submission file removed successfully. UserId: {UserId}, SubmissionId: {SubmissionId}, DocumentId: {DocumentId}.", currentUser.UserId, submission.Id, document.Id);
 
         return Result.Success(await DescribeAsync(submission, tenant, cancellationToken));
     }
@@ -336,6 +363,8 @@ public sealed class DocumentSubmissionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Discarding document submission draft. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
+
         var submission = await tenants.GetSubmissionAsync(command.SubmissionId, cancellationToken);
         if (submission is null)
         {
@@ -350,6 +379,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (submission.Status != TenantDocumentSubmissionStatus.Draft)
         {
+            logger.LogWarning("Document submission draft discard rejected because the submission is not a draft. UserId: {UserId}, SubmissionId: {SubmissionId}, Status: {Status}.", currentUser.UserId, submission.Id, submission.Status);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Only a draft can be discarded. This submission has already been sent for review."));
         }
@@ -375,6 +405,8 @@ public sealed class DocumentSubmissionCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Document submission draft discarded successfully. UserId: {UserId}, SubmissionId: {SubmissionId}, FileCount: {FileCount}.", currentUser.UserId, submission.Id, fileCount);
+
         return Result.Success(new OutcomeResponse(
             command.SubmissionId,
             TenantDocumentSubmissionStatus.Draft.ToString(),
@@ -387,6 +419,8 @@ public sealed class DocumentSubmissionCommandHandler(
         SubmitDocumentSubmissionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Submitting document submission for review. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
 
         var submission = await tenants.GetSubmissionAsync(command.SubmissionId, cancellationToken);
         if (submission is null)
@@ -403,6 +437,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!submission.CanTransitionTo(TenantDocumentSubmissionStatus.Submitted))
         {
+            logger.LogWarning("Document submission rejected because its current status cannot transition to Submitted. UserId: {UserId}, SubmissionId: {SubmissionId}, Status: {Status}.", currentUser.UserId, submission.Id, submission.Status);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 $"A submission that is {submission.Status} cannot be sent for review."));
         }
@@ -411,6 +446,7 @@ public sealed class DocumentSubmissionCommandHandler(
         // one with nothing in it is being asked to verify a registration against no evidence.
         if (submission.Documents.Count == 0)
         {
+            logger.LogWarning("Document submission rejected because no files are attached. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.Id);
             return Result.Failure<DocumentSubmissionResponse>(Error.Validation(
                 "Attach at least one file before sending this for review.",
                 [new ValidationError("Files", "A submission must contain at least one file.")]));
@@ -446,6 +482,8 @@ public sealed class DocumentSubmissionCommandHandler(
 
         var tenant = await tenants.GetByIdAsync(submission.TenantId, cancellationToken);
 
+        logger.LogInformation("Document submission submitted successfully. UserId: {UserId}, SubmissionId: {SubmissionId}, FileCount: {FileCount}, ReuploadCount: {ReuploadCount}.", currentUser.UserId, submission.Id, submission.Documents.Count, submission.ReuploadCount);
+
         return Result.Success(await DescribeAsync(submission, tenant, cancellationToken));
     }
 
@@ -458,6 +496,8 @@ public sealed class DocumentSubmissionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Starting document submission review. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, command.SubmissionId);
+
         var submission = await tenants.GetSubmissionAsync(command.SubmissionId, cancellationToken);
         if (submission is null)
         {
@@ -467,6 +507,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!submission.CanTransitionTo(TenantDocumentSubmissionStatus.UnderReview))
         {
+            logger.LogWarning("Document submission review start rejected because its current status cannot transition to UnderReview. UserId: {UserId}, SubmissionId: {SubmissionId}, Status: {Status}.", currentUser.UserId, submission.Id, submission.Status);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 $"A submission that is {submission.Status} cannot be picked up for review."));
         }
@@ -501,9 +542,12 @@ public sealed class DocumentSubmissionCommandHandler(
 
         var request = command.Request;
 
+        logger.LogInformation("Deciding document submission. UserId: {UserId}, SubmissionId: {SubmissionId}, Decision: {Decision}.", currentUser.UserId, command.SubmissionId, request.Decision);
+
         if (request.Decision != DocumentSubmissionDecision.Approve
             && string.IsNullOrWhiteSpace(request.Notes))
         {
+            logger.LogWarning("Document submission decision rejected because a reason is required. UserId: {UserId}, SubmissionId: {SubmissionId}, Decision: {Decision}.", currentUser.UserId, command.SubmissionId, request.Decision);
             return Result.Failure<DocumentSubmissionResponse>(Error.Validation(
                 request.Decision == DocumentSubmissionDecision.Reject
                     ? "Give a reason so the organisation can correct and resubmit."
@@ -527,6 +571,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!submission.CanTransitionTo(target))
         {
+            logger.LogWarning("Document submission decision rejected because the current status cannot transition to the requested target. UserId: {UserId}, SubmissionId: {SubmissionId}, Status: {Status}, Target: {Target}.", currentUser.UserId, submission.Id, submission.Status, target);
             return Result.Failure<DocumentSubmissionResponse>(Error.InvalidTransition(
                 $"A submission that is {submission.Status} cannot be moved to {target}."));
         }
@@ -580,6 +625,8 @@ public sealed class DocumentSubmissionCommandHandler(
 
         var tenant = await tenants.GetByIdAsync(submission.TenantId, cancellationToken);
 
+        logger.LogInformation("Document submission decision completed successfully. UserId: {UserId}, SubmissionId: {SubmissionId}, Target: {Target}, FileCount: {FileCount}.", currentUser.UserId, submission.Id, target, submission.Documents.Count);
+
         return Result.Success(await DescribeAsync(submission, tenant, cancellationToken));
     }
 
@@ -602,12 +649,19 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Document submission access rejected because tenant selection is required. UserId: {UserId}, SubmissionId: {SubmissionId}.", currentUser.UserId, submission.Id);
             return Error.TenantSelectionRequired();
         }
 
         return submission.TenantId == tenantContext.RequireTenantId()
             ? null
-            : Error.CrossTenantAccessDenied("That submission belongs to a different organisation.");
+            : LogCrossTenantAccessDenied(submission);
+    }
+
+    private Error LogCrossTenantAccessDenied(TenantDocumentSubmission submission)
+    {
+        logger.LogWarning("Document submission access rejected because the submission belongs to a different tenant. UserId: {UserId}, SubmissionId: {SubmissionId}, TenantId: {TenantId}.", currentUser.UserId, submission.Id, submission.TenantId);
+        return Error.CrossTenantAccessDenied("That submission belongs to a different organisation.");
     }
 
     /// <summary>
@@ -621,18 +675,21 @@ public sealed class DocumentSubmissionCommandHandler(
     {
         if (string.IsNullOrWhiteSpace(fileName))
         {
+            logger.LogWarning("Document file validation failed because the file name is missing.");
             return Error.Validation("The file has no name.",
                 [new ValidationError("File", "Choose a file.")]);
         }
 
         if (sizeBytes <= 0)
         {
+            logger.LogWarning("Document file validation failed because the file is empty.");
             return Error.Validation("That file is empty.",
                 [new ValidationError("File", "Choose a file with content in it.")]);
         }
 
         if (sizeBytes > _storage.MaximumFileSizeBytes)
         {
+            logger.LogWarning("Document file validation failed because the declared size exceeds the configured limit. SizeBytes: {SizeBytes}.", sizeBytes);
             return Error.Validation(
                 $"That file is {sizeBytes / 1024d / 1024d:0.0} MB. "
                 + $"The limit is {_storage.MaximumFileSizeMegabytes} MB.",
@@ -641,6 +698,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!_storage.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
         {
+            logger.LogWarning("Document file validation failed because the content type is not allowed. ContentType: {ContentType}.", contentType);
             return Error.Validation(
                 "That kind of file cannot be uploaded. Use a PDF, an image, or an Office document.",
                 [new ValidationError("File", $"{contentType} is not accepted.")]);
@@ -650,6 +708,7 @@ public sealed class DocumentSubmissionCommandHandler(
 
         if (!DocumentContentTypes.ExtensionMatches(contentType, extension))
         {
+            logger.LogWarning("Document file validation failed because the file extension does not match the declared content type. ContentType: {ContentType}, Extension: {Extension}.", contentType, extension);
             return Error.Validation(
                 $"The file name ends in \"{extension}\", which does not match its contents.",
                 [new ValidationError("File", "Rename the file correctly, or choose another.")]);
@@ -666,6 +725,7 @@ public sealed class DocumentSubmissionCommandHandler(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            logger.LogError(exception, "Failed to remove an orphaned stored document object during cleanup.");
             // An orphaned object is untidy; failing the request twice helps nobody.
         }
     }

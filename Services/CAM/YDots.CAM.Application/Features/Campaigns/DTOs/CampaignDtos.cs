@@ -42,6 +42,17 @@ public sealed record CreateCampaignRequest(
     string Name,
     string Code,
     string Purpose,
+
+    /// <summary>
+    /// The campaign amount - the fixed figure the campaign is stated at, captured on step 1
+    /// immediately after the code.
+    ///
+    /// NOT <c>TargetAmount</c>. That column belongs to the Target and Budget module and stays
+    /// uncollected; this is its own field, its own column, and the number both donation forms
+    /// show the moment a donor picks the campaign.
+    /// </summary>
+    decimal CampaignAmount,
+
     string FundOrProgramme,
     IReadOnlyList<Guid> OwnerIds,
     DateOnly StartDate,
@@ -87,6 +98,10 @@ public sealed record UpdateCampaignRequest(
     long ExpectedVersion,
     string Name,
     string Purpose,
+
+    /// <summary>The campaign amount. Editable while the campaign is a Draft, like the rest.</summary>
+    decimal CampaignAmount,
+
     string FundOrProgramme,
     IReadOnlyList<Guid> OwnerIds,
     DateOnly StartDate,
@@ -154,6 +169,10 @@ public sealed record CampaignListItemResponse(
     DateOnly EndDate,
     decimal TargetAmount,
     decimal? BudgetAmount,
+
+    /// <summary>The fixed figure the campaign is stated at. Zero on a campaign created before it existed.</summary>
+    decimal CampaignAmount,
+
     Guid CurrencyId,
 
     /// <summary>The ISO code, resolved from the currency master so the grid can print a symbol.</summary>
@@ -210,6 +229,10 @@ public sealed record CampaignDetailResponse(
     DateOnly StartDate,
     DateOnly EndDate,
     decimal TargetAmount,
+
+    /// <summary>The fixed figure the campaign is stated at.</summary>
+    decimal CampaignAmount,
+
     Guid CurrencyId,
     string? CurrencyCode,
     decimal? BudgetAmount,
@@ -308,6 +331,7 @@ public sealed record CampaignExportRow(
     string EndDate,
     string TargetAmount,
     string? BudgetAmount,
+    string CampaignAmount,
     string Status,
     string OwnerCount,
     string TrackingAssetCount,

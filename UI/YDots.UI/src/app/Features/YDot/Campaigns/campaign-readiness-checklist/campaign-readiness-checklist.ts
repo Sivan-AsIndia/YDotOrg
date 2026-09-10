@@ -66,6 +66,17 @@ export class CampaignReadinessChecklistComponent {
 
   /** The acting session's "user id" — reused for the self-approval block on Approve launch. */
   protected readonly currentUserRef = computed(() => this.currentUser.reference());
+
+  /**
+   * The acting person's HUMAN reference - USR-00001 - for the review panel beside their name.
+   *
+   * `currentUserRef()` IS THE TOKEN'S USER ID, WHICH IS A GUID. The review row printed it in
+   * brackets after the approver's name, so the line a person reads before signing off a launch
+   * read "Rajat Sivan (9fb11890-a08e-4adc-95ca-8e4d71f4dd21)". The raw id is still what the API
+   * calls carry; this is the half that belongs on screen. Empty when the directory has not
+   * resolved them, and the template then prints the name alone.
+   */
+  protected readonly currentUserCode = computed(() => this.people.code(this.currentUserRef()));
   protected readonly currentUserName = computed(() => this.currentUser.current().name);
 
   /**

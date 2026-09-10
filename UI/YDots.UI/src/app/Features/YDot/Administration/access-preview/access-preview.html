@@ -1,0 +1,401 @@
+<main class="app-wrapper">
+<div class="page-wrapper">
+  <div class="container-fluid px-4 py-3">
+
+    <!-- Header -->
+    <div class="page-header-gradient mb-4">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 position-relative" style="z-index:1;">
+        <div>
+          <h3 class="mb-1 fw-bold fs-24">Access Preview</h3>
+          <p class="mb-0 fs-14">Everything a person can do right now, from every role and grant at once</p>
+        </div>
+        @if (selectedPerson()) {
+          <button class="btn btn-light btn-sm px-3 shadow-sm" (click)="clearSelection()">
+            <i class="ri-arrow-left-line me-1"></i> Choose someone else
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="row g-3">
+
+      <!-- ============ THE PICKER ============================================================ -->
+      <div class="col-lg-4 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header bg-white border-bottom">
+            <h6 class="mb-0 fw-semibold"><i class="ri-team-line me-2 text-primary"></i>Who</h6>
+          </div>
+          <div class="card-body p-3">
+            <div class="position-relative mb-3">
+              <i class="ri-search-line position-absolute text-muted" style="left:12px; top:9px;"></i>
+              <input type="text" class="form-control ps-5" placeholder="Search by name or code"
+                     [ngModel]="personSearch()" (ngModelChange)="personSearch.set($event)">
+            </div>
+
+            @if (peopleLoading()) {
+              <div class="text-center py-4">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+              </div>
+            }
+
+            @if (peopleError() && !peopleLoading()) {
+              <div class="text-center py-4">
+                <i class="ri-error-warning-line fs-3 text-muted d-block mb-2"></i>
+                <p class="text-muted small mb-2">The directory could not be loaded.</p>
+                <button class="btn btn-sm btn-outline-primary" (click)="retry()">Retry</button>
+              </div>
+            }
+
+            @if (!peopleLoading() && !peopleError()) {
+              <div class="person-list">
+                @for (person of filteredPeople(); track person.id) {
+                  <button type="button" class="person-row"
+                          [class.person-row--active]="person.id === selectedPersonId()"
+                          (click)="selectPerson(person.id)">
+                    <span class="person-row__name">{{ person.displayName }}</span>
+                    <span class="person-row__meta">{{ person.reference }}</span>
+                    <span class="person-row__roles">{{ person.roleSummary }}</span>
+                  </button>
+                } @empty {
+                  <p class="text-muted small text-center py-4 mb-0">Nobody matches that search.</p>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ THE ANSWER =========================================================== -->
+      <div class="col-lg-8 col-xl-9">
+
+        <!-- Nobody chosen yet -->
+        @if (!selectedPersonId() && !loading()) {
+          <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+              <i class="ri-eye-line fs-1 text-muted d-block mb-3"></i>
+              <h5 class="fw-semibold">Choose a person</h5>
+              <p class="text-muted mb-0" style="max-width:520px; margin:0 auto;">
+                This screen answers one question: what can this person actually do? It resolves
+                every role they hold, every permission those roles add up to, the records they
+                reach and anything granted to them directly &mdash; from the same source the
+                sign-in token is built from.
+              </p>
+            </div>
+          </div>
+        }
+
+        <!-- Loading -->
+        @if (loading()) {
+          <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+              <div class="spinner-border text-primary mb-3" role="status" style="width:2.5rem; height:2.5rem;">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="text-muted mb-0">Resolving effective access&hellip;</p>
+            </div>
+          </div>
+        }
+
+        <!-- Error -->
+        @if (loadError() && !loading()) {
+          <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+              <i class="ri-error-warning-line fs-1 text-muted d-block mb-3"></i>
+              <h5>Could not resolve access</h5>
+              <p class="text-muted mb-3">{{ errorMessage() }}</p>
+              <button class="btn btn-outline-primary" (click)="retry()">
+                <i class="ri-refresh-line me-1"></i> Retry
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (access() && !loading() && !loadError()) {
+
+          <!-- ---- Totals ---------------------------------------------------------------- -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6 col-xl-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Roles held</p>
+                  <h4 class="fw-bold mb-0">{{ roles().length }}</h4>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Permissions</p>
+                  <h4 class="fw-bold mb-0">{{ access()?.totalPermissionCount ?? 0 }}</h4>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Sensitive</p>
+                  <h4 class="fw-bold mb-0 text-danger">{{ access()?.sensitivePermissionCount ?? 0 }}</h4>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Data scopes</p>
+                  <h4 class="fw-bold mb-0">{{ dataScopes().length }}</h4>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!--
+            A BLANKET GRANT NEEDS SAYING OUT LOUD. A SuperAdmin, or a role marked "grants all",
+            holds every code with no permission row behind it - so the module list below is thin
+            and would mislead somebody into thinking they had seen the whole picture.
+          -->
+          @if (isBlanketGrant()) {
+            <div class="alert alert-warning d-flex align-items-start gap-2 border-0 shadow-sm">
+              <i class="ri-alert-line fs-5"></i>
+              <div>
+                <strong>This account holds everything.</strong>
+                @if (access()?.isSuperAdmin) {
+                  It is a platform SuperAdmin, whose authority comes from a flag rather than from
+                  granted permissions.
+                } @else {
+                  It holds a role that grants every permission in this organisation.
+                }
+                The list below shows what is recorded as rows, which is not the whole of what
+                this account can reach.
+              </div>
+            </div>
+          }
+
+          <!-- ---- Roles ----------------------------------------------------------------- -->
+          <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom">
+              <h6 class="mb-0 fw-semibold">
+                <i class="ri-shield-user-line me-2 text-primary"></i>Roles
+                <span class="text-muted fw-normal small ms-1">&mdash; where the access comes from</span>
+              </h6>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Role</th>
+                    <th>Permissions</th>
+                    <th>Effective</th>
+                    <th>Assigned by</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (role of roles(); track role.id) {
+                    <tr>
+                      <td>
+                        <span class="fw-semibold">{{ role.roleName || role.roleCode }}</span>
+                        @if (role.isPrimary) {
+                          <span class="badge bg-primary bg-opacity-10 text-primary ms-2">Primary</span>
+                        }
+                      </td>
+                      <td class="small">{{ role.permissionCount ?? 0 }}</td>
+                      <td class="small">
+                        {{ formatDate(role.effectiveFromUtc) }}
+                        @if (role.effectiveToUtc) {
+                          &rarr; {{ formatDate(role.effectiveToUtc) }}
+                        } @else {
+                          <span class="text-muted">&rarr; no end</span>
+                        }
+                      </td>
+                      <td class="small">{{ role.assignedByName || '—' }}</td>
+                      <td>
+                        @if (role.isEffective) {
+                          <span class="badge bg-success bg-opacity-10 text-success">In force</span>
+                        } @else {
+                          <span class="badge bg-secondary bg-opacity-10 text-secondary">Not in force</span>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="5" class="text-center text-muted py-4">
+                        This person holds no roles.
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ---- Data scopes ----------------------------------------------------------- -->
+          @if (dataScopes().length > 0) {
+            <div class="card border-0 shadow-sm mb-3">
+              <div class="card-header bg-white border-bottom">
+                <h6 class="mb-0 fw-semibold">
+                  <i class="ri-focus-3-line me-2 text-primary"></i>Data scopes
+                  <span class="text-muted fw-normal small ms-1">&mdash; which records the permissions reach</span>
+                </h6>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Kind</th>
+                      <th>Value</th>
+                      <th>Effective</th>
+                      <th>State</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (scope of dataScopes(); track scope.id) {
+                      <tr>
+                        <td class="small">{{ scopeLabel(scope.scopeType) }}</td>
+                        <td class="small fw-semibold">{{ scope.displayLabel || scope.scopeValue || 'All' }}</td>
+                        <td class="small">
+                          {{ formatDate(scope.effectiveFromUtc) }}
+                          @if (scope.effectiveToUtc) {
+                            &rarr; {{ formatDate(scope.effectiveToUtc) }}
+                          }
+                        </td>
+                        <td>
+                          @if (scope.isEffective) {
+                            <span class="badge bg-success bg-opacity-10 text-success">In force</span>
+                          } @else {
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary">Not in force</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          <!-- ---- Permissions by module -------------------------------------------------- -->
+          <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h6 class="mb-0 fw-semibold">
+                  <i class="ri-key-2-line me-2 text-primary"></i>What they can do
+                </h6>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="grantedOnly"
+                           [ngModel]="grantedOnly()" (ngModelChange)="grantedOnly.set($event)">
+                    <label class="form-check-label small" for="grantedOnly">Granted only</label>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="sensitiveOnly"
+                           [ngModel]="sensitiveOnly()" (ngModelChange)="sensitiveOnly.set($event)">
+                    <label class="form-check-label small" for="sensitiveOnly">Sensitive only</label>
+                  </div>
+                  <button class="btn btn-sm btn-outline-secondary" (click)="expandAll()">Expand all</button>
+                  <button class="btn btn-sm btn-outline-secondary" (click)="collapseAll()">Collapse</button>
+                </div>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              @for (module of modules(); track module.moduleCode) {
+                <div class="module-block">
+                  <button type="button" class="module-head" (click)="toggleModule(module.moduleCode)">
+                    <i class="module-head__chevron"
+                       [class.ri-arrow-down-s-line]="isModuleOpen(module.moduleCode)"
+                       [class.ri-arrow-right-s-line]="!isModuleOpen(module.moduleCode)"></i>
+                    <i [class]="moduleIcon(module.moduleCode)" class="me-2 text-primary"></i>
+                    <span class="fw-semibold">{{ moduleLabel(module.moduleCode) }}</span>
+                    <span class="ms-auto d-flex gap-2">
+                      <span class="badge bg-primary bg-opacity-10 text-primary">
+                        {{ module.grantedCount }} granted
+                      </span>
+                      @if (module.sensitiveCount > 0) {
+                        <span class="badge bg-danger bg-opacity-10 text-danger">
+                          {{ module.sensitiveCount }} sensitive
+                        </span>
+                      }
+                    </span>
+                  </button>
+
+                  @if (isModuleOpen(module.moduleCode)) {
+                    <div class="module-body">
+                      @for (group of module.groups; track group.groupCode) {
+                        <div class="permission-group">
+                          <p class="permission-group__title">{{ group.groupCode }}</p>
+                          <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                              <thead class="table-light">
+                                <tr>
+                                  <th style="width:38%">Permission</th>
+                                  <th style="width:28%">Code</th>
+                                  <th style="width:22%">Granted via</th>
+                                  <th style="width:12%">&nbsp;</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (permission of group.permissions; track permission.code) {
+                                  <tr [class.text-muted]="permission.isGranted !== true">
+                                    <td class="small">{{ permission.name || permission.code }}</td>
+                                    <td class="small"><code>{{ permission.code }}</code></td>
+                                    <td class="small">
+                                      @if (permission.isGranted) {
+                                        {{ grantedViaLabel(permission) }}
+                                      } @else {
+                                        <span class="text-muted">&mdash;</span>
+                                      }
+                                    </td>
+                                    <td class="text-end">
+                                      @if (permission.isSensitive) {
+                                        <span class="badge bg-danger bg-opacity-10 text-danger"
+                                              title="Use of this permission writes an enhanced audit row">
+                                          Sensitive
+                                        </span>
+                                      }
+                                      @if (permission.isGranted !== true) {
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary">No</span>
+                                      }
+                                    </td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @empty {
+                <p class="text-muted text-center py-5 mb-0">
+                  Nothing matches the current filters.
+                </p>
+              }
+            </div>
+          </div>
+
+          <!-- ---- Direct claims ---------------------------------------------------------- -->
+          @if (directClaims().length > 0) {
+            <div class="card border-0 shadow-sm">
+              <div class="card-header bg-white border-bottom">
+                <h6 class="mb-0 fw-semibold">
+                  <i class="ri-add-circle-line me-2 text-primary"></i>Granted directly
+                  <span class="text-muted fw-normal small ms-1">&mdash; on top of any role</span>
+                </h6>
+              </div>
+              <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                  @for (claim of directClaims(); track claim) {
+                    <span class="badge bg-info bg-opacity-10 text-info"><code>{{ claim }}</code></span>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  </div>
+</div>
+</main>

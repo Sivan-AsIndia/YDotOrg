@@ -1,4 +1,4 @@
-﻿namespace YDot.IAM.Application.Common.Constants;
+namespace YDot.IAM.Application.Common.Constants;
 
 /// <summary>
 /// Stable dotted codes written into <c>AuditEvent.ActionCode</c>.
@@ -182,6 +182,26 @@ public static class AuditActionCodes
 
     /// <summary>Somebody took a copy of the trail. The event a later investigation looks for.</summary>
     public const string AuditExported = "iam.audit.exported";
+
+    // ---- Request outcomes that never reach a handler ----------------------------------------------
+    //
+    // WHY THESE TWO EXIST. Every other code on this list is written by a handler that RAN, which
+    // means the trail could only ever record actions that got as far as succeeding - and the audit
+    // screen's Outcome column showed nothing but "Succeeded" as a direct consequence. A refusal
+    // happens in the authorization pipeline BEFORE any handler, and a dependency failure unwinds
+    // past the handler without it writing anything, so neither one had a code to be recorded under
+    // and neither appeared at all.
+    //
+    // THEY CARRY THE ROUTE, NOT A BUSINESS VERB. Nothing at that point in the pipeline knows which
+    // action was intended - only which endpoint was addressed - so the request path and the
+    // permission that was refused go in the metadata, which is what an investigation actually
+    // needs.
+
+    /// <summary>An authenticated caller was refused an endpoint by the authorization pipeline.</summary>
+    public const string AccessDenied = "iam.security.access-denied";
+
+    /// <summary>A request failed with an unhandled error. Recorded as a Failed outcome.</summary>
+    public const string RequestFailed = "iam.security.request-failed";
 
     // ---- Cross-tenant alarm -----------------------------------------------------------------------
     /// <summary>

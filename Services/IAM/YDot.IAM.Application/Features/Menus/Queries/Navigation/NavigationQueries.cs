@@ -1,6 +1,7 @@
 ﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Models;
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Application.Common.Services;
 using YDot.IAM.Application.Features.Menus.DTOs;
@@ -58,11 +59,14 @@ public sealed class NavigationQueryHandler(
     IPermissionRepository permissions,
     ITenantRepository tenants,
     ITenantContext tenantContext,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<NavigationQueryHandler> logger)
 {
     public async Task<Result<NavigationResponse>> HandleAsync(
         GetNavigationQuery query, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Retrieving navigation for current user.");
+
         var menu = await menuBuilder.BuildForCurrentUserAsync(cancellationToken);
 
         // The landing route is read OFF the tree just built rather than built again. This used
@@ -91,7 +95,11 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving menu permission codes.");
+
         var all = await permissions.GetAllAsync(cancellationToken);
+
+        logger.LogInformation("Menu permission codes retrieved. Count: {Count}.", all.Count);
 
         return Result.Success<IReadOnlyList<MenuPermissionOptionResponse>>(
         [
@@ -114,13 +122,30 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var catalogue = await menus.GetCatalogueAsync(cancellationToken);
+        logger.LogInformation("Retrieving menu definitions. IncludeRetired: {IncludeRetired}.", query.IncludeRetired);
+
+        var all = await menus.GetCatalogueAsync(cancellationToken);
+
+        // SCOPED TO WHAT THIS CALLER OWNS OR SHARES. This list used to be behind the platform
+        // permission, where "everything" and "everything the caller may see" were the same set.
+        // It is now readable by an Organisation administrator building their own menu, and
+        // another Organisation's nodes are not theirs to read - the names and routes on them are
+        // that charity's business.
+        //
+        // A caller with no Organisation is a platform administrator and sees the catalogue alone;
+        // the Organisation branch adds that Organisation's own nodes to it.
+        var catalogue = all
+            .Where(node => node.OwnerTenantId == null
+                           || node.OwnerTenantId == tenantContext.TenantId)
+            .ToList();
 
         var nodes = query.IncludeRetired
             ? catalogue
             : catalogue.Where(node => node.Status != MenuStatus.Retired).ToList();
 
         var namesById = catalogue.ToDictionary(node => node.Id, node => node.Name);
+
+        logger.LogInformation("Menu definitions retrieved. Count: {Count}.", nodes.Count);
 
         return Result.Success<IReadOnlyList<MenuDefinitionResponse>>(
             BuildDefinitionTree(nodes, namesById, parentId: null));
@@ -131,11 +156,15 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving menu catalogue. IncludePlatformNodes: {IncludePlatformNodes}.", query.IncludePlatformNodes);
+
         // Platform nodes are only ever included for a root user, whatever the flag asks for.
         var includePlatform = query.IncludePlatformNodes && currentUser.IsSuperAdmin;
 
         var tree = await menuBuilder.BuildCatalogueAsync(
             tenantContext.TenantId, includePlatform, cancellationToken);
+
+        logger.LogInformation("Menu catalogue retrieved. Count: {Count}.", tree.Count);
 
         return Result.Success(tree);
     }
@@ -149,14 +178,17 @@ public sealed class NavigationQueryHandler(
     {
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Tenant menu configuration retrieval requires a tenant context.");
             return Result.Failure<TenantMenuConfigurationResponse>(Error.TenantSelectionRequired());
         }
 
         var tenantId = tenantContext.RequireTenantId();
+        logger.LogInformation("Retrieving tenant menu configuration. TenantId: {TenantId}.", tenantId);
 
         var tenant = await tenants.GetByIdAsync(tenantId, cancellationToken);
         if (tenant is null)
         {
+            logger.LogWarning("Tenant not found while retrieving menu configuration. TenantId: {TenantId}.", tenantId);
             return Result.Failure<TenantMenuConfigurationResponse>(Error.TenantNotFound());
         }
 
@@ -168,7 +200,16 @@ public sealed class NavigationQueryHandler(
         // rather than shown disabled.
         var configurable = catalogue
             .Where(node => !node.IsPlatformOnly && node.Status != MenuStatus.Retired)
+
+            // THE PLATFORM'S NODES AND THIS ORGANISATION'S OWN, AND NOTHING ELSE. The catalogue
+            // read is deliberately unscoped - it is one query for a tree that is mostly shared -
+            // so this is the line that keeps another Organisation's own menu items out. Without
+            // it the configuration screen listed every node every charity had ever added, names
+            // and routes included, and offered switches that could never affect anything.
+            .Where(node => node.OwnerTenantId == null || node.OwnerTenantId == tenantId)
             .ToList();
+
+        logger.LogInformation("Tenant menu configuration retrieved. TenantId: {TenantId}, ConfigurableCount: {Count}.", tenantId, configurable.Count);
 
         return Result.Success(new TenantMenuConfigurationResponse(
             tenantId,
@@ -195,9 +236,12 @@ public sealed class NavigationQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving role menu mapping. RoleId: {RoleId}.", query.RoleId);
+
         var role = await roles.GetWithPermissionsAsync(query.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role not found while retrieving menu mapping. RoleId: {RoleId}.", query.RoleId);
             return Result.Failure<RoleMenuMappingResponse>(Error.NotFound("That role was not found."));
         }
 
@@ -209,11 +253,18 @@ public sealed class NavigationQueryHandler(
         // applied where it is actually enforceable.
         if (role.IsPlatformRole)
         {
+            logger.LogWarning("Role menu mapping retrieval rejected for a platform role. RoleId: {RoleId}.", query.RoleId);
             return Result.Failure<RoleMenuMappingResponse>(Error.Forbidden(
                 "A platform role's navigation is not an organisation's to configure."));
         }
 
-        var catalogue = await menus.GetCatalogueAsync(cancellationToken);
+        // THE ROLE'S OWN ORGANISATION DECIDES THE SET, not the caller's. A role belongs to one
+        // Organisation, and the nodes that can be mapped to it are the platform's plus that
+        // Organisation's - never a third party's, whose node the role could never render.
+        var catalogue = (await menus.GetCatalogueAsync(cancellationToken))
+            .Where(node => node.OwnerTenantId == null || node.OwnerTenantId == role.TenantId)
+            .ToList();
+
         var roleMenus = await menus.GetRoleMenusAsync(role.Id, cancellationToken);
         var mappingsById = roleMenus.ToDictionary(mapping => mapping.MenuDefinitionId);
 
@@ -241,6 +292,8 @@ public sealed class NavigationQueryHandler(
             .Where(mapping => mapping.IsLandingPage)
             .Select(mapping => (Guid?)mapping.MenuDefinitionId)
             .FirstOrDefault();
+
+        logger.LogInformation("Role menu mapping retrieved. RoleId: {RoleId}, ConfigurableCount: {Count}.", role.Id, configurable.Count);
 
         return Result.Success(new RoleMenuMappingResponse(
             role.Id,
@@ -278,6 +331,8 @@ public sealed class NavigationQueryHandler(
                 node.OpensInNewTab,
                 node.BadgeKey,
                 node.Version,
+                node.OwnerTenantId,
+                node.IsSystemDefined,
                 BuildDefinitionTree(nodes, namesById, node.Id)));
         }
 
@@ -317,6 +372,9 @@ public sealed class NavigationQueryHandler(
                 tenantMenu?.DisplayNameOverride,
                 tenantMenu?.IconOverride,
                 tenantMenu?.DisplayOrderOverride,
+                node.OwnerTenantId is not null,
+                node.Version,
+                node.ParentMenuId,
                 children));
         }
 

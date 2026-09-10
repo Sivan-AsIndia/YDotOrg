@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -45,7 +46,8 @@ public sealed class IdentityVerificationCommandHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<IdentityVerificationCommandHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -55,14 +57,20 @@ public sealed class IdentityVerificationCommandHandler(
     {
         var request = command.Request;
 
+        logger.LogInformation("Identity verification challenge sending started for donor {DonorId}.", request.DonorId);
+
         var donor = await donorRepository.GetByIdAsync(request.DonorId, cancellationToken);
         if (donor is null || donor.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Identity verification challenge failed because donor {DonorId} was not found inside the current organisation scope.", request.DonorId);
+
             return Result.Failure<ChallengeSentResponse>(Error.DonorNotFound());
         }
 
         if (!Enum.TryParse<VerificationChannel>(request.VerificationChannel, ignoreCase: true, out var channel))
         {
+            logger.LogWarning("Identity verification challenge failed because an invalid verification channel was supplied for donor {DonorId}.", request.DonorId);
+
             return Result.Failure<ChallengeSentResponse>(Error.Validation(
                 "Review Verification channel. Choose a value from the approved catalogue.",
                 [new ValidationError(nameof(request.VerificationChannel), "Choose a channel from the list.")]));
@@ -72,6 +80,8 @@ public sealed class IdentityVerificationCommandHandler(
 
         if (string.IsNullOrWhiteSpace(destination))
         {
+            logger.LogWarning("Identity verification challenge failed because donor {DonorId} has no destination for channel {VerificationChannel}.", request.DonorId, channel);
+
             return Result.Failure<ChallengeSentResponse>(Error.InvalidTransition(
                 $"This donor has no {channel} destination on record, so a challenge cannot be sent."));
         }
@@ -117,6 +127,8 @@ public sealed class IdentityVerificationCommandHandler(
 
         // The delivery itself is a separate dependency. The local record is committed either
         // way, and the response says so, which is what UI section 4.7.4 asks for.
+        logger.LogInformation("Identity verification challenge {VerificationId} was queued successfully for donor {DonorId} using channel {VerificationChannel}.", verification.Id, donor.Id, channel);
+
         return Result.Success(new ChallengeSentResponse(
             verification.ToResponse(currentUser.CanSeeEvidence(), _settings.VerificationMaxAttempts),
             "Queued",
@@ -131,21 +143,29 @@ public sealed class IdentityVerificationCommandHandler(
         VerifyCodeCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Identity verification code verification started for verification {VerificationId}.", command.VerificationId);
+
         var verification = await verificationRepository.GetByIdAsync(command.VerificationId, cancellationToken);
 
         if (verification is null || verification.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Identity verification {VerificationId} was not found inside the current organisation scope.", command.VerificationId);
+
             return Result.Failure<IdentityVerificationResponse>(
                 Error.NotFound("That verification was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != verification.Version)
         {
+            logger.LogWarning("Identity verification {VerificationId} failed concurrency validation. Expected version {ExpectedVersion}, actual version {ActualVersion}.", command.VerificationId, command.Request.ExpectedVersion, verification.Version);
+
             return Result.Failure<IdentityVerificationResponse>(Error.Concurrency());
         }
 
         if (verification.Status is not (VerificationStatus.ChallengeSent or VerificationStatus.Escalated))
         {
+            logger.LogWarning("Identity verification {VerificationId} cannot accept a code because it is in state {Status}.", command.VerificationId, verification.Status);
+
             return Result.Failure<IdentityVerificationResponse>(Error.InvalidTransition(
                 $"A verification in state {verification.Status} cannot accept a code."));
         }
@@ -162,6 +182,8 @@ public sealed class IdentityVerificationCommandHandler(
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogWarning("Identity verification {VerificationId} failed because the challenge code had expired.", command.VerificationId);
 
             return Result.Failure<IdentityVerificationResponse>(Error.InvalidTransition(
                 "That code has expired. Send a new challenge."));
@@ -189,6 +211,8 @@ public sealed class IdentityVerificationCommandHandler(
 
             var remaining = Math.Max(0, _settings.VerificationMaxAttempts - verification.AttemptCount);
 
+            logger.LogWarning("Identity verification {VerificationId} code verification failed. Attempt {AttemptCount} of {MaxAttempts}. {RemainingAttempts} attempts remain.", command.VerificationId, verification.AttemptCount, _settings.VerificationMaxAttempts, remaining);
+
             return Result.Failure<IdentityVerificationResponse>(Error.Validation(
                 remaining == 0
                     ? "That code did not match and no attempts remain. Send a new challenge or escalate for review."
@@ -209,6 +233,8 @@ public sealed class IdentityVerificationCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Identity verification {VerificationId} completed successfully after {AttemptCount} attempt(s).", command.VerificationId, verification.AttemptCount);
+
         return Result.Success(verification.ToResponse(
             currentUser.CanSeeEvidence(), _settings.VerificationMaxAttempts));
     }
@@ -217,21 +243,29 @@ public sealed class IdentityVerificationCommandHandler(
         EscalateVerificationCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Identity verification escalation started for verification {VerificationId}.", command.VerificationId);
+
         var verification = await verificationRepository.GetByIdAsync(command.VerificationId, cancellationToken);
 
         if (verification is null || verification.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Identity verification {VerificationId} was not found inside the current organisation scope.", command.VerificationId);
+
             return Result.Failure<IdentityVerificationResponse>(
                 Error.NotFound("That verification was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != verification.Version)
         {
+            logger.LogWarning("Identity verification {VerificationId} escalation failed concurrency validation. Expected version {ExpectedVersion}, actual version {ActualVersion}.", command.VerificationId, command.Request.ExpectedVersion, verification.Version);
+
             return Result.Failure<IdentityVerificationResponse>(Error.Concurrency());
         }
 
         if (verification.Status is VerificationStatus.Verified or VerificationStatus.Cancelled)
         {
+            logger.LogWarning("Identity verification {VerificationId} cannot be escalated because it is in terminal state {Status}.", command.VerificationId, verification.Status);
+
             return Result.Failure<IdentityVerificationResponse>(Error.InvalidTransition(
                 $"A verification in state {verification.Status} cannot be escalated."));
         }
@@ -250,6 +284,8 @@ public sealed class IdentityVerificationCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Identity verification {VerificationId} escalated successfully.", command.VerificationId);
+
         return Result.Success(verification.ToResponse(
             currentUser.CanSeeEvidence(), _settings.VerificationMaxAttempts));
     }
@@ -258,21 +294,29 @@ public sealed class IdentityVerificationCommandHandler(
         CancelVerificationCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Identity verification cancellation started for verification {VerificationId}.", command.VerificationId);
+
         var verification = await verificationRepository.GetByIdAsync(command.VerificationId, cancellationToken);
 
         if (verification is null || verification.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Identity verification {VerificationId} was not found inside the current organisation scope.", command.VerificationId);
+
             return Result.Failure<IdentityVerificationResponse>(
                 Error.NotFound("That verification was not found inside your scope."));
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != verification.Version)
         {
+            logger.LogWarning("Identity verification {VerificationId} cancellation failed concurrency validation. Expected version {ExpectedVersion}, actual version {ActualVersion}.", command.VerificationId, command.Request.ExpectedVersion, verification.Version);
+
             return Result.Failure<IdentityVerificationResponse>(Error.Concurrency());
         }
 
         if (verification.Status is VerificationStatus.Verified or VerificationStatus.Cancelled)
         {
+            logger.LogWarning("Identity verification {VerificationId} cannot be cancelled because it is in terminal state {Status}.", command.VerificationId, verification.Status);
+
             return Result.Failure<IdentityVerificationResponse>(Error.InvalidTransition(
                 $"A verification in state {verification.Status} cannot be cancelled."));
         }
@@ -287,6 +331,8 @@ public sealed class IdentityVerificationCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Identity verification {VerificationId} cancelled successfully.", command.VerificationId);
 
         return Result.Success(verification.ToResponse(
             currentUser.CanSeeEvidence(), _settings.VerificationMaxAttempts));

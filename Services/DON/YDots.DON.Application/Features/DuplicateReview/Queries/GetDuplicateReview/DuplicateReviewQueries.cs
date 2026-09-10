@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Constants;
@@ -19,12 +20,15 @@ public sealed record GetDuplicateReviewDetailQuery(Guid ReviewId);
 
 public sealed class DuplicateReviewQueryHandler(
     IDonorMergeCaseRepository mergeCaseRepository,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILogger<DuplicateReviewQueryHandler> logger)
 {
     public async Task<Result<DuplicateReviewListResponse>> HandleAsync(
         GetDuplicateReviewListQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Get duplicate review list started.");
+
         var page = await mergeCaseRepository.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
         var rows = page.Items.Select(item => item.ToListItemResponse()).ToList();
 
@@ -40,6 +44,8 @@ public sealed class DuplicateReviewQueryHandler(
             DescribeScope(),
             rows.Count == 0 ? ScreenState.Empty : ScreenState.Initial);
 
+        logger.LogInformation("Get duplicate review list completed successfully. Returned {RowCount} row(s) out of {TotalCount}.", rows.Count, page.TotalCount);
+
         return Result.Success(response);
     }
 
@@ -47,13 +53,19 @@ public sealed class DuplicateReviewQueryHandler(
         GetDuplicateReviewDetailQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Get duplicate review detail started for ReviewId {ReviewId}.", query.ReviewId);
+
         var mergeCase = await mergeCaseRepository.GetWithCandidatesAsync(query.ReviewId, cancellationToken);
 
         if (mergeCase is null || mergeCase.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Get duplicate review detail failed for ReviewId {ReviewId} because the review was not found inside the current organisation scope.", query.ReviewId);
+
             return Result.Failure<DuplicateReviewDetailResponse>(
                 Error.NotFound("That duplicate review was not found inside your scope."));
         }
+
+        logger.LogInformation("Get duplicate review detail completed successfully for ReviewId {ReviewId}.", query.ReviewId);
 
         return Result.Success(mergeCase.ToDetailResponse(
             currentUser.CanSeeContact(),
@@ -87,7 +99,7 @@ public sealed class DuplicateReviewQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            parts.Add($"search '{filter.Search}'");
+            parts.Add("search filter");
         }
 
         if (filter.Status is not null)

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -49,7 +50,8 @@ public sealed class ReauthenticationCommandHandler(
     ITenantContext tenantContext,
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
-    IOptions<JwtSettings> jwtOptions)
+    IOptions<JwtSettings> jwtOptions,
+    ILogger<ReauthenticationCommandHandler> logger)
 {
     private readonly JwtSettings _jwt = jwtOptions.Value;
 
@@ -58,12 +60,15 @@ public sealed class ReauthenticationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Reauthentication started for user {UserId}, session {SessionId}", currentUser.UserId, currentUser.SessionId);
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Reauthentication failed because user {UserId} was not found", currentUser.UserId);
             return Result.Failure<ReauthenticateResponse>(Error.Unauthorised());
         }
 
@@ -71,11 +76,13 @@ public sealed class ReauthenticationCommandHandler(
         // password oracle for anybody who has got as far as an open session.
         if (user.IsLockedOut(now))
         {
+            logger.LogWarning("Reauthentication denied because user {UserId} is locked out", user.Id);
             return Result.Failure<ReauthenticateResponse>(
                 Error.AccountLocked(user.LockoutMinutesRemaining(now)));
         }
 
         var proved = false;
+        var authenticationMethod = string.IsNullOrWhiteSpace(request.Password) ? "Mfa" : "Password";
 
         // Either factor is accepted, because the person may have only one to hand: a password
         // manager on a different machine, or a phone but no memorised password.
@@ -92,6 +99,8 @@ public sealed class ReauthenticationCommandHandler(
 
         if (!proved)
         {
+            logger.LogWarning("Reauthentication failed for user {UserId} using {AuthenticationMethod}", user.Id, authenticationMethod);
+
             await audit.WriteAsync(
                 AuditActionCodes.Reauthenticated, nameof(User), user.Id, AuditResult.Denied,
                 user.DisplayName, cancellationToken: cancellationToken);
@@ -111,10 +120,16 @@ public sealed class ReauthenticationCommandHandler(
                 session.LastReauthenticatedAtUtc = now;
                 session.LastActivityAtUtc = now;
             }
+            else
+            {
+                logger.LogWarning("Reauthentication succeeded but session {SessionId} was not found for user {UserId}", currentUser.SessionId.Value, user.Id);
+            }
         }
 
         // Hand back the parked form, if there was one.
         string? draftPayload = null;
+        var draftRestored = false;
+
         if (!string.IsNullOrWhiteSpace(request.DraftToken))
         {
             var draft = await security.GetDraftAsync(request.DraftToken, cancellationToken);
@@ -128,6 +143,11 @@ public sealed class ReauthenticationCommandHandler(
             {
                 draftPayload = draft.Payload;
                 draft.ConsumedAtUtc = now;
+                draftRestored = true;
+            }
+            else
+            {
+                logger.LogWarning("Reauthentication succeeded but protected draft could not be restored for user {UserId}", user.Id);
             }
         }
 
@@ -137,6 +157,8 @@ public sealed class ReauthenticationCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Reauthentication succeeded for user {UserId}, session {SessionId}, method {AuthenticationMethod}, draft restored {DraftRestored}", user.Id, currentUser.SessionId, authenticationMethod, draftRestored);
 
         return Result.Success(new ReauthenticateResponse(
             Succeeded: true,
@@ -160,10 +182,13 @@ public sealed class ReauthenticationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Loading reauthentication view for user {UserId}", currentUser.UserId);
+
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
 
         if (user is null)
         {
+            logger.LogWarning("Reauthentication view could not be loaded because user {UserId} was not found", currentUser.UserId);
             return Result.Failure<ReauthenticationViewResponse>(Error.Unauthorised());
         }
 
@@ -174,6 +199,7 @@ public sealed class ReauthenticationCommandHandler(
         // reloaded during the timeout can restore what the person had typed before they confirm
         // rather than after - which is the difference between reassuring and unnerving.
         string? draftToken = null;
+        var draftAvailable = false;
 
         if (!string.IsNullOrWhiteSpace(query.DraftToken))
         {
@@ -186,8 +212,11 @@ public sealed class ReauthenticationCommandHandler(
                 && draft.ExpiresAtUtc > clock.UtcNow)
             {
                 draftToken = draft.DraftToken;
+                draftAvailable = true;
             }
         }
+
+        logger.LogDebug("Reauthentication view loaded for user {UserId}; MFA required {MfaRequired}; draft available {DraftAvailable}", user.Id, hasUsableFactor, draftAvailable);
 
         return Result.Success(new ReauthenticationViewResponse(
             IsAuthenticated: true,
@@ -216,6 +245,8 @@ public sealed class ReauthenticationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Support request started for user {UserId}, tenant {TenantId}", currentUser.UserId, tenantContext.TenantId);
+
         var reference = tokenHasher.GenerateReference("SUP");
 
         await audit.WriteAnonymousAsync(
@@ -234,6 +265,8 @@ public sealed class ReauthenticationCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Support request submitted successfully for user {UserId}, tenant {TenantId}", currentUser.UserId, tenantContext.TenantId);
 
         return Result.Success(new OutcomeResponse(
             currentUser.UserId,
@@ -255,6 +288,8 @@ public sealed class ReauthenticationCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating protected action draft for user {UserId}, tenant {TenantId}, action {ActionCode}, target {TargetId}", currentUser.UserId, tenantContext.TenantId, command.ActionCode, command.TargetId);
+
         var now = clock.UtcNow;
         var draftToken = tokenHasher.GenerateToken(24);
 
@@ -273,6 +308,8 @@ public sealed class ReauthenticationCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Protected action draft created for user {UserId}, tenant {TenantId}, action {ActionCode}, target {TargetId}", currentUser.UserId, tenantContext.TenantId, command.ActionCode, command.TargetId);
+
         return Result.Success(draftToken);
     }
 
@@ -286,6 +323,8 @@ public sealed class ReauthenticationCommandHandler(
     public Result<AccountRecoveryGuidanceResponse> GetRecoveryGuidance(
         string? reason, DateTimeOffset? retryAfterUtc, string? supportEmail, string? supportPhone)
     {
+        logger.LogInformation("Generating account recovery guidance for user {UserId}; reason supplied {ReasonSupplied}", currentUser.UserId, !string.IsNullOrWhiteSpace(reason));
+
         var now = clock.UtcNow;
         var minutes = retryAfterUtc.HasValue
             ? (int)Math.Max(0, Math.Ceiling((retryAfterUtc.Value - now).TotalMinutes))

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -46,12 +47,15 @@ public sealed class TokenCommandHandler(
     ICurrentUser currentUser,
     ITenantContext tenantContext,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<TokenCommandHandler> logger)
 {
     public async Task<Result<TokenResponse>> HandleAsync(
         RefreshTokenCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Refresh token operation started.");
 
         var presented = command.Request.RefreshToken;
 
@@ -60,6 +64,8 @@ public sealed class TokenCommandHandler(
             // Normally the token arrives in the HttpOnly cookie and the API layer copies it
             // onto the request before we get here. Nothing to work with means the cookie was
             // never set, or has expired.
+            logger.LogWarning("Token refresh failed because no refresh token was provided.");
+
             return Result.Failure<TokenResponse>(Error.SessionExpired());
         }
 
@@ -68,6 +74,9 @@ public sealed class TokenCommandHandler(
         if (refreshed is null)
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogWarning("Token refresh failed because the refresh token was invalid or expired.");
+
             return Result.Failure<TokenResponse>(Error.SessionExpired());
         }
 
@@ -77,6 +86,8 @@ public sealed class TokenCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Token refreshed successfully. {SessionId}", refreshed.SessionId);
+
         return Result.Success(refreshed);
     }
 
@@ -85,10 +96,14 @@ public sealed class TokenCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Sign-out operation started. {UserId}", currentUser.UserId);
+
         if (currentUser.SessionId is null)
         {
             // Already signed out. Reported as success: the caller asked for a state that now
             // holds, and answering 401 to a sign-out is a confusing way to say "fine".
+            logger.LogDebug("Sign-out requested but no active session was found. {UserId}", currentUser.UserId);
+
             return Result.Success(new OutcomeResponse(
                 Guid.Empty, "SignedOut", 0, "You are signed out.", []));
         }
@@ -105,21 +120,27 @@ public sealed class TokenCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogInformation("User signed out of all sessions. {UserId} {SessionsRevoked}", currentUser.UserId, revoked);
+
             return Result.Success(new OutcomeResponse(
                 currentUser.UserId, "SignedOut", 0,
                 $"Signed out of {revoked} session(s).", []));
         }
 
-        await sessions.RevokeAsync(currentUser.SessionId.Value, "Signed out.", cancellationToken);
+        var sessionId = currentUser.SessionId.Value;
+
+        await sessions.RevokeAsync(sessionId, "Signed out.", cancellationToken);
 
         await audit.WriteAsync(
-            AuditActionCodes.SignOut, nameof(UserSession), currentUser.SessionId,
+            AuditActionCodes.SignOut, nameof(UserSession), sessionId,
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("User signed out successfully. {UserId} {SessionId}", currentUser.UserId, sessionId);
+
         return Result.Success(new OutcomeResponse(
-            currentUser.SessionId.Value, "SignedOut", 0, "You are signed out.", []));
+            sessionId, "SignedOut", 0, "You are signed out.", []));
     }
 
     /// <summary>
@@ -135,10 +156,14 @@ public sealed class TokenCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Session revocation requested. {SessionId} {UserId}", command.Request.SessionId, currentUser.UserId);
+
         var session = await security.GetSessionAsync(command.Request.SessionId, cancellationToken);
 
         if (session is null)
         {
+            logger.LogWarning("Session revocation failed because the session was not found. {SessionId}", command.Request.SessionId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That session was not found."));
         }
 
@@ -146,6 +171,8 @@ public sealed class TokenCommandHandler(
 
         if (!isOwnSession && !currentUser.HasPermission(PermissionCodes.UserSecurityRevokeSession))
         {
+            logger.LogWarning("Session revocation denied due to insufficient permission. {SessionId} {UserId}", session.Id, currentUser.UserId);
+
             return Result.Failure<OutcomeResponse>(Error.Forbidden());
         }
 
@@ -161,6 +188,8 @@ public sealed class TokenCommandHandler(
             reason, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Session revoked successfully. {SessionId} {TargetUserId} {RevokedByUserId}", session.Id, session.UserId, currentUser.UserId);
 
         return Result.Success(new OutcomeResponse(
             session.Id, "Revoked", session.Version, "That session has been ended.", []));
@@ -183,6 +212,8 @@ public sealed class TokenCommandHandler(
 
         if (session is null || !session.IsActive(now))
         {
+            logger.LogWarning("Current session is missing or inactive. {SessionId}", currentUser.SessionId.Value);
+
             return Result.Success(new SessionStatusResponse(
                 false, currentUser.SessionId, null, null, null, 0, 0, false, true, null, null));
         }

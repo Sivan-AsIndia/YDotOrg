@@ -101,6 +101,11 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();
         services.AddScoped<IBulkOperationRepository, BulkOperationRepository>();
         services.AddScoped<IAuditRepository, AuditRepository>();
+
+        // THE OUTCOMES NO HANDLER CAN RECORD. See IRequestOutcomeAuditor - a refusal is decided
+        // before any handler runs and a failure unwinds past one, so without this the trail could
+        // only ever hold rows whose outcome was Succeeded.
+        services.AddScoped<IRequestOutcomeAuditor, RequestOutcomeAuditor>();
         services.AddScoped<ILookupRepository, LookupRepository>();
 
         // The five global masters, migrated in from the standalone GlobalMaster service. One
@@ -209,6 +214,10 @@ public static class DependencyInjection
         // Runs immediately after IamDbSeeder and depends on it: the platform masters need the
         // BusinessUnit that seeder creates.
         services.AddScoped<GlobalMasterSeeder>();
+
+        // LAST OF THE THREE. Its rows name the sample Organisation's users and roles by their
+        // generated ids, which exist only once IamDbSeeder has saved them.
+        services.AddScoped<AccessGovernanceSeeder>();
 
         return services;
     }

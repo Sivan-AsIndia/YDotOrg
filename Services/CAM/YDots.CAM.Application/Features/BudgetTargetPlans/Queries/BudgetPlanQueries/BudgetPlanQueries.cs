@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.CAM.Application.Common.Abstractions.Persistence;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
@@ -26,14 +27,22 @@ public sealed class BudgetPlanQueryHandler(
     ICsvExportService csv,
     IAuditWriter audit,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<BudgetPlanQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<BudgetPlanListItemResponse>>> HandleAsync(
         SearchBudgetPlansQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var page = await readService.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
+        logger.LogInformation("Searching budget plans. Page: {Page}, PageSize: {PageSize}.",
+            query.Filter.Page, query.Filter.PageSize);
+
+        var page = await readService.SearchAsync(
+            query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Budget plan search completed. TotalCount: {TotalCount}.",
+            page.TotalCount);
 
         return Result.Success(page);
     }
@@ -43,12 +52,25 @@ public sealed class BudgetPlanQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var plan = await readService.GetAsync(query.PlanId, currentUser.Scope, cancellationToken);
+        logger.LogDebug("Retrieving budget plan detail. PlanId: {PlanId}.",
+            query.PlanId);
 
-        return plan is null
-            ? Result.Failure<BudgetPlanDetailResponse>(
-                Error.NotFound("That budget plan was not found."))
-            : Result.Success(plan);
+        var plan = await readService.GetAsync(
+            query.PlanId, currentUser.Scope, cancellationToken);
+
+        if (plan is null)
+        {
+            logger.LogWarning("Budget plan not found. PlanId: {PlanId}.",
+                query.PlanId);
+
+            return Result.Failure<BudgetPlanDetailResponse>(
+                Error.NotFound("That budget plan was not found."));
+        }
+
+        logger.LogInformation("Budget plan detail retrieved. PlanId: {PlanId}.",
+            query.PlanId);
+
+        return Result.Success(plan);
     }
 
     public async Task<Result<CampaignBudgetSummaryResponse>> HandleAsync(
@@ -56,13 +78,25 @@ public sealed class BudgetPlanQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Retrieving campaign budget summary. CampaignId: {CampaignId}.",
+            query.CampaignId);
+
         var summary = await readService.GetCampaignSummaryAsync(
             query.CampaignId, currentUser.Scope, cancellationToken);
 
-        return summary is null
-            ? Result.Failure<CampaignBudgetSummaryResponse>(
-                Error.NotFound("That campaign was not found."))
-            : Result.Success(summary);
+        if (summary is null)
+        {
+            logger.LogWarning("Campaign budget summary not found. CampaignId: {CampaignId}.",
+                query.CampaignId);
+
+            return Result.Failure<CampaignBudgetSummaryResponse>(
+                Error.NotFound("That campaign was not found."));
+        }
+
+        logger.LogInformation("Campaign budget summary retrieved. CampaignId: {CampaignId}.",
+            query.CampaignId);
+
+        return Result.Success(summary);
     }
 
     /// <summary>
@@ -79,8 +113,13 @@ public sealed class BudgetPlanQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Starting budget plan export.");
+
         var rows = await readService.ListForExportAsync(
             query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Budget plan export rows retrieved. RowCount: {RowCount}.",
+            rows.Count);
 
         var file = csv.ToCsv(rows.Select(row => new
         {
@@ -106,6 +145,9 @@ public sealed class BudgetPlanQueryHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Budget plan export completed. RowCount: {RowCount}, Reference: {Reference}.",
+            rows.Count, file.Reference);
 
         return Result.Success(file);
     }

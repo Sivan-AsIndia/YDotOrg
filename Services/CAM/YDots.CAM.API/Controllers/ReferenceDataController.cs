@@ -18,7 +18,9 @@ namespace YDots.CAM.API.Controllers;
 /// </summary>
 [Route("api/v1/campaign-reference")]
 [Authorize(Policy = PolicyNames.ActiveUserOnly)]
-public sealed class ReferenceDataController(ReferenceDataQueryHandler queries) : ApiControllerBase
+public sealed class ReferenceDataController(
+    ReferenceDataQueryHandler queries,
+    ILogger<ReferenceDataController> logger) : ApiControllerBase
 {
     /// <summary>
     /// Every dropdown the campaign and tracking asset forms need, in one call.
@@ -31,31 +33,78 @@ public sealed class ReferenceDataController(ReferenceDataQueryHandler queries) :
     [HasPermission(PermissionCodes.ReferenceView)]
     [ProducesResponseType(typeof(ApiResponse<CampaignReferenceDataResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReferenceDataAsync(
-        [FromQuery] bool includeInactive, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(
-            new GetCampaignReferenceDataQuery(!includeInactive), cancellationToken));
+        [FromQuery] bool includeInactive, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting campaign reference data. IncludeInactive: {IncludeInactive}.", includeInactive);
+
+        var result = await queries.HandleAsync(
+            new GetCampaignReferenceDataQuery(!includeInactive), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get campaign reference data.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("channels")]
     [HasPermission(PermissionCodes.ReferenceView)]
     [ProducesResponseType(
         typeof(ApiResponse<IReadOnlyList<ReferenceItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetChannelsAsync(
-        [FromQuery] bool includeInactive, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetChannelsQuery(!includeInactive), cancellationToken));
+        [FromQuery] bool includeInactive, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting campaign reference channels. IncludeInactive: {IncludeInactive}.", includeInactive);
+
+        var result = await queries.HandleAsync(
+            new GetChannelsQuery(!includeInactive), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get campaign reference channels.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("sources")]
     [HasPermission(PermissionCodes.ReferenceView)]
     [ProducesResponseType(
         typeof(ApiResponse<IReadOnlyList<ReferenceItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSourcesAsync(
-        [FromQuery] bool includeInactive, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetSourcesQuery(!includeInactive), cancellationToken));
+        [FromQuery] bool includeInactive, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting campaign reference sources. IncludeInactive: {IncludeInactive}.", includeInactive);
+
+        var result = await queries.HandleAsync(
+            new GetSourcesQuery(!includeInactive), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get campaign reference sources.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("mediums")]
     [HasPermission(PermissionCodes.ReferenceView)]
     [ProducesResponseType(
         typeof(ApiResponse<IReadOnlyList<ReferenceItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMediumsAsync(
-        [FromQuery] bool includeInactive, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetMediumsQuery(!includeInactive), cancellationToken));
+        [FromQuery] bool includeInactive, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Getting campaign reference mediums. IncludeInactive: {IncludeInactive}.", includeInactive);
+
+        var result = await queries.HandleAsync(
+            new GetMediumsQuery(!includeInactive), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get campaign reference mediums.");
+        }
+
+        return FromResult(result);
+    }
 }

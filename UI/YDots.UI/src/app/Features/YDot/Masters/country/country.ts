@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MasterService } from '../master.service';
+import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
 import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-response.model';
 import {
   CountryDetail,
@@ -74,6 +75,23 @@ interface Toast {
 export class Country implements OnInit {
   private readonly masterService = inject(MasterService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly people = inject(PeopleDirectoryService);
+
+  /**
+   * Who made a change, by name.
+   *
+   * THE AUDIT ROWS ON THIS SCREEN PRINTED THE RAW USER GUID. `createdByUserId` and
+   * `updatedByUserId` are exactly that - the API's Guid - so "Created by" and "Updated by" read
+   * as thirty-six characters of hexadecimal, which tells the reader nothing about who did it and
+   * cannot be looked up, repeated or recognised.
+   *
+   * IT NEVER FALLS BACK TO THE ID. PeopleDirectoryService resolves what it can and says "Unknown
+   * user" for what it cannot - which is the honest answer for somebody who has left the
+   * Organisation, or for a platform-scoped session where the tenant directory does not apply.
+   */
+  protected changedBy(userId?: string | null): string {
+    return userId ? this.people.name(userId) : '—';
+  }
 
   /**
    * The most rows fetched for one filter.

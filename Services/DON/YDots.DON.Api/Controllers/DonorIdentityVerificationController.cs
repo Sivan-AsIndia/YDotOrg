@@ -21,6 +21,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class DonorIdentityVerificationController : ApiControllerBase
 {
+    private readonly ILogger<DonorIdentityVerificationController> _logger;
+
+    public DonorIdentityVerificationController(ILogger<DonorIdentityVerificationController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the verification attempts plus every filter option.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.VerificationView)]
@@ -30,8 +37,23 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
     public async Task<IActionResult> GetList(
         [FromQuery] VerificationSearchFilter filter,
         [FromServices] IdentityVerificationQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetVerificationListQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification list retrieval started.");
+
+        var result = await handler.HandleAsync(new GetVerificationListQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification list retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification list retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET one verification attempt.</summary>
     [HttpGet("{id:guid}", Name = "GetVerificationById")]
@@ -42,8 +64,23 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] IdentityVerificationQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetVerificationDetailQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification detail retrieval started. VerificationId={VerificationId}", id);
+
+        var result = await handler.HandleAsync(new GetVerificationDetailQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification detail retrieval completed successfully. VerificationId={VerificationId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification detail retrieval failed. VerificationId={VerificationId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// POST send challenge. The primary action. Pressing it twice resends on the same attempt
@@ -59,8 +96,23 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
     public async Task<IActionResult> SendChallenge(
         [FromBody] SendChallengeRequest request,
         [FromServices] IdentityVerificationCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SendChallengeCommand(request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification challenge send started.");
+
+        var result = await handler.HandleAsync(new SendChallengeCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification challenge sent successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification challenge send failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST verify code. A wrong code costs an attempt; running out fails the verification.</summary>
     [HttpPost("{id:guid}/verify-code")]
@@ -74,9 +126,23 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
         Guid id,
         [FromBody] VerifyCodeRequest request,
         [FromServices] IdentityVerificationCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new VerifyCodeCommand(id, request), cancellationToken),
-            "The identity was verified.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification code validation started. VerificationId={VerificationId}", id);
+
+        var result = await handler.HandleAsync(new VerifyCodeCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification code validation completed successfully. VerificationId={VerificationId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification code validation failed. VerificationId={VerificationId}", id);
+        }
+
+        return FromResult(result, "The identity was verified.");
+    }
 
     /// <summary>POST escalate review. Hands the attempt to a named reviewer with supporting evidence.</summary>
     [HttpPost("{id:guid}/escalate-review")]
@@ -90,9 +156,23 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
         Guid id,
         [FromBody] EscalateVerificationRequest request,
         [FromServices] IdentityVerificationCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new EscalateVerificationCommand(id, request), cancellationToken),
-            "The verification was escalated for review.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification review escalation started. VerificationId={VerificationId}", id);
+
+        var result = await handler.HandleAsync(new EscalateVerificationCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification review escalation completed successfully. VerificationId={VerificationId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification review escalation failed. VerificationId={VerificationId}", id);
+        }
+
+        return FromResult(result, "The verification was escalated for review.");
+    }
 
     /// <summary>POST cancel verification. Danger action: named reason required.</summary>
     [HttpPost("{id:guid}/cancel-verification")]
@@ -106,7 +186,21 @@ public sealed class DonorIdentityVerificationController : ApiControllerBase
         Guid id,
         [FromBody] ReasonRequest request,
         [FromServices] IdentityVerificationCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CancelVerificationCommand(id, request), cancellationToken),
-            "The verification was cancelled.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Identity verification cancellation started. VerificationId={VerificationId}", id);
+
+        var result = await handler.HandleAsync(new CancelVerificationCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Identity verification cancellation completed successfully. VerificationId={VerificationId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Identity verification cancellation failed. VerificationId={VerificationId}", id);
+        }
+
+        return FromResult(result, "The verification was cancelled.");
+    }
 }

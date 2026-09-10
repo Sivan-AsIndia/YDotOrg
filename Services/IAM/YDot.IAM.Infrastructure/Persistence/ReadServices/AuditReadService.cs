@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
+using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Models;
 using YDot.IAM.Application.DTOs;
 using YDot.IAM.Application.Features.Audit.DTOs;
@@ -17,14 +18,37 @@ namespace YDot.IAM.Infrastructure.Persistence.ReadServices;
 /// redacted metadata is returned. Somebody with plain audit access sees that an action
 /// happened; somebody with the sensitive permission sees what changed.
 /// </summary>
-public sealed class AuditReadService(IamDbContext context) : IAuditReadService
+public sealed class AuditReadService(IamDbContext context, ITenantContext tenantContext) : IAuditReadService
 {
+    /// <summary>
+    /// Narrows a query to the Organisation the request is operating in.
+    ///
+    /// EVERY OTHER TABLE GETS THIS FROM A GLOBAL QUERY FILTER AND THIS ONE CANNOT.
+    /// <c>AuditEvent</c> implements <c>IBusinessUnitOwned</c> rather than <c>ITenantOwned</c> -
+    /// deliberately, because its TenantId is NULLABLE: a platform action and a failed sign-in
+    /// whose host never resolved have no Organisation, and a non-nullable filter would have to
+    /// invent one. <c>ApplyTenantQueryFilters</c> only attaches a filter to the two tenant
+    /// interfaces, so the audit table had none - and the trail was therefore returning EVERY
+    /// Organisation's events to any caller holding <c>iam.audit.view</c>.
+    ///
+    /// So the scoping is applied here, explicitly, on the three reads that serve a screen.
+    ///
+    /// NO TENANT MEANS NO NARROWING, and that is the platform case rather than a hole: a request
+    /// on the platform host has no Organisation to be narrowed to, and the endpoints behind it
+    /// are SuperAdmin-only. A Tenant session always has one.
+    /// </summary>
+    private IQueryable<Domain.Entities.AuditEvent> ScopedToTenant(
+        IQueryable<Domain.Entities.AuditEvent> query) =>
+        tenantContext.TenantId is { } tenantId
+            ? query.Where(item => item.TenantId == tenantId)
+            : query;
+
     public async Task<PagedResponse<AuditEventResponse>> SearchAsync(
         AuditEventSearchFilter filter, bool canSeeSensitive, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var query = context.AuditEvents.AsNoTracking();
+        var query = ScopedToTenant(context.AuditEvents.AsNoTracking());
 
         // Sensitive rows are excluded entirely without the permission, rather than returned
         // with their detail stripped. A row that says "password reset by administrator" is
@@ -119,8 +143,7 @@ public sealed class AuditReadService(IamDbContext context) : IAuditReadService
     public async Task<AuditEventResponse?> GetAsync(
         Guid id, bool canSeeSensitive, CancellationToken cancellationToken)
     {
-        var auditEvent = await context.AuditEvents
-            .AsNoTracking()
+        var auditEvent = await ScopedToTenant(context.AuditEvents.AsNoTracking())
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
 
         if (auditEvent is null || (auditEvent.IsSensitive && !canSeeSensitive))
@@ -147,8 +170,7 @@ public sealed class AuditReadService(IamDbContext context) : IAuditReadService
     public async Task<IReadOnlyList<AuditEventResponse>> GetForTargetAsync(
         string targetType, Guid targetId, int take, CancellationToken cancellationToken)
     {
-        var rows = await context.AuditEvents
-            .AsNoTracking()
+        var rows = await ScopedToTenant(context.AuditEvents.AsNoTracking())
             .Where(item => item.TargetType == targetType && item.TargetId == targetId)
             .Where(item => !item.IsSensitive)
             .OrderByDescending(item => item.OccurredAtUtc)
@@ -161,14 +183,14 @@ public sealed class AuditReadService(IamDbContext context) : IAuditReadService
     /// <summary>
     /// The distinct record types in this Organisation's trail.
     ///
-    /// The global query filter scopes it to the caller's Organisation, exactly like the search
-    /// above, so this never reveals that another Organisation has records of a type yours does
-    /// not. DISTINCT on an indexed column over a table that is only ever appended to, ordered so
+    /// Scoped to the caller's Organisation by ScopedToTenant, exactly like the search above, so
+    /// this never reveals that another Organisation has records of a type yours does not. (It used
+    /// to say a global query filter did that. There is no filter on this table - see the note on
+    /// ScopedToTenant - which is why the scoping is written out.) DISTINCT on an indexed column over a table that is only ever appended to, ordered so
     /// the dropdown is stable between loads rather than reordering as new rows arrive.
     /// </summary>
     public async Task<IReadOnlyList<string>> GetTargetTypesAsync(CancellationToken cancellationToken) =>
-        await context.AuditEvents
-            .AsNoTracking()
+        await ScopedToTenant(context.AuditEvents.AsNoTracking())
             .Where(item => item.TargetType != null && item.TargetType != "")
             .Select(item => item.TargetType)
             .Distinct()

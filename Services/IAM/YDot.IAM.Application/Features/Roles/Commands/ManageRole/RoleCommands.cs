@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -60,18 +61,22 @@ public sealed class RoleCommandHandler(
     ITenantContext tenantContext,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<RoleCommandHandler> logger)
 {
     public async Task<Result<RoleDetailResponse>> HandleAsync(
         CreateRoleCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating role.");
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Role creation failed because tenant selection is required.");
             return Result.Failure<RoleDetailResponse>(Error.TenantSelectionRequired());
         }
 
@@ -83,6 +88,7 @@ public sealed class RoleCommandHandler(
 
         if (string.IsNullOrWhiteSpace(code))
         {
+            logger.LogWarning("Role creation failed because the role code is invalid.");
             return Result.Failure<RoleDetailResponse>(
                 Error.Validation("That role code is not valid.",
                     [new ValidationError(nameof(request.Code),
@@ -91,12 +97,14 @@ public sealed class RoleCommandHandler(
 
         if (await roles.CodeExistsAsync(code, tenantId, null, cancellationToken))
         {
+            logger.LogWarning("Role creation failed because the role code already exists for TenantId {TenantId}.", tenantId);
             return Result.Failure<RoleDetailResponse>(
                 Error.Duplicate($"A role with code {code} already exists in this organisation."));
         }
 
         if (await roles.NameExistsAsync(request.Name.Trim().ToUpperInvariant(), tenantId, null, cancellationToken))
         {
+            logger.LogWarning("Role creation failed because the role name already exists for TenantId {TenantId}.", tenantId);
             return Result.Failure<RoleDetailResponse>(
                 Error.Duplicate("A role with that name already exists in this organisation."));
         }
@@ -136,6 +144,7 @@ public sealed class RoleCommandHandler(
 
             if (applied.IsFailure)
             {
+                logger.LogWarning("Role permission assignment failed during role creation for RoleId {RoleId}.", role.Id);
                 return Result.Failure<RoleDetailResponse>(applied.Error!);
             }
         }
@@ -152,6 +161,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role created successfully. RoleId {RoleId}.", role.Id);
+
         return Result.Success(role.ToDetailResponse([], [], [], [], 0));
     }
 
@@ -160,16 +171,20 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating role. RoleId {RoleId}.", command.RoleId);
+
         var request = command.Request;
 
         var role = await roles.GetByIdAsync(command.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role update failed because RoleId {RoleId} was not found.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That role was not found."));
         }
 
         if (role.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Role update failed due to concurrency conflict. RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -224,6 +239,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role updated successfully. RoleId {RoleId}.", role.Id);
+
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version, "Role saved.",
             RoleMappingConfig.PermittedActionsFor(role, 0)));
@@ -240,17 +257,21 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Assigning permissions to role. RoleId {RoleId}.", command.RoleId);
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         var role = await roles.GetWithPermissionsAsync(command.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role permission assignment failed because RoleId {RoleId} was not found.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That role was not found."));
         }
 
         if (role.Version != request.ExpectedVersion)
         {
+            logger.LogWarning("Role permission assignment failed due to concurrency conflict. RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -258,6 +279,7 @@ public sealed class RoleCommandHandler(
         // and a list beside it would only mislead.
         if (role.GrantsAllTenantPermissions)
         {
+            logger.LogWarning("Role permission assignment rejected because RoleId {RoleId} grants all tenant permissions.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This role already grants every permission in the organisation, so its permission list cannot be edited."));
         }
@@ -267,6 +289,7 @@ public sealed class RoleCommandHandler(
 
         if (applied.IsFailure)
         {
+            logger.LogWarning("Role permission assignment failed for RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(applied.Error!);
         }
 
@@ -286,6 +309,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role permissions updated successfully. RoleId {RoleId}.", role.Id);
+
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version,
             $"Role permissions saved. {request.PermissionCodes?.Count ?? 0} permission(s) granted.",
@@ -297,14 +322,18 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Changing role status. RoleId {RoleId}, Status {Status}.", command.RoleId, command.Request.Status);
+
         var role = await roles.GetByIdAsync(command.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role status change failed because RoleId {RoleId} was not found.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That role was not found."));
         }
 
         if (role.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Role status change failed due to concurrency conflict. RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -312,6 +341,7 @@ public sealed class RoleCommandHandler(
         if (role.IsSystemRole && command.Request.Status != RoleStatus.Active
             && role.Code == RoleCodes.TenantAdmin)
         {
+            logger.LogWarning("Role status change rejected because the organisation administrator role cannot be deactivated. RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("The organisation administrator role cannot be deactivated."));
         }
@@ -336,6 +366,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role status changed successfully. RoleId {RoleId}, Status {Status}.", role.Id, role.Status);
+
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version,
             command.Request.Status == RoleStatus.Active ? "Role activated." : "Role deactivated.",
@@ -354,19 +386,24 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting role. RoleId {RoleId}.", command.RoleId);
+
         var role = await roles.GetByIdAsync(command.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role deletion failed because RoleId {RoleId} was not found.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That role was not found."));
         }
 
         if (role.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning("Role claims assignment failed due to concurrency conflict. RoleId {RoleId}.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
         if (role.IsSystemRole)
         {
+            logger.LogWarning("Role deletion rejected because RoleId {RoleId} is a system role.", command.RoleId);
             return Result.Failure<OutcomeResponse>(
                 Error.Forbidden("A system role cannot be deleted. Deactivate it instead."));
         }
@@ -374,6 +411,7 @@ public sealed class RoleCommandHandler(
         var holders = await roles.CountAssignmentsAsync(role.Id, cancellationToken);
         if (holders > 0)
         {
+            logger.LogWarning("Role deletion rejected because RoleId {RoleId} has {HolderCount} holder(s).", command.RoleId, holders);
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"{holders} user(s) still hold this role. Remove them first, or deactivate the role instead."));
         }
@@ -386,6 +424,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role deleted successfully. RoleId {RoleId}.", role.Id);
+
         return Result.Success(new OutcomeResponse(
             role.Id, "Deleted", 0, "Role deleted.", []));
     }
@@ -395,10 +435,13 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Creating role incompatibility.");
+
         var request = command.Request;
 
         if (request.RoleId == request.ConflictingRoleId)
         {
+            logger.LogWarning("Role incompatibility creation rejected because a role cannot conflict with itself.");
             return Result.Failure<RoleIncompatibilityResponse>(
                 Error.Validation("A role cannot conflict with itself.",
                     [new ValidationError(nameof(request.ConflictingRoleId), "Choose a different role.")]));
@@ -407,6 +450,7 @@ public sealed class RoleCommandHandler(
         var both = await roles.GetManyAsync([request.RoleId, request.ConflictingRoleId], cancellationToken);
         if (both.Count != 2)
         {
+            logger.LogWarning("Role incompatibility creation failed because one or both roles were not found.");
             return Result.Failure<RoleIncompatibilityResponse>(
                 Error.NotFound("One or both of those roles was not found in this organisation."));
         }
@@ -434,6 +478,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role incompatibility created successfully. RuleId {RuleId}.", rule.Id);
+
         return Result.Success(new RoleIncompatibilityResponse(
             rule.Id, first.Id, first.Name ?? first.Code, second.Id, second.Name ?? second.Code,
             rule.Reason, rule.IsBlocking, rule.IsActive));
@@ -444,9 +490,12 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting role incompatibility. RuleId {RuleId}.", command.Id);
+
         var rule = await roles.GetIncompatibilityAsync(command.Id, cancellationToken);
         if (rule is null)
         {
+            logger.LogWarning("Role incompatibility deletion failed because RuleId {RuleId} was not found.", command.Id);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That rule was not found."));
         }
 
@@ -458,6 +507,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role incompatibility deleted successfully. RuleId {RuleId}.", rule.Id);
+
         return Result.Success(new OutcomeResponse(rule.Id, "Deleted", 0, "Rule removed.", []));
     }
 
@@ -466,9 +517,12 @@ public sealed class RoleCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Assigning claims to role. RoleId {RoleId}.", command.RoleId);
+
         var role = await roles.GetByIdAsync(command.RoleId, cancellationToken);
         if (role is null)
         {
+            logger.LogWarning("Role claims assignment failed because RoleId {RoleId} was not found.", command.RoleId);
             return Result.Failure<OutcomeResponse>(Error.NotFound("That role was not found."));
         }
 
@@ -502,6 +556,8 @@ public sealed class RoleCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation("Role claims updated successfully. RoleId {RoleId}, ClaimCount {ClaimCount}.", role.Id, command.Request.Claims?.Count ?? 0);
+
         return Result.Success(new OutcomeResponse(
             role.Id, role.Status.ToString(), role.Version, "Role claims saved.",
             RoleMappingConfig.PermittedActionsFor(role, 0)));
@@ -531,6 +587,7 @@ public sealed class RoleCommandHandler(
         var platformCodes = requested.Where(PermissionCodes.IsPlatformOnly).ToList();
         if (platformCodes.Count > 0)
         {
+            logger.LogWarning("Role permission assignment rejected because platform-only permissions were requested. RoleId {RoleId}, Count {Count}.", role.Id, platformCodes.Count);
             return Result.Failure(Error.Forbidden(
                 "These permissions belong to the platform and cannot be given to an organisation role: "
                 + string.Join(", ", platformCodes)));
@@ -542,6 +599,7 @@ public sealed class RoleCommandHandler(
         var unknown = requested.Where(code => !byCode.ContainsKey(code)).ToList();
         if (unknown.Count > 0)
         {
+            logger.LogWarning("Role permission assignment rejected because unknown permissions were requested. RoleId {RoleId}, Count {Count}.", role.Id, unknown.Count);
             return Result.Failure(Error.Validation(
                 "One or more of those permissions was not recognised.",
                 [.. unknown.Select(code => new ValidationError("PermissionCodes", $"Unknown permission: {code}"))]));
@@ -588,6 +646,8 @@ public sealed class RoleCommandHandler(
     private async Task ApplyMenuMappingAsync(
         Role role, IReadOnlyList<Guid> visibleMenuIds, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        logger.LogInformation("Updating role menu mappings. RoleId {RoleId}, RequestedMenuCount {Count}.", role.Id, visibleMenuIds.Count);
+
         var existing = await menus.GetRoleMenusAsync(role.Id, cancellationToken);
         menus.RemoveRoleMenus(existing);
 
@@ -613,6 +673,7 @@ public sealed class RoleCommandHandler(
 
         foreach (var other in assignable.Where(role => role.IsDefaultRole && role.Id != keepRoleId))
         {
+            logger.LogInformation("Clearing previous default role. RoleId {RoleId}, TenantId {TenantId}.", other.Id, tenantId);
             other.IsDefaultRole = false;
         }
     }
@@ -631,6 +692,7 @@ public sealed class RoleCommandHandler(
 
         if (holderIds.Count == 0)
         {
+            logger.LogInformation("No role holders require security stamp invalidation. RoleId {RoleId}.", roleId);
             return;
         }
 
@@ -640,5 +702,7 @@ public sealed class RoleCommandHandler(
         {
             holder.SecurityStamp = Guid.NewGuid().ToString("N");
         }
+
+        logger.LogInformation("Role holder security stamps invalidated. RoleId {RoleId}, HolderCount {Count}.", roleId, holders.Count);
     }
 }

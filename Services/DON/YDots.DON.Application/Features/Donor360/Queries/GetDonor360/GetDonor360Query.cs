@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Abstractions.Services;
@@ -32,7 +33,8 @@ public sealed class Donor360QueryHandler(
     IAuditWriter auditWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IDateTimeProvider clock)
+    IDateTimeProvider clock,
+    ILogger<Donor360QueryHandler> logger)
 {
     private const int HistoryRowLimit = 50;
 
@@ -40,21 +42,27 @@ public sealed class Donor360QueryHandler(
         GetDonor360Query query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Get Donor 360 started for DonorId {DonorId}.", query.DonorId);
+
         var donor = await donorRepository.GetWithChildrenAsync(query.DonorId, cancellationToken);
 
         if (donor is null || donor.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Get Donor 360 failed for DonorId {DonorId} because the donor was not found inside the current organisation scope.", query.DonorId);
             return Result.Failure<Donor360Response>(Error.DonorNotFound());
         }
 
         if (currentUser.Scope.IsOwnRecordsOnly && donor.RelationshipOwnerUserId != currentUser.UserId)
         {
+            logger.LogWarning("Get Donor 360 failed for DonorId {DonorId} because the donor is outside the current user's ownership scope.", query.DonorId);
             return Result.Failure<Donor360Response>(Error.DonorNotFound());
         }
 
         var canSeeContact = currentUser.CanSeeContact();
         var canSeeEvidence = currentUser.CanSeeEvidence();
         var now = clock.UtcNow;
+
+        logger.LogInformation("Loading Donor 360 panels for DonorId {DonorId}. ContactVisibility {CanSeeContact}, EvidenceVisibility {CanSeeEvidence}.", donor.Id, canSeeContact, canSeeEvidence);
 
         var contacts = await donorRepository.GetContactsAsync(donor.Id, cancellationToken);
         var tags = await donorRepository.GetTagsAsync(donor.Id, cancellationToken);
@@ -67,6 +75,8 @@ public sealed class Donor360QueryHandler(
         var promises = await donor360Repository.GetPromisesAsync(donor.Id, cancellationToken);
         var documents = await donor360Repository.GetDocumentsAsync(donor.Id, canSeeEvidence, cancellationToken);
         var campaignHistory = await donor360Repository.GetCampaignHistoryAsync(donor.Id, cancellationToken);
+
+        logger.LogInformation("Donor 360 panel data loaded successfully for DonorId {DonorId}. Contacts {ContactCount}, Tags {TagCount}, Interactions {InteractionCount}, Activity {ActivityCount}, Consents {ConsentCount}, FollowUps {FollowUpCount}, MergeCases {MergeCaseCount}, DonationSummaries {DonationSummaryCount}, Promises {PromiseCount}, Documents {DocumentCount}, CampaignHistory {CampaignHistoryCount}.", donor.Id, contacts.Count, tags.Count, interactions.Count, activity.Count, consents.Count, followUps.Count, mergeCases.Count, totals.Count, promises.Count, documents.Count, campaignHistory.Count);
 
         var response = new Donor360Response(
             ScreenIds.Donor360,
@@ -107,13 +117,19 @@ public sealed class Donor360QueryHandler(
         // Opening a 360 view with the unmasking permission is a sensitive view in its own right.
         if (canSeeContact || canSeeEvidence)
         {
+            logger.LogInformation("Sensitive Donor 360 view detected for DonorId {DonorId}. ContactVisibility {CanSeeContact}, EvidenceVisibility {CanSeeEvidence}.", donor.Id, canSeeContact, canSeeEvidence);
+
             await auditWriter.WriteAsync(
                 new AuditEntry(AuditActionCodes.DonorSensitiveViewed, nameof(Donor), donor.Id, AuditResult.Succeeded,
                     $"{donor.DonorNumber} opened on Donor 360 with elevated visibility."),
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Sensitive Donor 360 view audit recorded successfully for DonorId {DonorId}.", donor.Id);
         }
+
+        logger.LogInformation("Get Donor 360 completed successfully for DonorId {DonorId}.", donor.Id);
 
         return Result.Success(response);
     }

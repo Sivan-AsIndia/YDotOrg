@@ -2256,6 +2256,12 @@ namespace YDot.IAM.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_platform_only");
 
+                    b.Property<bool>("IsSystemDefined")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_system_defined");
+
                     b.Property<string>("Level")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -2277,6 +2283,10 @@ namespace YDot.IAM.Infrastructure.Migrations
                     b.Property<bool>("OpensInNewTab")
                         .HasColumnType("boolean")
                         .HasColumnName("opens_in_new_tab");
+
+                    b.Property<Guid?>("OwnerTenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_tenant_id");
 
                     b.Property<Guid?>("ParentMenuId")
                         .HasColumnType("uuid")
@@ -2316,7 +2326,15 @@ namespace YDot.IAM.Infrastructure.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique()
-                        .HasDatabaseName("ix_iam_menu_definitions_code");
+                        .HasDatabaseName("ix_iam_menu_definitions_platform_code")
+                        .HasFilter("owner_tenant_id IS NULL");
+
+                    b.HasIndex("OwnerTenantId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_iam_menu_definitions_owner_code");
+
+                    b.HasIndex("OwnerTenantId", "Status")
+                        .HasDatabaseName("ix_iam_menu_definitions_owner_status");
 
                     b.HasIndex("ParentMenuId", "DisplayOrder")
                         .HasDatabaseName("ix_iam_menu_definitions_parent_order");

@@ -315,9 +315,7 @@
                   <div class="col-md-4"><small class="info-label d-block">Access end</small><span class="info-value">{{ data()?.accessEndDate || 'No end date' }}</span></div>
                   <div class="col-md-4">
                     <small class="info-label d-block">Access review</small>
-                    <a class="edit-link" routerLink="/app/administration/access/access-review-campaign">
-                      Open the review campaign <i class="ri-arrow-right-line ms-1"></i>
-                    </a>
+                    <span class="info-value text-muted">Not tracked on the account</span>
                   </div>
                 </div>
               </div>
@@ -509,28 +507,15 @@
           </div>
 
           <!--
-            ACCESS REVIEW IS NOT A FIELD ON A PERSON. It is a governance record owned by the
-            access-review campaign screen, and this page has no endpoint for it — which is why
-            the two rows that used to be here could only ever be the literals "19 days" and
-            "12 February 2026". Rather than invent a date, the card points at the screen that
-            actually holds the answer.
+            THE ACCESS REVIEW CARD IS GONE, along with the screen it pointed at.
+
+            It never carried data of its own: access review is a governance record rather than a
+            field on a person, so the card existed only to link to the review campaign screen.
+            That screen has been withdrawn from the product - the API and its records remain, so
+            restoring it is a route and a component away - and a card whose only content was a
+            link to a route that no longer resolves would bounce the operator to the dashboard
+            and read as this profile being broken.
           -->
-          <div class="detail-card">
-            <div class="detail-card-header"><h6 class="mb-0 fw-bold">Access review</h6></div>
-            <div class="detail-card-body">
-              <div class="notif-row border-0">
-                <div class="notif-avatar tone-accent"><i class="ri-calendar-check-line"></i></div>
-                <div class="notif-body">
-                  <div class="notif-title">Certification history</div>
-                  <div class="notif-sub">Recorded against the review campaign, not the account</div>
-                </div>
-                <a class="notif-trailing edit-link"
-                   routerLink="/app/administration/access/access-review-campaign">
-                  Open <i class="ri-arrow-right-line ms-1"></i>
-                </a>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     }

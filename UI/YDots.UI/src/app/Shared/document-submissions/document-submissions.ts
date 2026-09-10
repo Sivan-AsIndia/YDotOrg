@@ -78,7 +78,7 @@ export class DocumentSubmissionsComponent implements OnInit {
   // ---- The new-submission form -------------------------------------------------------------
 
   readonly showNewForm = signal(false);
-  readonly newDocumentType = signal('RegistrationCertificate');
+  readonly newDocumentType = signal('');
   readonly newTitle = signal('');
   readonly newNotes = signal('');
 
@@ -167,6 +167,12 @@ export class DocumentSubmissionsComponent implements OnInit {
       return;
     }
 
+    // The type is no longer guessed at, so it has to be chosen before anything is sent.
+    if (!this.newDocumentType()) {
+      this.errorMessage.set('Choose what this evidence is of.');
+      return;
+    }
+
     this.busy.set(true);
     this.errorMessage.set('');
 
@@ -178,6 +184,7 @@ export class DocumentSubmissionsComponent implements OnInit {
       next: (submission) => {
         this.submissions.update((current) => [submission, ...current]);
         this.showNewForm.set(false);
+        this.newDocumentType.set('');
         this.newTitle.set('');
         this.newNotes.set('');
         this.busy.set(false);

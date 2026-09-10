@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
 using YDots.DON.Application.Common.Abstractions.Services;
@@ -5,12 +7,11 @@ using YDots.DON.Application.Common.Constants;
 using YDots.DON.Application.Common.Models;
 using YDots.DON.Application.Common.Results;
 using YDots.DON.Application.Common.Services;
+using YDots.DON.Application.Common.Settings;
 using YDots.DON.Application.DTOs;
 using YDots.DON.Application.Features.Donors.DTOs;
 using YDots.DON.Domain.Entities;
 using YDots.DON.Domain.Enums;
-using Microsoft.Extensions.Options;
-using YDots.DON.Application.Common.Settings;
 
 namespace YDots.DON.Application.Features.Donors.Queries.SearchDonors;
 
@@ -37,7 +38,8 @@ public sealed class DonorQueryHandler(
     IAuditWriter auditWriter,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<DonorQueryHandler> logger)
 {
     private readonly DonorSettings _settings = donorSettings.Value;
 
@@ -45,7 +47,12 @@ public sealed class DonorQueryHandler(
         SearchDonorsQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Search donors started.");
+
         var page = await readService.SearchAsync(query.Filter, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Search donors completed successfully. Returned {RowCount} row(s).", page.Items.Count);
+
         return Result.Success(page);
     }
 
@@ -53,10 +60,13 @@ public sealed class DonorQueryHandler(
         GetDonorDetailQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Get donor detail started for DonorId {DonorId}.", query.DonorId);
+
         var detail = await readService.GetDetailAsync(query.DonorId, currentUser.Scope, cancellationToken);
 
         if (detail is null)
         {
+            logger.LogWarning("Get donor detail failed for DonorId {DonorId} because the donor was not found within the current scope.", query.DonorId);
             return Result.Failure<DonorDetailResponse>(Error.DonorNotFound());
         }
 
@@ -64,13 +74,19 @@ public sealed class DonorQueryHandler(
         // record with the unmasking permission leaves a trace.
         if (currentUser.CanSeeContact())
         {
+            logger.LogInformation("Sensitive donor view detected for DonorId {DonorId}.", query.DonorId);
+
             await auditWriter.WriteAsync(
                 new AuditEntry(AuditActionCodes.DonorSensitiveViewed, nameof(Donor), query.DonorId,
                     AuditResult.Succeeded, $"{detail.DonorNumber} viewed with unmasked contact details."),
                 cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Sensitive donor view audit recorded successfully for DonorId {DonorId}.", query.DonorId);
         }
+
+        logger.LogInformation("Get donor detail completed successfully for DonorId {DonorId}.", query.DonorId);
 
         return Result.Success(detail);
     }
@@ -79,8 +95,12 @@ public sealed class DonorQueryHandler(
         LookupDonorsQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Donor lookup started.");
+
         var rows = query.MaximumRows is <= 0 or > 50 ? 20 : query.MaximumRows;
         var items = await readService.LookupAsync(query.Search, rows, currentUser.Scope, cancellationToken);
+
+        logger.LogInformation("Donor lookup completed successfully. Returned {RowCount} row(s).", items.Count);
 
         return Result.Success(items);
     }
@@ -89,6 +109,8 @@ public sealed class DonorQueryHandler(
         ExportDonorsQuery query,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Export donors started with maximum row limit {MaximumRows}.", _settings.ExportMaximumRows);
+
         var items = await readService.ExportRowsAsync(
             query.Filter, _settings.ExportMaximumRows, currentUser.Scope, cancellationToken);
 
@@ -114,6 +136,8 @@ public sealed class DonorQueryHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Export donors completed successfully. Exported {RowCount} row(s).", rows.Count);
 
         return Result.Success(file);
     }

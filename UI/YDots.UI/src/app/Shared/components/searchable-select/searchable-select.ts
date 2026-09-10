@@ -17,7 +17,11 @@ import { FormsModule } from '@angular/forms';
 export class SearchableSelectComponent {
   @Input() options: readonly string[] = [];
   @Input() value = '';
-  @Input() placeholder = 'Search...';
+  /**
+   * Doubles as the empty-field prompt and as the first row of the list, so a searchable field
+   * reads the same as a plain <select>: "Select Country" until a country has been chosen.
+   */
+  @Input() placeholder = 'Select...';
   @Input() disabled = false;
   @Input() disabledPlaceholder = 'Not available';
   @Output() valueChange = new EventEmitter<string>();
@@ -50,6 +54,13 @@ export class SearchableSelectComponent {
 
   protected select(option: string): void {
     this.valueChange.emit(option);
+    this.query.set('');
+    this.open.set(false);
+  }
+
+  /** The placeholder row - picking it puts the field back to nothing chosen. */
+  protected selectPlaceholder(): void {
+    this.valueChange.emit('');
     this.query.set('');
     this.open.set(false);
   }

@@ -306,6 +306,7 @@
               <label class="form-label" for="mobileNumber">Mobile number</label>
               <div class="input-group">
                 <select class="form-select flex-grow-0" style="width: 6.5rem;" [(ngModel)]="mobileCountryCode" name="mobileCountryCode">
+                    <option value="" disabled>Select Code</option>
                   @for (code of countryCodes(); track code) { <option [value]="code">{{ code }}</option> }
                 </select>
                 <input id="mobileNumber" type="tel" class="form-control" placeholder="98765 43210"

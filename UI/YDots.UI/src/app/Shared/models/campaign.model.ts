@@ -107,6 +107,16 @@ export interface CampaignRecord {
   readonly startDate: string;
   readonly endDate: string;
   readonly targetAmount: number;
+
+  /**
+   * The campaign amount - the fixed figure this campaign is stated at, captured on wizard step 1.
+   *
+   * DISTINCT FROM `targetAmount`, which is the Target & Budget module's total and is still
+   * collected nowhere. This is the number a donor is shown the moment they pick the campaign on
+   * either donation form. Undefined only on a record that predates the column.
+   */
+  readonly campaignAmount?: number;
+
   readonly reconciledAmount: number;
   readonly progress: number;
   /** Not a displayed field — supports the History rule (delete only with no downstream reference). */

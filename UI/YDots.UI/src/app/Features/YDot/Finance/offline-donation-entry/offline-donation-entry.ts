@@ -130,7 +130,7 @@ export class OfflineDonationEntryComponent {
   }
 
   /** Currency — searchable controlled choice (4.3.2). */
-  protected readonly currency = signal('INR');
+  protected readonly currency = signal('');
   /** The currency catalogue, from GlobalMaster rather than four literals. */
   protected readonly currencyCatalogue = signal<readonly string[]>([]);
 
@@ -198,6 +198,7 @@ export class OfflineDonationEntryComponent {
       !!this.instrumentType() &&
       !!this.donationDate() &&
       this.amountValid() &&
+      !!this.currency() &&
       !!this.campaign() &&
       !!this.bankAccount() &&
       !!this.evidenceFile(),
@@ -249,6 +250,7 @@ export class OfflineDonationEntryComponent {
     if (!this.instrumentType()) missing.push('Instrument type');
     if (!this.donationDate()) missing.push('Donation date');
     if (!this.amountValid()) missing.push('Amount');
+    if (!this.currency()) missing.push('Currency');
     if (!this.campaign()) missing.push('Campaign or fund');
     if (!this.bankAccount()) missing.push('Bank or collection account');
     if (!this.evidenceFile()) missing.push('Evidence document');

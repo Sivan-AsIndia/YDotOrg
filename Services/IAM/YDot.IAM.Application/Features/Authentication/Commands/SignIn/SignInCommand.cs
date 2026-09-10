@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
 using YDot.IAM.Application.Common.Abstractions.Services;
@@ -64,7 +65,8 @@ public sealed class SignInCommandHandler(
     IUserAgentParser userAgents,
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
-    IOptions<SecuritySettings> securityOptions)
+    IOptions<SecuritySettings> securityOptions,
+    ILogger<SignInCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
 
@@ -72,6 +74,7 @@ public sealed class SignInCommandHandler(
         SignInCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        logger.LogInformation("Sign-in attempt started.");
 
         var request = command.Request;
         var now = clock.UtcNow;
@@ -86,6 +89,8 @@ public sealed class SignInCommandHandler(
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Sign-in failed because the platform business unit is not configured.");
+
             return Result.Failure<SignInResponse>(
                 Error.Dependency("The platform is not configured. Contact support."));
         }
@@ -102,7 +107,10 @@ public sealed class SignInCommandHandler(
                 null, identifier, businessUnit.Id, null, SignInOutcome.TenantNotResolved,
                 client, request, now, 0, 0, false, cancellationToken);
 
+            logger.LogWarning("Sign-in failed because the tenant could not be resolved from the request host.");
+
             return Result.Failure<SignInResponse>(Error.TenantNotResolved());
+
         }
 
         // ---- 2. Rate limit by address, before any database lookup for the account ------------
@@ -116,6 +124,8 @@ public sealed class SignInCommandHandler(
                 // NOT AccountLocked. Nothing about the account has changed - this is the ADDRESS
                 // being throttled, and telling somebody their account is locked sends them to an
                 // administrator who will find it perfectly healthy.
+                logger.LogWarning("Sign-in request rate limit exceeded.");
+
                 return Result.Failure<SignInResponse>(Error.TooManyAttempts());
             }
         }
@@ -138,6 +148,9 @@ public sealed class SignInCommandHandler(
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             // Same error, same wording, as a wrong password. Deliberately.
+            // Same error, same wording, as a wrong password. Deliberately.
+            logger.LogWarning("Sign-in failed because no matching account was found.");
+
             return Result.Failure<SignInResponse>(Error.InvalidCredentials());
         }
 
@@ -155,6 +168,8 @@ public sealed class SignInCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Sign-in blocked because the account is locked. {UserId}", user.Id);
+
             return Result.Failure<SignInResponse>(
                 Error.AccountLocked(minutes > 0 ? minutes : _security.LockoutMinutes));
         }
@@ -169,6 +184,8 @@ public sealed class SignInCommandHandler(
                 client, request, now, user.AccessFailedCount, 0, false, cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogWarning("Sign-in blocked because the account is not activated. {UserId}", user.Id);
 
             return Result.Failure<SignInResponse>(Error.AccountNotActivated());
         }
@@ -198,6 +215,8 @@ public sealed class SignInCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogWarning("Sign-in blocked by account state. {UserId} {Outcome}", user.Id, accountFailure.Value.Outcome);
+
             return Result.Failure<SignInResponse>(accountFailure.Value.Error);
         }
 
@@ -219,6 +238,8 @@ public sealed class SignInCommandHandler(
                     client, request, now, 0, 0, false, cancellationToken);
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                logger.LogWarning("Sign-in blocked by organisation state. {UserId} {TenantId}", user.Id, tenant.Id);
 
                 return Result.Failure<SignInResponse>(tenantFailure);
             }
@@ -255,6 +276,8 @@ public sealed class SignInCommandHandler(
 
                 if (challenge.IsFailure)
                 {
+                    logger.LogWarning("MFA challenge could not be issued during sign-in. {UserId}", user.Id);
+
                     return Result.Failure<SignInResponse>(challenge.Error!);
                 }
 
@@ -263,6 +286,8 @@ public sealed class SignInCommandHandler(
                     client, request, now, 0, 0, true, cancellationToken);
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                logger.LogInformation("MFA challenge issued for sign-in. {UserId}", user.Id);
 
                 return Result.Success(AuthenticationMappingConfig.ToMfaPendingResponse(challenge.Value!));
             }
@@ -312,6 +337,8 @@ public sealed class SignInCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            logger.LogInformation("SuperAdmin signed in at platform scope; organisation selection is pending. {UserId} {SessionId}", user.Id, tokens.SessionId);
+
             return Result.Success(AuthenticationMappingConfig.ToTenantSelectionResponse(
                 tokens, sessions.BuildUserResponse(user, access), selectable));
         }
@@ -359,6 +386,9 @@ public sealed class SignInCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Sign-in completed successfully. {UserId} {TenantId} {SessionId} {UsedTrustedDevice}",
+            user.Id, tenant?.Id, tokens.SessionId, usedTrustedDevice);
 
         // An administrator-set temporary password gets the person in, but nowhere else until
         // they change it. The client routes straight to the change-password screen.
@@ -437,6 +467,15 @@ public sealed class SignInCommandHandler(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (triggeredLockout)
+        {
+            logger.LogWarning("Sign-in failed and the account was locked out. {UserId} {FailedAttemptCount}", user.Id, user.AccessFailedCount);
+        }
+        else
+        {
+            logger.LogWarning("Sign-in failed due to invalid credentials. {UserId} {AttemptsRemaining}", user.Id, attemptsRemaining);
+        }
 
         if (triggeredLockout)
         {

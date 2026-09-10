@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDots.DON.Application.Common.Abstractions.Persistence;
 using YDots.DON.Application.Common.Abstractions.Security;
@@ -59,7 +60,8 @@ public sealed class LeadCaptureCommandHandler(
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     IDateTimeProvider clock,
-    IOptions<DonorSettings> donorSettings)
+    IOptions<DonorSettings> donorSettings,
+    ILogger<LeadCaptureCommandHandler> logger)
 {
     private const string SubmitEndpoint = "POST /api/v1/donors/lead-capture/{id}/submit";
 
@@ -80,9 +82,13 @@ public sealed class LeadCaptureCommandHandler(
     {
         var request = command.Request;
 
+        logger.LogInformation("Lead capture started for campaign {CampaignId} in organisation {OrganisationId}.", request.CampaignId, currentUser.OrganisationId);
+
         var campaign = await campaignRepository.GetByIdAsync(request.CampaignId, cancellationToken);
         if (campaign is null || campaign.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Lead capture failed because campaign {CampaignId} was not found inside the current organisation scope.", request.CampaignId);
+
             return Result.Failure<LeadDetailResponse>(Error.Validation(
                 "Review Campaign. Choose a campaign inside your scope.",
                 [new ValidationError(nameof(request.CampaignId), "Choose a campaign from the list.")]));
@@ -90,6 +96,8 @@ public sealed class LeadCaptureCommandHandler(
 
         if (campaign.Status == CampaignStatus.Closed)
         {
+            logger.LogWarning("Lead capture rejected because campaign {CampaignId} is closed.", request.CampaignId);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 $"Campaign {campaign.Code} is closed and cannot accept new leads."));
         }
@@ -123,6 +131,8 @@ public sealed class LeadCaptureCommandHandler(
         var consents = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
         lead.Campaign = campaign;
 
+        logger.LogInformation("Lead {LeadId} captured successfully for campaign {CampaignId}.", lead.Id, request.CampaignId);
+
         return Result.Success(lead.ToDetailResponse(currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consents));
     }
 
@@ -130,21 +140,27 @@ public sealed class LeadCaptureCommandHandler(
         UpdateLeadCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Lead update started for lead {LeadId}.", command.LeadId);
+
         var lead = await leadRepository.GetByIdAsync(command.LeadId, cancellationToken);
 
         var scopeFailure = CheckScope(lead);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Lead update rejected for lead {LeadId} because the lead was not found inside the current scope.", command.LeadId);
             return Result.Failure<LeadDetailResponse>(scopeFailure);
         }
 
         if (command.Request.ExpectedVersion != lead!.Version)
         {
+            logger.LogWarning("Lead update failed concurrency validation for lead {LeadId}. Expected version {ExpectedVersion}, actual version {ActualVersion}.", command.LeadId, command.Request.ExpectedVersion, lead.Version);
             return Result.Failure<LeadDetailResponse>(Error.Concurrency());
         }
 
         if (lead.Status is LeadStatus.Converted or LeadStatus.Closed or LeadStatus.Suppressed)
         {
+            logger.LogWarning("Lead update rejected for lead {LeadId} because it is in state {Status}.", command.LeadId, lead.Status);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 $"A lead in state {lead.Status} can no longer be edited."));
         }
@@ -152,6 +168,8 @@ public sealed class LeadCaptureCommandHandler(
         var campaign = await campaignRepository.GetByIdAsync(command.Request.CampaignId, cancellationToken);
         if (campaign is null || campaign.OrganisationId != currentUser.OrganisationId)
         {
+            logger.LogWarning("Lead update failed because campaign {CampaignId} was not found inside the current organisation scope.", command.Request.CampaignId);
+
             return Result.Failure<LeadDetailResponse>(Error.Validation(
                 "Review Campaign. Choose a campaign inside your scope.",
                 [new ValidationError(nameof(command.Request.CampaignId), "Choose a campaign from the list.")]));
@@ -175,6 +193,8 @@ public sealed class LeadCaptureCommandHandler(
         var consents = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
         lead.Campaign = campaign;
 
+        logger.LogInformation("Lead {LeadId} updated successfully.", command.LeadId);
+
         return Result.Success(lead.ToDetailResponse(currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consents));
     }
 
@@ -182,11 +202,14 @@ public sealed class LeadCaptureCommandHandler(
         DeduplicateLeadCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Lead deduplication started for lead {LeadId}.", command.LeadId);
+
         var lead = await leadRepository.GetByIdAsync(command.LeadId, cancellationToken);
 
         var scopeFailure = CheckScope(lead);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Lead deduplication rejected for lead {LeadId} because the lead was not found inside the current scope.", command.LeadId);
             return Result.Failure<DeduplicateResultResponse>(scopeFailure);
         }
 
@@ -199,6 +222,8 @@ public sealed class LeadCaptureCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Lead deduplication completed for lead {LeadId}. Found {CandidateCount} candidate(s).", command.LeadId, candidates.Count);
 
         return Result.Success(new DeduplicateResultResponse(
             lead.Id,
@@ -215,16 +240,20 @@ public sealed class LeadCaptureCommandHandler(
         SubmitLeadCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Lead submission started for lead {LeadId}.", command.LeadId);
+
         var lead = await leadRepository.GetByIdAsync(command.LeadId, cancellationToken);
 
         var scopeFailure = CheckScope(lead);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Lead submission rejected for lead {LeadId} because the lead was not found inside the current scope.", command.LeadId);
             return Result.Failure<LeadDetailResponse>(scopeFailure);
         }
 
         if (command.Request.ExpectedVersion is > 0 && command.Request.ExpectedVersion != lead!.Version)
         {
+            logger.LogWarning("Lead submission failed concurrency validation for lead {LeadId}. Expected version {ExpectedVersion}, actual version {ActualVersion}.", command.LeadId, command.Request.ExpectedVersion, lead.Version);
             return Result.Failure<LeadDetailResponse>(Error.Concurrency());
         }
 
@@ -236,12 +265,17 @@ public sealed class LeadCaptureCommandHandler(
             if (replay is not null && replay.ResourceId == lead!.Id)
             {
                 var consented = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
+
+                logger.LogInformation("Lead submission replay detected for lead {LeadId}; returning the existing result.", command.LeadId);
+
                 return Result.Success(lead.ToDetailResponse(currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consented));
             }
         }
 
         if (!lead!.IsDraft)
         {
+            logger.LogWarning("Lead submission rejected for lead {LeadId} because it has already been submitted.", command.LeadId);
+
             return Result.Failure<LeadDetailResponse>(Error.InvalidTransition(
                 "This lead has already been submitted to the work queue."));
         }
@@ -271,6 +305,8 @@ public sealed class LeadCaptureCommandHandler(
 
         var consents = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
 
+        logger.LogInformation("Lead {LeadId} submitted successfully to the work queue.", command.LeadId);
+
         return Result.Success(lead.ToDetailResponse(currentUser.CanSeeContact(), currentUser.CanSeeEvidence(), consents));
     }
 
@@ -278,11 +314,14 @@ public sealed class LeadCaptureCommandHandler(
         DeleteLeadDraftCommand command,
         CancellationToken cancellationToken = default)
     {
+        logger.LogInformation("Lead draft deletion started for lead {LeadId}.", command.LeadId);
+
         var lead = await leadRepository.GetWithAssignmentsAsync(command.LeadId, cancellationToken);
 
         var scopeFailure = CheckScope(lead);
         if (scopeFailure is not null)
         {
+            logger.LogWarning("Lead draft deletion rejected for lead {LeadId} because the lead was not found inside the current scope.", command.LeadId);
             return Result.Failure<OutcomeResponse>(scopeFailure);
         }
 
@@ -290,6 +329,8 @@ public sealed class LeadCaptureCommandHandler(
         // kind of reference, so either one turns delete into cancel.
         if (!lead!.IsDraft || lead.Status != LeadStatus.New)
         {
+            logger.LogWarning("Lead draft deletion rejected for lead {LeadId} because it is not an unused draft.", command.LeadId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "Permanent delete is only available for an unsubmitted draft. Use Close instead."));
         }
@@ -297,12 +338,16 @@ public sealed class LeadCaptureCommandHandler(
         var consents = await consentRepository.GetForLeadAsync(lead.Id, cancellationToken);
         if (consents.Count > 0)
         {
+            logger.LogWarning("Lead draft deletion rejected for lead {LeadId} because consent evidence exists.", command.LeadId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This draft already carries consent evidence and cannot be deleted. Use Close instead."));
         }
 
         if (lead.Assignments.Count > 0 || lead.ConvertedDonorId is not null)
         {
+            logger.LogWarning("Lead draft deletion rejected for lead {LeadId} because downstream references exist.", command.LeadId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This draft is already referenced by an assignment or a donor record and cannot be deleted."));
         }
@@ -316,6 +361,8 @@ public sealed class LeadCaptureCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Lead draft {LeadId} deleted successfully.", command.LeadId);
 
         return Result.Success(new OutcomeResponse(
             reference,
@@ -465,8 +512,12 @@ public sealed class LeadCaptureCommandHandler(
 
         var request = command.Request;
 
+        logger.LogInformation("Bulk lead import started for organisation {OrganisationId} with {RowCount} row(s).", currentUser.OrganisationId, request.Rows.Count);
+
         if (request.Rows.Count == 0)
         {
+            logger.LogWarning("Bulk lead import rejected because the uploaded file contained no rows.");
+
             return Result.Failure<BulkLeadImportResponse>(Error.Validation(
                 "The uploaded file contained no rows.",
                 [new ValidationError(nameof(request.Rows), "Add at least one lead row.")]));
@@ -474,6 +525,8 @@ public sealed class LeadCaptureCommandHandler(
 
         if (request.Rows.Count > MaximumBulkImportRows)
         {
+            logger.LogWarning("Bulk lead import rejected because {RowCount} rows exceeded the maximum allowed {MaximumRows}.", request.Rows.Count, MaximumBulkImportRows);
+
             return Result.Failure<BulkLeadImportResponse>(Error.Validation(
                 $"A bulk upload takes at most {MaximumBulkImportRows} leads at a time. The file had {request.Rows.Count}.",
                 [new ValidationError(nameof(request.Rows), "Split the file and upload it in parts.")]));
@@ -581,6 +634,8 @@ public sealed class LeadCaptureCommandHandler(
         }
 
         var rejected = results.Count(result => !result.Imported);
+
+        logger.LogInformation("Bulk lead import completed for organisation {OrganisationId}. Imported {ImportedCount} of {TotalCount} row(s); {RejectedCount} row(s) rejected.", currentUser.OrganisationId, imported, request.Rows.Count, rejected);
 
         return Result.Success(new BulkLeadImportResponse(
             request.Rows.Count,

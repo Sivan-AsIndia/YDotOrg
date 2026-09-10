@@ -156,10 +156,16 @@ export interface CreateCampaignRequest {
   startDate: string;
   endDate: string;
   /**
-   * NO targetAmount OR budgetAmount. Target & Budget is on hold, no step collects either, and the
-   * server no longer accepts them on this contract - a campaign is created with a target of 0
-   * until the module returns.
+   * The campaign amount - the fixed figure the campaign is stated at, captured on step 1
+   * immediately after the code.
+   *
+   * IT IS NOT `targetAmount`. That column belongs to the Target & Budget module, is still on
+   * hold, and is still absent from this contract - a campaign is created with a target of 0 until
+   * that module returns. This is its own field with its own column, required and greater than
+   * zero, and it is the number both donation forms show once a donor picks the campaign.
    */
+  campaignAmount: number;
+
   currencyId: string;
   countryId: string;
   /** At least one. A campaign with no owner is one nobody is accountable for. */
@@ -199,7 +205,10 @@ export interface UpdateCampaignRequest {
   fundOrProgramme: string;
   startDate: string;
   endDate: string;
-  /** Absent for the same reason as on create; an edit cannot touch a stored target. */
+  /** The campaign amount. Sent on every save, so an edit changes it like any other field. */
+  campaignAmount: number;
+
+  /** `targetAmount` is absent for the same reason as on create; an edit cannot touch a stored target. */
   currencyId: string;
   countryId: string;
   ownerIds: string[];
@@ -235,6 +244,8 @@ export interface CampaignListItem {
   endDate: string;
   targetAmount: number;
   budgetAmount: number | null;
+  /** The fixed figure the campaign is stated at. Zero on a campaign created before it existed. */
+  campaignAmount: number;
   currencyId: string;
   /** The ISO code, resolved server-side, so the grid can print a symbol beside the figure. */
   currencyCode: string | null;
@@ -281,6 +292,8 @@ export interface CampaignDetail {
   startDate: string;
   endDate: string;
   targetAmount: number;
+  /** The fixed figure the campaign is stated at. */
+  campaignAmount: number;
   currencyId: string;
   /**
    * The names beside the ids.

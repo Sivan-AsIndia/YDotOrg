@@ -22,7 +22,6 @@ export enum BulkActionType {
   Deactivate = 'Deactivate',
   RequirePasswordReset = 'RequirePasswordReset',
   RevokeSessions = 'RevokeSessions',
-  AssignAccessReview = 'AssignAccessReview',
 }
 
 /** A display option for the action grid — mirrors the API's `LookupItem`. */
@@ -34,13 +33,6 @@ export interface BulkActionOption {
 
 /** A scope option (organisation, geography, campaign…) — mirrors the API's `LookupItem`. */
 export interface BulkScopeOption {
-  value: string;
-  label: string;
-  description?: string | null;
-}
-
-/** An access review campaign option for the conditional campaign selector. */
-export interface BulkCampaignOption {
   value: string;
   label: string;
   description?: string | null;

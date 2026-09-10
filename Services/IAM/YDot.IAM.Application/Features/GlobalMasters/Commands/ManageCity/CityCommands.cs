@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Constants;
@@ -41,12 +42,15 @@ public sealed class CityCommandHandler(
     IGlobalMasterRepository masters,
     IAuditService audit,
     GlobalMasterWriteGuard guard,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<CityCommandHandler> logger)
 {
     public async Task<Result<CityDetailResponse>> HandleAsync(
         CreateCityCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        logger.LogInformation("Creating city.");
 
         var request = command.Request;
         var scopeTenantId = guard.WriteScopeTenantId;
@@ -54,6 +58,8 @@ public sealed class CityCommandHandler(
         var code = CodeValue.TryParse(request.CityCode)?.Value;
         if (code is null)
         {
+            logger.LogWarning("City creation failed because the city code is invalid.");
+
             return Result.Failure<CityDetailResponse>(Error.Validation(
                 "That city code is not valid.",
                 [new ValidationError(
@@ -64,12 +70,19 @@ public sealed class CityCommandHandler(
         var state = await masters.GetStateProvinceAsync(request.StateProvinceId, cancellationToken);
         if (state is null)
         {
+            logger.LogWarning(
+                "City creation failed because the state was not found. StateProvinceId: {StateProvinceId}.",
+                request.StateProvinceId);
+
             return Result.Failure<CityDetailResponse>(Error.NotFound("That state was not found."));
         }
 
         var country = await masters.GetCountryAsync(state.CountryId, cancellationToken);
         if (country is null)
         {
+            logger.LogError("City creation failed because the state is linked to a missing country. StateProvinceId: {StateProvinceId}, CountryId: {CountryId}.",
+                request.StateProvinceId,state.CountryId);
+
             // Reachable only if a state outlived its country, which the delete guard prevents.
             // Reported as a dependency failure rather than a not-found, because the CALLER did
             // nothing wrong: the catalogue is inconsistent and somebody needs to know.
@@ -79,6 +92,8 @@ public sealed class CityCommandHandler(
 
         if (await masters.CodeExistsAsync<City>(code, scopeTenantId, null, cancellationToken))
         {
+            logger.LogWarning("City creation failed because the city code already exists. Code: {Code}.",code);
+
             return Result.Failure<CityDetailResponse>(
                 Error.Duplicate($"A city with code {code} already exists in this catalogue."));
         }
@@ -86,6 +101,10 @@ public sealed class CityCommandHandler(
         var coordinates = ParseCoordinates(request.Latitude, request.Longitude);
         if (coordinates.IsFailure)
         {
+            logger.LogWarning(
+                "City creation failed because the coordinates are invalid. StateProvinceId: {StateProvinceId}.",
+                request.StateProvinceId);
+
             return Result.Failure<CityDetailResponse>(coordinates.Error!);
         }
 
@@ -108,6 +127,9 @@ public sealed class CityCommandHandler(
             },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation("City created successfully. CityId: {CityId}, Code: {Code}, StateProvinceId: {StateProvinceId}.",
+            city.Id,city.Code,city.StateProvinceId);
+
         return city.ToDetailResponse(
             state.Code, state.Name, country.Code, country.Name, guard.IsSuperAdmin);
     }
@@ -117,23 +139,35 @@ public sealed class CityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Updating city. CityId: {CityId}.",command.CityId);
+
         var request = command.Request;
 
         var city = await masters.GetCityAsync(command.CityId, cancellationToken);
         if (city is null)
         {
+            logger.LogWarning(
+                "City update failed because the city was not found. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That city was not found."));
         }
 
         var guarded = GuardWrite(city, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning("City update failed because the write guard rejected the operation. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
         var coordinates = ParseCoordinates(request.Latitude, request.Longitude);
         if (coordinates.IsFailure)
         {
+            logger.LogWarning("City update failed because the coordinates are invalid. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(coordinates.Error!);
         }
 
@@ -149,6 +183,9 @@ public sealed class CityCommandHandler(
             new { city.Code },
             cancellationToken: cancellationToken);
 
+        logger.LogInformation("City updated successfully. CityId: {CityId}, Code: {Code}.",
+            city.Id,city.Code);
+
         return BuildOutcome(city, "City updated.");
     }
 
@@ -157,22 +194,34 @@ public sealed class CityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Changing city status. CityId: {CityId}, RequestedStatus: {RequestedStatus}.",
+            command.CityId,command.Request.Status);
+
         var request = command.Request;
 
         var city = await masters.GetCityAsync(command.CityId, cancellationToken);
         if (city is null)
         {
+            logger.LogWarning("City status change failed because the city was not found. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That city was not found."));
         }
 
         var guarded = GuardWrite(city, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning("City status change failed because the write guard rejected the operation. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
         if (city.Status == request.Status)
         {
+            logger.LogWarning("City status change rejected because the city is already in the requested status. CityId: {CityId}, Status: {Status}.",
+                command.CityId,request.Status);
+
             return Result.Failure<OutcomeResponse>(
                 Error.InvalidTransition($"That city is already {request.Status}."));
         }
@@ -192,6 +241,9 @@ public sealed class CityCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("City status changed successfully. CityId: {CityId}, NewStatus: {NewStatus}.",
+            city.Id,request.Status);
+
         return BuildOutcome(
             city, request.Status == MasterDataStatus.Active ? "City activated." : "City deactivated.");
     }
@@ -201,17 +253,27 @@ public sealed class CityCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Deleting city. CityId: {CityId}.",
+            command.CityId);
+
         var request = command.Request;
 
         var city = await masters.GetCityAsync(command.CityId, cancellationToken);
         if (city is null)
         {
+            logger.LogWarning("City deletion failed because the city was not found. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That city was not found."));
         }
 
         var guarded = GuardWrite(city, request.ExpectedVersion);
         if (guarded.IsFailure)
         {
+            logger.LogWarning(
+                "City deletion failed because the write guard rejected the operation. CityId: {CityId}.",
+                command.CityId);
+
             return Result.Failure<OutcomeResponse>(guarded.Error!);
         }
 
@@ -234,6 +296,9 @@ public sealed class CityCommandHandler(
             request.Reason,
             cancellationToken);
 
+        logger.LogInformation("City deleted successfully. CityId: {CityId}, Code: {Code}.",
+            city.Id,city.Code);
+
         return new OutcomeResponse(city.Id, city.Status.ToString(), city.Version, "City deleted.", []);
     }
 
@@ -242,9 +307,23 @@ public sealed class CityCommandHandler(
     {
         var writable = guard.EnsureWritable(city, $"The city {city.Name}");
 
-        return writable.IsFailure
-            ? writable
-            : GlobalMasterWriteGuard.EnsureVersionMatches(city, expectedVersion);
+        if (writable.IsFailure)
+        {
+            logger.LogWarning("City write rejected by ownership or write guard. CityId: {CityId}.",
+                city.Id);
+
+            return writable;
+        }
+
+        var versionResult = GlobalMasterWriteGuard.EnsureVersionMatches(city, expectedVersion);
+
+        if (versionResult.IsFailure)
+        {
+            logger.LogWarning("City write rejected because the entity version does not match. CityId: {CityId}.",
+                city.Id);
+        }
+
+        return versionResult;
     }
 
     /// <summary>

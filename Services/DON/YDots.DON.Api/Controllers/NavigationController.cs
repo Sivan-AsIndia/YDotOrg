@@ -21,6 +21,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class NavigationController : ApiControllerBase
 {
+    private readonly ILogger<NavigationController> _logger;
+
+    public NavigationController(ILogger<NavigationController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the menu entries this caller may see, plus their sensitive-field flags.</summary>
     [HttpGet("menu")]
     [HasPermission(PermissionCodes.DonView)]
@@ -29,8 +36,23 @@ public sealed class NavigationController : ApiControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMenu(
         [FromServices] GetDonorMenuQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetDonorMenuQuery(), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor navigation menu retrieval started.");
+
+        var result = await handler.HandleAsync(new GetDonorMenuQuery(), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor navigation menu retrieved successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Donor navigation menu retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET every enum catalogue the eight screens draw their selectors from.</summary>
     [HttpGet("reference-data")]
@@ -39,8 +61,23 @@ public sealed class NavigationController : ApiControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetReferenceData(
         [FromServices] ReferenceDataQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetReferenceDataQuery(), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Donor reference data retrieval started.");
+
+        var result = await handler.HandleAsync(new GetReferenceDataQuery(), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Donor reference data retrieved successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Donor reference data retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET the scope-aware campaign autocomplete.</summary>
     [HttpGet("reference-data/campaigns")]
@@ -51,8 +88,23 @@ public sealed class NavigationController : ApiControllerBase
         [FromQuery] string? search,
         [FromQuery] int maximumRows,
         [FromServices] ReferenceDataQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SearchCampaignsQuery(search, maximumRows), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Campaign reference data search started.");
+
+        var result = await handler.HandleAsync(new SearchCampaignsQuery(search, maximumRows), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Campaign reference data search completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Campaign reference data search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET the scope-aware lead autocomplete, used by the follow-up planner.</summary>
     [HttpGet("reference-data/leads")]
@@ -63,6 +115,21 @@ public sealed class NavigationController : ApiControllerBase
         [FromQuery] string? search,
         [FromQuery] int maximumRows,
         [FromServices] ReferenceDataQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new SearchLeadsQuery(search, maximumRows), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead reference data search started.");
+
+        var result = await handler.HandleAsync(new SearchLeadsQuery(search, maximumRows), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead reference data search completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Lead reference data search failed.");
+        }
+
+        return FromResult(result);
+    }
 }

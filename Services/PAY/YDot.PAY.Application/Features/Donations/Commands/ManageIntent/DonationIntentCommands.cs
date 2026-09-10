@@ -61,6 +61,10 @@ public sealed class DonationIntentCommandHandler(
     IDonationRepository donations,
     IGatewayAccountRepository gatewayAccounts,
     IDonorDirectory donorDirectory,
+
+    // Read-only, over the shared database. It is how the amount stops being something the browser
+    // gets to choose - see the block at the top of the create handler.
+    ICampaignDirectory campaigns,
     IPaymentGateway paymentGateway,
     IReferenceGenerator references,
     IAuditWriter audit,
@@ -85,6 +89,8 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Donation intent creation requested.");
+
         var request = command.Request;
 
         // The Organisation has already been resolved by the middleware - from the tracking
@@ -92,12 +98,67 @@ public sealed class DonationIntentCommandHandler(
         // taken from the request body.
         if (!tenantContext.HasTenant)
         {
+            logger.LogWarning("Donation intent creation rejected because no tenant context was resolved.");
+
             return Result.Failure<DonationIntentResponse>(Error.TenantSelectionRequired(
                 "This donation link is not linked to an organisation."));
         }
 
         var tenantId = tenantContext.RequireTenantId();
         var now = clock.UtcNow;
+
+        // ==================================================================================
+        // THE AMOUNT COMES FROM THE CAMPAIGN, NOT FROM THE BROWSER.
+        //
+        // The donation forms no longer ask anybody to type a figure: a campaign states what it
+        // asks for and a donor giving to it pays that. So the amount on this request is entirely
+        // derived from a record this server already holds - and a value the client cannot
+        // legitimately choose is a value the client must not be trusted to send. THIS ENDPOINT IS
+        // ANONYMOUS: without this, anybody could post one rupee against a five-thousand-rupee
+        // appeal, and the platform would have raised a payment link for it.
+        //
+        // It is the same principle the gateway checkout already works on - the amount lives on
+        // the provider's own order record so the browser cannot change it - applied one step
+        // earlier, to the intent that order is created from.
+        //
+        // THE CURRENCY TRAVELS WITH IT. A figure stated in the campaign's currency, charged in a
+        // currency the caller named, is a real charge in the wrong denomination that nothing
+        // downstream can detect.
+        //
+        // A CAMPAIGN THAT STATES NOTHING CHANGES NOTHING. Campaigns created before the amount
+        // column existed hold zero, which means "never stated"; the requested amount stands there,
+        // exactly as it did before, so no donation that used to work stops working.
+        if (request.CampaignId is { } campaignId && campaignId != Guid.Empty)
+        {
+            var eligibility = await campaigns.GetDonationEligibilityAsync(
+                tenantId, campaignId, cancellationToken);
+
+            // AND A CAMPAIGN THAT CANNOT TAKE MONEY IS REFUSED HERE. Nothing checked it on the way
+            // in - only the later donation-recording path did - so a draft, paused or closed
+            // campaign named directly on the request produced a live intent and a payment link,
+            // and left the money with nowhere legitimate to be reported. The reason is the
+            // directory's own donor-facing sentence.
+            if (!eligibility.CanAcceptDonations)
+            {
+                logger.LogWarning(
+                    "Donation intent creation refused for campaign {CampaignId}: {Reason}",
+                    campaignId, eligibility.Reason);
+
+                return Result.Failure<DonationIntentResponse>(Error.Validation(
+                    eligibility.Reason ?? "This campaign is not currently accepting donations."));
+            }
+
+            if (eligibility.CampaignAmount > 0m)
+            {
+                request = request with
+                {
+                    Amount = eligibility.CampaignAmount,
+                    CurrencyCode = string.IsNullOrWhiteSpace(eligibility.CurrencyCode)
+                        ? request.CurrencyCode
+                        : eligibility.CurrencyCode
+                };
+            }
+        }
 
         var normalisedEmail = request.Email.Trim().ToLowerInvariant();
 
@@ -110,7 +171,7 @@ public sealed class DonationIntentCommandHandler(
         if (existing is not null)
         {
             logger.LogInformation(
-                "Reusing open intent {IntentReference} for a repeated submission.",
+                "Reusing open donation intent {IntentReference} for a repeated submission.",
                 existing.IntentReference);
 
             return existing.ToResponse(
@@ -122,6 +183,7 @@ public sealed class DonationIntentCommandHandler(
 
         if (reference.IsFailure)
         {
+            logger.LogError("Donation intent creation failed because a unique intent reference could not be generated.");
             return Result.Failure<DonationIntentResponse>(reference.Error!);
         }
 
@@ -187,8 +249,8 @@ public sealed class DonationIntentCommandHandler(
         {
             logger.LogWarning(
                 exception,
-                "The existing-donor check could not run for intent {IntentReference}. The "
-                + "donation proceeds and the donor is treated as new.",
+                "The existing-donor check could not run for donation intent {IntentReference}. "
+                + "The donation proceeds and the donor is treated as new.",
                 intent.IntentReference);
         }
 
@@ -212,8 +274,10 @@ public sealed class DonationIntentCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Donation intent {IntentReference} created for organisation {TenantId} from {Source}.",
-            intent.IntentReference, tenantId, intent.SourceType);
+            "Donation intent {IntentReference} created successfully for organisation {TenantId} from {Source}.",
+            intent.IntentReference,
+            tenantId,
+            intent.SourceType);
 
         return intent.ToResponse(campaignName: null, PermittedActions(intent, now)) with
         {
@@ -242,16 +306,23 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Existing donor check requested.");
+
         var intent = await donations.GetIntentByReferenceAsync(command.IntentReference, cancellationToken);
 
         if (intent is null)
         {
+            logger.LogWarning("Existing donor check failed because the donation intent was not found.");
             return Result.Failure<ExistingDonorCheckResponse>(
                 Error.NotFound("That donation was not found."));
         }
 
         if (intent.Status == DonationIntentStatus.Paid)
         {
+            logger.LogWarning(
+                "Existing donor check rejected because donation intent {IntentReference} is already paid.",
+                intent.IntentReference);
+
             return Result.Failure<ExistingDonorCheckResponse>(Error.IntentAlreadyPaid());
         }
 
@@ -279,6 +350,10 @@ public sealed class DonationIntentCommandHandler(
 
         if (match is null)
         {
+            logger.LogInformation(
+                "Existing donor check completed with no donor match for intent {IntentReference}.",
+                intent.IntentReference);
+
             // Section 14: continue without signing in. No password is created at this point.
             return new ExistingDonorCheckResponse(
                 ExistingDonorFound: false,
@@ -287,6 +362,10 @@ public sealed class DonationIntentCommandHandler(
                 NextStep: "Continue",
                 Message: "Continue to payment. We will set up your account after your donation.");
         }
+
+        logger.LogInformation(
+            "Existing donor check completed with an existing donor match for intent {IntentReference}.",
+            intent.IntentReference);
 
         // Section 13: sign in, then come back to this intent.
         return new ExistingDonorCheckResponse(
@@ -321,11 +400,16 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Payment link creation requested.");
+
         var opened = await BeginPaymentAttemptAsync(
             command.IntentReference, command.Request.ExpectedVersion, cancellationToken);
 
         if (opened.IsFailure)
         {
+            logger.LogWarning(
+                "Payment link creation could not start because the payment attempt could not be opened.");
+
             return Result.Failure<PaymentLinkResponse>(opened.Error!);
         }
 
@@ -349,6 +433,10 @@ public sealed class DonationIntentCommandHandler(
         {
             await RecordAttemptFailedAsync(
                 intent, attempt, link.FailureCode, link.FailureMessage, cancellationToken);
+
+            logger.LogWarning(
+                "Payment link creation was declined for intent {IntentReference}.",
+                intent.IntentReference);
 
             return Result.Failure<PaymentLinkResponse>(Error.PaymentDeclined());
         }
@@ -376,6 +464,10 @@ public sealed class DonationIntentCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Payment link created successfully for intent {IntentReference}.",
+            intent.IntentReference);
 
         return new PaymentLinkResponse(
             intent.Id,
@@ -418,11 +510,16 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Checkout session creation requested.");
+
         var opened = await BeginPaymentAttemptAsync(
             command.IntentReference, command.Request.ExpectedVersion, cancellationToken);
 
         if (opened.IsFailure)
         {
+            logger.LogWarning(
+                "Checkout session creation could not start because the payment attempt could not be opened.");
+
             return Result.Failure<CheckoutSessionResponse>(opened.Error!);
         }
 
@@ -453,6 +550,10 @@ public sealed class DonationIntentCommandHandler(
         {
             await ReleaseAttemptAsync(intent, attempt, cancellationToken);
 
+            logger.LogInformation(
+                "Checkout session is not supported for intent {IntentReference}; payment link fallback is available.",
+                intent.IntentReference);
+
             return Result.Failure<CheckoutSessionResponse>(Error.Dependency(
                 "This organisation's payment provider does not support an in-page checkout."));
         }
@@ -461,6 +562,10 @@ public sealed class DonationIntentCommandHandler(
         {
             await RecordAttemptFailedAsync(
                 intent, attempt, session.FailureCode, session.FailureMessage, cancellationToken);
+
+            logger.LogWarning(
+                "Checkout session creation was declined for intent {IntentReference}.",
+                intent.IntentReference);
 
             return Result.Failure<CheckoutSessionResponse>(Error.PaymentDeclined());
         }
@@ -484,6 +589,10 @@ public sealed class DonationIntentCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Checkout session created successfully for intent {IntentReference}.",
+            intent.IntentReference);
 
         return new CheckoutSessionResponse(
             intent.Id,
@@ -532,6 +641,7 @@ public sealed class DonationIntentCommandHandler(
 
         if (intent is null)
         {
+            logger.LogWarning("Payment attempt could not be started because the donation intent was not found.");
             return Result.Failure<OpenedAttempt>(Error.NotFound("That donation was not found."));
         }
 
@@ -539,6 +649,10 @@ public sealed class DonationIntentCommandHandler(
 
         if (guard.IsFailure)
         {
+            logger.LogWarning(
+                "Payment attempt rejected by payment eligibility guard for intent {IntentReference}.",
+                intent.IntentReference);
+
             return Result.Failure<OpenedAttempt>(guard.Error!);
         }
 
@@ -546,6 +660,10 @@ public sealed class DonationIntentCommandHandler(
         // donor ends up on two payment forms at once.
         if (intent.Status == DonationIntentStatus.PaymentInProgress)
         {
+            logger.LogWarning(
+                "Payment attempt rejected because intent {IntentReference} already has a payment in progress.",
+                intent.IntentReference);
+
             return Result.Failure<OpenedAttempt>(Error.PaymentInProgress());
         }
 
@@ -553,9 +671,8 @@ public sealed class DonationIntentCommandHandler(
 
         if (account is null)
         {
-            logger.LogError(
-                "Organisation {TenantId} has no active gateway account, so intent {IntentReference} "
-                + "cannot be paid.", intent.TenantId, intent.IntentReference);
+            logger.LogError("Organisation {TenantId} has no active gateway account, so intent {IntentReference} cannot be paid.",
+                intent.TenantId,intent.IntentReference);
 
             return Result.Failure<OpenedAttempt>(Error.PaymentGatewayNotConfigured());
         }
@@ -565,6 +682,9 @@ public sealed class DonationIntentCommandHandler(
         if (!string.Equals(
                 account.SettlementCurrencyCode, intent.Amount.CurrencyCode, StringComparison.Ordinal))
         {
+            logger.LogWarning(
+                "Payment attempt rejected because the intent currency does not match the gateway settlement currency.");
+
             return Result.Failure<OpenedAttempt>(Error.Dependency(
                 $"This organisation cannot accept {intent.Amount.CurrencyCode}. "
                 + $"Its payment account settles in {account.SettlementCurrencyCode}."));
@@ -603,6 +723,9 @@ public sealed class DonationIntentCommandHandler(
         // SAVED BEFORE THE GATEWAY CALL. If the provider times out, the attempt and its
         // idempotency key are already on disk - which is the entire basis of safe retry.
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Payment attempt {AttemptNumber} opened for intent {IntentReference}.",
+            attempt.AttemptNumber,intent.IntentReference);
 
         return new OpenedAttempt(intent, account, attempt, idempotencyKey, now);
     }
@@ -673,6 +796,11 @@ public sealed class DonationIntentCommandHandler(
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogWarning(
+            "Payment attempt {AttemptNumber} failed for intent {IntentReference}.",
+            attempt.AttemptNumber,
+            intent.IntentReference);
     }
 
     /// <summary>
@@ -701,6 +829,10 @@ public sealed class DonationIntentCommandHandler(
         intent.Status = DonationIntentStatus.Draft;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Payment attempt {AttemptNumber} released because the gateway does not support in-page checkout.",
+            attempt.AttemptNumber);
     }
 
     // =====================================================================================
@@ -712,15 +844,27 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Donation intent cancellation requested for intent {IntentId}.",
+            command.IntentId);
+
         var intent = await donations.GetIntentAsync(command.IntentId, cancellationToken);
 
         if (intent is null)
         {
+            logger.LogWarning(
+                "Donation intent cancellation failed because intent {IntentId} was not found.",
+                command.IntentId);
+
             return Result.Failure<OutcomeResponse>(Error.NotFound("That donation was not found."));
         }
 
         if (intent.Version != command.Request.ExpectedVersion)
         {
+            logger.LogWarning(
+                "Donation intent cancellation rejected for intent {IntentId} because the record version is stale.",
+                command.IntentId);
+
             return Result.Failure<OutcomeResponse>(Error.Concurrency());
         }
 
@@ -728,12 +872,20 @@ public sealed class DonationIntentCommandHandler(
         // refund, which is a different thing with a different approval.
         if (intent.Status == DonationIntentStatus.Paid)
         {
+            logger.LogWarning(
+                "Donation intent cancellation rejected because intent {IntentId} is already paid.",
+                command.IntentId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 "This donation has been paid. Raise a refund instead of cancelling it."));
         }
 
         if (intent.IsTerminal)
         {
+            logger.LogWarning(
+                "Donation intent cancellation rejected because intent {IntentId} is already terminal.",
+                command.IntentId);
+
             return Result.Failure<OutcomeResponse>(Error.InvalidTransition(
                 $"This donation is already {intent.Status}."));
         }
@@ -752,6 +904,10 @@ public sealed class DonationIntentCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Donation intent {IntentReference} cancelled successfully.",
+            intent.IntentReference);
+
         return BuildOutcome(intent, "Donation cancelled.");
     }
 
@@ -767,10 +923,18 @@ public sealed class DonationIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation(
+            "Payment link resend requested for intent {IntentId}.",
+            command.IntentId);
+
         var intent = await donations.GetIntentAsync(command.IntentId, cancellationToken);
 
         if (intent is null)
         {
+            logger.LogWarning(
+                "Payment link resend failed because intent {IntentId} was not found.",
+                command.IntentId);
+
             return Result.Failure<PaymentLinkResponse>(Error.NotFound("That donation was not found."));
         }
 
@@ -781,10 +945,25 @@ public sealed class DonationIntentCommandHandler(
             new { intent.IntentReference },
             cancellationToken: cancellationToken);
 
-        return await HandleAsync(
+        var result = await HandleAsync(
             new CreatePaymentLinkCommand(
                 intent.IntentReference, new CreatePaymentLinkRequest(command.ExpectedVersion)),
             cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            logger.LogInformation(
+                "Payment link resent successfully for intent {IntentReference}.",
+                intent.IntentReference);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Payment link resend could not be completed for intent {IntentReference}.",
+                intent.IntentReference);
+        }
+
+        return result;
     }
 
     // =====================================================================================
@@ -802,6 +981,10 @@ public sealed class DonationIntentCommandHandler(
     {
         if (intent.Version != expectedVersion)
         {
+            logger.LogWarning(
+                "Payment eligibility check rejected intent {IntentReference} because the record version is stale.",
+                intent.IntentReference);
+
             return Result.Failure(Error.Concurrency());
         }
 
@@ -836,6 +1019,8 @@ public sealed class DonationIntentCommandHandler(
 
         // Five collisions against a random reference means the generator is broken, not that we
         // were unlucky.
+        logger.LogError("Unable to generate a unique donation intent reference after {Attempts} attempts.", ReferenceAttempts);
+
         return Result.Failure<string>(Error.Dependency(
             "A unique donation reference could not be generated. Please try again shortly."));
     }

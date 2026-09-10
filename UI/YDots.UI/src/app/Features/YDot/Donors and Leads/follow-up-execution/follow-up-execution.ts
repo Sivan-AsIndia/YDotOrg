@@ -18,6 +18,7 @@ import {
   signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   FormBuilder,
@@ -389,7 +390,12 @@ export class FollowUpExecutionService {
             },
           },
           followUp: {
-            followUpId: followUp?.id ?? followUpId,
+            // THE REFERENCE, NOT THE ROW'S GUID. The detail panel prints this under "Follow-up
+            // ID", and `followUp.id` is the API's Guid - so the one line somebody would quote
+            // when chasing a follow-up read as thirty-six characters of hexadecimal. The server
+            // returns `followUpReference` (FUP-2026-0007) beside it; nothing was reading it.
+            // `readableIdentifier` keeps a GUID out of the fallback path too.
+            followUpId: readableIdentifier(followUp?.followUpReference, '—'),
             type: this.toFollowUpType(followUp?.permittedChannel),
             subject: followUp?.purpose ?? '',
             priority: (followUp?.priority === 'Urgent' ? 'Critical' : followUp?.priority ?? 'Medium') as FollowUpPriority,

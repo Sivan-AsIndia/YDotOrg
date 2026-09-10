@@ -20,6 +20,14 @@
 
     @if (open()) {
       <div class="ss-panel">
+        <button
+          type="button"
+          class="ss-option ss-option-placeholder"
+          [class.is-selected]="!value"
+          (click)="selectPlaceholder()"
+        >
+          {{ placeholder }}
+        </button>
         @if (filtered().length === 0) {
           <div class="ss-empty">No matches</div>
         } @else {

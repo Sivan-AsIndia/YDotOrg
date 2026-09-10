@@ -3,8 +3,9 @@ import { CampaignApiService } from '../../Service/campaign-api.service';
 import { OrganisationScopeService } from './organisation-scope.service';
 import { CampaignDetail, CampaignHistoryEntry } from '../models/campaign-contract.model';
 import { CloseRequestRecord, LifecycleHistoryEntry } from '../models/pause-resume.model';
-import { CampaignStoreService } from './campaign-store.service';
+import { CampaignStoreService, LifecycleOutcome } from './campaign-store.service';
 import { PeopleDirectoryService } from './people-directory.service';
+import { apiErrorMessage } from '../models/api-response.model';
 
 /**
  * Campaign close requests and the lifecycle history behind them.
@@ -141,10 +142,14 @@ export class CloseRequestStoreService {
     detailedReason: string,
     communicationImpact: string,
     closureSummary: string,
+    onDone?: LifecycleOutcome,
   ): void {
     const campaignId = this.campaigns.apiId(reference);
 
     if (!campaignId) {
+      const message = 'That campaign is not loaded yet. Refresh and try again.';
+      this.loadError.set(message);
+      onDone?.({ applied: false, error: message });
       return;
     }
 
@@ -160,8 +165,18 @@ export class CloseRequestStoreService {
         next: () => {
           this.load(reference);
           this.campaigns.refresh();
+          onDone?.({ applied: true });
         },
-        error: () => this.failed(reference, 'The close request could not be raised.'),
+
+        // THE SERVER'S OWN MESSAGE, not a fixed sentence. A close request is refused for reasons
+        // the operator can act on - a request already pending, a campaign somebody else has
+        // already moved, a stale version - and a single "could not be raised" threw all of it
+        // away.
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The close request could not be raised.');
+          this.failed(reference, message);
+          onDone?.({ applied: false, error: message });
+        },
       });
   }
 
@@ -172,10 +187,13 @@ export class CloseRequestStoreService {
    * stored requester - which is what makes the second pair of eyes real rather than a convention
    * the browser was trusted to observe.
    */
-  approveClose(reference: string, decisionReason: string): void {
+  approveClose(reference: string, decisionReason: string, onDone?: LifecycleOutcome): void {
     const campaignId = this.campaigns.apiId(reference);
 
     if (!campaignId) {
+      const message = 'That campaign is not loaded yet. Refresh and try again.';
+      this.loadError.set(message);
+      onDone?.({ applied: false, error: message });
       return;
     }
 
@@ -188,8 +206,17 @@ export class CloseRequestStoreService {
         next: () => {
           this.load(reference);
           this.campaigns.refresh();
+          onDone?.({ applied: true });
         },
-        error: () => this.failed(reference, 'The closure could not be approved.'),
+
+        // The segregation-of-duties refusal arrives here - "You cannot approve a close request
+        // you raised" - and it is the single most useful message this call can return, so it is
+        // passed through rather than replaced.
+        error: (error: unknown) => {
+          const message = apiErrorMessage(error, 'The closure could not be approved.');
+          this.failed(reference, message);
+          onDone?.({ applied: false, error: message });
+        },
       });
   }
 

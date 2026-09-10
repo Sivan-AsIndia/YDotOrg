@@ -21,6 +21,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
 {
+    private readonly ILogger<ConsentAndPreferenceCentreController> _logger;
+
+    public ConsentAndPreferenceCentreController(ILogger<ConsentAndPreferenceCentreController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the consent rows, the history for one donor and every catalogue.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.ConsentCentreView)]
@@ -30,8 +37,23 @@ public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
     public async Task<IActionResult> Get(
         [FromQuery] ConsentSearchFilter filter,
         [FromServices] ConsentCentreQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetConsentCentreQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consent centre retrieval started.");
+
+        var result = await handler.HandleAsync(new GetConsentCentreQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Consent centre retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Consent centre retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET one consent row. Reading a confidential evidence reference is audited.</summary>
     [HttpGet("{id:guid}", Name = "GetConsentById")]
@@ -42,8 +64,23 @@ public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
     public async Task<IActionResult> GetById(
         Guid id,
         [FromServices] ConsentCentreQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetConsentEvidenceQuery(id), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consent evidence retrieval started. ConsentId={ConsentId}", id);
+
+        var result = await handler.HandleAsync(new GetConsentEvidenceQuery(id), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Consent evidence retrieval completed successfully. ConsentId={ConsentId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Consent evidence retrieval failed. ConsentId={ConsentId}", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST grant. Records a new permission and supersedes the previous row for that channel.</summary>
     [HttpPost("grant")]
@@ -58,7 +95,18 @@ public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
         [FromServices] ConsentCommandHandler handler,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Consent grant operation started.");
+
         var result = await handler.HandleAsync(new GrantConsentCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Consent grant operation completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Consent grant operation failed.");
+        }
 
         return CreatedFromResult(result, "GetConsentById", new { id = result.Value?.Id ?? Guid.Empty },
             "The consent was recorded.");
@@ -76,9 +124,23 @@ public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
         Guid id,
         [FromBody] WithdrawConsentRequest request,
         [FromServices] ConsentCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new WithdrawConsentCommand(id, request), cancellationToken),
-            "The consent was withdrawn.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consent withdrawal operation started. ConsentId={ConsentId}", id);
+
+        var result = await handler.HandleAsync(new WithdrawConsentCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Consent withdrawal operation completed successfully. ConsentId={ConsentId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Consent withdrawal operation failed. ConsentId={ConsentId}", id);
+        }
+
+        return FromResult(result, "The consent was withdrawn.");
+    }
 
     /// <summary>POST correct. Supersedes the row with a corrected copy; the original is never edited.</summary>
     [HttpPost("{id:guid}/correct")]
@@ -92,7 +154,21 @@ public sealed class ConsentAndPreferenceCentreController : ApiControllerBase
         Guid id,
         [FromBody] CorrectConsentRequest request,
         [FromServices] ConsentCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new CorrectConsentCommand(id, request), cancellationToken),
-            "The correction was recorded and the previous row was superseded.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consent correction operation started. ConsentId={ConsentId}", id);
+
+        var result = await handler.HandleAsync(new CorrectConsentCommand(id, request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Consent correction operation completed successfully. ConsentId={ConsentId}", id);
+        }
+        else
+        {
+            _logger.LogWarning("Consent correction operation failed. ConsentId={ConsentId}", id);
+        }
+
+        return FromResult(result, "The correction was recorded and the previous row was superseded.");
+    }
 }

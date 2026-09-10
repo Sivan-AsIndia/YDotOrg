@@ -390,7 +390,7 @@ export class PaymentGatewayConfigurationComponent implements OnInit, OnDestroy {
       clearSecretKey: false,
       clearWebhookSecret: false,
       subscribedEvents: ['payment.success', 'payment.failure'],
-      settlementCurrencyCode: 'INR',
+      settlementCurrencyCode: '',
       returnUrl: '',
       paymentLinkValidityMinutes: 60,
       enabledMethods: [],
@@ -431,7 +431,7 @@ export class PaymentGatewayConfigurationComponent implements OnInit, OnDestroy {
       merchantId: row.merchantId ?? '',
       webhookUrl: row.webhookUrl ?? '',
       returnUrl: row.returnUrl ?? '',
-      settlementCurrencyCode: row.settlementCurrencyCode || 'INR',
+      settlementCurrencyCode: row.settlementCurrencyCode || '',
       paymentLinkValidityMinutes: row.paymentLinkValidityMinutes || 60,
       enabledMethods: [...row.enabledMethods],
     });
@@ -582,6 +582,13 @@ export class PaymentGatewayConfigurationComponent implements OnInit, OnDestroy {
 
     if (!state.provider) {
       this.fieldErrors.set({ provider: 'Choose a payment gateway.' });
+      return;
+    }
+
+    // No longer defaulted to INR, so it is asked for here rather than being sent empty and
+    // bounced back by the server.
+    if (!state.settlementCurrencyCode.trim()) {
+      this.fieldErrors.set({ settlementCurrencyCode: 'Choose a settlement currency.' });
       return;
     }
 

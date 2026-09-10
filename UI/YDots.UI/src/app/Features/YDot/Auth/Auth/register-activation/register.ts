@@ -87,7 +87,7 @@ export class RegisterComponent implements OnInit {
   readonly secretCopied = signal(false);
   /** A signal, so canVerifyMethod re-evaluates as the passcode is typed. */
   readonly verificationCode = signal('');
-  mobileCountryCode = '+91';
+  mobileCountryCode = '';
   mobileNumber = '';
 
   // ---- Step 4: recovery codes ---------------------------------------------------------------------

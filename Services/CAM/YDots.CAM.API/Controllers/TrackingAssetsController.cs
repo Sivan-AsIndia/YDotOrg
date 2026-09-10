@@ -21,29 +21,67 @@ namespace YDots.CAM.API.Controllers;
 [Authorize(Policy = PolicyNames.TenantContextRequired)]
 public sealed class TrackingAssetsController(
     TrackingAssetCommandHandler commands,
-    TrackingAssetQueryHandler queries) : ApiControllerBase
+    TrackingAssetQueryHandler queries,
+    ILogger<TrackingAssetsController> logger) : ApiControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.TrackingAssetsView)]
     [ProducesResponseType(
         typeof(ApiResponse<PagedResponse<TrackingAssetListItemResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAsync(
-        [FromQuery] TrackingAssetSearchFilter filter, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new SearchTrackingAssetsQuery(filter), cancellationToken));
+        [FromQuery] TrackingAssetSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Searching tracking assets.");
+
+        var result = await queries.HandleAsync(new SearchTrackingAssetsQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Tracking asset search failed.");
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("{id:guid}", Name = nameof(GetTrackingAssetAsync))]
     [HasPermission(PermissionCodes.TrackingAssetsView)]
     [ProducesResponseType(typeof(ApiResponse<TrackingAssetDetailResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTrackingAssetAsync(Guid id, CancellationToken cancellationToken) =>
-        FromResult(await queries.HandleAsync(new GetTrackingAssetQuery(id), cancellationToken));
+    public async Task<IActionResult> GetTrackingAssetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Getting tracking asset {TrackingAssetId}.", id);
+
+        var result = await queries.HandleAsync(new GetTrackingAssetQuery(id), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to get tracking asset {TrackingAssetId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpGet("export")]
     [HasPermission(PermissionCodes.TrackingAssetsExport)]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportAsync(
-        [FromQuery] TrackingAssetSearchFilter filter, CancellationToken cancellationToken) =>
-        FileFromResult(await queries.HandleAsync(new ExportTrackingAssetsQuery(filter), cancellationToken));
+        [FromQuery] TrackingAssetSearchFilter filter, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Exporting tracking assets.");
+
+        var result = await queries.HandleAsync(new ExportTrackingAssetsQuery(filter), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Tracking asset export failed.");
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset export completed successfully.");
+        }
+
+        return FileFromResult(result);
+    }
 
     /// <summary>
     /// Creates a tracking asset.
@@ -58,13 +96,22 @@ public sealed class TrackingAssetsController(
     public async Task<IActionResult> CreateAsync(
         [FromBody] CreateTrackingAssetRequest request, CancellationToken cancellationToken)
     {
-        var result = await commands.HandleAsync(new CreateTrackingAssetCommand(request), cancellationToken);
+        logger.LogInformation("Creating a new tracking asset.");
 
-        return result.IsFailure
-            ? FromResult(result)
-            : CreatedFromResult(
-                result, nameof(GetTrackingAssetAsync), new { id = result.Value!.Id },
-                "Tracking asset created.");
+        var result = await commands.HandleAsync(
+            new CreateTrackingAssetCommand(request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Tracking asset creation failed.");
+            return FromResult(result);
+        }
+
+        logger.LogInformation("Tracking asset {TrackingAssetId} created successfully.", result.Value!.Id);
+
+        return CreatedFromResult(
+            result, nameof(GetTrackingAssetAsync), new { id = result.Value!.Id },
+            "Tracking asset created.");
     }
 
     /// <summary>Edits a Draft asset. The campaign cannot be changed - that would re-attribute gifts.</summary>
@@ -72,17 +119,47 @@ public sealed class TrackingAssetsController(
     [HasPermission(PermissionCodes.TrackingAssetsEdit)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateAsync(
-        Guid id, [FromBody] UpdateTrackingAssetRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new UpdateTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] UpdateTrackingAssetRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Updating tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new UpdateTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to update tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset {TrackingAssetId} updated successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 
     [HttpPost("{id:guid}/submit")]
     [HasPermission(PermissionCodes.TrackingAssetsSubmit)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SubmitAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new SubmitTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Submitting tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new SubmitTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to submit tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset {TrackingAssetId} submitted successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>Refused for the person who created or submitted the asset.</summary>
     [HttpPost("{id:guid}/approve")]
@@ -90,18 +167,48 @@ public sealed class TrackingAssetsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ApproveAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new ApproveTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Approving tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new ApproveTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to approve tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset {TrackingAssetId} approved successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>Approved to Active. Mints the tracking reference and the generated URL.</summary>
     [HttpPost("{id:guid}/activate")]
     [HasPermission(PermissionCodes.TrackingAssetsActivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ActivateAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new ActivateTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Activating tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new ActivateTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to activate tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset {TrackingAssetId} activated successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Asks for a live asset to be taken down. Active to DisableRequested.
@@ -113,18 +220,48 @@ public sealed class TrackingAssetsController(
     [HasPermission(PermissionCodes.TrackingAssetsRequestDisable)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RequestDisableAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new RequestDisableTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Requesting disable for tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new RequestDisableTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to request disable for tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Disable requested successfully for tracking asset {TrackingAssetId}.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>Decides a disable request, or takes a live asset down directly.</summary>
     [HttpPost("{id:guid}/deactivate")]
     [HasPermission(PermissionCodes.TrackingAssetsDeactivate)]
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new DeactivateTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deactivating tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new DeactivateTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to deactivate tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Tracking asset {TrackingAssetId} deactivated successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>
     /// Destroys an unused Draft asset.
@@ -138,7 +275,22 @@ public sealed class TrackingAssetsController(
     [ProducesResponseType(typeof(ApiResponse<OutcomeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteDraftAsync(
-        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken) =>
-        FromResult(await commands.HandleAsync(
-            new DeleteDraftTrackingAssetCommand(id, request), cancellationToken));
+        Guid id, [FromBody] TrackingAssetLifecycleRequest request, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deleting draft tracking asset {TrackingAssetId}.", id);
+
+        var result = await commands.HandleAsync(
+            new DeleteDraftTrackingAssetCommand(id, request), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            logger.LogWarning("Failed to delete draft tracking asset {TrackingAssetId}.", id);
+        }
+        else
+        {
+            logger.LogInformation("Draft tracking asset {TrackingAssetId} deleted successfully.", id);
+        }
+
+        return FromResult(result);
+    }
 }

@@ -3,6 +3,7 @@ import { Observable, tap } from 'rxjs';
 import { AuthApiService } from '../../Service/auth-api.service';
 import { MenuNode, NavigationResponse } from '../models/auth.model';
 import { OrganisationScopeService } from './organisation-scope.service';
+import { isRenderableIcon, remixIconClass } from '../models/remix-icon-catalogue';
 
 /**
  * The sidebar, as the server decides it.
@@ -159,15 +160,46 @@ export class NavigationService {
   }
 
   /**
-   * Turns the server's icon name into the class this theme uses.
+   * Turns whatever names an icon into the class this theme renders.
    *
-   * The API names icons in a neutral vocabulary — "users", "shield", "building" — rather than in
-   * one icon set's class names. That is deliberate: the icon set is a choice this client makes,
-   * and a server that emitted `ri-user-line` would have made it on the client's behalf and
-   * would need changing the day the theme did.
+   * THREE VOCABULARIES REACH THIS, and it used to understand one.
+   *
+   *   "settings"          the NEUTRAL name the catalogue seeds. The API deliberately does not
+   *                       speak in one icon set's class names - the icon set is a choice this
+   *                       client makes, and a server emitting `ri-settings-3-line` would have
+   *                       made it on the client's behalf. Mapped, and mapped FIRST, because the
+   *                       mapping is a curated choice: "grid" means ri-dashboard-line, which is
+   *                       not what prefixing would produce.
+   *
+   *   "bear-smile-fill"   a RAW icon name, chosen in the icon picker. The picker offers all 3,058
+   *                       icons in the bundled font, and none of them but the fifty below were
+   *                       known here - so an administrator picked an icon, the configuration
+   *                       screen drew it, and the sidebar drew the fallback dot. Two resolvers
+   *                       disagreeing about the same stored value is the whole defect.
+   *
+   *   "ri-bear-smile-fill" already a class, from anything that stored the prefixed form.
+   *
+   * THE FALLBACK IS LAST AND STILL A DOT. A name the font cannot draw would otherwise render an
+   * empty box, which looks like a broken build rather than an unset icon.
    */
   iconClass(icon: string | null | undefined): string {
-    return NavigationService.ICONS[icon ?? ''] ?? 'ri-circle-line';
+    const value = (icon ?? '').trim();
+
+    if (!value) {
+      return 'ri-circle-line';
+    }
+
+    const mapped = NavigationService.ICONS[value];
+
+    if (mapped) {
+      return mapped;
+    }
+
+    if (value.startsWith('ri-')) {
+      return value;
+    }
+
+    return isRenderableIcon(value) ? remixIconClass(value) : 'ri-circle-line';
   }
 
   /**

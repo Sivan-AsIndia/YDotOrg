@@ -149,6 +149,13 @@ public sealed class MenuBuilderService(
         var nodes = catalogue
             .Where(node => node.Status != MenuStatus.Retired)
             .Where(node => includePlatformNodes || !node.IsPlatformOnly)
+
+            // THE SAME OWNERSHIP RULE THE SIDEBAR APPLIES. The configuration screen lists what an
+            // Organisation may switch on and map to roles, and another Organisation's own nodes
+            // are neither - offering them here would let one charity map a menu item it can
+            // never render, and read the name another charity chose for it.
+            .Where(node => node.OwnerTenantId == null
+                           || node.OwnerTenantId == tenantContext.TenantId)
             .ToList();
 
         return BuildTree(nodes, overridesById, landingMenuId: null, parentId: null);
@@ -233,6 +240,19 @@ public sealed class MenuBuilderService(
     {
         // 1. Retired or hidden in the catalogue.
         if (!node.IsVisible)
+        {
+            return false;
+        }
+
+        // 1b. Somebody else's node.
+        //
+        // A node with an owner belongs to exactly one Organisation and is rendered in exactly one
+        // sidebar. The catalogue read is deliberately unscoped - it is one query for a tree that
+        // is mostly shared - so this is the filter that keeps one charity's own menu items out of
+        // every other charity's navigation. It runs before the permission rules on purpose: not
+        // holding the permission is a reason to hide a node, but not being the owner means the
+        // node is not part of this Organisation's menu at all.
+        if (node.OwnerTenantId is not null && node.OwnerTenantId != tenantContext.TenantId)
         {
             return false;
         }

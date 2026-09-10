@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
@@ -63,7 +64,8 @@ public sealed class PasswordRecoveryCommandHandler(
     IDateTimeProvider clock,
     IUnitOfWork unitOfWork,
     IOptions<SecuritySettings> securityOptions,
-    IOptions<ClientAppSettings> clientOptions)
+    IOptions<ClientAppSettings> clientOptions,
+    ILogger<PasswordRecoveryCommandHandler> logger)
 {
     private readonly SecuritySettings _security = securityOptions.Value;
     private readonly ClientAppSettings _client = clientOptions.Value;
@@ -86,6 +88,8 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        logger.LogInformation("Checking password recovery link validity");
+
         var now = clock.UtcNow;
 
         var token = await security.GetRecoveryTokenAsync(
@@ -94,6 +98,8 @@ public sealed class PasswordRecoveryCommandHandler(
         var valid = token is not null
                     && token.Purpose == RecoveryTokenPurpose.PasswordReset
                     && token.IsRedeemable(now);
+
+        logger.LogInformation("Password recovery link validation completed; valid {IsValid}", valid);
 
         return Result.Success(new ResetPasswordViewResponse(
             IsTokenValid: valid,
@@ -126,6 +132,8 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("New password recovery link requested");
+
         return HandleAsync(
             new ForgotPasswordCommand(new ForgotPasswordRequest(command.Request.Identifier)),
             cancellationToken);
@@ -143,6 +151,8 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Account recovery started");
+
         return HandleAsync(
             new ForgotPasswordCommand(new ForgotPasswordRequest(command.Request.Identifier)),
             cancellationToken);
@@ -153,12 +163,15 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Password recovery request started for tenant {TenantId}", tenantContext.TenantId);
+
         var now = clock.UtcNow;
         var identifier = (command.Request.Identifier ?? string.Empty).Trim().ToLowerInvariant();
 
         var businessUnit = await businessUnits.GetDefaultAsync(cancellationToken);
         if (businessUnit is null)
         {
+            logger.LogError("Password recovery failed because the default business unit is not configured");
             return Result.Failure<ForgotPasswordResponse>(Error.Dependency("The platform is not configured."));
         }
 
@@ -174,6 +187,8 @@ public sealed class PasswordRecoveryCommandHandler(
         // Unknown address: same reply, no e-mail, and the attempt is still recorded.
         if (user is null || user.Status is UserStatus.Deactivated or UserStatus.Withdrawn)
         {
+            logger.LogWarning("Password recovery request could not be matched to an active account");
+
             await audit.WriteAnonymousAsync(
                 AuditActionCodes.PasswordResetRequested, nameof(User), null,
                 businessUnit.Id, tenant?.Id, AuditResult.Denied, identifier,
@@ -191,6 +206,8 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (recent >= _security.PasswordResetRequestsPerHour)
         {
+            logger.LogWarning("Password recovery request rate limit reached for user {UserId}", user.Id);
+
             // Still the generic reply: telling somebody they are rate-limited confirms the
             // account exists just as surely as a "not found" would.
             return Result.Success(new ForgotPasswordResponse(GenericReply, EmailSent: false));
@@ -230,6 +247,8 @@ public sealed class PasswordRecoveryCommandHandler(
             BuildClientUrl(tenant, businessUnit, _client.ResetPasswordPath, token),
             expiresAt, cancellationToken);
 
+        logger.LogInformation("Password recovery link generated and notification sent for user {UserId}, tenant {TenantId}", user.Id, user.TenantId);
+
         return Result.Success(new ForgotPasswordResponse(GenericReply, EmailSent: true));
     }
 
@@ -238,11 +257,15 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Password reset operation started");
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
         {
+            logger.LogWarning("Password reset failed because password confirmation did not match");
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.Validation("The passwords do not match.",
                     [new ValidationError(nameof(request.ConfirmPassword), "The passwords do not match.")]));
@@ -253,17 +276,20 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (recovery is null || recovery.Purpose != RecoveryTokenPurpose.PasswordReset)
         {
+            logger.LogWarning("Password reset failed because the recovery token was invalid");
             return Result.Failure<PasswordOperationResponse>(Error.TokenInvalid());
         }
 
         if (!recovery.IsRedeemable(now))
         {
+            logger.LogWarning("Password reset failed because the recovery token was expired or already used");
             return Result.Failure<PasswordOperationResponse>(Error.TokenExpired());
         }
 
         var user = await users.FindByIdInTenantAsync(recovery.UserId, recovery.TenantId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Password reset failed because recovery user {UserId} was not found", recovery.UserId);
             return Result.Failure<PasswordOperationResponse>(Error.TokenInvalid());
         }
 
@@ -278,6 +304,8 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (failures.Count > 0)
         {
+            logger.LogWarning("Password reset failed password policy validation for user {UserId}", user.Id);
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.WeakPassword("That password does not meet the requirements.",
                     [.. failures.Select(message => new ValidationError(nameof(request.Password), message))]));
@@ -287,6 +315,7 @@ public sealed class PasswordRecoveryCommandHandler(
         if (!string.IsNullOrEmpty(user.PasswordHash)
             && passwordHasher.Verify(user.PasswordHash, request.Password!) != PasswordVerificationOutcome.Failed)
         {
+            logger.LogWarning("Password reset rejected because the new password was reused for user {UserId}", user.Id);
             return Result.Failure<PasswordOperationResponse>(Error.PasswordReused());
         }
 
@@ -334,6 +363,8 @@ public sealed class PasswordRecoveryCommandHandler(
                 user, tenant, businessUnit, currentUser.IpAddress, cancellationToken);
         }
 
+        logger.LogInformation("Password reset completed successfully for user {UserId}; all sessions revoked", user.Id);
+
         return Result.Success(new PasswordOperationResponse(
             Succeeded: true,
             "Your password has been changed. Sign in with your new password.",
@@ -346,11 +377,15 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Password change started for user {UserId}", currentUser.UserId);
+
         var request = command.Request;
         var now = clock.UtcNow;
 
         if (!string.Equals(request.NewPassword, request.ConfirmPassword, StringComparison.Ordinal))
         {
+            logger.LogWarning("Password change failed because password confirmation did not match for user {UserId}", currentUser.UserId);
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.Validation("The passwords do not match.",
                     [new ValidationError(nameof(request.ConfirmPassword), "The passwords do not match.")]));
@@ -359,6 +394,7 @@ public sealed class PasswordRecoveryCommandHandler(
         var user = await users.GetByIdAsync(currentUser.UserId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Password change failed because user {UserId} was not found", currentUser.UserId);
             return Result.Failure<PasswordOperationResponse>(Error.Unauthorised());
         }
 
@@ -368,6 +404,8 @@ public sealed class PasswordRecoveryCommandHandler(
             || passwordHasher.Verify(user.PasswordHash, request.CurrentPassword ?? string.Empty)
                == PasswordVerificationOutcome.Failed)
         {
+            logger.LogWarning("Password change failed because current password verification failed for user {UserId}", user.Id);
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.InvalidCredentials("Your current password is not correct."));
         }
@@ -381,6 +419,8 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (failures.Count > 0)
         {
+            logger.LogWarning("Password change failed password policy validation for user {UserId}", user.Id);
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.WeakPassword("That password does not meet the requirements.",
                     [.. failures.Select(message => new ValidationError(nameof(request.NewPassword), message))]));
@@ -388,6 +428,8 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (passwordHasher.Verify(user.PasswordHash, request.NewPassword!) != PasswordVerificationOutcome.Failed)
         {
+            logger.LogWarning("Password change rejected because the new password was reused for user {UserId}", user.Id);
+
             return Result.Failure<PasswordOperationResponse>(
                 Error.PasswordReused("Your new password must be different from your current one."));
         }
@@ -417,6 +459,8 @@ public sealed class PasswordRecoveryCommandHandler(
                 user, tenant, businessUnit, currentUser.IpAddress, cancellationToken);
         }
 
+        logger.LogInformation("Password changed successfully for user {UserId}; other sessions revoked {OtherSessionsRevoked}", user.Id, revoked);
+
         return Result.Success(new PasswordOperationResponse(
             Succeeded: true,
             revoked > 0
@@ -436,6 +480,8 @@ public sealed class PasswordRecoveryCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        logger.LogInformation("Email confirmation started");
+
         var now = clock.UtcNow;
 
         var recovery = await security.GetRecoveryTokenAsync(
@@ -443,17 +489,20 @@ public sealed class PasswordRecoveryCommandHandler(
 
         if (recovery is null || recovery.Purpose != RecoveryTokenPurpose.EmailConfirmation)
         {
+            logger.LogWarning("Email confirmation failed because the confirmation token was invalid");
             return Result.Failure<PasswordOperationResponse>(Error.TokenInvalid());
         }
 
         if (!recovery.IsRedeemable(now))
         {
+            logger.LogWarning("Email confirmation failed because the confirmation token was expired or already used");
             return Result.Failure<PasswordOperationResponse>(Error.TokenExpired());
         }
 
         var user = await users.FindByIdInTenantAsync(recovery.UserId, recovery.TenantId, cancellationToken);
         if (user is null)
         {
+            logger.LogWarning("Email confirmation failed because user {UserId} was not found", recovery.UserId);
             return Result.Failure<PasswordOperationResponse>(Error.TokenInvalid());
         }
 
@@ -468,6 +517,8 @@ public sealed class PasswordRecoveryCommandHandler(
             cancellationToken: cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Email confirmed successfully for user {UserId}", user.Id);
 
         return Result.Success(new PasswordOperationResponse(
             Succeeded: true, "Your e-mail address is confirmed.", RequiresSignIn: false));

@@ -19,6 +19,13 @@ namespace YDots.DON.Api.Controllers;
 [Authorize]
 public sealed class AssignmentBoardController : ApiControllerBase
 {
+    private readonly ILogger<AssignmentBoardController> _logger;
+
+    public AssignmentBoardController(ILogger<AssignmentBoardController> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>GET the board: routable leads on one side, owners and their workload on the other.</summary>
     [HttpGet]
     [HasPermission(PermissionCodes.AssignmentBoardView)]
@@ -28,8 +35,23 @@ public sealed class AssignmentBoardController : ApiControllerBase
     public async Task<IActionResult> GetBoard(
         [FromQuery] LeadSearchFilter filter,
         [FromServices] AssignmentBoardQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetAssignmentBoardQuery(filter), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Assignment board retrieval started.");
+
+        var result = await handler.HandleAsync(new GetAssignmentBoardQuery(filter), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Assignment board retrieval completed successfully.");
+        }
+        else
+        {
+            _logger.LogWarning("Assignment board retrieval failed.");
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>GET the append-only ownership trail for one lead. This is "Inspect history".</summary>
     [HttpGet("{leadId:guid}/history")]
@@ -40,8 +62,23 @@ public sealed class AssignmentBoardController : ApiControllerBase
     public async Task<IActionResult> GetHistory(
         Guid leadId,
         [FromServices] AssignmentBoardQueryHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new GetAssignmentHistoryQuery(leadId), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Assignment history retrieval started. LeadId={LeadId}", leadId);
+
+        var result = await handler.HandleAsync(new GetAssignmentHistoryQuery(leadId), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Assignment history retrieval completed successfully. LeadId={LeadId}", leadId);
+        }
+        else
+        {
+            _logger.LogWarning("Assignment history retrieval failed. LeadId={LeadId}", leadId);
+        }
+
+        return FromResult(result);
+    }
 
     /// <summary>POST assign. For a lead that has no owner yet.</summary>
     [HttpPost("assign")]
@@ -54,9 +91,23 @@ public sealed class AssignmentBoardController : ApiControllerBase
     public async Task<IActionResult> Assign(
         [FromBody] AssignmentRequest request,
         [FromServices] AssignmentBoardCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new AssignFromBoardCommand(request), cancellationToken),
-            "The lead was assigned.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead assignment started from assignment board.");
+
+        var result = await handler.HandleAsync(new AssignFromBoardCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead assignment completed successfully from assignment board.");
+        }
+        else
+        {
+            _logger.LogWarning("Lead assignment failed from assignment board.");
+        }
+
+        return FromResult(result, "The lead was assigned.");
+    }
 
     /// <summary>POST reassign. For a lead that already has an owner.</summary>
     [HttpPost("reassign")]
@@ -69,9 +120,23 @@ public sealed class AssignmentBoardController : ApiControllerBase
     public async Task<IActionResult> Reassign(
         [FromBody] AssignmentRequest request,
         [FromServices] AssignmentBoardCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new ReassignFromBoardCommand(request), cancellationToken),
-            "The lead was reassigned.");
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Lead reassignment started from assignment board.");
+
+        var result = await handler.HandleAsync(new ReassignFromBoardCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Lead reassignment completed successfully from assignment board.");
+        }
+        else
+        {
+            _logger.LogWarning("Lead reassignment failed from assignment board.");
+        }
+
+        return FromResult(result, "The lead was reassigned.");
+    }
 
     /// <summary>
     /// POST bulk route. Every lead is reported separately: routed or skipped with a reason.
@@ -85,6 +150,21 @@ public sealed class AssignmentBoardController : ApiControllerBase
     public async Task<IActionResult> BulkRoute(
         [FromBody] BulkRouteRequest request,
         [FromServices] AssignmentBoardCommandHandler handler,
-        CancellationToken cancellationToken) =>
-        FromResult(await handler.HandleAsync(new BulkRouteCommand(request), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Bulk lead routing started from assignment board.");
+
+        var result = await handler.HandleAsync(new BulkRouteCommand(request), cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("Bulk lead routing completed successfully from assignment board.");
+        }
+        else
+        {
+            _logger.LogWarning("Bulk lead routing failed from assignment board.");
+        }
+
+        return FromResult(result);
+    }
 }

@@ -1,3 +1,4 @@
+using YDot.IAM.Application.Common.Abstractions.Services;
 using YDot.IAM.Application.Common.Results;
 
 namespace YDot.IAM.Api.Middleware;
@@ -16,6 +17,12 @@ namespace YDot.IAM.Api.Middleware;
 /// SECOND, THE ENVELOPE IS THE SAME. A 500 from here has exactly the same six keys as a 400
 /// from a validator, so the Angular error interceptor needs no second code path for the case
 /// where something went genuinely wrong.
+///
+/// AND IT NOW LEAVES A ROW IN THE AUDIT TRAIL. An unhandled error unwinds PAST the handler that
+/// was going to write one, and the handler's unit of work is discarded with it - so a dependency
+/// outage used to produce a run of 500s and an audit trail that recorded none of them. The
+/// auditor writes through a scope of its own for exactly that reason; see
+/// <see cref="IRequestOutcomeAuditor"/>.
 /// </summary>
 public sealed class ExceptionHandlingMiddleware(
     RequestDelegate next,
@@ -44,6 +51,25 @@ public sealed class ExceptionHandlingMiddleware(
                 exception,
                 "Unhandled exception on {Method} {Path}. Correlation {CorrelationId}.",
                 context.Request.Method, context.Request.Path, correlationId);
+
+            // RESOLVED FROM THE REQUEST RATHER THAN INJECTED, because this middleware is a
+            // singleton and the auditor is scoped. Absent only if the container was not fully
+            // configured, in which case the response below still goes out unchanged.
+            //
+            // THE EXCEPTION TYPE, NOT ITS MESSAGE. The first rule above applies to the audit trail
+            // as much as to the response: a database message names the schema, so the row records
+            // what KIND of thing failed and leaves the detail in the log, tied to it by the
+            // correlation id both carry.
+            var auditor = context.RequestServices?.GetService<IRequestOutcomeAuditor>();
+
+            if (auditor is not null)
+            {
+                await auditor.RecordFailedAsync(
+                    context.Request.Method,
+                    context.Request.Path.Value ?? string.Empty,
+                    $"Unhandled {exception.GetType().Name}. See the log for correlation {correlationId}.",
+                    CancellationToken.None);
+            }
 
             if (context.Response.HasStarted)
             {

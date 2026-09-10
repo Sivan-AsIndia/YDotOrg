@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using YDots.CAM.Application.Common.Abstractions.Services;
 using YDots.CAM.Application.Common.Settings;
 using YDots.CAM.Domain.Common.Enums;
 using YDots.CAM.Domain.Entities;
@@ -47,6 +48,7 @@ namespace YDots.CAM.Infrastructure.Persistence.Seed;
 public sealed class CampaignDbSeeder(
     CampaignDbContext context,
     IOptions<SeedSettings> seedOptions,
+    ITrackingReferenceGenerator references,
     ILogger<CampaignDbSeeder> logger)
 {
     private readonly SeedSettings _seed = seedOptions.Value;
@@ -205,6 +207,109 @@ public sealed class CampaignDbSeeder(
         ("30000000-0000-0000-0000-000000000009", "SMS", "SMS", "Text message.", 90)
     ];
 
+    /// <summary>
+    /// The demonstration campaign's tracking assets.
+    ///
+    /// WHY THE MANAGER NEEDED THEM. The campaign seed put a campaign on a fresh database and
+    /// stopped there, so the tracking asset manager opened on its own empty state: no rows, no
+    /// counts, nothing for the QR preview, the placement table or the disable-request flow to be
+    /// exercised against. Every one of those had to be reached by driving the Generate form by
+    /// hand first, which is the same gap the campaign seed exists to close one level up.
+    ///
+    /// FIVE ASSETS ACROSS FOUR STATES AND ALL FOUR TYPES, because the screen's whole vocabulary
+    /// is status and type: Draft has an Edit and a Submit, Submitted has an Approve, Approved has
+    /// an Activate, and only Active has a live URL, a usage count and a Request disable. A set
+    /// that was uniformly Active would leave four of those five buttons unreachable.
+    ///
+    /// THE OFFLINE QR CODES CARRY PLACEMENTS AND NOTHING ELSE DOES. `ValidatePlacements` refuses
+    /// both directions - an offline QR code with no place, and a place on anything else - so a
+    /// seeded row that ignored the rule would be a record the product itself would not accept.
+    ///
+    /// THE DATES ARE RELATIVE TO NOW, for the same reason the campaign's are. `IsLiveAt` checks
+    /// the window as well as the status, so an asset seeded with a window from the day this was
+    /// written would report as not live on every database created afterwards.
+    /// </summary>
+    private static readonly (string Id, string Suffix, TrackingAssetType Type, string ChannelId,
+        string SourceId, string MediumId, string Destination, string? ContentTag,
+        TrackingAssetStatus Status, long Usage, decimal Received, string Reference)[] TrackingAssets =
+    [
+        // ---- ACTIVE: THE PRINTED POSTER ---------------------------------------------------
+        //
+        // The case the whole attribution chain is built around. It carries placements, a usage
+        // count and money against it, so the manager's tiles and the place-level breakdown have
+        // something real to total.
+        ("44000000-0000-0000-0000-000000000001", "QR-001", TrackingAssetType.QRCode,
+            "10000000-0000-0000-0000-000000000008", "20000000-0000-0000-0000-000000000007",
+            "30000000-0000-0000-0000-000000000008",
+            "https://give.ngoplanet.com/donate", "annual-appeal-poster",
+            TrackingAssetStatus.Active, 412, 186_500m, "QR7K3MNPB49F"),
+
+        // ---- ACTIVE: THE EVENT QR CODE ----------------------------------------------------
+        //
+        // A second offline QR code, so the manager shows more than one row that groups by place
+        // and the "which poster worked" comparison the reporting exists for is answerable.
+        ("44000000-0000-0000-0000-000000000002", "QR-002", TrackingAssetType.QRCode,
+            "10000000-0000-0000-0000-000000000008", "20000000-0000-0000-0000-000000000009",
+            "30000000-0000-0000-0000-000000000008",
+            "https://give.ngoplanet.com/donate", "founders-day-stall",
+            TrackingAssetStatus.Active, 97, 43_250m, "QRW8XCTJ2H6D"),
+
+        // ---- ACTIVE: THE NEWSLETTER LINK --------------------------------------------------
+        //
+        // A short link on e-mail. No placements, deliberately: a link has no physical location,
+        // which is the distinction `HasPlacements` draws.
+        ("44000000-0000-0000-0000-000000000003", "SL-001", TrackingAssetType.ShortLink,
+            "10000000-0000-0000-0000-000000000004", "20000000-0000-0000-0000-000000000001",
+            "30000000-0000-0000-0000-000000000001",
+            "https://give.ngoplanet.com/donate", "march-newsletter",
+            TrackingAssetStatus.Active, 268, 91_800m, "SLQ4RBMK7NVZ"),
+
+        // ---- APPROVED, NOT YET LIVE -------------------------------------------------------
+        //
+        // Approved and waiting to be activated, which is the one state the Activate button can
+        // be exercised from. It has no tracking reference and no URL yet - both are minted at
+        // activation, and writing them onto an unactivated row would misrepresent what the
+        // product does.
+        ("44000000-0000-0000-0000-000000000004", "UTM-001", TrackingAssetType.UTMLink,
+            "10000000-0000-0000-0000-000000000005", "20000000-0000-0000-0000-000000000006",
+            "30000000-0000-0000-0000-000000000003",
+            "https://hopefoundation.example.org/annual-giving", "homepage-hero",
+            TrackingAssetStatus.Approved, 0, 0m, ""),
+
+        // ---- DRAFT ------------------------------------------------------------------------
+        //
+        // Still being written, so Edit, Submit and Delete draft are all reachable from the first
+        // start rather than only after somebody has created a row by hand.
+        ("44000000-0000-0000-0000-000000000005", "LP-001", TrackingAssetType.LandingPage,
+            "10000000-0000-0000-0000-000000000001", "20000000-0000-0000-0000-000000000003",
+            "30000000-0000-0000-0000-000000000005",
+            "https://hopefoundation.example.org/give/instagram", "reels-campaign",
+            TrackingAssetStatus.Draft, 0, 0m, "")
+    ];
+
+    /// <summary>
+    /// Where the two offline QR codes are physically posted.
+    ///
+    /// THE PLACE IS WHAT MAKES AN OFFLINE QR CODE WORTH TRACKING. One code printed in six halls
+    /// reports as one row without these, and the question the module exists to answer - which
+    /// placement produced the gift - has nothing to group by.
+    ///
+    /// CITY AND STATE ARE LEFT NULL, matching what the product stores for this campaign: the
+    /// create path fills them from the campaign's own geography, and the seeded campaign carries
+    /// none. Inventing ids here would put geography on the record that the campaign cannot
+    /// account for.
+    /// </summary>
+    private static readonly (string Id, string AssetId, string PlaceName, string Destination)[]
+        TrackingAssetPlaces =
+    [
+        ("45000000-0000-0000-0000-000000000001", "44000000-0000-0000-0000-000000000001",
+            "Community centre notice board", "https://give.ngoplanet.com/donate"),
+        ("45000000-0000-0000-0000-000000000002", "44000000-0000-0000-0000-000000000001",
+            "Railway station concourse", "https://give.ngoplanet.com/donate"),
+        ("45000000-0000-0000-0000-000000000003", "44000000-0000-0000-0000-000000000002",
+            "Founders day stall, main hall", "https://give.ngoplanet.com/donate")
+    ];
+
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         var added = await SeedChannelsAsync(cancellationToken);
@@ -221,6 +326,162 @@ public sealed class CampaignDbSeeder(
         // channel rows have to exist first - and keeping the saves separate means a failure while
         // inserting the campaign cannot roll back the reference data the module needs to function.
         await SeedSampleCampaignAsync(cancellationToken);
+
+        // LAST, AND AS A STEP OF ITS OWN RATHER THAN INSIDE THE CAMPAIGN INSERT. The campaign
+        // seed returns early the moment its row exists, so anything nested in it can only ever
+        // reach a database that has never been seeded - and the tracking assets were added after
+        // the campaign shipped. Run from here they reconcile on every start, so an existing
+        // database gets them by deploying rather than by being dropped.
+        await SeedTrackingAssetsAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The demonstration campaign's tracking assets, and the placements on the offline ones.
+    ///
+    /// IDEMPOTENT BY FIXED ID, like every other row in this file: the assets already present are
+    /// read once and skipped, so this runs on every start and inserts each row exactly once. An
+    /// operator who edits, activates or takes one down keeps their version.
+    ///
+    /// IT NEEDS THE CAMPAIGN. Every asset hangs off <see cref="SampleCampaignId"/> by foreign
+    /// key, so a database where the campaign was never seeded - <c>CreateSampleData</c> off, or
+    /// the campaign deleted - gets nothing here rather than a failed insert.
+    /// </summary>
+    private async Task SeedTrackingAssetsAsync(CancellationToken cancellationToken)
+    {
+        if (!_seed.CreateSampleData || _seed.OrganisationId == Guid.Empty)
+        {
+            return;
+        }
+
+        var campaign = await context.Campaigns
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(item => item.Id == SampleCampaignId)
+            .Select(item => new { item.Id, item.Code, item.TenantId, item.BusinessUnitId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (campaign is null)
+        {
+            return;
+        }
+
+        var existing = await context.TrackingAssets
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(asset => asset.CampaignId == SampleCampaignId)
+            .Select(asset => asset.Id)
+            .ToListAsync(cancellationToken);
+
+        var present = existing.ToHashSet();
+        var now = DateTimeOffset.UtcNow;
+        var added = 0;
+
+        // The codes each asset's URL carries, read once. `BuildUrl` writes them into the query
+        // string as utm_source and utm_medium, and a row per asset would be three round trips
+        // apiece for two tables of nine.
+        var sourceCodes = await context.Sources
+            .AsNoTracking()
+            .ToDictionaryAsync(source => source.Id, source => source.Code, cancellationToken);
+
+        var mediumCodes = await context.Mediums
+            .AsNoTracking()
+            .ToDictionaryAsync(medium => medium.Id, medium => medium.Code, cancellationToken);
+
+        foreach (var seed in TrackingAssets)
+        {
+            var id = Guid.Parse(seed.Id);
+
+            if (present.Contains(id))
+            {
+                continue;
+            }
+
+            var isLive = seed.Status == TrackingAssetStatus.Active;
+
+            var asset = new TrackingAsset
+            {
+                Id = id,
+                TenantId = campaign.TenantId,
+                BusinessUnitId = campaign.BusinessUnitId,
+                CampaignId = campaign.Id,
+
+                // The same shape the product mints: CMP-SEED-0001-QR-001.
+                Code = $"{campaign.Code}-{seed.Suffix}",
+
+                AssetType = seed.Type,
+                ChannelId = Guid.Parse(seed.ChannelId),
+                SourceId = Guid.Parse(seed.SourceId),
+                MediumId = Guid.Parse(seed.MediumId),
+                Destination = seed.Destination,
+                ContentTag = seed.ContentTag,
+                Status = seed.Status,
+
+                // YESTERDAY TO A YEAR OUT, so an Active asset is inside its own window the moment
+                // it is seeded. `IsLiveAt` checks the window as well as the status, so a row that
+                // says Active outside its dates resolves nothing and reads as a broken seed.
+                ActiveFrom = now.AddDays(-1),
+                ActiveTo = now.AddYears(1),
+
+                // ONLY ON A LIVE ASSET. The reference is minted at activation and the URL is
+                // built from it, so a Draft or Approved row carries neither - see the note on
+                // the blueprint above.
+                TrackingReference = isLive ? seed.Reference : null,
+
+                UsageCount = seed.Usage,
+                TotalReceived = seed.Received,
+
+                CreatedAtUtc = now,
+                CreatedByUserId = _seed.SystemUserId,
+                Version = 1
+            };
+
+            // SUBMITTED AND APPROVED ARE STAMPED ON EVERYTHING PAST DRAFT, because the record has
+            // to explain itself: an approved asset with no approver and no date is the shape of a
+            // row somebody forged, and the manager shows both.
+            if (seed.Status != TrackingAssetStatus.Draft)
+            {
+                asset.SubmittedByUserId = _seed.SystemUserId;
+                asset.SubmittedAtUtc = now;
+                asset.ApprovedByUserId = _seed.SystemUserId;
+                asset.ApprovedAtUtc = now;
+            }
+
+            if (isLive)
+            {
+                asset.GeneratedUrl = references.BuildUrl(
+                    asset,
+                    sourceCodes.GetValueOrDefault(asset.SourceId) ?? string.Empty,
+                    mediumCodes.GetValueOrDefault(asset.MediumId) ?? string.Empty,
+                    campaign.Code);
+            }
+
+            foreach (var place in TrackingAssetPlaces.Where(item => item.AssetId == seed.Id))
+            {
+                asset.Places.Add(new TrackingAssetPlace
+                {
+                    Id = Guid.Parse(place.Id),
+                    TrackingAssetId = asset.Id,
+                    PlaceName = place.PlaceName,
+                    Destination = place.Destination,
+                    CreatedAtUtc = now,
+                    CreatedByUserId = _seed.SystemUserId,
+                    Version = 1
+                });
+            }
+
+            await context.TrackingAssets.AddAsync(asset, cancellationToken);
+            added++;
+        }
+
+        if (added == 0)
+        {
+            return;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Seeded {Count} tracking asset(s) for campaign {Code}.", added, campaign.Code);
     }
 
     /// <summary>
@@ -271,6 +532,12 @@ public sealed class CampaignDbSeeder(
             EndDate = today.AddYears(1),
 
             TargetAmount = 1_000_000m,
+
+            // THE FIXED FIGURE THE CAMPAIGN IS STATED AT, which is what both donation forms show
+            // once a donor picks it. Seeded so the picker has a real amount to fill in rather
+            // than the zero the migration leaves on rows written before this column existed.
+            CampaignAmount = 5_000m,
+
             CurrencyId = InrCurrencyId,
             BudgetAmount = 100_000m,
             CountryId = IndiaCountryId,

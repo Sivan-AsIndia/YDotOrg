@@ -413,11 +413,33 @@
                     </div>
                   </div>
 
-                  <!-- ---- Cannot be held alongside ---- -->
+                  <!--
+                    ---- Cannot be held alongside ----
+
+                    EDITABLE HERE, AND IT HAD TO BECOME SO. The section was read-only, and the only
+                    place a conflict could ever be named was the Create Draft Role dialog - so the
+                    two roles the rule matters most for, both built in and both already existing,
+                    could never be paired at all.
+
+                    A SYSTEM ROLE IS NOT EXEMPT. Everything else on this panel is refused for a
+                    built-in role because its permissions are the platform's to decide; a conflict
+                    is not part of the role, it is a statement about how THIS organisation staffs
+                    it, which is exactly the kind of decision an administrator here should make.
+                  -->
                   <div class="rc-profile-section">
-                    <div class="rc-profile-section__label">Cannot Be Held Alongside</div>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                      <div class="rc-profile-section__label mb-0">Cannot Be Held Alongside</div>
+                      @if (!showConflictForm()) {
+                        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                (click)="openConflictForm()"
+                                [disabled]="conflictCandidates().length === 0">
+                          <i class="ri-add-line"></i> Add rule
+                        </button>
+                      }
+                    </div>
+
                     @if (role.incompatibleRoles.length > 0) {
-                      @for (conflict of role.incompatibleRoles; track conflict.name) {
+                      @for (conflict of role.incompatibleRoles; track conflict.id) {
                         <div class="rc-meta-row">
                           <span class="rc-meta-row__label">
                             {{ conflict.name }}
@@ -427,13 +449,79 @@
                               <span class="rc-tag-pill rc-tag-pill--amber ms-1">Flagged</span>
                             }
                           </span>
-                          <span class="rc-meta-row__value">{{ conflict.reason || '—' }}</span>
+                          <span class="rc-meta-row__value d-flex align-items-start gap-2">
+                            <span class="flex-grow-1">{{ conflict.reason || '—' }}</span>
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0 flex-shrink-0"
+                                    title="Remove this rule"
+                                    [disabled]="conflictRemovingId() === conflict.id"
+                                    (click)="removeConflict(conflict)">
+                              @if (conflictRemovingId() === conflict.id) {
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                              } @else {
+                                <i class="ri-delete-bin-line"></i>
+                              }
+                            </button>
+                          </span>
                         </div>
                       }
-                    } @else {
+                    } @else if (!showConflictForm()) {
                       <p class="rc-profile-bio">
                         No segregation-of-duties rules apply to this role.
                       </p>
+                    }
+
+                    @if (showConflictForm()) {
+                      <div class="rc-conflict-form">
+                        <label class="form-label small fw-semibold mb-1">Cannot be held with</label>
+                        <select class="form-select form-select-sm mb-2"
+                                [ngModel]="conflictForm().conflictingRoleId"
+                                (ngModelChange)="conflictForm.set({ ...conflictForm(), conflictingRoleId: $event })">
+                          <option value="">Choose a role...</option>
+                          @for (candidate of conflictCandidates(); track candidate.id) {
+                            <option [value]="candidate.id">{{ candidate.name }}</option>
+                          }
+                        </select>
+
+                        <label class="form-label small fw-semibold mb-1">
+                          Why <span class="text-danger">*</span>
+                        </label>
+                        <!--
+                          SHOWN TO WHOEVER IS REFUSED, which is why it is required. A refusal that
+                          says only "these cannot be held together" tells the person nothing they
+                          can act on.
+                        -->
+                        <textarea class="form-control form-control-sm mb-2" rows="3"
+                                  placeholder="e.g. The maker and the checker must be different people."
+                                  [ngModel]="conflictForm().reason"
+                                  (ngModelChange)="conflictForm.set({ ...conflictForm(), reason: $event })"></textarea>
+
+                        <div class="form-check form-switch mb-2">
+                          <input class="form-check-input" type="checkbox" id="conflictBlocking"
+                                 [ngModel]="conflictForm().isBlocking"
+                                 (ngModelChange)="conflictForm.set({ ...conflictForm(), isBlocking: $event })">
+                          <label class="form-check-label small" for="conflictBlocking">
+                            @if (conflictForm().isBlocking) {
+                              <strong>Refuse</strong> the combination outright
+                            } @else {
+                              <strong>Allow</strong> it, but flag it for review
+                            }
+                          </label>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                          <button type="button" class="btn btn-sm btn-primary"
+                                  [disabled]="conflictSaving()" (click)="saveConflict()">
+                            @if (conflictSaving()) {
+                              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Save rule
+                          </button>
+                          <button type="button" class="btn btn-sm btn-light"
+                                  [disabled]="conflictSaving()" (click)="resetConflictForm()">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     }
                   </div>
 
@@ -488,7 +576,8 @@
               <label class="form-label small fw-semibold" for="privilegeLevelSelect">Privilege Level</label>
               <select id="privilegeLevelSelect" class="form-select rc-input"
                       [ngModel]="createRoleForm().isPrivileged"
-                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isPrivileged: $event === 'true' || $event === true})">
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isPrivileged: $event === null ? null : ($event === 'true' || $event === true)})">
+                <option [ngValue]="null" disabled>Select Privilege Level</option>
                 <option [ngValue]="false">Standard</option>
                 <option [ngValue]="true">Privileged — assignment is reviewed</option>
               </select>
@@ -568,7 +657,8 @@
               <label class="form-label small fw-semibold" for="defaultRoleSelect">Given To Everybody</label>
               <select id="defaultRoleSelect" class="form-select rc-input"
                       [ngModel]="createRoleForm().isDefaultRole"
-                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isDefaultRole: $event === 'true' || $event === true})">
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isDefaultRole: $event === null ? null : ($event === 'true' || $event === true)})">
+                <option [ngValue]="null" disabled>Select Option</option>
                 <option [ngValue]="false">No — assigned individually</option>
                 <option [ngValue]="true">Yes — every new person gets it</option>
               </select>

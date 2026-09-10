@@ -31,11 +31,15 @@ namespace YDot.PAY.Infrastructure.Services;
 /// </summary>
 public sealed class ReceiptDocumentService(
     IOptions<ClientAppSettings> clientSettings,
+    IOptions<PaymentSettings> paymentSettings,
     IEmailSender emailSender,
     IReceiptDocumentStore documentStore,
+    ITenantHostDirectory tenantHosts,
     ILogger<ReceiptDocumentService> logger) : IReceiptDocumentService
 {
     private readonly ClientAppSettings _clientSettings = clientSettings.Value;
+
+    private readonly PaymentSettings _paymentSettings = paymentSettings.Value;
 
     public async Task<ReceiptDocumentResult> RenderAsync(
         Receipt receipt, CancellationToken cancellationToken)
@@ -44,7 +48,7 @@ public sealed class ReceiptDocumentService(
 
         try
         {
-            var html = BuildHtml(receipt);
+            var html = BuildHtml(receipt, await ResolveReceiptsUrlAsync(receipt, cancellationToken));
 
             var url = await documentStore.SaveAsync(
                 receipt.Id,
@@ -94,7 +98,7 @@ public sealed class ReceiptDocumentService(
             ? "Your donation receipt"
             : $"Your donation receipt {receipt.ReceiptNumber}";
 
-        var body = BuildHtml(receipt);
+        var body = BuildHtml(receipt, await ResolveReceiptsUrlAsync(receipt, cancellationToken));
 
         var result = await emailSender.SendAsync(
             destination, subject, body, isHtml: true, cancellationToken);
@@ -122,13 +126,12 @@ public sealed class ReceiptDocumentService(
     /// The styles are inline and the layout is a single column, because this is read in e-mail
     /// clients that strip stylesheets and printed on A4 by people claiming tax relief.
     /// </summary>
-    private string BuildHtml(Receipt receipt)
+    private string BuildHtml(Receipt receipt, string? receiptsUrl)
     {
         var builder = new StringBuilder();
 
         var amount = receipt.Amount.Amount.ToString("N2", CultureInfo.InvariantCulture);
-        var issued = receipt.IssuedAtUtc?.ToString("dd MMMM yyyy", CultureInfo.InvariantCulture)
-                     ?? "Not yet issued";
+        var issued = FormatIssueDate(receipt.IssuedAtUtc);
 
         builder.Append(
             """
@@ -181,12 +184,14 @@ public sealed class ReceiptDocumentService(
                 """);
         }
 
-        if (!string.IsNullOrWhiteSpace(_clientSettings.BaseUrl))
+        // THE LINK IS TO THE PAYMENTS AND RECEIPTS SCREEN ON THE ORGANISATION'S OWN HOST, not to
+        // the bare platform base URL this used to print. See ResolveReceiptsUrlAsync.
+        if (!string.IsNullOrWhiteSpace(receiptsUrl))
         {
             builder.Append(CultureInfo.InvariantCulture, $"""
                 <p style="margin:24px 0 0;font-size:13px;color:#5a6270;">
-                  You can see all of your donations at
-                  <a href="{Encode(_clientSettings.BaseUrl)}" style="color:#2a5bd7;">{Encode(_clientSettings.BaseUrl)}</a>.
+                  You can see all of your donations and receipts at
+                  <a href="{Encode(receiptsUrl)}" style="color:#2a5bd7;">{Encode(receiptsUrl)}</a>.
                 </p>
                 """);
         }
@@ -199,6 +204,85 @@ public sealed class ReceiptDocumentService(
             """);
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Where the receipt tells the reader to go to see their donations.
+    ///
+    /// TWO THINGS WERE WRONG WITH THE OLD ONE LINE, and both are the same mistake: it printed
+    /// <c>ClientAppSettings.BaseUrl</c> raw.
+    ///
+    ///   THE HOST WAS THE PLATFORM'S. The Organisation is resolved from the host, so a receipt
+    ///   from an Organisation living on ten1.localhost:6700 sent its donor to localhost:6700 -
+    ///   a different Organisation, or none. Even after signing in they would not find the gift
+    ///   the document in their hand describes.
+    ///
+    ///   THERE WAS NO PATH. The base URL is the front door; the register is four clicks in. A
+    ///   receipt should land somebody ON the page that lists their donations.
+    ///
+    /// A MISSING HOST IS NOT AN ERROR. An Organisation with no verified domain yet falls back to
+    /// the platform host with the right path on it, which is still a working link for anyone who
+    /// reaches the platform directly.
+    /// </summary>
+    private async Task<string?> ResolveReceiptsUrlAsync(
+        Receipt receipt, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_clientSettings.BaseUrl))
+        {
+            return null;
+        }
+
+        var host = await tenantHosts.GetPrimaryHostAsync(receipt.TenantId, cancellationToken);
+
+        return _clientSettings.TenantUrl(host, _clientSettings.ReceiptsPath);
+    }
+
+    /// <summary>
+    /// The issue date as the reader's own calendar has it.
+    ///
+    /// UTC IS WHAT WE STORE AND THE WRONG THING TO PRINT. A donation captured at 21:17 UTC on
+    /// 8 September is 02:47 on the 9th in India, so a receipt formatted straight off
+    /// <c>IssuedAtUtc</c> claimed the day before the one the donor paid on - and the day before
+    /// the one the Payments and Receipts screen shows, because that formats in the browser's own
+    /// zone. Two documents about one payment disagreeing on the date is the kind of thing a tax
+    /// claim is refused over.
+    ///
+    /// AN UNKNOWN ZONE ID DEGRADES TO UTC rather than throwing. A misconfigured setting must not
+    /// stop a tax document from being produced; the date is then merely the old, wrong-by-hours
+    /// one rather than absent.
+    /// </summary>
+    private string FormatIssueDate(DateTimeOffset? issuedAtUtc)
+    {
+        if (issuedAtUtc is null)
+        {
+            return "Not yet issued";
+        }
+
+        var local = issuedAtUtc.Value;
+
+        var zoneId = _paymentSettings.DisplayTimeZone;
+
+        if (!string.IsNullOrWhiteSpace(zoneId))
+        {
+            try
+            {
+                local = TimeZoneInfo.ConvertTime(
+                    issuedAtUtc.Value, TimeZoneInfo.FindSystemTimeZoneById(zoneId));
+            }
+            catch (Exception exception)
+                when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "PaymentSettings:DisplayTimeZone is set to \"{ZoneId}\", which this platform "
+                    + "does not recognise. Receipt dates will be printed in UTC.",
+                    zoneId);
+
+                local = issuedAtUtc.Value.ToUniversalTime();
+            }
+        }
+
+        return local.ToString("dd MMMM yyyy", CultureInfo.InvariantCulture);
     }
 
     private static void AppendRow(StringBuilder builder, string label, string? value)
