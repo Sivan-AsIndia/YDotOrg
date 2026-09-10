@@ -3,6 +3,80 @@
    is the permission code: it is an identifier people copy, so it wants a monospace face and
    a clear affordance that it is clickable.
    --------------------------------------------------------------------------------------- */
+
+/* ---------- Header: a gradient hero card instead of a plain title row ---------- */
+.bu-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 28px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(
+    115deg,
+    #ffffff 0%,
+    #e7efe7 45%,
+    #e6eff3 100%
+  );
+  background-size: 220% 220%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 12px 28px -14px rgba(30, 42, 36, 0.24);
+  animation: bu-hero-drift 14s ease-in-out infinite;
+}
+@keyframes bu-hero-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.bu-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  font-size: 26px;
+  color: var(--pe-primary, #223c30);
+}
+.bu-hero-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: #16201a;
+}
+.bu-hero-subtitle {
+  font-size: 14px;
+  color: #4a564e;
+  max-width: 60ch;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bu-hero {
+    animation: none;
+  }
+}
+
+/* ---------- The main business-unit card — a coloured accent edge and a
+   soft corner glow, rather than a flat white Bootstrap card. ---------- */
+.bu-main-card {
+  position: relative;
+  overflow: hidden;
+  border-left: 4px solid var(--pe-primary, #223c30) !important;
+}
+.bu-main-card::after {
+  content: '';
+  position: absolute;
+  top: -35%;
+  right: -12%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e7efe7 0%, transparent 72%);
+  pointer-events: none;
+}
+.bu-main-card .card-header,
+.bu-main-card .card-body {
+  position: relative;
+  z-index: 1;
+}
 .font-monospace {
   font-size: 0.8125rem;
   word-break: break-all;

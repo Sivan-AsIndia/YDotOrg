@@ -2,11 +2,14 @@
 <div class="page-wrapper">
   <div class="container-fluid py-6">
 
-    <div class="mb-6">
-      <h4 class="mb-1"><i class="ri-global-line me-2"></i>Platform</h4>
-      <p class="text-muted mb-0">
-        The root of the whole system. Every organisation is a subdomain beneath it.
-      </p>
+    <div class="bu-hero mb-6">
+      <span class="bu-hero-icon"><i class="ri-global-line"></i></span>
+      <div>
+        <h1 class="bu-hero-title">Platform</h1>
+        <p class="bu-hero-subtitle mb-0">
+          The root of the whole system. Every organisation is a subdomain beneath it.
+        </p>
+      </div>
     </div>
 
     @if (loading()) {
@@ -30,7 +33,7 @@
 
       <div class="row g-6">
         <div class="col-lg-7">
-          <div class="card border-0 shadow-sm h-100">
+          <div class="card border-0 shadow-sm h-100 bu-main-card">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h6 class="mb-0">{{ unit.name }}</h6>
               <span class="badge" [ngClass]="statusClass(unit.status)">{{ unit.status }}</span>
