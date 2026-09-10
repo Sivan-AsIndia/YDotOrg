@@ -1,15 +1,43 @@
-/* ==================================================================== *
- * Lead Capture — component styles
- * Visual language matched to the reference screen (serif display type,
- * muted slate/green enterprise palette, soft-bordered card system).
- * All values are tokenised as CSS custom properties on .app-wrapper so
- * they stay easy to retune from one place.
- * ==================================================================== */
+/* Lead capture: responsive reference-inspired surface. All rules stay component scoped. */
+:host {
+  display: block;
+  --lc-bg: #f6f8f7;
+  --lc-surface: #fff;
+  --lc-field-bg: #f2f7f5;
+  --lc-primary: #24775c;
+  --lc-primary-dark: #105245;
+  --lc-primary-tint: #e8f4ee;
+  --lc-text: #172b2b;
+  --lc-text-muted: #485854;
+  --lc-text-faint: #60706b;
+  --lc-border: #e5ece8;
+  --lc-border-strong: #cfdcd6;
+  --lc-radius-sm: 8px;
+  --lc-radius-md: 10px;
+  --lc-radius-lg: 12px;
+  --lc-radius-pill: 999px;
+  --lc-shadow-card: 0 2px 12px #173b2710;
+  --lc-shadow-raised: 0 -3px 18px #173b270c;
+  --lc-success-bg: #e8f5ee;
+  --lc-success-text: #176142;
+  --lc-warning-bg: #fff5dc;
+  --lc-warning-text: #805b12;
+  --lc-danger-bg: #fff0f1;
+  --lc-danger-text: #b33148;
+  --lc-neutral-bg: #edf1ef;
+  --lc-neutral-text: #4a6057;
+  --lc-info-bg: #edf4fa;
+  --lc-info-text: #315b78;
+  font-family: var(--font-other);
+  font-size: var(--font-size-base);
+  color: var(--lc-text);
+  line-height: 1.5;
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, input, select, textarea { font-family: var(--font-other); font-size: var(--font-size-base); }
+button, label, p, dd { overflow-wrap: anywhere; }
+.lc-page { padding: 16px; background: var(--lc-bg); min-width: 0; }
 
-
-/* -------------------------------------------------------------------- *
- * Header
- * -------------------------------------------------------------------- */
 .lc-header {
   display: flex;
   align-items: flex-start;
@@ -25,8 +53,8 @@
 }
 
 .lc-title {
-  font-family: var(--lc-font-display);
-  font-size: 28px;
+  font-family: var(--font-heading);
+  font-size: var(--font-size-base);
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--lc-text);
@@ -35,13 +63,13 @@
 
 .lc-subtitle {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-muted);
 }
 
 .lc-meta {
   margin: 6px 0 0;
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
   display: flex;
   align-items: center;
@@ -66,7 +94,7 @@
   border-radius:8px;
   background: var(--lc-primary-tint);
   color: var(--lc-primary-dark);
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin-bottom: 20px;
   width: fit-content;
@@ -77,16 +105,13 @@
   height: 14px;
 }
 
-/* -------------------------------------------------------------------- *
- * Badges
- * -------------------------------------------------------------------- */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   line-height: 1.6;
   white-space: nowrap;
@@ -105,9 +130,6 @@
 .badge-neutral { background: var(--lc-neutral-bg); color: var(--lc-neutral-text); }
 .badge-info    { background: var(--lc-info-bg);    color: var(--lc-info-text); }
 
-/* -------------------------------------------------------------------- *
- * Banners
- * -------------------------------------------------------------------- */
 .lc-banner {
   display: flex;
   align-items: flex-start;
@@ -117,7 +139,7 @@
   border-radius: var(--lc-radius-md);
   border: 1px solid transparent;
   margin-bottom: 16px;
-  font-size: 13.5px;
+  font-size: var(--font-size-base);
 }
 
 .lc-banner-body {
@@ -130,8 +152,6 @@
   font-weight: 700;
 }
 
-/* Server-side rules this form has no control for. Full width so the list is not squeezed
-   alongside the summary sentence by the flex row above. */
 .lc-banner-list {
   flex-basis: 100%;
   margin: 4px 0 0;
@@ -158,7 +178,7 @@
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 18px;
+  font-size: var(--font-size-base);
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
@@ -169,9 +189,6 @@
 .lc-banner-dismiss:hover { opacity: 1; }
 .lc-banner-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
 
-/* -------------------------------------------------------------------- *
- * Cards
- * -------------------------------------------------------------------- */
 .lc-card {
   background: var(--lc-surface);
   border: 1px solid var(--lc-border);
@@ -193,21 +210,18 @@
 }
 
 .lc-card-title {
-  font-size: 15.5px;
+  font-size: var(--font-size-base);
   font-weight: 700;
   color: var(--lc-text);
   margin: 0;
 }
 
 .lc-card-subtitle {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-muted);
   margin: 2px 0 0;
 }
 
-/* -------------------------------------------------------------------- *
- * Bulk upload card
- * -------------------------------------------------------------------- */
 .lc-bulk-card {
   padding: 0;
   overflow: hidden;
@@ -272,7 +286,7 @@
 }
 
 .lc-bulk-hint {
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
 }
 
@@ -299,7 +313,7 @@
   background: var(--lc-bg);
   border: 1px solid var(--lc-border);
   border-radius: var(--lc-radius-sm);
-  font-size: 13px;
+  font-size: var(--font-size-base);
 }
 
 .lc-bulk-file-icon { width: 16px; height: 16px; color: var(--lc-text-muted); flex-shrink: 0; }
@@ -311,7 +325,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-muted);
 }
 
@@ -336,7 +350,7 @@
 
 .lc-bulk-stat-value {
   display: block;
-  font-size: 20px;
+  font-size: var(--font-size-base);
   font-weight: 700;
   color: var(--lc-text);
 }
@@ -346,7 +360,7 @@
 
 .lc-bulk-stat-label {
   display: block;
-  font-size: 11.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -368,7 +382,7 @@
   gap: 8px;
   color: var(--lc-success-text);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--font-size-base);
   margin: 0;
 }
 
@@ -388,12 +402,9 @@
   to { transform: rotate(360deg); }
 }
 
-/* -------------------------------------------------------------------- *
- * Form grid & fields
- * -------------------------------------------------------------------- */
 .lc-grid {
   display: grid;
-  gap: 16px 18px;
+  gap: 24px 36px;
 }
 
 .lc-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -409,7 +420,7 @@
 }
 
 .lc-field label {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--lc-text);
 }
@@ -433,12 +444,12 @@
 .lc-input {
   width: 100%;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text);
-  background: var(--lc-surface);
+  background: var(--lc-field-bg);
   border: 1px solid var(--lc-border-strong);
   border-radius: var(--lc-radius-sm);
-  padding: 9px 12px;
+  padding: 14px 16px;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -482,18 +493,18 @@ select.lc-input {
 
 .lc-error {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--lc-danger-text);
 }
 
 .lc-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
 }
 
 .lc-counter {
-  font-size: 11.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
   flex-shrink: 0;
 }
@@ -520,7 +531,7 @@ select.lc-input {
   border: none;
   background: transparent;
   color: var(--lc-primary);
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   cursor: pointer;
   padding: 2px 4px;
@@ -529,9 +540,6 @@ select.lc-input {
 .lc-link-btn:hover { color: var(--lc-primary-dark); text-decoration: underline; }
 .lc-link-btn:focus-visible { outline: 2px solid var(--lc-primary); outline-offset: 2px; border-radius: 4px; }
 
-/* -------------------------------------------------------------------- *
- * Mobile number rows
- * -------------------------------------------------------------------- */
 .lc-mobile-list {
   display: flex;
   flex-direction: column;
@@ -556,7 +564,7 @@ select.lc-input {
   border: 1px solid var(--lc-border-strong);
   background: var(--lc-surface);
   color: var(--lc-text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -590,9 +598,6 @@ select.lc-input {
 .lc-icon-btn:hover { border-color: var(--lc-danger-text); color: var(--lc-danger-text); }
 .lc-icon-btn:focus-visible { outline: 2px solid var(--lc-primary); outline-offset: 2px; }
 
-/* -------------------------------------------------------------------- *
- * Consent
- * -------------------------------------------------------------------- */
 .lc-switch {
   display: flex;
   align-items: center;
@@ -638,7 +643,7 @@ select.lc-input {
 }
 
 .lc-switch-label {
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--lc-text-muted);
   min-width: 22px;
@@ -665,8 +670,6 @@ select.lc-input {
   gap: 10px 18px;
 }
 
-/* The channel group is a group, not a control, so `.lc-field.has-error` does not reach it.
-   Marked here so "choose at least one channel" has something visible to point at. */
 .lc-consent-checks.has-error {
   border: 1px solid var(--lc-danger-text);
   border-radius: 8px;
@@ -681,7 +684,7 @@ select.lc-input {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   color: var(--lc-text);
   cursor: pointer;
 }
@@ -697,9 +700,6 @@ select.lc-input {
 .lc-checkbox-danger { color: var(--lc-danger-text); }
 .lc-checkbox-danger input { accent-color: var(--lc-danger-text); }
 
-/* -------------------------------------------------------------------- *
- * Consent & Preference Centre — datetime + evidence status rows
- * -------------------------------------------------------------------- */
 .lc-datetime-group {
   display: flex;
   align-items: center;
@@ -710,7 +710,7 @@ select.lc-input {
 .lc-datetime-group .lc-input { flex: 1 1 130px; }
 
 .lc-datetime-tz {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
   white-space: nowrap;
 }
@@ -722,9 +722,6 @@ select.lc-input {
   margin-top: 10px;
 }
 
-/* -------------------------------------------------------------------- *
- * Sticky action bar
- * -------------------------------------------------------------------- */
 .lc-action-bar-spacer {
   height: 8px;
 }
@@ -750,7 +747,7 @@ select.lc-input {
 
 .lc-action-bar-hint {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
 }
 
@@ -761,9 +758,6 @@ select.lc-input {
   margin-left: auto;
 }
 
-/* -------------------------------------------------------------------- *
- * Responsive
- * -------------------------------------------------------------------- */
 @media (max-width: 992px) {
   .lc-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -776,12 +770,9 @@ select.lc-input {
   .lc-action-bar-inner { flex-direction: column; align-items: stretch; gap: 10px; }
   .lc-action-bar-buttons { margin-left: 0; justify-content: stretch; }
   .lc-action-bar-buttons .btn { flex: 1; }
-  .lc-title { font-size: 24px; }
+  .lc-title { font-size: var(--font-size-base); }
 }
 
-/* -------------------------------------------------------------------- *
- * Reduced motion
- * -------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .lc-chevron,
   .lc-switch-track,
@@ -791,16 +782,7 @@ select.lc-input {
     animation: none;
   }
 }
-/* ==================================================================== *
- * ONE MODE AT A TIME
- *
- * Bulk upload and single capture are separate submissions. The styles
- * below draw whichever one is not currently active as unavailable rather
- * than hiding it, so the screen still explains itself.
- * ==================================================================== */
 
-/* Wraps the whole capture form so `disabled` reaches every control in it,
-   including any added later. Reset to nothing visually. */
 .lc-fieldset {
   border: 0;
   margin: 0;
@@ -818,14 +800,12 @@ select.lc-input {
   cursor: not-allowed;
 }
 
-/* The calm blue banner over a form that is paused, not broken. */
 .lc-banner-info {
   background: var(--lc-info-bg);
   border-color: var(--lc-info-bg);
   color: var(--lc-info-text);
 }
 
-/* "You have already started entering a lead" — the two-way choice. */
 .lc-bulk-choice {
   padding: 14px 16px;
   border: 1px solid var(--lc-border);
@@ -837,13 +817,13 @@ select.lc-input {
 .lc-bulk-choice-title {
   margin: 0 0 4px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   color: var(--lc-text);
 }
 
 .lc-bulk-choice-body {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   line-height: 1.5;
   color: var(--lc-text-muted);
 }
@@ -854,27 +834,286 @@ select.lc-input {
   gap: 8px;
 }
 
-/* Detaching a staged file is the way back to the single-lead form, so it
-   sits on the file row itself rather than somewhere else on the page. */
 .lc-bulk-file-remove {
   border: none;
   background: transparent;
   padding: 0;
   margin-left: 12px;
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--lc-primary);
   cursor: pointer;
   text-decoration: underline;
 }
 
-/* What the button beside it actually submits. */
 .lc-bulk-note {
   margin: 8px 0 0;
-  font-size: 12.5px;
+  font-size: var(--font-size-base);
   color: var(--lc-text-faint);
 }
 
 .lc-action-bar-buttons .lc-action-bar-hint {
   margin-right: 8px;
+}
+
+
+/* Desktop workspace. Breakpoints follow usable content width, including the app sidebar. */
+.lc-page {
+  container: lead-capture / inline-size;
+  width: 100%;
+  max-width: none;
+  padding: 20px 24px;
+  margin: 0;
+  background: #f5f7f7;
+}
+.lc-header {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  min-height: 112px;
+  margin-bottom: 18px;
+  padding: 22px 24px;
+  background: var(--lc-surface);
+  border: 1px solid var(--lc-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px #173b2705;
+}
+.lc-header-main { min-width: 0; flex: 1; position: relative; z-index: 1; }
+.lc-title-row { gap: 12px; flex-wrap: wrap; }
+.lc-title {
+  position: relative;
+  font-family: var(--font-heading);
+  font-size: calc(var(--font-size-base) * 2.15);
+  line-height: 1.2;
+  color: var(--lc-primary-dark);
+  letter-spacing: -.025em;
+}
+.lc-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -8px;
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: #dfbd48;
+}
+.lc-subtitle { margin: 16px 0 0; max-width: 62ch; line-height: 1.5; }
+.lc-header-art { position: absolute; right: 420px; bottom: 0; width: 190px; height: 105px; opacity: .55; z-index: -1; pointer-events: none; }
+.lc-header-actions { flex: 0 0 auto; padding: 0 0 0 24px; max-width: 430px; border-left: 1px solid var(--lc-border); }
+.lc-header-context { display: flex; align-items: flex-start; gap: 28px; margin: 0; }
+.lc-header-context > div { min-width: 0; }
+.lc-header-context dt { font-family: var(--font-heading); color: var(--lc-text-faint); font-weight: 600; font-size: var(--font-size-base); }
+.lc-header-context dd { margin: 4px 0 0; color: var(--lc-text); font-weight: 500; }
+.lc-header-actions > .btn { margin-top: 10px; }
+.lc-fieldset { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; gap: 18px; }
+.lc-card { min-width: 0; padding: 20px 24px; margin: 0; border-radius: 8px; box-shadow: 0 2px 6px #173b2705; }
+.lc-details-card { grid-column: 1 / -1; }
+.lc-card-head { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; column-gap: 12px; row-gap: 1px; margin: 0 0 18px; padding: 0 0 15px; border-bottom: 1px solid var(--lc-border); }
+.lc-section-icon { width: 38px; height: 38px; padding: 9px; border-radius: 10px; background: var(--lc-primary-tint); color: var(--lc-primary); grid-row: span 2; flex-shrink: 0; }
+.lc-card-title { font-family: var(--font-heading); font-size: calc(var(--font-size-base) * 1.15); line-height: 1.35; color: var(--lc-primary-dark); }
+.lc-card-subtitle { margin: 1px 0 0; font-family: var(--font-other); font-size: var(--font-size-base); }
+.lc-card-head-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
+.lc-card-head-row .lc-section-icon { grid-row: auto; }
+.lc-card-head-row > div { min-width: 0; }
+.lc-grid { gap: 14px 22px; }
+.lc-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lc-identity-grid, .lc-contact-grid, .lc-geography-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lc-details-card > .lc-grid + .lc-grid { margin-top: 16px; }
+.lc-field { gap: 6px; }
+.lc-field label { font-weight: 500; line-height: 1.4; }
+.lc-identity-grid > .lc-field > label, .lc-contact-grid > .lc-field > label, .lc-contact-grid .lc-field-header { min-height: 26px; }
+.lc-field-header, .lc-field-footer { flex-wrap: wrap; gap: 6px 10px; }
+.lc-location { display: grid; grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr); gap: 10px 22px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--lc-border); }
+.lc-location > .lc-field-header { grid-column: 1 / -1; }
+.lc-location .lc-geography-grid { gap: 14px; }
+.lc-location > .lc-field { min-width: 0; }
+.lc-input { min-width: 0; min-height: 40px; padding: 9px 12px 9px 38px; line-height: 1.4; border-radius: 6px; background-color: #f8fbf9; }
+input.lc-input, textarea.lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%228%22%20r%3D%224%22%2F%3E%3Cpath%20d%3D%22M5%2021v-2a7%207%200%200%201%2014%200v2%22%2F%3E%3C%2Fsvg%3E"); background-repeat: no-repeat; background-size: 20px; background-position: 15px 15px; }
+input[type='email'].lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2214%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22m3%206%209%207%209-7%22%2F%3E%3C%2Fsvg%3E"); }
+input[type='tel'].lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%203H4a1%201%200%200%200-1%201c0%2010%207%2017%2017%2017a1%201%200%200%200%201-1v-3l-5-2-2%202a14%2014%200%200%201-7-7l2-2-2-5Z%22%2F%3E%3C%2Fsvg%3E"); font-family: var(--font-number); }
+input[type='search'].lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2210%22%20cy%3D%2210%22%20r%3D%226%22%2F%3E%3Cpath%20d%3D%22m15%2015%206%206%22%2F%3E%3C%2Fsvg%3E"); }
+#addressDetails { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m3%2011%209-8%209%208M5%2010v11h5v-7h4v7h5V10%22%2F%3E%3C%2Fsvg%3E"); }
+#sourceDetails, textarea.lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14%203H5v18h14V8l-5-5ZM14%203v5h5M8%2012h8M8%2016h6%22%2F%3E%3C%2Fsvg%3E"); }
+input[type='date'].lc-input, input[type='time'].lc-input { background-image: none; padding-left: 12px; font-family: var(--font-number); }
+select.lc-input { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cellipse%20cx%3D%2212%22%20cy%3D%2212%22%20rx%3D%224%22%20ry%3D%229%22%2F%3E%3Cpath%20d%3D%22M3%2012h18M5%207h14M5%2017h14%22%2F%3E%3C%2Fsvg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m5 7 5 5 5-5' stroke='%23214c41' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-size: 20px, 18px; background-position: 15px center, right 14px center; padding-right: 42px; }
+#campaign, #leadSource { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2326745d%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m4%2010%2015-6v16L4%2014v-4ZM4%2014l2%207h4l-2-6M19%208l3-2M19%2016l3%202%22%2F%3E%3C%2Fsvg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 7 5 5 5-5' fill='none' stroke='%23214c41' stroke-width='1.6'/%3E%3C/svg%3E"); }
+
+input.lc-input, textarea.lc-input { background-size: 17px; background-position: 11px 11px; }
+select.lc-input { background-size: 17px, 16px; background-position: 11px center, right 10px center; padding-right: 32px; }
+input[type='date'].lc-input, input[type='time'].lc-input { padding-left: 10px; }
+.lc-input:focus-visible { outline: 2px solid var(--lc-primary); outline-offset: 2px; }
+.lc-input-with-icon .lc-input { padding-right: 32px; }
+.lc-lookup-search .lc-input { min-height: 36px; background-position-y: center; background-color: var(--lc-surface); }
+.lc-textarea { min-height: 80px; }
+.lc-numeric, .lc-counter, .lc-bulk-stat-value, .lc-bulk-filesize, .lc-datetime-tz { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
+.lc-hint { line-height: 1.45; }
+.lc-mobile-row { gap: 6px; }
+.lc-mobile-row .lc-input { width: 0; flex: 1; }
+.lc-chip { min-height: 32px; padding: 5px 8px; border-radius: 6px; }
+.lc-icon-btn { width: 28px; height: 28px; }
+.lc-field-header .btn-sm { min-height: 26px; padding: 3px 9px; }
+.lc-campaign-card, .lc-consent-card { align-self: stretch; }
+.lc-consent-off-hint { padding: 14px; margin: 0; background: #f6f9f7; border: 1px dashed #d9e5dd; border-radius: 6px; }
+.lc-consent-expanded .lc-campaign-card, .lc-consent-expanded .lc-consent-card { grid-column: 1 / -1; }
+.lc-consent-expanded .lc-campaign-card > .lc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lc-consent-expanded .lc-campaign-card .lc-span-2 { grid-column: auto; }
+.lc-consent-panel { margin-top: 0; padding-top: 0; border-top: 0; gap: 18px; }
+.lc-consent-checks { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; padding: 14px; background: #f6f9f7; border: 1px solid var(--lc-border); border-radius: 6px; }
+.lc-consent-checks.has-error { border-color: var(--lc-danger-text); }
+.lc-checkbox input { width: 16px; height: 16px; }
+.lc-consent-panel > .lc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lc-consent-panel .lc-span-2 { grid-column: span 2; }
+.lc-switch-label { min-width: 28px; }
+.lc-bulk-card { padding: 0; margin-top: 18px; }
+.lc-bulk-toggle { padding: 16px 24px; gap: 12px; }
+.lc-bulk-toggle-icon { width: 36px; height: 36px; border-radius: 8px; }
+.lc-bulk-toggle-icon svg { width: 19px; height: 19px; }
+.lc-bulk-toggle-text { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 6px 20px; }
+.lc-bulk-body { padding: 18px 24px; }
+.lc-bulk-file { flex-wrap: wrap; }
+.lc-bulk-filename { min-width: 0; overflow-wrap: anywhere; }
+.lc-action-bar-spacer { height: 14px; }
+.lc-action-bar { position: static; padding: 12px 16px; border: 1px solid var(--lc-border); border-radius: 8px; box-shadow: none; }
+.lc-action-bar-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.lc-action-bar-hint { margin-right: auto; flex: 1; min-width: 200px; }
+.btn { display: inline-flex; justify-content: center; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 6px; font-family: var(--font-other); font-size: var(--font-size-base); line-height: 1.4; font-weight: 600; cursor: pointer; text-decoration: none; }
+.btn-sm { min-height: 34px; padding: 7px 13px; }
+.btn-primary { background: var(--lc-primary); border-color: var(--lc-primary); color: #fff; }
+.btn-primary:hover { background: var(--lc-primary-dark); border-color: var(--lc-primary-dark); }
+.btn-outline-secondary { background: var(--lc-surface); color: var(--lc-text-muted); border-color: var(--lc-border-strong); }
+.btn-outline-secondary:hover { background: var(--lc-bg); border-color: var(--lc-primary); }
+.btn-outline-primary { background: var(--lc-surface); border-color: var(--lc-primary); color: var(--lc-primary); }
+.btn-outline-danger { background: var(--lc-surface); color: var(--lc-danger-text); border-color: var(--lc-danger-text); }
+.btn-danger { background: var(--lc-danger-text); border-color: var(--lc-danger-text); color: white; }
+.btn:focus-visible, .lc-file-label:focus-within { outline: 2px solid var(--lc-primary); outline-offset: 3px; }
+.btn:disabled, .lc-fieldset:disabled .btn { opacity: .55; cursor: not-allowed; }
+.lc-button-icon { width: 17px; height: 17px; flex-shrink: 0; vertical-align: middle; }
+.lc-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* The native dialog supplies focus containment and ignores backdrop clicks. */
+.lc-confirm { width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; color: var(--lc-text); border: 1px solid var(--lc-border); border-radius: 14px; box-shadow: 0 20px 80px #102e3240; font-family: var(--font-other); font-size: var(--font-size-base); }
+.lc-confirm::backdrop { background: #17382f70; }
+.lc-confirm-header { display: flex; align-items: center; gap: 16px; padding: 24px; border-bottom: 1px solid var(--lc-border); }
+.lc-confirm-header .lc-card-title { flex: 1; }
+.lc-confirm-body { padding: 0 24px 24px; }
+.lc-confirm-body > .lc-field { margin-top: 18px; }
+.lc-confirm-details { display: grid; gap: 12px; padding: 16px; background: var(--lc-bg); border-radius: 8px; }
+.lc-confirm-details dt { font-weight: 600; }.lc-confirm-details dd { margin: 4px 0 0; }
+.lc-confirm-changes p { display: grid; gap: 4px; }
+.lc-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--lc-border); }
+
+/* These rules use the content container, not the browser width. */
+@container lead-capture (max-width: 1199px) {
+  .lc-header-art { display: none; }
+  .lc-header-context { gap: 18px; }
+  .lc-header-actions { max-width: 380px; }
+  .lc-header-context dd { max-width: 230px; }
+  .lc-location { grid-template-columns: 1fr; }
+  .lc-location > .lc-field-header { grid-column: auto; }
+  .lc-location > .lc-field { margin-top: 4px; }
+}
+@container lead-capture (max-width: 959px) {
+  .lc-header { gap: 20px; }
+  .lc-header-actions { max-width: 270px; padding-left: 18px; }
+  .lc-header-context { display: grid; gap: 8px; }
+  .lc-fieldset { grid-template-columns: 1fr; }
+  .lc-identity-grid, .lc-contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-identity-grid > .lc-field:last-child, .lc-contact-grid > .lc-field:last-child { grid-column: 1 / -1; }
+  .lc-consent-checks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lc-consent-panel > .lc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-consent-expanded .lc-campaign-card > .lc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-consent-expanded .lc-campaign-card .lc-span-2 { grid-column: 1 / -1; }
+}
+@container lead-capture (max-width: 679px) {
+  .lc-header { flex-direction: column; align-items: stretch; padding: 18px; }
+  .lc-header-actions { max-width: none; padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--lc-border); }
+  .lc-header-context { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .lc-title { font-size: calc(var(--font-size-base) * 1.85); }
+  .lc-card { padding: 18px; }
+  .lc-grid-2, .lc-identity-grid, .lc-contact-grid, .lc-geography-grid,
+  .lc-consent-panel > .lc-grid, .lc-consent-expanded .lc-campaign-card > .lc-grid { grid-template-columns: 1fr; }
+  .lc-span-2, .lc-consent-panel .lc-span-2 { grid-column: 1 / -1; }
+  .lc-card-head { grid-template-columns: 34px minmax(0, 1fr); gap: 2px 10px; }
+  .lc-section-icon { width: 34px; height: 34px; padding: 8px; }
+  .lc-card-head-row { grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .lc-consent-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-input { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
+  input.lc-input, textarea.lc-input { background-position-y: 13px; }
+  .lc-bulk-card { padding: 0; }
+  .lc-bulk-toggle, .lc-bulk-body { padding: 16px 18px; }
+  .lc-bulk-toggle-text { display: flex; flex-direction: column; gap: 2px; }
+  .lc-action-bar-hint { flex-basis: 100%; }
+  .lc-action-bar-buttons .btn { flex: 1 1 auto; }
+  .badge { white-space: normal; }
+}
+@container lead-capture (max-width: 399px) {
+  .lc-header-context { grid-template-columns: 1fr; }
+  .lc-mobile-row { flex-wrap: wrap; }
+  .lc-mobile-row .lc-input { flex: 1 1 100%; width: 100%; }
+  .lc-card-head-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .lc-card-head-row .lc-switch { grid-column: 2; justify-self: start; margin-top: 8px; }
+  .lc-consent-checks { grid-template-columns: 1fr; }
+  .lc-bulk-stats { flex-direction: column; }
+  .lc-bulk-actions .btn { width: 100%; }
+}
+@media (max-width: 767px) {
+  .lc-page { padding: 12px; }
+  .lc-confirm-header { padding: 16px; gap: 10px; }
+  .lc-confirm-body { padding: 0 16px 16px; }
+}
+
+/* Put the page actions in the desktop header, where they are available immediately. */
+.lc-header-actions { min-width: 365px; max-width: 465px; }
+.lc-header-context { justify-content: space-between; }
+.lc-header .lc-action-bar { padding: 14px 0 0; border: 0; border-radius: 0; background: none; }
+.lc-header .lc-action-bar-buttons { gap: 8px; }
+.lc-header .lc-action-bar-hint { flex-basis: 100%; min-width: 0; }
+.lc-campaign-card { container: campaign-card / inline-size; }
+.lc-campaign-card, .lc-consent-card { align-self: start; }
+@container campaign-card (min-width: 720px) {
+  .lc-campaign-card > .lc-grid { grid-template-columns: 1fr 1.2fr 1fr; }
+  .lc-campaign-card .lc-span-2 { grid-column: auto; }
+}
+@container lead-capture (max-width: 959px) {
+  .lc-header-actions { min-width: 365px; max-width: 400px; }
+  .lc-header-context { display: flex; gap: 18px; }
+}
+@container lead-capture (max-width: 679px) {
+  .lc-header-actions { min-width: 0; max-width: none; }
+  .lc-header .lc-action-bar-buttons .btn { flex: 1 1 auto; }
+}
+
+/* Final page actions follow all capture and upload content. */
+.lc-page > .lc-action-bar { margin-top: 18px; position: static; }
+.lc-header-draft-action:empty { display: none; }
+.lc-header-draft-action { flex-shrink: 0; }
+.lc-header-art { right: 24px; }
+
+/* Consistent consent rows: selectors, paired text areas, evidence and dates. */
+.lc-consent-panel > .lc-consent-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px 22px; align-items: start; }
+.lc-consent-fields > .lc-field { grid-column: span 3; }
+.lc-consent-fields > .lc-consent-recognitionPreference,
+.lc-consent-fields > .lc-consent-channelRef,
+.lc-consent-fields > .lc-consent-consentState { grid-column: span 2; }
+.lc-consent-fields > .lc-span-2 { grid-column: 1 / -1; }
+.lc-consent-fields > .lc-field > label { min-height: 20px; }
+.lc-consent-purpose .lc-textarea, .lc-consent-consentNotes .lc-textarea { height: 96px; min-height: 96px; }
+.lc-consent-evidence .lc-field-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+.lc-consent-evidence .lc-field-header > label:first-child { min-height: 20px; }
+.lc-consent-evidence .lc-file-label { min-height: 40px; }
+.lc-consent-fields .lc-datetime-group { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px 10px; }
+.lc-consent-fields .lc-datetime-tz { grid-column: 1 / -1; }
+.lc-consent-fields .lc-counter { margin-left: auto; }
+@container lead-capture (max-width: 959px) {
+ .lc-consent-panel > .lc-consent-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .lc-consent-fields > .lc-field { grid-column: span 1; }
+ .lc-consent-fields > .lc-span-2 { grid-column: 1 / -1; }
+}
+@container lead-capture (max-width: 679px) {
+ .lc-consent-panel > .lc-consent-fields { grid-template-columns: minmax(0, 1fr); }
+ .lc-consent-fields > .lc-field { grid-column: 1 / -1; }
 }

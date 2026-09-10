@@ -1,28 +1,334 @@
 /* SCR-IAM-001 — User directory.
-   Page width, padding and position come from the shell's app-wrapper / page-wrapper /
-   container-fluid, exactly as on every other page in this area. Nothing here should try to
-   own the page box — an earlier version did, with its own max-width and centring, and the
-   result was content sliding out from under the header. */
+   Folder tabs, a pill toolbar, dot-status rows and a floating bulk action bar, in the app's
+   Indigo palette. Page width, padding and position still come from the shell's app-wrapper /
+   page-wrapper / container-fluid, exactly as on every other page in this area. Nothing here
+   should try to own the page box — an earlier version did, with its own max-width and centring,
+   and the result was content sliding out from under the header. */
 
-/* Leaves room for the search icon sitting inside the input. */
-.ps-9 {
-  padding-left: 2.5rem;
+.ud-page {
+  /* Indigo tokens — the palette the other Indigo-theme screens share. */
+  --ud-accent: #4f46e5;
+  --ud-accent-dark: #4338ca;
+  --ud-accent-soft: #eef0ff;
+  --ud-accent-ring: rgba(79, 70, 229, 0.22);
+  --ud-ink: #23263b;
+  --ud-muted: #8a8fa3;
+  --ud-faint: #b9bdcc;
+  --ud-line: #ecedf5;
+  --ud-line-soft: #f3f4fa;
+  --ud-tab-bg: #e9ebf3;
+  --ud-hover: #f8f9fe;
+  --ud-selected: #f4f5ff;
+  --ud-radius: 18px;
 }
 
-/* ---- Table ------------------------------------------------------------------------------- */
+/* ---- Folder tabs --------------------------------------------------------------------------
+   The tabs ARE the status filter. The active tab is white and visually opens into the card
+   below it, which is why the card's top-left corner is square. */
+
+.ud-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 2px;
+}
+
+.ud-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: var(--ud-tab-bg);
+  color: var(--ud-muted);
+  padding: 0.7rem 1.1rem;
+  font-size: 0.87rem;
+  font-weight: 500;
+  border-radius: 14px 14px 0 0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ud-tab:hover {
+  color: var(--ud-ink);
+}
+
+.ud-tab-active,
+.ud-tab-active:hover {
+  background: #ffffff;
+  color: var(--ud-accent);
+  font-weight: 600;
+}
+
+.ud-tab-icon {
+  font-size: 1.05rem;
+}
+
+.ud-tab-count {
+  min-width: 1.55rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #dde0eb;
+  color: #6d7286;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.ud-tab-active .ud-tab-count {
+  background: var(--ud-accent);
+  color: #ffffff;
+}
+
+/* ---- Card --------------------------------------------------------------------------------- */
+
+.ud-card {
+  background: #ffffff;
+  border: 1px solid var(--ud-line);
+  border-radius: 0 var(--ud-radius) var(--ud-radius) var(--ud-radius);
+  box-shadow: 0 1px 2px rgba(23, 23, 43, 0.04);
+  overflow: hidden;
+}
+
+/* ---- Toolbar ------------------------------------------------------------------------------ */
+
+.ud-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.ud-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 320px;
+  max-width: 480px;
+}
+
+.ud-search-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--ud-muted);
+  pointer-events: none;
+}
+
+.ud-search-input {
+  width: 100%;
+  border: 1px solid var(--ud-line);
+  border-radius: 999px;
+  padding: 0.6rem 3.1rem 0.6rem 2.5rem;
+  font-size: 0.9rem;
+  color: var(--ud-ink);
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ud-search-input::placeholder {
+  color: var(--ud-faint);
+}
+
+.ud-search-input:focus {
+  border-color: var(--ud-accent);
+  box-shadow: 0 0 0 3px var(--ud-accent-ring);
+}
+
+/* The sliders button that opens the advanced filter panel, inside the pill on the right. */
+.ud-filter-toggle {
+  position: absolute;
+  right: 0.4rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ud-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ud-filter-toggle:hover,
+.ud-filter-toggle-on {
+  background: var(--ud-accent-soft);
+  color: var(--ud-accent);
+}
+
+/* ---- Toolbar buttons ---------------------------------------------------------------------- */
+
+.ud-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ud-accent);
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px -10px rgba(79, 70, 229, 0.7);
+  transition: background-color 0.15s ease;
+}
+
+.ud-btn-primary:hover {
+  background: var(--ud-accent-dark);
+}
+
+.ud-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ud-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--ud-line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ud-ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.6rem 1.15rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.ud-btn-ghost:hover {
+  border-color: var(--ud-faint);
+  background: #fafbff;
+}
+
+.ud-btn-ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- Advanced filters --------------------------------------------------------------------- */
+
+.ud-advanced {
+  margin: 0 1.25rem 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--ud-line);
+  border-radius: 14px;
+  background: #fafbfe;
+}
+
+/* ---- Table --------------------------------------------------------------------------------- */
 
 .ud-table thead th {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
-  font-weight: 600;
+  padding: 0.8rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ud-muted);
+  background: #fbfbfe;
+  border-bottom: 1px solid var(--ud-line);
   white-space: nowrap;
-  border-bottom-width: 1px;
 }
 
-.ud-table td {
+.ud-table thead th:first-child,
+.ud-table tbody td:first-child {
+  padding-left: 1.25rem;
+}
+
+.ud-table thead th:last-child,
+.ud-table tbody td:last-child {
+  padding-right: 1.25rem;
+}
+
+/* Bootstrap paints every cell from --bs-table-bg, which would hide any row colour, so the
+   state colours live on the cells themselves. */
+.ud-table tbody td {
+  padding: 0.9rem 1rem;
+  background-color: transparent;
+  border-bottom: 1px solid var(--ud-line-soft);
   vertical-align: middle;
+}
+
+.ud-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+
+.ud-table tbody tr:hover td {
+  background-color: var(--ud-hover);
+}
+
+.ud-table tbody tr.ud-row-selected td,
+.ud-table tbody tr.ud-row-selected:hover td {
+  background-color: var(--ud-selected);
+}
+
+.ud-table tbody tr.ud-row-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--ud-accent);
+}
+
+.ud-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ud-table .form-check-input {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-color: #c9cddd;
+  accent-color: var(--ud-accent);
+  cursor: pointer;
+}
+
+/* Name column sort — the arrow only shows on hover or while a direction is set. */
+.ud-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ud-sort-arrow {
+  font-size: 1.05rem;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.ud-sort:hover .ud-sort-arrow {
+  opacity: 0.55;
+}
+
+.ud-sort-arrow.ud-sort-on {
+  opacity: 1;
+  color: var(--ud-accent);
+}
+
+.ud-sort-arrow.ud-sort-asc {
+  transform: rotate(180deg);
+}
+
+.ud-name-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ud-ink);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.ud-name-btn:hover {
+  color: var(--ud-accent);
 }
 
 /* Without an explicit min-width of 0, a flex child refuses to shrink and `text-truncate`
@@ -40,8 +346,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: #eef2ff;
-  color: #4f46e5;
+  background-color: var(--ud-accent-soft);
+  color: var(--ud-accent);
   font-weight: 600;
   font-size: 0.8rem;
 }
@@ -50,40 +356,6 @@
   width: 56px;
   height: 56px;
   font-size: 1.1rem;
-}
-
-/* ---- Status badges -----------------------------------------------------------------------
-   Each badge pairs a colour with the status word itself, so the meaning never depends on
-   colour alone. */
-
-.ud-badge {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.ud-badge-good {
-  background-color: #d1fae5;
-  color: #047857;
-}
-
-.ud-badge-danger {
-  background-color: #fee2e2;
-  color: #b91c1c;
-}
-
-.ud-badge-blue {
-  background-color: #dbeafe;
-  color: #1d4ed8;
-}
-
-.ud-badge-muted {
-  background-color: #f3f4f6;
-  color: #4b5563;
 }
 
 /* ---- Dialogs ------------------------------------------------------------------------------ */

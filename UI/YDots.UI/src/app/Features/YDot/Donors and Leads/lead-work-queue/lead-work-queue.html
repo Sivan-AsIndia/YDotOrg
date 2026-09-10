@@ -1,473 +1,849 @@
+<ng-template #icon let-name>
+  <svg
+    class="lq-icon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path [attr.d]="icons[name]" />
+  </svg>
+</ng-template>
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="container-fluid px-4 py-3 lq-page">
-
-      <!-- HEADER -->
+    <div class="lq-page" [attr.aria-busy]="uiState() === 'loading'">
       <header class="lq-header">
-        <div class="lq-header-main">
-          <!-- <nav class="lq-breadcrumb" aria-label="Breadcrumb">
-            @for (crumb of screen().breadcrumb; track crumb; let last = $last) {
-              <span class="lq-crumb">{{ crumb }}</span>
-              @if (!last) {
-                <span class="lq-crumb-sep" aria-hidden="true">></span>
-              }
-            }
-          </nav> -->
-          <div class="lq-title-row">
-            <div>
-              <h1 class="lq-title" style="
-        font-size: 40px !important;font-family:Georgia !important ;">{{ screen().title }}</h1>
-              <p class="lq-subtitle">{{ screen().purpose }}</p>
-              <!-- <p class="lq-meta">
-                <span>{{ screen().scope }}</span>
-                <span class="lq-meta-sep">·</span>
-                <span>Data updated {{ screen().lastRefresh }}</span>
-              </p> -->
-            </div>
-            <div class="lq-header-actions">
-              <span class="lq-status-pill" [class]="statusPill().cls">{{ statusPill().label }}</span>
-              @if (permissions().create) {
-                <button type="button" class="btn btn-primary btn-sm" (click)="createLead()">
-                  Create Lead
-                </button>
-              }
-              <button type="button" class="btn btn-outline-primary btn-sm" (click)="refresh()" [disabled]="uiState() === 'loading'">
-                Refresh
-              </button>
-              @if (permissions().export) {
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportLeads()">
-                  Export Leads
-                </button>
-              }
-            </div>
-          </div>
+        <div>
+          <h1 class="lq-title">{{ screen().title }}</h1>
+          <p class="lq-subtitle">{{ screen().purpose }}</p>
+        </div>
+        <div class="lq-header-actions">
+          @if (permissions().assign) {
+            <a
+              class="btn btn-outline-secondary btn-sm lq-board"
+              routerLink="/app/fundraising/relationships/assignment-board"
+              title="Assignment Board"
+              ><ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{ $implicit: 'grid' }"
+              />
+              Assignment Board</a
+            >
+          }
+          @if (permissions().create) {
+            <button type="button" class="btn btn-primary btn-sm" title="Add" (click)="createLead()">
+              <ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{ $implicit: 'add' }"
+              />
+              Add
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Refresh leads"
+            (click)="refresh()"
+            [disabled]="uiState() === 'loading'"
+          >
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'refresh' }"
+            />
+            Refresh
+          </button>
+          @if (permissions().export) {
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              title="Export displayed leads"
+              (click)="exportLeads()"
+              [disabled]="!hasResults() || uiState() === 'loading'"
+            >
+              <ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{ $implicit: 'export' }"
+              />
+              Export Leads
+            </button>
+          }
         </div>
       </header>
 
-      <!-- SUCCESS BANNER -->
       @if (uiState() === 'success') {
-        <div class="lq-banner lq-banner-success" role="status">
-          <span>Queue updated successfully.</span>
-          <button type="button" class="lq-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss">×</button>
+        <div class="lq-banner" role="status">
+          <span
+            ><ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'check' }"
+            />
+            Queue updated successfully.</span
+          ><button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Dismiss notification"
+            aria-label="Dismiss notification"
+            (click)="dismissBanner()"
+          >
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'close' }"
+            />
+          </button>
         </div>
       }
-
-      <!-- KPI CARDS -->
       <section class="lq-kpi-row" aria-label="Lead summary">
-        @for (kpi of kpis(); track kpi.id) {
-          <article class="lq-kpi-card">
-            <div class="lq-kpi-icon" [attr.data-kpi]="kpi.id" aria-hidden="true"></div>
-            <div class="lq-kpi-body">
+        @for (kpi of primaryKpis(); track kpi.id) {
+          <article class="lq-kpi-card" [attr.data-kpi]="kpi.id">
+            <span class="lq-kpi-icon"
+              ><ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{
+                  $implicit:
+                    kpi.id === 'total'
+                      ? 'users'
+                      : kpi.id === 'converted'
+                        ? 'check'
+                        : kpi.id === 'potential'
+                          ? 'potential'
+                          : 'assign',
+                }"
+            /></span>
+            <div>
               <p class="lq-kpi-label">{{ kpi.label }}</p>
-              <p class="lq-kpi-value">{{ kpi.value | number }}</p>
+              <p class="lq-kpi-value lq-number">{{ kpi.value | number }}</p>
               <p class="lq-kpi-hint">{{ kpi.hint }}</p>
             </div>
+            <span class="lq-kpi-art" aria-hidden="true"><i></i><i></i><i></i></span>
           </article>
+        } @empty {
+          @for (
+            label of [
+              'Total Leads',
+              'Unassigned Leads',
+              'Assigned Leads',
+              'Converted Leads',
+              'High Donation Potential',
+            ];
+            track label
+          ) {
+            <article class="lq-kpi-card">
+              <span class="lq-kpi-icon"
+                ><ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'users' }"
+              /></span>
+              <div>
+                <p class="lq-kpi-label">{{ label }}</p>
+                <p class="lq-kpi-value">—</p>
+                <p class="lq-kpi-hint">
+                  {{ uiState() === 'error' ? 'Unavailable' : 'Loading summary…' }}
+                </p>
+              </div>
+            </article>
+          }
         }
       </section>
 
-      <!-- SAVED VIEWS + SEARCH + FILTERS -->
       <section class="lq-toolbar" aria-label="Views and filters">
-        <div class="lq-saved-views">
-          @for (view of savedViews(); track view) {
+        <div class="lq-saved-views" aria-label="Assignment views">
+          @for (view of primaryViews(); track view) {
             <button
               type="button"
               class="lq-view-chip"
               [class.lq-view-chip-active]="savedView() === view"
+              [attr.aria-pressed]="savedView() === view"
               (click)="selectSavedView(view)"
             >
-              {{ view }}
+              <ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{
+                  $implicit:
+                    view === 'All Leads' ? 'grid' : view === 'Unassigned Leads' ? 'assign' : 'user',
+                }"
+              />
+              {{ view === 'All Leads' ? view : view.replace(' Leads', '') }}
             </button>
           }
         </div>
-
-        <div class="lq-search-row">
+        <form class="lq-search-row" (ngSubmit)="refresh()" role="search">
           <div class="lq-search-wrap">
-            <label class="visually-hidden" for="lq-search">Search leads</label>
-            <input
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'search' }"
+            /><label class="visually-hidden" for="lq-search">Search leads</label
+            ><input
               id="lq-search"
+              name="search"
               type="search"
               class="lq-search-input"
               placeholder="Search Lead ID, Name, Phone, Email"
               [ngModel]="searchTerm()"
-              (ngModelChange)="searchTerm.set($event)"
+              (ngModelChange)="onSearchChange($event)"
             />
           </div>
-          <button type="button" class="btn btn-outline-primary btn-sm" (click)="toggleFilters()">
-            {{ showFilters() ? 'Hide Filters' : 'Filters' }}
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Filters"
+            aria-controls="lq-filters"
+            [attr.aria-expanded]="showFilters()"
+            (click)="toggleFilters()"
+          >
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'filter' }"
+            />
+            Filters
           </button>
           @if (activeFilterChips().length > 0) {
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearAllFilters()">
-              Reset Filters
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              title="Reset filters"
+              (click)="clearAllFilters()"
+            >
+              <ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{ $implicit: 'refresh' }"
+              />
+              Reset
             </button>
           }
-        </div>
-
+        </form>
         @if (showFilters()) {
-          <div class="lq-filter-panel">
+          <div class="lq-filter-panel" id="lq-filters">
             <div class="lq-filter-grid">
-              <div class="lq-filter-field">
-                <label for="lq-stage">Stage</label>
-                <select id="lq-stage" class="lq-select" [ngModel]="stageFilter()" (ngModelChange)="stageFilter.set($event)">
-                  <option value="">All stages</option>
-                  @for (s of filterOptions().stages; track s) {
-                    <option [value]="s">{{ s }}</option>
+              @for (field of filterFields(); track field.key) {
+                <div class="lq-filter-field">
+                  <label [for]="'lq-' + field.key">{{ field.label }}</label>
+                  @if (field.options.length > 20) {
+                    <label class="visually-hidden" [for]="'lq-option-search-' + field.key"
+                      >Search {{ field.label }} options</label
+                    >
+                    <input
+                      class="lq-option-search"
+                      type="search"
+                      [id]="'lq-option-search-' + field.key"
+                      [placeholder]="'Search ' + field.label.toLowerCase() + '…'"
+                      [ngModel]="optionSearch()[field.key] ?? ''"
+                      (ngModelChange)="setOptionSearch(field.key, $event)"
+                    />
                   }
-                </select>
-              </div>
-              <div class="lq-filter-field">
-                <label for="lq-temp">Temperature</label>
-                <select id="lq-temp" class="lq-select" [ngModel]="temperatureFilter()" (ngModelChange)="temperatureFilter.set($event)">
-                  <option value="">All</option>
-                  @for (t of filterOptions().temperatures; track t) {
-                    <option [value]="t">{{ t }}</option>
-                  }
-                </select>
-              </div>
-              <div class="lq-filter-field">
-                <label for="lq-pot">Donation Potential</label>
-                <select id="lq-pot" class="lq-select" [ngModel]="potentialFilter()" (ngModelChange)="potentialFilter.set($event)">
-                  <option value="">All</option>
-                  @for (p of filterOptions().potentials; track p) {
-                    <option [value]="p">{{ p }}</option>
-                  }
-                </select>
-              </div>
-              <div class="lq-filter-field">
-                <label for="lq-src">Lead Source</label>
-                <select id="lq-src" class="lq-select" [ngModel]="sourceFilter()" (ngModelChange)="sourceFilter.set($event)">
-                  <option value="">All sources</option>
-                  @for (s of filterOptions().sources; track s) {
-                    <option [value]="s">{{ s }}</option>
-                  }
-                </select>
-              </div>
-              <div class="lq-filter-field">
-                <label for="lq-own">Owner</label>
-                <select id="lq-own" class="lq-select" [ngModel]="ownerFilter()" (ngModelChange)="ownerFilter.set($event)">
-                  <option value="">All</option>
-                  <option value="Unassigned">Unassigned</option>
-                  <option value="Arun Kumar">Arun Kumar</option>
-                  <option value="Neha Patel">Neha Patel</option>
-                </select>
-              </div>
+                  <select
+                    class="lq-select"
+                    [id]="'lq-' + field.key"
+                    [ngModel]="field.value"
+                    (ngModelChange)="setFilterValue(field.key, $event)"
+                  >
+                    <option value="">All</option>
+                    @for (
+                      option of matchingOptions(field.key, field.options, field.value);
+                      track option.value
+                    ) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
             </div>
+            <p class="lq-filter-note">Lead source narrows the displayed results.</p>
             <div class="lq-filter-actions">
-              <button type="button" class="btn btn-primary btn-sm" (click)="applyFilters()">Apply Filters</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearAdvancedFilters()">Clear</button>
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                (click)="applyFilters()"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'check' }"
+                />
+                Apply Filters</button
+              ><button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                (click)="clearAdvancedFilters()"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'close' }"
+                />
+                Clear
+              </button>
             </div>
           </div>
         }
-
         @if (activeFilterChips().length > 0) {
-          <div class="lq-chip-row">
+          <div class="lq-chip-row" aria-label="Active filters">
             @for (chip of activeFilterChips(); track chip.key) {
-              <span class="lq-filter-chip">
-                {{ chip.label }}
-                <button type="button" class="lq-chip-remove" (click)="removeFilterChip(chip.key)" [attr.aria-label]="'Remove ' + chip.label">×</button>
-              </span>
+              <span class="lq-filter-chip"
+                >{{ chip.label
+                }}<button
+                  type="button"
+                  class="lq-chip-remove"
+                  [title]="'Remove ' + chip.label"
+                  [attr.aria-label]="'Remove ' + chip.label"
+                  (click)="removeFilterChip(chip.key)"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="icon"
+                    [ngTemplateOutletContext]="{ $implicit: 'close' }"
+                  /></button
+              ></span>
             }
           </div>
         }
       </section>
 
-      <!-- PIPELINE SUMMARY -->
-      <section class="lq-pipeline" aria-label="Lead pipeline">
-        @for (stage of pipeline(); track stage.key) {
-          <button
-            type="button"
-            class="lq-pipe-item"
-            [class.lq-pipe-active]="stageFilter() === stage.label"
-            (click)="selectPipelineStage(stage.key)"
-          >
-            <span class="lq-pipe-label">{{ stage.label }}</span>
-            <span class="lq-pipe-count">{{ stage.count }}</span>
-          </button>
+      <section class="lq-grid-wrap" aria-labelledby="lq-list-title">
+        <div class="lq-grid-heading">
+          <!-- <h2 id="lq-list-title">
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'list' }"
+            />
+            Leads <span class="lq-number">({{ totalCount() | number }})</span>
+          </h2> -->
+        </div>
+        @if (selectionCount() > 0) {
+          <div class="lq-bulk-bar" role="toolbar" aria-label="Bulk actions">
+            <span
+              ><span class="lq-number">{{ selectionCount() }}</span> selected</span
+            >
+            @if (permissions().assign) {
+              <button type="button" class="btn btn-primary btn-sm" (click)="bulkAssign()">
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'assign' }"
+                />
+                Assign Selected
+              </button>
+            }
+            @if (permissions().export) {
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="bulkExport()">
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'export' }"
+                />
+                Export Selected
+              </button>
+            }
+          </div>
+        }
+        @if (uiState() === 'error') {
+          <div class="lq-empty lq-error" role="alert">
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'alert' }"
+            />
+            <h3>Unable to load leads</h3>
+            <p>{{ errorMessage() }}</p>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refresh()">
+              <ng-container
+                [ngTemplateOutlet]="icon"
+                [ngTemplateOutletContext]="{ $implicit: 'refresh' }"
+              />
+              Try again
+            </button>
+          </div>
+        } @else if (uiState() === 'loading') {
+          <div class="lq-empty" role="status">
+            <span class="lq-spinner" aria-hidden="true"></span>
+            <p>Loading leads…</p>
+          </div>
+        } @else if (!hasResults()) {
+          <div class="lq-empty" role="status">
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'search' }"
+            />
+            <h3>No leads found</h3>
+            <p>Try adjusting your filters or add a lead.</p>
+            <div class="lq-empty-actions">
+              @if (permissions().create) {
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  title="Add"
+                  (click)="createLead()"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="icon"
+                    [ngTemplateOutletContext]="{ $implicit: 'add' }"
+                  />
+                  Add
+                </button>
+              }
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                (click)="clearAllFilters()"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{ $implicit: 'refresh' }"
+                />
+                Reset Filters
+              </button>
+            </div>
+          </div>
+        } @else {
+          <div class="lq-table-scroll" tabindex="0" role="region" aria-label="Leads table">
+            <table class="lq-table">
+              <caption class="visually-hidden">
+                Leads with contact details, campaign, owner, status and actions
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="lq-col-check">
+                    <input
+                      type="checkbox"
+                      [checked]="allSelected()"
+                      [indeterminate]="selectionCount() > 0 && !allSelected()"
+                      (change)="toggleSelectAll()"
+                      aria-label="Select all visible leads"
+                    />
+                  </th>
+                  <th scope="col">Lead Name</th>
+                  <th scope="col">Contact Details</th>
+                  <th scope="col">Campaign</th>
+                  <th scope="col">Owner</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (lead of filteredLeads(); track lead.id) {
+                  <tr
+                    [class.lq-row-selected]="isSelected(lead.id)"
+                    [class.lq-row-previewed]="isPreviewed(lead)"
+                  >
+                    <td class="lq-col-check">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(lead.id)"
+                        (change)="toggleSelect(lead.id)"
+                        [attr.aria-label]="'Select ' + lead.name"
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="lq-name-btn"
+                        (click)="previewLead(lead)"
+                        [title]="'View ' + lead.name"
+                      >
+                        <span
+                          class="lq-avatar"
+                          aria-hidden="true"
+                          [style.background]="getAvatarColor(lead.name) + '18'"
+                          [style.color]="getAvatarColor(lead.name)"
+                          >{{ getInitials(lead.name) }}</span
+                        ><span>{{ lead.name }}</span>
+                      </button>
+                    </td>
+                    <td>
+                      <div class="lq-contact">
+                        <span class="lq-number">{{ displayValue(lead.mobile) }}</span
+                        ><span class="lq-email" [title]="displayValue(lead.email)">{{
+                          displayValue(lead.email)
+                        }}</span>
+                      </div>
+                    </td>
+                    <td class="lq-campaign">{{ displayValue(lead.campaign) }}</td>
+                    <td>{{ displayValue(lead.owner) }}</td>
+                    <td>
+                      <span class="lq-badge" [ngClass]="stageClass(lead.stage)">{{
+                        lead.stage
+                      }}</span>
+                    </td>
+                    <td>
+                      <div class="lq-row-actions">
+                        <button
+                          type="button"
+                          class="lq-icon-btn"
+                          title="View lead"
+                          [attr.aria-label]="'View ' + lead.name"
+                          (click)="previewLead(lead)"
+                        >
+                          <ng-container
+                            [ngTemplateOutlet]="icon"
+                            [ngTemplateOutletContext]="{ $implicit: 'eye' }"
+                          />
+                        </button>
+                        @if (lead.owner === 'Unassigned' && permissions().assign) {
+                          <button
+                            type="button"
+                            class="lq-icon-btn"
+                            title="Assign lead"
+                            [attr.aria-label]="'Assign ' + lead.name"
+                            (click)="onAssign(lead)"
+                          >
+                            <ng-container
+                              [ngTemplateOutlet]="icon"
+                              [ngTemplateOutletContext]="{ $implicit: 'assign' }"
+                            />
+                          </button>
+                        }
+                        @if (permissions().communicate) {
+                          <button
+                            type="button"
+                            class="lq-icon-btn"
+                            title="Communicate"
+                            [attr.aria-label]="'Communicate with ' + lead.name"
+                            (click)="onCommunicate(lead)"
+                          >
+                            <ng-container
+                              [ngTemplateOutlet]="icon"
+                              [ngTemplateOutletContext]="{ $implicit: 'chat' }"
+                            />
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (filteredLeads().length !== totalCount()) {
+            <p class="lq-results-note">
+              Showing <span class="lq-number">{{ filteredLeads().length | number }}</span> of
+              <span class="lq-number">{{ totalCount() | number }}</span> leads. Refine your search
+              to narrow results.
+            </p>
+          }
         }
       </section>
 
-      <!-- BULK TOOLBAR -->
-      @if (selectionCount() > 0) {
-        <div class="lq-bulk-bar" role="toolbar" aria-label="Bulk actions">
-          <span class="lq-bulk-count">{{ selectionCount() }} selected</span>
-          <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkAssign()">Assign Selected</button>
-          <button type="button" class="btn btn-outline-primary btn-sm" (click)="bulkExport()">Export Selected</button>
-        </div>
-      }
-
-      <!-- MAIN GRID + PREVIEW -->
-      <div class="lq-content" [class.lq-content-preview]="selectedLead()">
-        <div class="lq-grid-wrap">
-          @if (!hasResults()) {
-            <div class="lq-empty" role="status">
-              <p class="lq-empty-title">No leads found.</p>
-              <p class="lq-empty-text">Try adjusting filters or create a new lead.</p>
-              <div class="lq-empty-actions">
-                <button type="button" class="btn btn-primary btn-sm" (click)="createLead()">Create Lead</button>
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearAllFilters()">Reset Filters</button>
+      <details class="lq-insights">
+        <summary>More views &amp; pipeline</summary>
+        <div class="lq-insights-body">
+          <div class="lq-saved-views" aria-label="More saved views">
+            @for (view of extraViews(); track view) {
+              <button
+                type="button"
+                class="lq-view-chip"
+                [class.lq-view-chip-active]="savedView() === view"
+                [attr.aria-pressed]="savedView() === view"
+                (click)="selectSavedView(view)"
+              >
+                {{ view }}
+              </button>
+            }
+          </div>
+          <div class="lq-extra-kpis">
+            @for (kpi of extraKpis(); track kpi.id) {
+              <div>
+                <span>{{ kpi.label }}</span
+                ><strong class="lq-number">{{ kpi.value | number }}</strong>
               </div>
-            </div>
-          } @else {
-            <div class="lq-table-scroll">
-              <table class="lq-table" role="grid">
-                <thead>
-                  <tr>
-                    <th scope="col" class="lq-col-check">
-                      <input
-                        type="checkbox"
-                        [checked]="allSelected()"
-                        (change)="toggleSelectAll()"
-                        aria-label="Select all visible leads"
-                      />
-                    </th>
-                    <!-- <th scope="col">Lead ID</th> -->
-                    <th scope="col">Lead Name</th>
-                    <th scope="col">Mobile</th>
-                    <th scope="col">Email</th>
-                    <!-- <th scope="col">Source</th> -->
-                    <th scope="col">Campaign</th>
-                    <!-- <th scope="col">Stage</th>
-                    <th scope="col">Temperature</th>
-                    <th scope="col">Donation Potential</th> -->
-                    <th scope="col">Owner</th>
-                    <!-- <th scope="col">Last Activity</th> -->
-                    <th scope="col">Next Follow-Up</th>
-                    <!-- <th scope="col">Health</th> -->
-                    <th scope="col">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (lead of filteredLeads(); track lead.id) {
-                    <tr
-                      [class.lq-row-selected]="isSelected(lead.id)"
-                      [class.lq-row-previewed]="isPreviewed(lead)"
-                      [class.lq-row-converted]="lead.converted"
-                    >
-                      <td class="lq-col-check">
-                        <input
-                          type="checkbox"
-                          [checked]="isSelected(lead.id)"
-                          (change)="toggleSelect(lead.id)"
-                          [attr.aria-label]="'Select ' + lead.name"
-                        />
-                      </td>
-                      <!-- <td>
-                        <button type="button" class="lq-link" (click)="previewLead(lead)">{{ lead.reference }}</button>
-                      </td> -->
-                      <td>
-                        <button type="button" class="lq-link lq-name-btn" (click)="previewLead(lead)">
-                          <span
-                            class="lq-avatar"
-                            aria-hidden="true"
-                            [style.background]="getAvatarColor(lead.name) + '22'"
-                            [style.color]="getAvatarColor(lead.name)"
-                          >{{ getInitials(lead.name) }}</span>
-                          {{ lead.name }}
-                        </button>
-                      </td>
-                      <td>{{ displayValue(lead.mobile) }}</td>
-                      <td class="lq-cell-email">{{ displayValue(lead.email) }}</td>
-                      <!-- <td><span class="lq-badge lq-badge-muted">{{ lead.source }}</span></td> -->
-                      <td>{{ displayValue(lead.campaign) }}</td>
-                      <!-- <td><span class="lq-badge" [class]="stageClass(lead.stage)">{{ lead.stage }}</span></td> -->
-                      <!-- <td><span class="lq-badge" [class]="temperatureClass(lead.temperature)">{{ lead.temperature }}</span></td> -->
-                      <!-- <td><span class="lq-badge" [class]="potentialClass(lead.donationPotential)">{{ lead.donationPotential }}</span></td> -->
-                      <td>{{ displayValue(lead.owner) }}</td>
-                      <!-- <td class="lq-cell-muted">{{ lead.lastActivity }}</td> -->
-                      <td>{{ displayValue(lead.nextFollowUp) }}</td>
-                      <!-- <td>
-                        <span class="lq-health" [class]="healthClass(lead.healthScore)">
-                          {{ lead.healthScore }} / 100
-                        </span>
-                      </td> -->
-                      <td class="lq-actions-cell">
-                        <div class="lq-row-actions">
-                          @if (lead.owner === 'Unassigned' && permissions().assign) {
-                            <button type="button" class="lq-icon-btn" title="Assign" aria-label="Assign" (click)="onAssign(lead)">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                                <circle cx="9" cy="7" r="4"/>
-                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                              </svg>
-                            </button>
-                          }
-                          <button type="button" class="lq-icon-btn" title="Preview" aria-label="Preview" (click)="previewLead(lead)">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                              <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                          </button>
-                          @if (permissions().communicate) {
-                            <button type="button" class="lq-icon-btn" title="Communicate" aria-label="Communicate" (click)="onCommunicate(lead)">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-                              </svg>
-                            </button>
-                          }
-                        </div>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
+            }
+          </div>
+          <div class="lq-pipeline" aria-label="Lead pipeline">
+            @for (stage of pipeline(); track stage.key) {
+              <button
+                type="button"
+                class="lq-view-chip"
+                [class.lq-view-chip-active]="stageFilter() === stage.label"
+                [attr.aria-pressed]="stageFilter() === stage.label"
+                (click)="selectPipelineStage(stage.key)"
+              >
+                {{ stage.label }} <span class="lq-number">{{ stage.count | number }}</span>
+              </button>
+            }
+          </div>
         </div>
-
-        <!-- PREVIEW DRAWER -->
-        @if (selectedLead(); as lead) {
-          <aside class="lq-drawer" aria-label="Lead preview">
-            <div class="lq-drawer-header">
-              <h2 class="lq-drawer-title">Lead details</h2>
-              <button type="button" class="lq-drawer-close" (click)="closePreview()" aria-label="Close preview">×</button>
-            </div>
-
-            <div class="lq-drawer-body">
-              <!-- PROFILE -->
-              <section class="lq-drawer-section">
-                <h3 class="lq-drawer-section-title">Profile</h3>
-                <dl class="lq-dl">
-                  <div class="lq-dl-row">
-                    <dt>Lead ID</dt>
-                    <dd>
-                      {{ lead.reference }}
-                      <button type="button" class="lq-copy-btn" (click)="copyValue('id', lead.reference)">
-                        {{ copiedField() === 'id' ? 'Copied' : 'Copy' }}
-                      </button>
-                    </dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Name</dt>
-                    <dd>{{ lead.name }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Phone</dt>
-                    <dd>
-                      {{ displayValue(lead.mobile) }}
-                      <button type="button" class="lq-copy-btn" (click)="copyValue('mobile', lead.mobile)">
-                        {{ copiedField() === 'mobile' ? 'Copied' : 'Copy' }}
-                      </button>
-                    </dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Email</dt>
-                    <dd>
-                      {{ displayValue(lead.email) }}
-                      <button type="button" class="lq-copy-btn" (click)="copyValue('email', lead.email)">
-                        {{ copiedField() === 'email' ? 'Copied' : 'Copy' }}
-                      </button>
-                    </dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Campaign</dt>
-                    <dd>{{ displayValue(lead.campaign) }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Lead Source</dt>
-                    <dd>{{ displayValue(lead.source) }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Owner</dt>
-                    <dd>{{ displayValue(lead.owner) }}</dd>
-                  </div>
-                  <!-- A LINK, NOT A PRINTED GUID. `convertedDonorId` is documented on the
-                       contract as being there "so the row can link straight to Donor 360" - it is
-                       the API's id and has no meaning to a reader. It was rendered as the value of
-                       a field labelled "Donor ID", which put 36 characters of hexadecimal in the
-                       lead panel. -->
-                  @if (lead.converted && lead.donorId) {
-                    <div class="lq-dl-row">
-                      <dt>Donor record</dt>
-                      <dd>
-                        <a [routerLink]="['/app/fundraising/relationships/donor-360']"
-                           [queryParams]="{ donorId: lead.donorId }">Open Donor 360</a>
-                        <span class="lq-badge lq-badge-good">Converted</span>
-                      </dd>
-                    </div>
-                  }
-                </dl>
-              </section>
-
-              <!-- STATUS -->
-              <section class="lq-drawer-section">
-                <h3 class="lq-drawer-section-title">Status</h3>
-                <div class="lq-status-row">
-                  <span class="lq-badge" [class]="stageClass(lead.stage)">{{ lead.stage }}</span>
-                  <span class="lq-badge" [class]="temperatureClass(lead.temperature)">{{ lead.temperature }}</span>
-                  <span class="lq-badge" [class]="potentialClass(lead.donationPotential)">{{ lead.donationPotential }}</span>
-                </div>
-              </section>
-
-              <!-- HEALTH -->
-              <section class="lq-drawer-section">
-                <h3 class="lq-drawer-section-title">Lead Health</h3>
-                <p class="lq-health-score" [class]="healthClass(lead.healthScore)">
-                  {{ lead.healthScore }} / 100
-                </p>
-              </section>
-
-              <!-- ENGAGEMENT -->
-              <section class="lq-drawer-section">
-                <h3 class="lq-drawer-section-title">Engagement snapshot</h3>
-                <dl class="lq-dl">
-                  <div class="lq-dl-row">
-                    <dt>Last contact outcome</dt>
-                    <dd>{{ displayValue(lead.lastContactOutcome) }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Last activity</dt>
-                    <dd>{{ displayValue(lead.lastActivity) }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Next follow-up</dt>
-                    <dd>{{ displayValue(lead.nextFollowUp) }}</dd>
-                  </div>
-                  <div class="lq-dl-row">
-                    <dt>Language</dt>
-                    <dd>{{ displayValue(lead.language) }}</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <!-- NEXT ACTION -->
-              <section class="lq-drawer-section">
-                <h3 class="lq-drawer-section-title">Recommended next action</h3>
-                <p class="lq-next-action">
-                  @if (lead.stage === 'New') {
-                    Initial contact
-                  } @else if (lead.stage === 'Assigned') {
-                    Qualification call
-                  } @else if (lead.stage === 'Contacted') {
-                    Follow-up discussion
-                  } @else if (lead.stage === 'Engaged') {
-                    Proposal discussion
-                  } @else if (lead.converted) {
-                    Open Donor 360
-                  } @else {
-                    Review status
-                  }
-                </p>
-              </section>
-            </div>
-
-            <div class="lq-drawer-footer">
-              @if (lead.owner === 'Unassigned' && permissions().assign) {
-                <button type="button" class="btn btn-primary btn-sm" (click)="onAssign(lead)">Assign</button>
-              }
-              @if (permissions().communicate) {
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="onCommunicate(lead)">Communicate</button>
-              }
-              @if (permissions().schedule) {
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="onSchedule(lead)">Schedule Follow-Up</button>
-              }
-              <button type="button" class="btn btn-outline-primary btn-sm" (click)="onTimeline(lead)">Open Timeline</button>
-            </div>
-          </aside>
-        }
-      </div>
-
-
+      </details>
     </div>
   </div>
 </main>
+
+<dialog
+  #leadDialog
+  class="lq-drawer"
+  aria-labelledby="lq-drawer-title"
+  aria-describedby="lq-drawer-description"
+  (click)="onPreviewBackdrop($event)"
+  (cancel)="closePreview()"
+  (close)="closePreview()"
+>
+  @if (selectedLead(); as lead) {
+    <div class="lq-drawer-header">
+      <div>
+        <h2 id="lq-drawer-title" class="lq-title">Lead Details</h2>
+        <p id="lq-drawer-description" class="lq-subtitle">
+          View complete information for this lead.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm lq-close"
+        title="Close lead details"
+        aria-label="Close lead details"
+        autofocus
+        (click)="closePreview()"
+      >
+        <ng-container
+          [ngTemplateOutlet]="icon"
+          [ngTemplateOutletContext]="{ $implicit: 'close' }"
+        />
+      </button>
+    </div>
+    <div class="lq-drawer-body">
+      <section class="lq-profile" aria-label="Lead profile">
+        <span
+          class="lq-avatar"
+          aria-hidden="true"
+          [style.background]="getAvatarColor(lead.name) + '18'"
+          [style.color]="getAvatarColor(lead.name)"
+          >{{ getInitials(lead.name) }}</span
+        >
+        <h3>{{ lead.name }}</h3>
+        <span class="lq-badge" [ngClass]="stageClass(lead.stage)">{{ lead.stage }}</span>
+      </section>
+      <section class="lq-drawer-section">
+        <h3>
+          <ng-container
+            [ngTemplateOutlet]="icon"
+            [ngTemplateOutletContext]="{ $implicit: 'file' }"
+          />
+          Lead Information
+        </h3>
+        <dl class="lq-dl">
+          <div>
+            <dt>Lead ID</dt>
+            <dd class="lq-number">
+              {{ lead.reference
+              }}<button
+                type="button"
+                class="lq-copy-btn"
+                title="Copy lead ID"
+                aria-label="Copy lead ID"
+                (click)="copyValue('id', lead.reference)"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{
+                    $implicit: copiedField() === 'id' ? 'check' : 'copy',
+                  }"
+                />
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>Phone Number</dt>
+            <dd class="lq-number">
+              {{ displayValue(lead.mobile) }}
+              @if (lead.mobile) {
+                <button
+                  type="button"
+                  class="lq-copy-btn"
+                  title="Copy phone number"
+                  aria-label="Copy phone number"
+                  (click)="copyValue('mobile', lead.mobile)"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="icon"
+                    [ngTemplateOutletContext]="{
+                      $implicit: copiedField() === 'mobile' ? 'check' : 'copy',
+                    }"
+                  />
+                </button>
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Email Address</dt>
+            <dd>
+              {{ displayValue(lead.email) }}
+              @if (lead.email) {
+                <button
+                  type="button"
+                  class="lq-copy-btn"
+                  title="Copy email address"
+                  aria-label="Copy email address"
+                  (click)="copyValue('email', lead.email)"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="icon"
+                    [ngTemplateOutletContext]="{
+                      $implicit: copiedField() === 'email' ? 'check' : 'copy',
+                    }"
+                  />
+                </button>
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Campaign</dt>
+            <dd>{{ displayValue(lead.campaign) }}</dd>
+          </div>
+          <div>
+            <dt>Lead Source</dt>
+            <dd>{{ displayValue(lead.source) }}</dd>
+          </div>
+          @if (lead.converted && lead.donorId) {
+            <div>
+              <dt>Donor record</dt>
+              <dd>
+                <a
+                  [routerLink]="['/app/fundraising/relationships/donor-360']"
+                  [queryParams]="{ donorId: lead.donorId }"
+                  >Open Donor 360
+                  <ng-container
+                    [ngTemplateOutlet]="icon"
+                    [ngTemplateOutletContext]="{ $implicit: 'arrow' }"
+                /></a>
+              </dd>
+            </div>
+          }
+        </dl>
+      </section>
+      <section class="lq-drawer-section">
+        <h3>
+          <ng-container
+            [ngTemplateOutlet]="icon"
+            [ngTemplateOutletContext]="{ $implicit: 'user' }"
+          />
+          Ownership
+        </h3>
+        <dl class="lq-dl">
+          <div>
+            <dt>Current Owner</dt>
+            <dd>{{ displayValue(lead.owner) }}</dd>
+          </div>
+          @if (lead.owner !== 'Unassigned' && lead.stage !== 'Assigned') {
+            <div>
+              <dt>Assignment Status</dt>
+              <dd><span class="lq-badge lq-badge-warn">Assigned</span></dd>
+            </div>
+          }
+        </dl>
+      </section>
+      <details class="lq-drawer-section lq-engagement">
+        <summary>
+          <ng-container
+            [ngTemplateOutlet]="icon"
+            [ngTemplateOutletContext]="{ $implicit: 'clock' }"
+          />
+          Engagement &amp; qualification
+        </summary>
+        <dl class="lq-dl">
+          <div>
+            <dt>Temperature</dt>
+            <dd>
+              <span class="lq-badge" [ngClass]="temperatureClass(lead.temperature)">{{
+                lead.temperature
+              }}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Donation Potential</dt>
+            <dd>
+              <span class="lq-badge" [ngClass]="potentialClass(lead.donationPotential)">{{
+                lead.donationPotential
+              }}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Lead Health</dt>
+            <dd class="lq-number">{{ lead.healthScore }} / 100</dd>
+          </div>
+          <div>
+            <dt>Last Contact Outcome</dt>
+            <dd>{{ displayValue(lead.lastContactOutcome) }}</dd>
+          </div>
+          @if (lead.lastActivity && lead.lastActivity !== lead.lastContactOutcome) {
+            <div>
+              <dt>Last Activity</dt>
+              <dd>{{ lead.lastActivity }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Next Follow-Up</dt>
+            <dd class="lq-number">{{ displayValue(lead.nextFollowUp) }}</dd>
+          </div>
+          <div>
+            <dt>Language</dt>
+            <dd>{{ displayValue(lead.language) }}</dd>
+          </div>
+          <div>
+            <dt>Recommended Action</dt>
+            <dd>
+              @switch (lead.stage) {
+                @case ('New') {
+                  Initial contact
+                }
+                @case ('Assigned') {
+                  Qualification call
+                }
+                @case ('Contacted') {
+                  Follow-up discussion
+                }
+                @case ('Engaged') {
+                  Proposal discussion
+                }
+                @default {
+                  {{ lead.converted ? 'Open Donor 360' : 'Review status' }}
+                }
+              }
+            </dd>
+          </div>
+        </dl>
+      </details>
+      <div class="lq-secondary-actions" aria-label="Additional lead actions">
+        @if (lead.owner === 'Unassigned' && permissions().assign) {
+          <button type="button" class="btn btn-primary btn-sm" (click)="onAssign(lead)">
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'assign' }"
+            />
+            Assign
+          </button>
+        }
+        @if (permissions().schedule) {
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="onSchedule(lead)">
+            <ng-container
+              [ngTemplateOutlet]="icon"
+              [ngTemplateOutletContext]="{ $implicit: 'calendar' }"
+            />
+            Schedule Follow-Up
+          </button>
+        }
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="onTimeline(lead)">
+          <ng-container
+            [ngTemplateOutlet]="icon"
+            [ngTemplateOutletContext]="{ $implicit: 'clock' }"
+          />
+          Open Timeline
+        </button>
+      </div>
+      <span class="visually-hidden" role="status">{{
+        copiedField() ? 'Copied to clipboard' : ''
+      }}</span>
+    </div>
+    <footer class="lq-drawer-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closePreview()">
+        <ng-container
+          [ngTemplateOutlet]="icon"
+          [ngTemplateOutletContext]="{ $implicit: 'close' }"
+        />
+        Close
+      </button>
+      @if (permissions().communicate) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="onCommunicate(lead)">
+          <ng-container
+            [ngTemplateOutlet]="icon"
+            [ngTemplateOutletContext]="{ $implicit: 'chat' }"
+          />
+          Communicate
+        </button>
+      }
+    </footer>
+  }
+</dialog>

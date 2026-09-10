@@ -44,6 +44,7 @@ export class OrganisationsCreateComponent {
   protected readonly legalStructure = signal<LegalStructure>('Trust');
   protected readonly registrationNumber = signal('');
   protected readonly registrationDate = signal('');
+  protected readonly description = signal('');
 
   // Address — optional; Country/State/City cascade when Country is India.
   protected readonly addressLine1 = signal('');
@@ -159,6 +160,7 @@ export class OrganisationsCreateComponent {
           legalStructure: this.legalStructure(),
           registrationNumber: this.registrationNumber(),
           registrationDate: this.registrationDate(),
+          description: this.description(),
           addressLine1: this.addressLine1(),
           addressLine2: this.addressLine2(),
           country: this.country(),

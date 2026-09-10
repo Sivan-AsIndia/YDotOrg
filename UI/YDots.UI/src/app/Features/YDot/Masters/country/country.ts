@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, WritableSignal, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -132,6 +132,36 @@ export class Country implements OnInit {
   // ---------- toasts ----------
   readonly toasts = signal<Toast[]>([]);
   private toastIdCounter = 0;
+
+  constructor() {
+    effect(() => this.animateCounter(this.filteredCountries().length, this.totalDisplay));
+    effect(() => this.animateCounter(this.activeCount(), this.activeDisplay));
+    effect(() => this.animateCounter(this.inactiveCount(), this.inactiveDisplay));
+    effect(() => this.animateCounter(this.regionsCount(), this.regionsDisplay));
+  }
+
+  /**
+   * Eases a summary tile's big number from its current displayed value to the freshly loaded one.
+   *
+   * Runs inside an `effect`, so it fires whenever the source count changes - initial load and
+   * every subsequent refresh alike - rather than only once.
+   */
+  private animateCounter(target: number, display: WritableSignal<number>): void {
+    const start = display();
+    if (start === target) return;
+
+    const durationMs = 600;
+    const startTime = performance.now();
+
+    const step = (now: number): void => {
+      const progress = Math.min((now - startTime) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      display.set(Math.round(start + (target - start) * eased));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+
+    requestAnimationFrame(step);
+  }
 
   /**
    * ngOnInit RATHER THAN ngAfterViewInit, which is what this used to use.
@@ -299,6 +329,38 @@ export class Country implements OnInit {
 
   readonly activeCount = computed(() => this.filteredCountries().filter((c) => c.isActive).length);
   readonly inactiveCount = computed(() => this.filteredCountries().filter((c) => !c.isActive).length);
+  readonly regionsCount = computed(() => this.tableRegions().length);
+
+  /**
+   * The fraction each summary ring draws, all genuinely data-derived rather than decorative.
+   *
+   * Total is always a full ring - there is nothing for it to be a fraction of. Active/Inactive
+   * are each a share of the loaded set, and Regions is the share of the platform's known regions
+   * that are actually represented in it.
+   */
+  readonly totalRatio = computed(() => (this.filteredCountries().length ? 1 : 0));
+  readonly activeRatio = computed(() =>
+    this.filteredCountries().length ? this.activeCount() / this.filteredCountries().length : 0,
+  );
+  readonly inactiveRatio = computed(() =>
+    this.filteredCountries().length ? this.inactiveCount() / this.filteredCountries().length : 0,
+  );
+  readonly regionsRatio = computed(() =>
+    this.regions().length ? this.regionsCount() / this.regions().length : 0,
+  );
+
+  /** Circumference of the summary ring's r=18 circle - shared by every card's stroke-dasharray. */
+  readonly ringCircumference = 2 * Math.PI * 18;
+
+  ringOffset(ratio: number): number {
+    return this.ringCircumference * (1 - Math.min(Math.max(ratio, 0), 1));
+  }
+
+  // ---------- animated summary counters ----------
+  readonly totalDisplay = signal(0);
+  readonly activeDisplay = signal(0);
+  readonly inactiveDisplay = signal(0);
+  readonly regionsDisplay = signal(0);
 
   readonly totalPages = computed(() =>
     this.filteredCountries().length === 0
@@ -372,16 +434,6 @@ export class Country implements OnInit {
 
   nextPage(): void {
     this.goToPage(this.currentPage() + 1);
-  }
-
-  refresh(): void {
-    this.searchText.set('');
-    this.selectedRegion.set('');
-    this.selectedStatus.set('');
-    this.statusFilter.set('all');
-    this.resetPaging();
-    this.loadCountries();
-    this.showToast('success', 'Reload successful', 'Country data has been refreshed');
   }
 
   // ================= navigation =================

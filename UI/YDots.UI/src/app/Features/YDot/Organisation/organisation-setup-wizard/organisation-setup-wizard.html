@@ -3,37 +3,97 @@
 <div class="org-page">
 
   <div class="org-header">
-    <div>
-      <h1 class="org-title">
-        <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
-        Create an organisation
-      </h1>
-      <p class="org-subtitle">
-        This creates the organisation, reserves its web address, and invites its first
-        administrator.
-      </p>
-    </div>
     <div class="org-header-actions">
       <a routerLink="/app/administration/organisation/directory"
          class="org-btn org-btn-ghost org-btn-sm">
         <i class="ri-arrow-left-line"></i> Back to organisations
       </a>
     </div>
+
+    <div class="wiz-hero">
+      <div class="wiz-hero-main">
+        <span class="org-title-icon" aria-hidden="true">
+          <i class="ri-building-4-line wiz-icon-static"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--base"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--side-left"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--side-right"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--mid"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--top"></i>
+        </span>
+        <div>
+          <h1 class="org-title">Create an organisation</h1>
+          <span class="wiz-title-underline" aria-hidden="true"></span>
+          <p class="org-subtitle">
+            This creates the organisation, reserves its web address, and invites its first
+            administrator.
+          </p>
+        </div>
+      </div>
+      <div class="wiz-hero-side">
+        <img class="wiz-hero-art" src="assets/images/pages/orgpic3.png" alt="" aria-hidden="true">
+      </div>
+    </div>
   </div>
 
   @if (step() !== 'done') {
     <div class="org-stepper">
-      <div class="org-step" [class.is-active]="stepNumber() >= 1">
-        <span class="org-step-index">1</span> Organisation
+      <div class="wiz-step" [class.is-active]="step() === 'organisation'" [class.is-done]="stepNumber() > 1"
+           style="animation-delay: 0ms">
+        <div class="wiz-step-inner">
+          <span class="wiz-step-icon"><i class="ri-building-line"></i></span>
+          <div class="wiz-step-text">
+            <span class="wiz-step-row">
+              <span class="wiz-step-num">01</span>
+              <span class="wiz-step-title">Organisation</span>
+            </span>
+            <span class="wiz-step-sub">Basic details</span>
+          </div>
+        </div>
       </div>
-      <div class="org-step" [class.is-active]="stepNumber() >= 2">
-        <span class="org-step-index">2</span> Contact
+      <span class="wiz-step-arrow"><i class="ri-arrow-right-s-line"></i></span>
+
+      <div class="wiz-step wiz-step--blue" [class.is-active]="step() === 'address'" [class.is-done]="stepNumber() > 2"
+           style="animation-delay: 60ms">
+        <div class="wiz-step-inner">
+          <span class="wiz-step-icon"><i class="ri-user-line"></i></span>
+          <div class="wiz-step-text">
+            <span class="wiz-step-row">
+              <span class="wiz-step-num">02</span>
+              <span class="wiz-step-title">Contact</span>
+            </span>
+            <span class="wiz-step-sub">Primary contact information</span>
+          </div>
+        </div>
       </div>
-      <div class="org-step" [class.is-active]="stepNumber() >= 3">
-        <span class="org-step-index">3</span> Administrator
+      <span class="wiz-step-arrow"><i class="ri-arrow-right-s-line"></i></span>
+
+      <div class="wiz-step wiz-step--plum" [class.is-active]="step() === 'administrator'" [class.is-done]="stepNumber() > 3"
+           style="animation-delay: 120ms">
+        <div class="wiz-step-inner">
+          <span class="wiz-step-icon"><i class="ri-group-line"></i></span>
+          <div class="wiz-step-text">
+            <span class="wiz-step-row">
+              <span class="wiz-step-num">03</span>
+              <span class="wiz-step-title">Administrator</span>
+            </span>
+            <span class="wiz-step-sub">Invite first administrator</span>
+          </div>
+        </div>
       </div>
-      <div class="org-step" [class.is-active]="stepNumber() >= 4">
-        <span class="org-step-index">4</span> Review
+      <span class="wiz-step-arrow"><i class="ri-arrow-right-s-line"></i></span>
+
+      <div class="wiz-step wiz-step--gold" [class.is-active]="step() === 'review'" [class.is-done]="stepNumber() > 4"
+           style="animation-delay: 180ms">
+        <div class="wiz-step-inner">
+          <span class="wiz-step-icon"><i class="ri-file-list-3-line"></i></span>
+          <div class="wiz-step-text">
+            <span class="wiz-step-row">
+              <span class="wiz-step-num">04</span>
+              <span class="wiz-step-title">Review</span>
+            </span>
+            <span class="wiz-step-sub">Review and confirm details</span>
+          </div>
+        </div>
       </div>
     </div>
   }
@@ -48,7 +108,18 @@
   <!-- ===================================================================== Step 1 -->
   @if (step() === 'organisation') {
     <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--blue">About the organisation</h3>
+      <div class="wiz-section-head">
+        <div class="wiz-section-head-main">
+          <span class="wiz-section-icon"><i class="ri-building-line"></i></span>
+          <div>
+            <h3>About the organisation</h3>
+            <p>Enter the core information about the organisation.</p>
+          </div>
+        </div>
+        <div class="wiz-section-badge">
+          <span class="wiz-section-badge-pill">Step {{ stepNumber() }} of 4</span>
+        </div>
+      </div>
 
       <div class="org-grid org-grid-2">
         <div class="org-field">
@@ -145,6 +216,14 @@
         </div>
       </div>
 
+      <div class="org-field">
+        <label class="org-field-label" for="org-description">Description</label>
+        <textarea id="org-description" class="org-input" rows="3" maxlength="1000"
+                  [ngModel]="form().description"
+                  (ngModelChange)="update('description', $event)"
+                  placeholder="A short description of the organisation — shown on its profile."></textarea>
+      </div>
+
       <div class="org-step-actions">
         <button type="button" class="org-btn org-btn-primary"
                 [disabled]="!organisationStepValid()" (click)="next()">
@@ -157,11 +236,21 @@
   <!-- ===================================================================== Step 2 -->
   @if (step() === 'address') {
     <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--blue">Contact and defaults</h3>
-      <p class="org-section-note">
-        All optional. The administrator completes the full profile once they activate their
-        account, and the organisation cannot be approved until they have.
-      </p>
+      <div class="wiz-section-head">
+        <div class="wiz-section-head-main">
+          <span class="wiz-section-icon"><i class="ri-user-line"></i></span>
+          <div>
+            <h3>Contact and defaults</h3>
+            <p>
+              All optional. The administrator completes the full profile once they activate their
+              account, and the organisation cannot be approved until they have.
+            </p>
+          </div>
+        </div>
+        <div class="wiz-section-badge">
+          <span class="wiz-section-badge-pill">Step {{ stepNumber() }} of 4</span>
+        </div>
+      </div>
 
       <div class="org-grid org-grid-2">
         <div class="org-field">
@@ -258,11 +347,21 @@
   <!-- ===================================================================== Step 3 -->
   @if (step() === 'administrator') {
     <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--blue">First administrator</h3>
-      <p class="org-section-note">
-        They receive an invitation link, choose their own password, and then complete the
-        organisation's profile. No password is ever created here or sent by e-mail.
-      </p>
+      <div class="wiz-section-head">
+        <div class="wiz-section-head-main">
+          <span class="wiz-section-icon"><i class="ri-group-line"></i></span>
+          <div>
+            <h3>First administrator</h3>
+            <p>
+              They receive an invitation link, choose their own password, and then complete the
+              organisation's profile. No password is ever created here or sent by e-mail.
+            </p>
+          </div>
+        </div>
+        <div class="wiz-section-badge">
+          <span class="wiz-section-badge-pill">Step {{ stepNumber() }} of 4</span>
+        </div>
+      </div>
 
       <div class="org-grid org-grid-2">
         <div class="org-field">
@@ -350,7 +449,18 @@
   <!-- ===================================================================== Step 4 -->
   @if (step() === 'review') {
     <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--good">Check before creating</h3>
+      <div class="wiz-section-head">
+        <div class="wiz-section-head-main">
+          <span class="wiz-section-icon is-good"><i class="ri-file-list-3-line"></i></span>
+          <div>
+            <h3>Check before creating</h3>
+            <p>Review everything below before the organisation is created.</p>
+          </div>
+        </div>
+        <div class="wiz-section-badge">
+          <span class="wiz-section-badge-pill">Step {{ stepNumber() }} of 4</span>
+        </div>
+      </div>
 
       <div class="org-review-grid">
         <div><span class="detail-label">Organisation</span>

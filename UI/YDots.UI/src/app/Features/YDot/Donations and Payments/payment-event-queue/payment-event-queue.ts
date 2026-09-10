@@ -478,6 +478,27 @@ export class PaymentEventQueueComponent {
   }
 
   // ===========================================================================================
+  // Row quick-view popup - the plus icon on a row. Carries the columns the table hides on
+  // md screens and below (td-xl-none), so the collapsed index never loses its data.
+  // ===========================================================================================
+
+  protected readonly rowPopup = signal<PaymentReceiptRow | null>(null);
+
+  protected openRowPopup(row: PaymentReceiptRow): void {
+    this.rowPopup.set(row);
+  }
+
+  protected closeRowPopup(): void {
+    this.rowPopup.set(null);
+  }
+
+  /** Close the quick view first so the full detail drawer opens on a clean screen. */
+  protected inspectFromPopup(ref: string): void {
+    this.closeRowPopup();
+    this.inspect(ref);
+  }
+
+  // ===========================================================================================
   // Retry (Fail rows) - unchanged from the queue's safe-retry flow
   // ===========================================================================================
 

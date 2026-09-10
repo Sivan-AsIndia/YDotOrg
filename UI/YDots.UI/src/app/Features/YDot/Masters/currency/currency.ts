@@ -391,19 +391,6 @@ export class CurrencyComponent implements OnInit {
     return pages;
   }
 
-  onRefresh(): void {
-    this.searchText = '';
-    this.selectedType = '';
-    this.selectedStatus = '';
-    this.currentPage = 1;
-
-    // The reference-data cache is invalidated too: a currency added or retired here appears in
-    // the country form's dropdown, and a cached list would keep offering the old one.
-    this.masters.invalidateReferenceData();
-    this.loadData();
-    this.showToast('info', 'Refresh', 'Data refreshed');
-  }
-
   trackById(_: number, item: Currency): string {
     return item.id;
   }

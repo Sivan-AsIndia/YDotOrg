@@ -35,7 +35,14 @@
 
       <div class="org-hero">
         <div class="org-hero-main">
-          <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
+          <span class="org-title-icon" aria-hidden="true">
+            <i class="ri-building-line wiz-icon-static"></i>
+            <i class="ri-building-line wiz-icon-part wiz-icon-part--base"></i>
+            <i class="ri-building-line wiz-icon-part wiz-icon-part--side-left"></i>
+            <i class="ri-building-line wiz-icon-part wiz-icon-part--side-right"></i>
+            <i class="ri-building-line wiz-icon-part wiz-icon-part--mid"></i>
+            <i class="ri-building-line wiz-icon-part wiz-icon-part--top"></i>
+          </span>
           <div>
             <h1 class="org-title">{{ org.name }}</h1>
             <p class="org-subtitle">
@@ -52,10 +59,7 @@
         </div>
 
         <div class="org-hero-side">
-          @if (org.description) {
-            <p class="org-hero-quote">&ldquo;{{ org.description }}&rdquo;</p>
-          }
-          <img class="org-hero-art" src="assets/images/orgpic2.png" alt="" aria-hidden="true">
+          <img class="org-hero-art" src="assets/images/pages/orgpic1.png" alt="" aria-hidden="true">
         </div>
       </div>
     </div>
@@ -371,21 +375,32 @@
         } @else {
           <div class="org-profile-layout">
               <aside class="org-identity-card">
-                <span class="org-identity-kicker">Organisation</span>
-                <h2 class="org-identity-name">{{ org.name }}</h2>
-                <p class="org-identity-code">{{ org.code }}</p>
-                <p class="org-identity-code">{{ org.hostName }}</p>
-                @if (org.description) {
-                  <blockquote class="org-identity-quote">&ldquo;{{ org.description }}&rdquo;</blockquote>
-                }
-                <img class="org-identity-art" src="assets/images/orgpic2.png" alt="" aria-hidden="true">
+                <header class="org-identity-head">
+                  <h3>Organisation Details</h3>
+                  <p>Additional information</p>
+                </header>
+                <div class="org-info-rows">
+                  <div class="org-info-row"><span>Business Unit</span><span>{{ org.businessUnitName || '—' }}</span></div>
+                  <div class="org-info-row"><span>Time Zone</span><span>{{ org.timeZone || '—' }}</span></div>
+                  <div class="org-info-row"><span>Currency</span><span>{{ org.defaultCurrency || '—' }}</span></div>
+                  <div class="org-info-row"><span>Language</span><span>{{ org.defaultCulture || '—' }}</span></div>
+                  <div class="org-info-row">
+                    <span>Created</span>
+                    <span>{{ org.createdAtUtc ? (org.createdAtUtc | date: 'mediumDate') : '—' }}</span>
+                  </div>
+                </div>
+                <div class="org-identity-about">
+                  <span class="org-identity-about-label">About</span>
+                  <p>{{ org.description || 'No description has been added yet.' }}</p>
+                </div>
+                <img class="org-identity-art" src="assets/images/pages/orgpic2.png" alt="" aria-hidden="true">
               </aside>
 
               <div class="org-profile-content">
                 <div class="org-info-grid">
                   <section class="org-info-card">
                     <header class="org-info-card-head">
-                      <span class="org-info-card-icon"><i class="ri-building-4-line"></i></span>
+                      <span class="org-info-card-icon"><i class="ri-profile-line"></i></span>
                       <div>
                         <h3>Organisation Profile</h3>
                         <p>Core details about the organisation</p>
@@ -401,7 +416,7 @@
 
                   <section class="org-info-card">
                     <header class="org-info-card-head">
-                      <span class="org-info-card-icon"><i class="ri-file-text-line"></i></span>
+                      <span class="org-info-card-icon"><i class="ri-file-list-3-line"></i></span>
                       <div>
                         <h3>Statutory Details</h3>
                         <p>Regulatory information</p>
@@ -420,7 +435,7 @@
 
                   <section class="org-info-card">
                     <header class="org-info-card-head">
-                      <span class="org-info-card-icon"><i class="ri-phone-line"></i></span>
+                      <span class="org-info-card-icon"><i class="ri-contacts-line"></i></span>
                       <div>
                         <h3>Contact Information</h3>
                         <p>Primary contact details</p>
@@ -440,7 +455,7 @@
 
                   <section class="org-info-card">
                     <header class="org-info-card-head">
-                      <span class="org-info-card-icon"><i class="ri-map-pin-line"></i></span>
+                      <span class="org-info-card-icon"><i class="ri-map-pin-2-line"></i></span>
                       <div>
                         <h3>Address</h3>
                         <p>Registered address of the organisation</p>
@@ -461,7 +476,7 @@
 
                 <section class="org-info-card">
                   <header class="org-info-card-head">
-                    <span class="org-info-card-icon"><i class="ri-team-line"></i></span>
+                    <span class="org-info-card-icon"><i class="ri-group-line"></i></span>
                     <div>
                       <h3>People &amp; Administration</h3>
                       <p>Key people associated with this organisation</p>

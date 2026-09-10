@@ -233,30 +233,6 @@ textarea:focus-visible {
   fill: var(--primary);
 }
 
-/* Icon circle button (refresh) */
-.btn-icon-circle {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: #fff;
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all .15s;
-}
-.btn-icon-circle:hover:not(:disabled) {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-.btn-icon-circle:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
-
 /* Create button — solid green */
 .btn-create {
   display: inline-flex;
@@ -1570,7 +1546,6 @@ textarea.form-control {
   .page-title { font-size: 1.22rem; }
   .page-header-right { justify-content: stretch; gap: .5rem; }
   .page-header-right > * { flex: 1; }
-  .page-header-right .btn-icon-circle { flex: 0 0 42px; }
   .stats-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .stat-card { min-height: 68px; padding: .65rem .55rem; gap: .5rem; }
   .stat-icon { width: 32px; height: 32px; }

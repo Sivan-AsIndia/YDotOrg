@@ -20,6 +20,7 @@
   --org-blue: #58717c;
   --org-blue-soft: #e6eff3;
   --org-plum: #6b4a72;
+  --org-plum-soft: #f1e9f2;
   --org-good: #2f7d4f;
   --org-good-soft: #e5efe7;
   --org-error: #c0392b;
@@ -118,17 +119,132 @@
   flex-wrap: wrap;
 }
 .org-title-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  background: var(--org-meadow-soft);
   color: var(--org-meadow);
-  font-size: 22px;
+  opacity: 0.72;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
   flex: none;
 }
+
+/* !important on both rules is load-bearing here, not defensive styling: the
+   app's global stylesheet has one giant selector list — body, p, span, div,
+   ..., i, ... — that forces font-size: var(--font-size-base) !important onto
+   every bare <i> (and <span>) in the app for its site-wide type scale. That
+   !important beats specificity entirely, so without matching it here every
+   icon in this component is silently pinned to that global base size (13
+   or 14px) no matter what font-size is set on it or its wrapper. */
+.wiz-icon-static,
+.wiz-icon-part {
+  font-size: 30px !important;
+}
+
+/* The header icon has one plain, always-visible copy of the glyph
+   (.wiz-icon-static) plus five clipped copies used only transiently, on
+   hover, to animate — same technique as the setup wizard's header icon.
+   Stacking clipped copies of a thin line-icon PERMANENTLY causes visible
+   seams (their clip edges don't anti-alias identically), so the five
+   pieces only exist on screen for the ~1.6s hover animation; before hover,
+   and again the instant it finishes, only the single clean static icon is
+   shown, with a hard, imperceptible cut between the two. */
+.wiz-icon-part {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.wiz-icon-part--base { clip-path: inset(75% 0 0 0); }
+.wiz-icon-part--side-left { clip-path: inset(50% 50% 25% 0); }
+.wiz-icon-part--side-right { clip-path: inset(50% 0 25% 50%); }
+.wiz-icon-part--mid { clip-path: inset(25% 0 50% 0); }
+.wiz-icon-part--top { clip-path: inset(0 0 75% 0); }
+
+/* Every piece falls in from above the header — as if dropped from the top
+   of the section — landing in this order: base first, then both walls,
+   then the middle, then the roof last. */
+.org-hero:hover .wiz-icon-static {
+  animation: wiz-icon-static-handoff 1.6s both;
+}
+.org-hero:hover .wiz-icon-part--base {
+  animation: wiz-icon-fall-base 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--side-left,
+.org-hero:hover .wiz-icon-part--side-right {
+  animation: wiz-icon-fall-sides 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--mid {
+  animation: wiz-icon-fall-mid 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--top {
+  animation: wiz-icon-fall-top 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* The clean icon: gone the instant hover starts, back the instant every
+   piece has finished (96% = 1.53s in). */
+@keyframes wiz-icon-static-handoff {
+  0% { opacity: 1; }
+  1% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  95% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes wiz-icon-fall-base {
+  0% { opacity: 0; transform: translateY(-60px); }
+  27% { opacity: 1; transform: translateY(8px); }
+  34% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-sides {
+  0% { opacity: 0; transform: translateY(-60px); }
+  19% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  47% { opacity: 1; transform: translateY(8px); }
+  53% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-mid {
+  0% { opacity: 0; transform: translateY(-60px); }
+  41% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  66% { opacity: 1; transform: translateY(8px); }
+  72% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-top {
+  0% { opacity: 0; transform: translateY(-60px); }
+  59% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  89% { opacity: 1; transform: translateY(8px); }
+  94% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-hero:hover .wiz-icon-static {
+    animation: none;
+  }
+  .org-hero:hover .wiz-icon-part--base,
+  .org-hero:hover .wiz-icon-part--side-left,
+  .org-hero:hover .wiz-icon-part--side-right,
+  .org-hero:hover .wiz-icon-part--mid,
+  .org-hero:hover .wiz-icon-part--top {
+    animation: none;
+  }
+}
+
 .org-subtitle {
   display: flex;
   align-items: center;
@@ -155,25 +271,57 @@
 }
 
 /* ---------- Hero banner (identity + decorative panel) ---------- */
+/* No padding here at all — padding on THIS element applies to every child,
+   including the image side, which is exactly what kept leaving a top/bottom
+   gap even after the right-side padding was removed. The text side now
+   carries its own padding instead, so the image side has none on any edge. */
+/* Shifted cooler toward the right edge — a warm cream on its own read as a
+   mismatch against the blue-toned glass photo it fades into; ending on a
+   pale blue-grey instead lets the two blend rather than seam. */
+/* A moving pastel blend of the module's own brand colours (meadow, blue,
+   plum, gold) rather than random hues, so "colourful" still reads as part
+   of the same design system — kept light enough that the existing dark text
+   colours need no changes. background-size larger than the box plus a slow
+   position shift is what gives the gradient its gentle animated life. */
 .org-hero {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 24px;
-  padding: 20px 32px;
+  min-height: 162px;
   border-radius: 22px;
-  background: linear-gradient(120deg, #f8f7f1 0%, #f0f1e9 55%, #e9ece2 100%);
+  background: linear-gradient(
+    115deg,
+    var(--org-meadow-soft) 0%,
+    var(--org-blue-soft) 35%,
+    var(--org-plum-soft) 65%,
+    var(--org-gold-soft) 100%
+  );
+  background-size: 220% 220%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 12px 28px -14px rgba(30, 42, 36, 0.28);
   overflow: hidden;
+  animation: org-fade-up 0.4s ease both, org-gradient-drift 14s ease-in-out infinite;
 }
 
+@keyframes org-gradient-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* flex-start, not center: the icon is now taller than the title line alone,
+   so centering it against the WHOLE title+subtitle+badge stack pulled it
+   down to float next to the code line instead of the title. Anchoring both
+   to the top keeps the icon beside the name, where it reads correctly. */
 .org-hero-main {
   display: flex;
+  flex: 1 1 auto;
   align-items: flex-start;
   gap: 16px;
   position: relative;
   z-index: 1;
   min-width: 0;
+  padding: 20px 0 20px 32px;
 }
 
 .org-hero-main .org-title {
@@ -197,31 +345,17 @@
   margin-top: 10px;
 }
 
+/* Deliberately NOT padded like org-hero-main — this side is meant to run
+   flush to the card's top, right and bottom edges (a photo panel), while the
+   text side keeps the card's normal inset. */
 .org-hero-side {
-  flex: 0 0 340px;
+  flex: 0 0 38%;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
   min-width: 0;
   z-index: 1;
 }
 
-.org-hero-quote {
-  margin: 0;
-  padding-bottom: 14px;
-  max-width: 260px;
-  border-bottom: 2px solid rgba(30, 42, 36, 0.18);
-  font-size: 14px;
-  font-style: italic;
-  line-height: 1.5;
-  color: var(--org-ink-2);
-  text-align: right;
-  position: relative;
-  z-index: 1;
-}
-
-/* Sits in normal flow below the quote rather than being absolutely
+/* Sits in normal flow rather than being absolutely
    positioned and bled off the card edge — a fixed offset like that clipped
    itself whenever the card ended up shorter than the image needed.
 
@@ -229,37 +363,42 @@
    rather than a photo pasted on top of it: a soft radial fade dissolves the
    image's own edges into the card's background instead of drawing a hard
    rectangle over it. */
+/* 162px is this box's own aspect ratio at its 340px width matching the
+   source photo's ~2.1:1 aspect — close enough to "contain" that cover barely
+   crops anything, instead of slicing through the middle of the building. */
+/* Fills its side completely — top, right and bottom flush with the card,
+   rounded only on the right to match the card's own corners there. Faded
+   only on the left, so it blends into the text side instead of a hard seam. */
 .org-hero-art {
   width: 100%;
-  height: 140px;
+  height: 100%;
   object-fit: cover;
-  object-position: 75% 20%;
-  flex: none;
-  margin-top: 10px;
-  -webkit-mask-image: radial-gradient(ellipse 72% 78% at 62% 48%, #000 50%, transparent 100%);
-  mask-image: radial-gradient(ellipse 72% 78% at 62% 48%, #000 50%, transparent 100%);
+  object-position: center 35%;
+  flex: 1 1 auto;
+  border-radius: 0 22px 22px 0;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 22%);
 }
 
 @media (max-width: 860px) {
   .org-hero {
     flex-direction: column;
-    padding: 24px;
+  }
+  .org-hero-main {
+    padding: 24px 24px 0 24px;
   }
   .org-hero-side {
     flex: none;
     width: 100%;
-    align-items: flex-start;
-    padding-top: 10px;
-  }
-  .org-hero-quote {
-    max-width: none;
-    text-align: left;
+    padding: 0 24px 24px 24px;
   }
   .org-hero-art {
     width: 100%;
-    max-width: 260px;
-    height: 120px;
+    height: 140px;
     margin-top: 14px;
+    border-radius: 14px;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 
@@ -298,6 +437,17 @@
     transition: none;
   }
   .org-btn-primary:hover {
+    transform: none;
+  }
+  .org-hero,
+  .org-identity-card,
+  .org-info-card,
+  .org-tabs-bar,
+  .org-tab-warn {
+    animation: none;
+  }
+  .org-info-card:hover,
+  .org-tab:hover {
     transform: none;
   }
 }
@@ -1087,14 +1237,27 @@
 }
 
 /* ---------- Tabs ---------- */
+/* Same brand-gradient-and-drift treatment as the hero banner and sidebar,
+   scaled down into a pill-shaped bar so the tab strip reads as part of the
+   same design system instead of a plain, unstyled row of links. */
 .org-tabs-bar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid var(--org-border);
+  padding: 8px;
+  border-radius: 16px;
+  background: linear-gradient(
+    100deg,
+    var(--org-meadow-soft) 0%,
+    var(--org-blue-soft) 50%,
+    var(--org-plum-soft) 100%
+  );
+  background-size: 200% 200%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 8px 20px -12px rgba(30, 42, 36, 0.22);
   margin-bottom: 20px;
   flex-wrap: wrap;
+  animation: org-fade-up 0.4s 0.16s ease both, org-gradient-drift 18s 2s ease-in-out infinite;
 }
 .org-tabs {
   display: flex;
@@ -1112,31 +1275,36 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 10px;
   flex: none;
 }
 .org-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: none;
+  background: transparent;
   border: none;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 10px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--org-muted);
+  color: var(--org-ink-2);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   white-space: nowrap;
   font-family: inherit;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
 }
 .org-tab:hover {
   color: var(--org-ink);
+  background: rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
 }
 .org-tab.is-active {
   color: var(--org-meadow);
-  border-bottom-color: var(--org-meadow);
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(30, 42, 36, 0.12);
+}
+.org-tab.is-active:hover {
+  transform: none;
 }
 
 /* ---------- Banners / alerts ---------- */
@@ -1979,6 +2147,12 @@
   min-width: 0;
 }
 
+/* Same cool-toward-the-bottom shift as the hero banner, so the sidebar's
+   photo — which fades in at its bottom edge — blends into the card instead
+   of sitting on a visibly warmer background. */
+/* Same brand-colour blend as the header, running top-to-bottom and drifting
+   on its own slightly offset timing so the two sections don't pulse in
+   lockstep. */
 .org-identity-card {
   display: flex;
   flex-direction: column;
@@ -1986,55 +2160,74 @@
   padding: 24px 22px;
   border: 1px solid var(--org-border);
   border-radius: 16px;
-  background: #fafaf6;
+  background: linear-gradient(
+    165deg,
+    var(--org-meadow-soft) 0%,
+    var(--org-blue-soft) 45%,
+    var(--org-plum-soft) 75%,
+    var(--org-gold-soft) 100%
+  );
+  background-size: 200% 200%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 10px 24px -14px rgba(30, 42, 36, 0.24);
   position: relative;
   overflow: hidden;
   min-height: 260px;
+  animation: org-fade-up 0.4s 0.08s ease both, org-gradient-drift 16s 1s ease-in-out infinite;
 }
 
-.org-identity-kicker {
+/* The organisation's own description, shown here (and nowhere else in this
+   view — the header already carries the name) rather than styled as a quote,
+   since it's the record's actual "about" text, not a tagline. */
+.org-identity-about {
+  margin: 4px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--org-border);
+}
+
+.org-identity-about-label {
+  display: block;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--org-muted);
+  margin-bottom: 6px;
 }
 
-.org-identity-name {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--org-ink);
+.org-identity-about p {
   margin: 0;
-}
-
-.org-identity-code {
-  font-size: 12.5px;
-  color: var(--org-muted);
-  margin: 0;
-}
-
-.org-identity-quote {
-  margin: 10px 0 0;
-  padding: 12px 0 0;
-  border-top: 1px solid var(--org-border);
-  font-size: 13px;
-  font-style: italic;
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--org-ink-2);
 }
 
 /* Feathered the same way as the header banner's illustration, so the two
    read as one visual language rather than a photo dropped onto a card. */
+/* 155px matches this box's own ~216px inner width against the source
+   photo's ~1.4:1 aspect ratio, so cover crops only a sliver off the sides
+   instead of cutting through the roofline or the ground. */
+/* This card is stretched by the grid to match the taller card column beside
+   it (org-profile-content), so its own height varies with screen width and
+   content. A fixed image height plus margin-top:auto left the leftover space
+   as a gap ABOVE the image instead of closing it — flex-grow makes the image
+   itself absorb all of that leftover space, so it always touches both the
+   text above and the card's bottom edge with nothing in between. */
+/* Breaks out of the card's own padding on three sides (negative margins
+   matching that padding exactly) so it sits flush against the card's left,
+   right and bottom edges — rounded only at the bottom to match the card's
+   corners there. margin-top:auto still pushes it down to the bottom of
+   whatever height the card is stretched to, but its own height stays fixed
+   and modest rather than growing to fill that leftover space. */
 .org-identity-art {
-  width: 100%;
-  height: 180px;
+  width: calc(100% + 44px);
+  height: 190px;
+  flex: none;
   object-fit: cover;
-  object-position: center 35%;
-  margin-top: auto;
-  -webkit-mask-image: radial-gradient(ellipse 85% 80% at 50% 55%, #000 50%, transparent 100%);
-  mask-image: radial-gradient(ellipse 85% 80% at 50% 55%, #000 50%, transparent 100%);
+  object-position: center 40%;
+  margin: auto -22px -24px -22px;
+  border-radius: 0 0 16px 16px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 28%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 28%);
 }
 
 .org-info-grid {
@@ -2052,11 +2245,29 @@
   box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 4px 10px -8px rgba(30, 42, 36, 0.2);
   min-width: 0;
   width: 100%;
+  animation: org-fade-up 0.4s 0.12s ease both;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.org-info-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 4px rgba(30, 42, 36, 0.05), 0 14px 28px -12px rgba(30, 42, 36, 0.28);
+}
+
+@keyframes org-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .org-info-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -2065,32 +2276,42 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  font-size: 18px;
+  font-size: 30px !important;
+  line-height: 1;
   flex: none;
-  background: var(--org-meadow-soft);
   color: var(--org-meadow);
+  opacity: 0.72;
+}
+
+/* !important required — see the note on .org-title-icon above: the global
+   stylesheet's bare "i" selector rule wins over specificity otherwise. */
+.org-info-card-icon i {
+  font-size: 30px !important;
 }
 
 .org-info-card-icon.is-warn {
-  background: var(--org-warn-soft);
   color: var(--org-warn);
 }
 
 .org-info-card-icon.is-good {
-  background: var(--org-good-soft);
   color: var(--org-good);
 }
 
 /* The small flag on the "Review & submit" tab when the profile still has
    outstanding fields — an at-a-glance reason to open that tab, not just a
-   label. */
+   label. The gentle pulse is what makes it read as "needs attention" rather
+   than just another static icon in the row. */
 .org-tab-warn {
-  font-size: 13px;
+  font-size: 13px !important;
   color: var(--org-warn);
   margin-left: 2px;
+  display: inline-block;
+  animation: org-pulse 2s ease-in-out infinite;
+}
+
+@keyframes org-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.88); }
 }
 
 .org-info-card-head h3 {
@@ -2101,6 +2322,25 @@
 }
 
 .org-info-card-head p {
+  font-size: 12.5px;
+  color: var(--org-muted);
+  margin: 2px 0 0;
+}
+
+/* Same typography as .org-info-card-head, without the icon column — the
+   sidebar's own header carries no icon. */
+.org-identity-head {
+  margin-bottom: 16px;
+}
+
+.org-identity-head h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--org-ink);
+}
+
+.org-identity-head p {
   font-size: 12.5px;
   color: var(--org-muted);
   margin: 2px 0 0;
@@ -2145,9 +2385,6 @@
   }
   .org-identity-card {
     min-height: 0;
-  }
-  .org-identity-art {
-    height: 130px;
   }
 }
 

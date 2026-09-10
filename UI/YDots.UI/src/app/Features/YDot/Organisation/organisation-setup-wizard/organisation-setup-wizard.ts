@@ -82,6 +82,7 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
     subdomain: '',
     code: '',
     organisationType: '',
+    description: '',
     contactPhoneCountryCode: '+91',
     contactPhone: '',
     timeZone: 'Asia/Kolkata',
@@ -340,6 +341,7 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
         code: f.code.trim() || null,
         legalName: f.legalName.trim() || null,
         organisationType: f.organisationType || null,
+        description: f.description.trim() || null,
         contactPhoneCountryCode: f.contactPhone ? f.contactPhoneCountryCode : null,
         contactPhone: f.contactPhone.trim() || null,
         adminUsername: f.adminUsername.trim() || null,
@@ -393,7 +395,7 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
 
   createAnother(): void {
     this.form.set({
-      name: '', legalName: '', subdomain: '', code: '', organisationType: '',
+      name: '', legalName: '', subdomain: '', code: '', organisationType: '', description: '',
       contactPhoneCountryCode: '+91', contactPhone: '',
       timeZone: 'Asia/Kolkata', defaultCurrency: 'INR', defaultCulture: 'en-IN',
       maximumUsers: null, defaultMfaRequirement: 'optional',

@@ -186,7 +186,6 @@ textarea:focus-visible {
 .pin-two { top: 64px; right: 13%; }
 .pin-three { bottom: 24px; right: 36%; }
 
-.btn-icon-round,
 .btn-create,
 .btn-outline,
 .btn-success,
@@ -201,26 +200,6 @@ textarea:focus-visible {
   cursor: pointer;
   text-decoration: none;
   transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
-}
-
-.btn-icon-round {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--line-strong);
-  border-radius: 11px;
-  background: #fff;
-  color: var(--ink-2);
-}
-
-.btn-icon-round:hover:not(:disabled) {
-  border-color: #bcd8cd;
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.btn-icon-round:disabled {
-  opacity: .5;
-  cursor: not-allowed;
 }
 
 .btn-create {

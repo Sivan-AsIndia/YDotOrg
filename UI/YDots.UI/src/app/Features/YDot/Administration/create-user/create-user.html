@@ -4,6 +4,10 @@
   Four steps, then a confirmation. Every dropdown is filled from the server, because roles and
   organisation units are identifiers rather than words, and a form that invents its own would look
   correct and refuse to save.
+
+  Visual design follows the approved "Create New User" reference: a mint hero band with the serif
+  page title and the Build-People tagline, a described stepper with dashed connectors, and fields
+  that carry a leading icon. Structure is unchanged from the working form — only presentation.
 -->
 <!-- Same shell contract as every other page in this area. See the note in user-directory.html. -->
 <main class="app-wrapper">
@@ -11,19 +15,25 @@
   <div class="container-fluid px-4 py-3">
 
   <!-- ===================================================================================
-       Header
+       Hero header — icon tile, serif title, tagline, artwork, and the way back
        =================================================================================== -->
-  <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-    <div>
-      <h4 class="mb-1">Create New User</h4>
-      <p class="text-muted mb-0">
-        Create the account and e-mail them a link to set their own password.
-      </p>
-    </div>
-    <button type="button" class="btn btn-outline-secondary btn-sm" (click)="goBack()">
-      <i class="ri-arrow-left-line me-1"></i> Back to directory
+  <header class="cu-hero mb-4 d-flex justify-content-between align-items-center gap-3 gap-lg-4">
+  
+      <div class="cu-hero-id">
+        <!-- <span class="cu-hero-tile" aria-hidden="true"><i class="ri-user-add-line"></i></span> -->
+        <div class="cu-hero-text">
+          <h1 class="cu-hero-title">Create New User</h1>
+          <p class="cu-hero-sub">Create the account and e-mail them a link to set their own password.</p>
+        </div>
+      </div>
+
+        <button type="button" class="btn btn-outline-primary btn-sm" (click)="goBack()">
+      <i class="ri-arrow-left-line" aria-hidden="true"></i> Back to directory
     </button>
-  </div>
+  
+
+
+  </header>
 
   <!-- ===================================================================================
        Loading and load failure
@@ -109,26 +119,27 @@
        =================================================================================== -->
   @else {
 
-    <!-- Step rail -->
-    <div class="card border mb-4">
-      <div class="card-body py-3">
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          @for (label of steps; track label; let i = $index) {
-            <button type="button" class="cu-step btn btn-sm d-flex align-items-center gap-2"
-                    [class.active]="activeStep() === i"
-                    [class.done]="activeStep() > i && isStepComplete(i)"
-                    (click)="goToStep(i)">
-              <span class="cu-step-dot">
-                @if (activeStep() > i && isStepComplete(i)) { <i class="ri-check-line"></i> } @else { {{ i + 1 }} }
-              </span>
-              <span class="d-none d-sm-inline">{{ label }}</span>
-            </button>
+    <!-- Step rail — numbered circles, a title and a one-line brief each, joined by dashed
+         connectors as in the reference design. Still buttons: going back to fix something
+         should not mean pressing Back four times. -->
+    <nav class="cu-stepper mb-4" aria-label="Create-user steps">
+      @for (meta of stepMeta; track meta.title; let i = $index) {
+        <button type="button" class="cu-step"
+                [class.active]="activeStep() === i"
+                [class.done]="activeStep() > i && isStepComplete(i)"
+                (click)="goToStep(i)">
+          <span class="cu-step-dot" aria-hidden="true">
+            @if (activeStep() > i && isStepComplete(i)) { <i class="ri-check-line"></i> } @else { {{ i + 1 }} }
+          </span>
+          <span class="cu-step-text">
+            <span class="cu-step-title">{{ meta.title }}</span>
+            <span class="cu-step-desc">{{ meta.description }}</span>
+          </span>
+        </button>
 
-            @if (i < steps.length - 1) { <i class="ri-arrow-right-s-line text-muted"></i> }
-          }
-        </div>
-      </div>
-    </div>
+        @if (i < stepMeta.length - 1) { <span class="cu-step-link" aria-hidden="true"></span> }
+      }
+    </nav>
 
     @if (errorMessage()) {
       <div class="alert alert-danger" role="alert" aria-live="assertive">
@@ -159,95 +170,128 @@
 
         <!-- ============================= STEP 1 — Identity ============================= -->
         @if (activeStep() === 0) {
-          <div class="d-flex align-items-center gap-3 mb-4">
-            <span class="cu-avatar">{{ initials() }}</span>
+          <div class="cu-section-head card-title">
+            <span class="cu-section-icon" aria-hidden="true"><i class="ri-user-add-line"></i></span>
             <div>
-              <h6 class="mb-0">Who is this account for?</h6>
-              <small class="text-muted">The e-mail address is where the invitation goes.</small>
+              <h2 class="cu-section-title ">Who is this account for?</h2>
+              <p class="cu-section-sub">The e-mail address is where the invitation goes.</p>
             </div>
           </div>
 
-          <div class="row g-3">
+          <div class="row g-6">
             <div class="col-6 col-lg-3">
-              <label class="form-label small" for="cuCategory">Account type *</label>
-              <select id="cuCategory" class="form-select" [value]="form().accountCategory"
-                      (change)="update('accountCategory', $any($event.target).value)">
-                @for (option of accountCategories(); track option.value) {
-                  <option [value]="option.value">{{ option.label }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuCategory">Account type <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-briefcase-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuCategory" class="form-select" [value]="form().accountCategory"
+                        (change)="update('accountCategory', $any($event.target).value)">
+                  @for (option of accountCategories(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
             </div>
 
-            <div class="col-6 col-lg-2">
-              <label class="form-label small" for="cuTitle">Title</label>
-              <input id="cuTitle" class="form-control" [value]="form().title"
-                     (input)="update('title', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('title')">
+            <div class="col-6 col-lg-3">
+              <label class="cu-label" for="cuTitle">Title</label>
+              <div class="cu-field">
+                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuTitle" class="form-select" [value]="form().title"
+                        (change)="update('title', $any($event.target).value)">
+                  <option value="">Select title</option>
+                  @for (t of titles; track t) {
+                    <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('title')) {
                 <div class="invalid-feedback d-block">{{ errorFor('title') }}</div>
               }
             </div>
 
             <div class="col-lg-3">
-              <label class="form-label small" for="cuFirst">First name *</label>
-              <input id="cuFirst" class="form-control" [class.is-invalid]="isFieldInvalid('firstName')"
-                     [value]="form().firstName"
-                     (input)="update('firstName', $any($event.target).value)"
-                     (blur)="onNameChanged()">
+              <label class="cu-label" for="cuFirst">First name <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuFirst" class="form-control" [class.is-invalid]="isFieldInvalid('firstName')"
+                       placeholder="Enter first name"
+                       [value]="form().firstName"
+                       (input)="update('firstName', $any($event.target).value)"
+                       (blur)="onNameChanged()">
+              </div>
               @if (errorFor('firstName')) {
                 <div class="invalid-feedback d-block">{{ errorFor('firstName') }}</div>
               }
             </div>
 
-            <div class="col-lg-4">
-              <label class="form-label small" for="cuLast">Last name *</label>
-              <input id="cuLast" class="form-control" [class.is-invalid]="isFieldInvalid('lastName')"
-                     [value]="form().lastName"
-                     (input)="update('lastName', $any($event.target).value)"
-                     (blur)="onNameChanged()">
+            <div class="col-lg-3">
+              <label class="cu-label" for="cuLast">Last name <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuLast" class="form-control" [class.is-invalid]="isFieldInvalid('lastName')"
+                       placeholder="Enter last name"
+                       [value]="form().lastName"
+                       (input)="update('lastName', $any($event.target).value)"
+                       (blur)="onNameChanged()">
+              </div>
               @if (errorFor('lastName')) {
                 <div class="invalid-feedback d-block">{{ errorFor('lastName') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuDisplay">Display name *</label>
-              <input id="cuDisplay" class="form-control" [class.is-invalid]="isFieldInvalid('displayName')"
-                     [value]="form().displayName"
-                     (input)="update('displayName', $any($event.target).value)">
+              <label class="cu-label" for="cuDisplay">Display name <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuDisplay" class="form-control" [class.is-invalid]="isFieldInvalid('displayName')"
+                       placeholder="Enter display name"
+                       [value]="form().displayName"
+                       (input)="update('displayName', $any($event.target).value)">
+              </div>
               @if (errorFor('displayName')) {
                 <div class="invalid-feedback d-block">{{ errorFor('displayName') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuPreferred">Preferred name</label>
-              <input id="cuPreferred" class="form-control" [value]="form().preferredName"
-                     (input)="update('preferredName', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('preferredName')">
+              <label class="cu-label" for="cuPreferred">Preferred name</label>
+              <div class="cu-field">
+                <i class="ri-user-smile-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuPreferred" class="form-control" placeholder="Enter preferred name (optional)"
+                       [value]="form().preferredName"
+                       (input)="update('preferredName', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('preferredName')">
+              </div>
               @if (errorFor('preferredName')) {
                 <div class="invalid-feedback d-block">{{ errorFor('preferredName') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuEmail">Login e-mail *</label>
-              <input id="cuEmail" type="email" class="form-control" [class.is-invalid]="isFieldInvalid('email')"
-                     placeholder="name@organisation.org"
-                     [value]="form().email"
-                     (input)="update('email', $any($event.target).value)"
-                     (blur)="onEmailChanged()">
+              <label class="cu-label" for="cuEmail">Login e-mail <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-mail-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuEmail" type="email" class="form-control" [class.is-invalid]="isFieldInvalid('email')"
+                       placeholder="name@organisation.org"
+                       [value]="form().email"
+                       (input)="update('email', $any($event.target).value)"
+                       (blur)="onEmailChanged()">
+              </div>
               @if (errorFor('email')) {
                 <div class="invalid-feedback d-block">{{ errorFor('email') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuUsername">Username *</label>
-              <input id="cuUsername" class="form-control" [class.is-invalid]="isFieldInvalid('username')"
-                     [value]="form().username"
-                     (input)="update('username', $any($event.target).value)"
-                     (blur)="checkIdentity()">
+              <label class="cu-label" for="cuUsername">Username <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-at-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuUsername" class="form-control" [class.is-invalid]="isFieldInvalid('username')"
+                       placeholder="Enter username"
+                       [value]="form().username"
+                       (input)="update('username', $any($event.target).value)"
+                       (blur)="checkIdentity()">
+              </div>
               @if (errorFor('username')) {
                 <div class="invalid-feedback d-block">{{ errorFor('username') }}</div>
               }
@@ -275,16 +319,19 @@
 
             <!-- A list, not a text box: the API requires the international form (+91), and a
                  typed "91" used to sail through the browser and fail on the final step. -->
-            <div class="col-4 col-lg-2">
-              <label class="form-label small" for="cuCode">Country code</label>
-              <select id="cuCode" class="form-select"
-                      [class.is-invalid]="errorFor('mobileCountryCode')"
-                      [value]="form().mobileCountryCode"
-                      (change)="update('mobileCountryCode', $any($event.target).value)">
-                @for (code of countryCodes(); track code) {
-                  <option [value]="code">{{ code }}</option>
-                }
-              </select>
+            <div class="col-6 col-lg-3">
+              <label class="cu-label" for="cuCode">Country code</label>
+              <div class="cu-field">
+                <i class="ri-global-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuCode" class="form-select"
+                        [class.is-invalid]="errorFor('mobileCountryCode')"
+                        [value]="form().mobileCountryCode"
+                        (change)="update('mobileCountryCode', $any($event.target).value)">
+                  @for (code of countryCodes(); track code) {
+                    <option [value]="code">{{ code }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('mobileCountryCode')) {
                 <div class="invalid-feedback d-block">{{ errorFor('mobileCountryCode') }}</div>
               }
@@ -292,69 +339,111 @@
 
             <!-- Whether these are required depends on the account type, and the server says which.
                  The asterisk appears and disappears as the category changes. -->
-            <div class="col-8 col-lg-4">
-              <label class="form-label small" for="cuMobile">
-                Mobile @if (mobileRequired()) { <span class="text-danger">*</span> }
+            <div class="col-6 col-lg-3">
+              <label class="cu-label" for="cuMobile">
+                Mobile @if (mobileRequired()) { <span class="cu-req" aria-hidden="true">*</span> }
               </label>
-              <input id="cuMobile" type="tel" class="form-control"
-                     [class.is-invalid]="isFieldInvalid('mobileNumber')"
-                     [value]="form().mobileNumber"
-                     (input)="update('mobileNumber', $any($event.target).value)">
+              <div class="cu-field">
+                <i class="ri-smartphone-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuMobile" type="tel" class="form-control" placeholder="Enter mobile number"
+                       [class.is-invalid]="isFieldInvalid('mobileNumber')"
+                       [value]="form().mobileNumber"
+                       (input)="update('mobileNumber', $any($event.target).value)">
+              </div>
               @if (errorFor('mobileNumber')) {
                 <div class="invalid-feedback d-block">{{ errorFor('mobileNumber') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuEmployee">
-                Employee or volunteer number @if (employeeNumberRequired()) { <span class="text-danger">*</span> }
+              <label class="cu-label" for="cuEmployee">
+                Employee or volunteer number @if (employeeNumberRequired()) { <span class="cu-req" aria-hidden="true">*</span> }
               </label>
-              <input id="cuEmployee" class="form-control"
-                     [class.is-invalid]="isFieldInvalid('employeeNumber')"
-                     [value]="form().employeeNumber"
-                     (input)="update('employeeNumber', $any($event.target).value)">
+              <div class="cu-field">
+                <i class="ri-hashtag cu-field-icon" aria-hidden="true"></i>
+                <input id="cuEmployee" class="form-control" placeholder="Enter employee or volunteer number"
+                       [class.is-invalid]="isFieldInvalid('employeeNumber')"
+                       [value]="form().employeeNumber"
+                       (input)="update('employeeNumber', $any($event.target).value)">
+              </div>
               @if (errorFor('employeeNumber')) {
                 <div class="invalid-feedback d-block">{{ errorFor('employeeNumber') }}</div>
               }
-              @if (employeeNumberRequired()) {
-                <small class="text-muted">Required for a {{ form().accountCategory }} account.</small>
-              }
+              <small class="cu-hint">
+                @if (employeeNumberRequired()) {
+                  Required for a {{ form().accountCategory }} account.
+                } @else {
+                  Needed for salaried employee accounts only.
+                }
+              </small>
             </div>
           </div>
+
+          <!-- Invitation & Security — the band from the reference design, restating what the API
+               actually does: the invite goes to the address above and no password is set here. -->
+          <aside class="cu-invite mt-4">
+            <span class="cu-invite-icon" aria-hidden="true"><i class="ri-shield-check-line"></i></span>
+            <div class="cu-invite-text">
+              <h6 class="cu-invite-title">Invitation &amp; Security</h6>
+              <p class="cu-invite-sub">An invitation link will be sent to the provided e-mail address. The user will set their own password.</p>
+            </div>
+            <svg class="cu-invite-art" viewBox="0 0 152 64" fill="none" aria-hidden="true" focusable="false">
+              <path class="cu-invite-dash" d="M52 54c22-18 42-24 66-22" />
+              <g class="cu-invite-mail">
+                <rect x="8" y="32" width="34" height="23" rx="5" />
+                <path d="M11 36l14 10 14-10" />
+              </g>
+              <g class="cu-invite-plane">
+                <path d="M98 36l44-22-17 44-10-16z" />
+                <path d="M115 42l27-28" />
+              </g>
+            </svg>
+          </aside>
         }
 
         <!-- ============================= STEP 2 — Organisation ============================= -->
         @if (activeStep() === 1) {
-          <h6 class="mb-1">Where do they sit?</h6>
-          <p class="text-muted small mb-4">This drives which records they can see once they sign in.</p>
+          <div class="cu-section-head">
+            <span class="cu-section-icon" aria-hidden="true"><i class="ri-building-line"></i></span>
+            <div>
+              <h2 class="cu-section-title">Where do they sit?</h2>
+              <p class="cu-section-sub">This drives which records they can see once they sign in.</p>
+            </div>
+          </div>
 
-          <div class="row g-3">
+          <div class="row g-3 g-lg-4">
             <div class="col-lg-4">
-              <label class="form-label small" for="cuEngagement">Engagement</label>
-              <select id="cuEngagement" class="form-select" [value]="form().engagementType"
-                      (change)="update('engagementType', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('engagementType')">
-                @for (option of engagementTypes(); track option.value) {
-                  <option [value]="option.value">{{ option.label }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuEngagement">Engagement</label>
+              <div class="cu-field">
+                <i class="ri-briefcase-4-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuEngagement" class="form-select" [value]="form().engagementType"
+                        (change)="update('engagementType', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('engagementType')">
+                  @for (option of engagementTypes(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('engagementType')) {
                 <div class="invalid-feedback d-block">{{ errorFor('engagementType') }}</div>
               }
             </div>
 
             <div class="col-lg-4">
-              <label class="form-label small" for="cuUnit">Organisation unit</label>
-              <select id="cuUnit" class="form-select"
-                      [value]="form().organisationUnitId"
-                      (change)="update('organisationUnitId', $any($event.target).value)">
-                <option value="">Not set</option>
-                @for (option of organisationUnits(); track option.id) {
-                  <option [value]="option.id">{{ option.name }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuUnit">Organisation unit</label>
+              <div class="cu-field">
+                <i class="ri-building-2-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuUnit" class="form-select"
+                        [value]="form().organisationUnitId"
+                        (change)="update('organisationUnitId', $any($event.target).value)">
+                  <option value="">Not set</option>
+                  @for (option of organisationUnits(); track option.id) {
+                    <option [value]="option.id">{{ option.name }}</option>
+                  }
+                </select>
+              </div>
               @if (organisationUnits().length === 0) {
-                <div class="form-text small">
+                <div class="cu-hint">
                   No units yet. Create them under Organisation &rsaquo; Branches and Units;
                   a user can be invited without one.
                 </div>
@@ -362,71 +451,88 @@
             </div>
 
             <div class="col-lg-4">
-              <label class="form-label small" for="cuDept">Department</label>
-              <select id="cuDept" class="form-select" [value]="form().departmentId"
-                      (change)="update('departmentId', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('departmentId')">
-              @if (errorFor('departmentId')) {
-                <div class="invalid-feedback d-block">{{ errorFor('departmentId') }}</div>
-              }
-                <option value="">Not set</option>
-                @for (option of departments(); track option.id) {
-                  <option [value]="option.id">{{ option.name }}</option>
+              <label class="cu-label" for="cuDept">Department</label>
+              <div class="cu-field">
+                <i class="ri-community-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuDept" class="form-select" [value]="form().departmentId"
+                        (change)="update('departmentId', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('departmentId')">
+                @if (errorFor('departmentId')) {
+                  <div class="invalid-feedback d-block">{{ errorFor('departmentId') }}</div>
                 }
-              </select>
+                  <option value="">Not set</option>
+                  @for (option of departments(); track option.id) {
+                    <option [value]="option.id">{{ option.name }}</option>
+                  }
+                </select>
+              </div>
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuDesignation">Designation</label>
-              <input id="cuDesignation" class="form-control" [value]="form().designation"
-                     (input)="update('designation', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('designation')">
+              <label class="cu-label" for="cuDesignation">Designation</label>
+              <div class="cu-field">
+                <i class="ri-medal-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuDesignation" class="form-control" placeholder="Enter designation"
+                       [value]="form().designation"
+                       (input)="update('designation', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('designation')">
+              </div>
               @if (errorFor('designation')) {
                 <div class="invalid-feedback d-block">{{ errorFor('designation') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuLocation">Work location</label>
-              <input id="cuLocation" class="form-control" [value]="form().workLocation"
-                     (input)="update('workLocation', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('workLocation')">
+              <label class="cu-label" for="cuLocation">Work location</label>
+              <div class="cu-field">
+                <i class="ri-map-pin-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuLocation" class="form-control" placeholder="Enter work location"
+                       [value]="form().workLocation"
+                       (input)="update('workLocation', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('workLocation')">
+              </div>
               @if (errorFor('workLocation')) {
                 <div class="invalid-feedback d-block">{{ errorFor('workLocation') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuLanguage">Preferred language</label>
-              <select id="cuLanguage" class="form-select" [value]="form().preferredLanguage"
-                      (change)="update('preferredLanguage', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('preferredLanguage')">
-                <!-- The full catalogue. This form asks for no country, so the language list is
-                     the unfiltered one and needs no country link to load - the same supported
-                     case as the time-zone field below. The option VALUE is the culture code,
-                     because users.preferred_language stores exactly that. -->
-                <option value="">Select a language</option>
-                @for (language of geo.languages(); track language.id) {
-                  <option [value]="language.cultureCode">{{ language.displayLabel }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuLanguage">Preferred language</label>
+              <div class="cu-field">
+                <i class="ri-translate-2 cu-field-icon" aria-hidden="true"></i>
+                <select id="cuLanguage" class="form-select" [value]="form().preferredLanguage"
+                        (change)="update('preferredLanguage', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('preferredLanguage')">
+                  <!-- The full catalogue. This form asks for no country, so the language list is
+                       the unfiltered one and needs no country link to load - the same supported
+                       case as the time-zone field below. The option VALUE is the culture code,
+                       because users.preferred_language stores exactly that. -->
+                  <option value="">Select a language</option>
+                  @for (language of geo.languages(); track language.id) {
+                    <option [value]="language.cultureCode">{{ language.displayLabel }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('preferredLanguage')) {
                 <div class="invalid-feedback d-block">{{ errorFor('preferredLanguage') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuTimezone">Time zone</label>
-              <select id="cuTimezone" class="form-select" [value]="form().timeZoneId"
-                      (change)="update('timeZoneId', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('timeZoneId')">
-                <!-- The full zone catalogue. This form asks for no country, so the list is the
-                     unfiltered one and needs no country link to load. -->
-                <option value="">Select a time zone</option>
-                @for (zone of geo.timeZones(); track zone.id) {
-                  <option [value]="zone.ianaKey">{{ zone.name }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuTimezone">Time zone</label>
+              <div class="cu-field">
+                <i class="ri-time-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuTimezone" class="form-select" [value]="form().timeZoneId"
+                        (change)="update('timeZoneId', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('timeZoneId')">
+                  <!-- The full zone catalogue. This form asks for no country, so the list is the
+                       unfiltered one and needs no country link to load. -->
+                  <option value="">Select a time zone</option>
+                  @for (zone of geo.timeZones(); track zone.id) {
+                    <option [value]="zone.ianaKey">{{ zone.name }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('timeZoneId')) {
                 <div class="invalid-feedback d-block">{{ errorFor('timeZoneId') }}</div>
               }
@@ -436,82 +542,103 @@
 
         <!-- ============================= STEP 3 — Access ============================= -->
         @if (activeStep() === 2) {
-          <h6 class="mb-1">What may they do?</h6>
-          <p class="text-muted small mb-4">
-            The role decides their permissions; the scope decides how much data those permissions reach.
-          </p>
+          <div class="cu-section-head">
+            <span class="cu-section-icon" aria-hidden="true"><i class="ri-shield-keyhole-line"></i></span>
+            <div>
+              <h2 class="cu-section-title">What may they do?</h2>
+              <p class="cu-section-sub">The role decides their permissions; the scope decides how much data those permissions reach.</p>
+            </div>
+          </div>
 
-          <div class="row g-3">
+          <div class="row g-3 g-lg-4">
             <div class="col-lg-6">
-              <label class="form-label small" for="cuRole">Primary role *</label>
-              <select id="cuRole" class="form-select" [class.is-invalid]="isFieldInvalid('primaryRoleId')"
-                      [value]="form().primaryRoleId"
-                      (change)="update('primaryRoleId', $any($event.target).value)">
-              @if (errorFor('primaryRoleId')) {
-                <div class="invalid-feedback d-block">{{ errorFor('primaryRoleId') }}</div>
-              }
-                <option value="">Choose…</option>
-                @for (option of roles(); track option.id) {
-                  <option [value]="option.id">{{ option.name }}</option>
+              <label class="cu-label" for="cuRole">Primary role <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field">
+                <i class="ri-user-star-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuRole" class="form-select" [class.is-invalid]="isFieldInvalid('primaryRoleId')"
+                        [value]="form().primaryRoleId"
+                        (change)="update('primaryRoleId', $any($event.target).value)">
+                @if (errorFor('primaryRoleId')) {
+                  <div class="invalid-feedback d-block">{{ errorFor('primaryRoleId') }}</div>
                 }
-              </select>
+                  <option value="">Choose…</option>
+                  @for (option of roles(); track option.id) {
+                    <option [value]="option.id">{{ option.name }}</option>
+                  }
+                </select>
+              </div>
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuScope">Data scope</label>
-              <select id="cuScope" class="form-select" [value]="form().dataScopeType"
-                      (change)="update('dataScopeType', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('dataScopeType')">
-                @for (option of dataScopeTypes(); track option.value) {
-                  <option [value]="option.value">{{ option.label }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuScope">Data scope</label>
+              <div class="cu-field">
+                <i class="ri-database-2-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuScope" class="form-select" [value]="form().dataScopeType"
+                        (change)="update('dataScopeType', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('dataScopeType')">
+                  @for (option of dataScopeTypes(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('dataScopeType')) {
                 <div class="invalid-feedback d-block">{{ errorFor('dataScopeType') }}</div>
               }
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuStart">Access starts</label>
-              <input id="cuStart" type="date" class="form-control" [value]="form().accessStartsAt"
-                     (change)="update('accessStartsAt', $any($event.target).value)">
+              <label class="cu-label" for="cuStart">Access starts</label>
+              <div class="cu-field">
+                <i class="ri-calendar-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuStart" type="date" class="form-control" [value]="form().accessStartsAt"
+                       (change)="update('accessStartsAt', $any($event.target).value)">
+              </div>
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuEnd">Access ends</label>
-              <input id="cuEnd" type="date" class="form-control" [value]="form().accessEndsAt"
-                     (change)="update('accessEndsAt', $any($event.target).value)">
-              <small class="text-muted">Leave empty for open-ended access.</small>
+              <label class="cu-label" for="cuEnd">Access ends</label>
+              <div class="cu-field">
+                <i class="ri-calendar-line cu-field-icon" aria-hidden="true"></i>
+                <input id="cuEnd" type="date" class="form-control" [value]="form().accessEndsAt"
+                       (change)="update('accessEndsAt', $any($event.target).value)">
+              </div>
+              <small class="cu-hint">Leave empty for open-ended access.</small>
             </div>
 
             <div class="col-lg-6">
-              <label class="form-label small" for="cuMfa">Two-step verification</label>
-              <select id="cuMfa" class="form-select" [value]="form().mfaRequirement"
-                      (change)="update('mfaRequirement', $any($event.target).value)"
-                     [class.is-invalid]="isFieldInvalid('mfaRequirement')">
-                @for (option of mfaRequirements(); track option.value) {
-                  <option [value]="option.value">{{ option.label }}</option>
-                }
-              </select>
+              <label class="cu-label" for="cuMfa">Two-step verification</label>
+              <div class="cu-field">
+                <i class="ri-lock-password-line cu-field-icon" aria-hidden="true"></i>
+                <select id="cuMfa" class="form-select" [value]="form().mfaRequirement"
+                        (change)="update('mfaRequirement', $any($event.target).value)"
+                       [class.is-invalid]="isFieldInvalid('mfaRequirement')">
+                  @for (option of mfaRequirements(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
               @if (errorFor('mfaRequirement')) {
                 <div class="invalid-feedback d-block">{{ errorFor('mfaRequirement') }}</div>
               }
-              <small class="text-muted">
+              <small class="cu-hint">
                 <strong>Required</strong> means they must set up a second factor during activation.
               </small>
             </div>
 
             <div class="col-12">
-              <label class="form-label small" for="cuJustification">Business justification *</label>
-              <textarea id="cuJustification" class="form-control" rows="3"
-                        [class.is-invalid]="isFieldInvalid('businessJustification')"
-                        placeholder="Why does this person need this access? At least 10 characters."
-                        [value]="form().businessJustification"
-                        (input)="update('businessJustification', $any($event.target).value)"></textarea>
+              <label class="cu-label" for="cuJustification">Business justification <span class="cu-req" aria-hidden="true">*</span></label>
+              <div class="cu-field cu-field--area">
+                <i class="ri-file-text-line cu-field-icon" aria-hidden="true"></i>
+                <textarea id="cuJustification" class="form-control" rows="3"
+                          [class.is-invalid]="isFieldInvalid('businessJustification')"
+                          placeholder="Why does this person need this access? At least 10 characters."
+                          [value]="form().businessJustification"
+                          (input)="update('businessJustification', $any($event.target).value)"></textarea>
+              </div>
               @if (errorFor('businessJustification')) {
                 <div class="invalid-feedback d-block">{{ errorFor('businessJustification') }}</div>
               }
-              <small class="text-muted">
+              <small class="cu-hint">
                 Recorded in the audit trail, and the first thing an access review will look at.
               </small>
             </div>
@@ -520,8 +647,13 @@
 
         <!-- ============================= STEP 4 — Review ============================= -->
         @if (activeStep() === 3) {
-          <h6 class="mb-1">Check before you send</h6>
-          <p class="text-muted small mb-4">The invitation goes out as soon as you create the account.</p>
+          <div class="cu-section-head">
+            <span class="cu-section-icon" aria-hidden="true"><i class="ri-file-list-3-line"></i></span>
+            <div>
+              <h2 class="cu-section-title">Check before you send</h2>
+              <p class="cu-section-sub">The invitation goes out as soon as you create the account.</p>
+            </div>
+          </div>
 
           <div class="cu-review rounded-3 border p-4 mb-4">
             <div class="row g-3">
@@ -542,11 +674,14 @@
           </div>
 
           <div class="mb-4">
-            <label class="form-label small" for="cuWelcome">Welcome message (optional)</label>
-            <textarea id="cuWelcome" class="form-control" rows="3"
-                      placeholder="Included in the invitation e-mail."
-                      [value]="form().welcomeMessage"
-                      (input)="update('welcomeMessage', $any($event.target).value)"></textarea>
+            <label class="cu-label" for="cuWelcome">Welcome message (optional)</label>
+            <div class="cu-field cu-field--area">
+              <i class="ri-message-2-line cu-field-icon" aria-hidden="true"></i>
+              <textarea id="cuWelcome" class="form-control" rows="3"
+                        placeholder="Included in the invitation e-mail."
+                        [value]="form().welcomeMessage"
+                        (input)="update('welcomeMessage', $any($event.target).value)"></textarea>
+            </div>
           </div>
 
           <div class="alert alert-light border small">
@@ -556,23 +691,32 @@
           </div>
         }
 
-        <!-- ============================= Footer ============================= -->
-        <div class="d-flex flex-wrap justify-content-between gap-2 mt-5 pt-4 border-top">
-          <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="activeStep() === 0" (click)="previousStep()">
-            <i class="ri-arrow-left-line me-1"></i> Back
-          </button>
+        <!-- ============================= Footer =============================
+             Cancel returns to the directory on the first step, as the reference design shows;
+             later steps go Back. "Save & Continue" advances; on the review step the two create
+             actions take its place, the green one being the invitation path. -->
+        <div class="cu-footer">
+          @if (activeStep() === 0) {
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="goBack()">
+              <i class="ri-arrow-left-line me-1" aria-hidden="true"></i> Cancel
+            </button>
+          } @else {
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="previousStep()">
+              <i class="ri-arrow-left-line me-1" aria-hidden="true"></i> Back
+            </button>
+          }
 
           @if (activeStep() < steps.length - 1) {
             <button type="button" class="btn btn-primary btn-sm" (click)="nextStep()">
-              Continue <i class="ri-arrow-right-line ms-1"></i>
+              Save &amp; Continue <i class="ri-arrow-right-line ms-1" aria-hidden="true"></i>
             </button>
           } @else {
-            <div class="d-flex gap-2">
-              <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="submitting()" (click)="createWithoutInvite()">
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="submitting()" (click)="createWithoutInvite()">
                 Create without sending
               </button>
-              <button type="button" class="btn btn-primary btn-sm" [disabled]="!canSubmit()" (click)="createAndInvite()">
-                {{ submitting() ? 'Creating…' : 'Create and send invitation' }}
+              <button type="button" class="btn cu-btn-primary" [disabled]="!canSubmit()" (click)="createAndInvite()">
+                {{ submitting() ? 'Creating…' : 'Create and send invitation' }} <i class="ri-mail-send-line ms-1" aria-hidden="true"></i>
               </button>
             </div>
           }

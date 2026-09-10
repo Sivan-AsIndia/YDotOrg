@@ -237,29 +237,39 @@ textarea:focus-visible,
 .pr-tile {
   position: relative;
   background: var(--pr-card);
-  border: 1px solid color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 25%, white);
+  border: 1.3px solid color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 42%, white);
   border-radius: 18px;
-  padding: 20px 20px 36px;
+  padding: 20px 20px 38px;
   display: flex;
   align-items: flex-start;
   gap: 14px;
   overflow: hidden;
   /* clip decorative wave to the card */
+  /* DARK derivative of each tile's accent - drives fonts and icons so the five
+     receipt cards read bold and dark while keeping their one-accent colour coding. */
+  --tile-accent-strong: color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 72%, #0c1210);
 }
 
 /* decorative wave along the bottom of each tile - tinted with the SAME formula as the
-   card (color-mix of the tile's accent over white) through fill="currentColor" */
+   card (color-mix of the tile's accent over white) through fill="currentColor".
+   The wave is drawn BOLD: a stronger tint band with a thick dark-accent outline, so it
+   reads as a bold wave border rather than a whisper of colour. */
 .pr-tile-wave {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+    bottom: -5px;
   width: 100%;
-  height: 40px;
+  height: 46px;
   display: block;
-  color: color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 18%, white);
-  opacity: 0.9;
+  color: color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 34%, white);
+  opacity: 1;
   pointer-events: none;
+}
+.pr-tile-wave path {
+  stroke: var(--tile-accent-strong, var(--pr-ink));
+  stroke-width: 0.2;
+  stroke-linejoin: round;
 }
 
 /* EACH CARD DECLARES ONE ACCENT TAKEN STRAIGHT FROM THE APP'S THEME VARIABLES, so
@@ -277,7 +287,7 @@ textarea:focus-visible,
 }
 
 .pr-tile-gold .pr-tile-value {
-  color: var(--tile-accent);
+  color: var(--tile-accent-strong);
 }
 
 .pr-tile-good {
@@ -293,7 +303,7 @@ textarea:focus-visible,
 }
 
 .pr-tile-danger .pr-tile-value {
-  color: var(--tile-accent);
+  color: var(--tile-accent-strong);
 }
 
 .pr-tile-icon {
@@ -306,8 +316,8 @@ textarea:focus-visible,
   height: 62px;
   border-radius: 50%;
   flex: none;
-  background: color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 10%, white);
-  color: var(--tile-accent, var(--pr-meadow));
+  background: color-mix(in srgb, var(--tile-accent, var(--pr-meadow)) 14%, white);
+  color: var(--tile-accent-strong, var(--pr-ink));
 }
 
 .pr-tile-icon svg {
@@ -668,12 +678,12 @@ textarea:focus-visible,
   border-radius: 50%;
   /* distinct "ghost outline" style: tinted circle + accent ring, derived from the status colour */
   background: color-mix(in srgb, currentColor 10%, white);
-  border: 1.5px solid color-mix(in srgb, currentColor 35%, white);
+  border: 1.10px solid color-mix(in srgb, currentColor 35%, white);
   color: #2c4a38;
 }
 
 /* status dot pinned bottom-right, tinted with the same accent as the chip (currentColor) */
-.pr-event-doc::after {
+/* .pr-event-doc::after {
   content: '';
   position: absolute;
   right: -2px;
@@ -683,7 +693,7 @@ textarea:focus-visible,
   border-radius: 50%;
   background: currentColor;
   border: 2px solid #fff;
-}
+} */
 
 .pr-event-doc svg {
   width: 18px;
@@ -1205,6 +1215,16 @@ textarea:focus-visible,
   }
 }
 
+/* ---- td-xl-none: the data columns (Donor, Email, Campaign, Amount, Payment status,
+   Received at) hidden on md screens and below, so the index stays readable without a
+   horizontal scroll. The row's plus icon opens the quick-view popup carrying exactly
+   this data, so hiding the columns loses nothing. Visible again from lg (992px) up. ---- */
+@media (max-width: 991.98px) {
+  .pr-table .td-xl-none {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .pr-header-art {
     display: none;
@@ -1263,6 +1283,11 @@ textarea:focus-visible,
     color: var(--pr-ink-2);
     font-size: 11px;
     text-transform: uppercase;
+  }
+
+  /* the plus-icon and actions cells carry no data-label - they must not grow an empty one */
+  .pr-table td:not([data-label])::before {
+    content: none;
   }
 
   .pr-table td.pr-cell-event {
@@ -1504,6 +1529,15 @@ textarea:focus-visible,
   fill: var(--art-accent);
 }
 
+/* Status icon styles for offcanvas banner - matches artwork tint */
+.pr-detail-art .t-pending-circle {
+  fill: var(--art-accent);
+}
+
+.pr-detail-art .t-fail-circle {
+  fill: var(--art-accent);
+}
+
 .pr-header-art .t-coin,
 .pr-detail-art .t-coin {
   fill: color-mix(in srgb, var(--pe-warning, var(--pr-gold)) 55%, white);
@@ -1638,4 +1672,29 @@ textarea:focus-visible,
   .pr-detail-backdrop,
   .pr-detail { animation: none !important; }
   .pr-tile, .pr-detail { transition: none !important; }
+}
+
+
+.plus-icon{
+      border-radius: 50%;
+    height: 20px;
+    width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    box-shadow:
+color-mix(in srgb, var(--primary) 42%, white) 0px 5px 15px;
+    border: 1px solid white;
+    padding: 0;
+    cursor: pointer;
+    flex: none;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.plus-icon:hover {
+  transform: rotate(90deg);
+}
+.plus-icon i{
+  font-size: 18px !important;
 }

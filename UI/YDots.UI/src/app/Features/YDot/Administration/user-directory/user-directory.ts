@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { Observable, Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
+import { Observable, Subject, debounceTime, distinctUntilChanged, forkJoin, map, takeUntil } from 'rxjs';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { UserDirectoryApiService } from '../../../../Service/user-directory-api.service';
 import {
@@ -15,6 +15,9 @@ import { LookupItem } from '../../../../Shared/models/api-response.model';
 import { UserStatus } from '../../../../Shared/models/iam-contract.model';
 
 type DialogKind = 'none' | 'view' | 'edit' | 'suspend' | 'reactivate' | 'delete' | 'invite';
+
+/** The folder tabs above the table. `all` is the directory without a status filter. */
+type DirectoryTab = 'all' | 'active' | 'invited' | 'suspended' | 'draft';
 
 
 @Component({
@@ -58,6 +61,42 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
     return page.length > 0 && page.every((u) => this.selectedIds().has((u.id ?? '')));
   });
 
+  // ---- Tabs, filter panel and page sort -------------------------------------------------------
+  /** The status filter that is open, so the matching stat card can light up. */
+  readonly activeTab = signal<string>('all');
+
+  /** The real counts, as the server last reported them. */
+  readonly statusCounts = signal<Record<DirectoryTab, number>>({
+    all: 0,
+    active: 0,
+    invited: 0,
+    suspended: 0,
+    draft: 0,
+  });
+
+  /**
+   * The counts as they are being displayed, mid count-up.
+   *
+   * The stat cards start at zero and roll up to the real numbers — and roll between numbers on
+   * every refresh — which is why the cards read this rather than {@link statusCounts}.
+   */
+  readonly shownCounts = signal<Record<DirectoryTab, number>>({
+    all: 0,
+    active: 0,
+    invited: 0,
+    suspended: 0,
+    draft: 0,
+  });
+
+  /** Handle of the in-flight count-up animation, so a refresh can cut it short. */
+  private countRaf: number | null = null;
+
+  /** The search bar's sliders button opens the filters that did not earn a tab. */
+  readonly showAdvancedFilters = signal(false);
+
+  /** Client-side sort of the loaded page by name: asc, then desc, then off. */
+  readonly sortDirection = signal<'asc' | 'desc' | 'none'>('none');
+
   reason = '';
   readonly deleteConfirmation = signal('');
   welcomeMessage = '';
@@ -85,6 +124,21 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
   // =========================================================================================
 
   readonly users = computed(() => this.data()?.users.items ?? []);
+
+  /** The page in display order — the name column sorts client-side, asc then desc. */
+  readonly sortedUsers = computed(() => {
+    const rows = [...this.users()];
+    const direction = this.sortDirection();
+
+    if (direction === 'none') {
+      return rows;
+    }
+
+    return rows.sort(
+      (a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '') * (direction === 'asc' ? 1 : -1),
+    );
+  });
+
   readonly totalCount = computed(() => this.data()?.users.totalCount ?? 0);
   readonly pageIndex = computed(() => this.data()?.users.page ?? 1);
   readonly pageSize = computed(() => this.data()?.users.pageSize ?? 10);
@@ -166,11 +220,16 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
       });
 
     this.load();
+    this.loadStatusCounts();
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    if (this.countRaf !== null) {
+      cancelAnimationFrame(this.countRaf);
+    }
   }
 
   // =========================================================================================
@@ -221,8 +280,113 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     this.searchText = '';
+    this.activeTab.set('all');
     this.filter.set({ pageIndex: 1, pageSize: this.pageSize() });
     this.load();
+  }
+
+  /** Opens a status filter from one of the stat cards. */
+  selectTab(tab: DirectoryTab): void {
+    if (tab === this.activeTab()) {
+      return;
+    }
+
+    this.activeTab.set(tab);
+    this.filter.update((current) => ({
+      ...current,
+      status: tab === 'all' ? undefined : tab,
+      pageIndex: 1,
+    }));
+    this.load();
+  }
+
+  toggleAdvancedFilters(): void {
+    this.showAdvancedFilters.update((open) => !open);
+  }
+
+  /** The header's search icon: jumps the pointer to the search box instead of duplicating it. */
+  focusSearch(): void {
+    document.getElementById('udSearch')?.focus();
+  }
+
+  /**
+   * A status chosen outside the cards — the chips in the filter panel.
+   *
+   * A status with its own card lights that card up; one without (drafts, deactivated…) simply
+   * leaves every card dark rather than pretending a card is open when it is not.
+   */
+  setStatus(status: string): void {
+    this.activeTab.set(status || 'all');
+    this.filter.update((current) => ({ ...current, status: status || undefined, pageIndex: 1 }));
+    this.load();
+  }
+
+  /** asc → desc → off, so a third click puts the page back the way the server returned it. */
+  toggleSort(): void {
+    this.sortDirection.update((current) => (current === 'asc' ? 'desc' : current === 'desc' ? 'none' : 'asc'));
+  }
+
+  /**
+   * Counts for the tab badges, read straight off the search endpoint with a page of one.
+   *
+   * Five cheap requests rather than one clever one: the server already returns totalCount for
+   * any filter, and a page of a single row is the smallest page there is. Deliberately cosmetic
+   * — a failed count leaves the tabs working and the badges blank rather than breaking the page.
+   */
+  private loadStatusCounts(): void {
+    const countFor = (status?: UserStatus) =>
+      this.api.searchUsers({ pageIndex: 1, pageSize: 1, status }).pipe(map((page) => page.totalCount ?? 0));
+
+    forkJoin({
+      all: countFor(),
+      active: countFor('active'),
+      invited: countFor('invited'),
+      suspended: countFor('suspended'),
+      draft: countFor('draft'),
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (counts) => {
+          this.statusCounts.set(counts);
+          this.animateCounts(counts);
+        },
+        error: () => {
+          const zeros = { all: 0, active: 0, invited: 0, suspended: 0, draft: 0 };
+          this.statusCounts.set(zeros);
+          this.shownCounts.set(zeros);
+        },
+      });
+  }
+
+  /**
+   * Rolls the stat cards from their current numbers to the new ones.
+   *
+   * 700 ms of ease-out is long enough to read as motion and short enough that a fast typist
+   * never waits for it; a newer animation always cancels the older one mid-flight.
+   */
+  private animateCounts(target: Record<DirectoryTab, number>): void {
+    if (this.countRaf !== null) {
+      cancelAnimationFrame(this.countRaf);
+    }
+
+    const from = { ...this.shownCounts() };
+    const startedAt = performance.now();
+    const duration = 700;
+
+    const tick = (now: number): void => {
+      const t = Math.min(1, (now - startedAt) / duration);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const next = { all: 0, active: 0, invited: 0, suspended: 0, draft: 0 };
+
+      (Object.keys(next) as DirectoryTab[]).forEach((key) => {
+        next[key] = Math.round(from[key] + (target[key] - from[key]) * ease);
+      });
+      this.shownCounts.set(next);
+
+      this.countRaf = t < 1 ? requestAnimationFrame(tick) : null;
+    };
+
+    this.countRaf = requestAnimationFrame(tick);
   }
 
   goToPage(page: number): void {
@@ -712,6 +876,7 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
     this.closeDialog();
     this.toast.show('Done', message, 'success');
     this.load();
+    this.loadStatusCounts();
   }
 
   private fail(error: Error): void {

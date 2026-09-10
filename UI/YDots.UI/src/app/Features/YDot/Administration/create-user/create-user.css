@@ -1,68 +1,697 @@
-/* IAM-USR-01 — Create a new user.
-   Page width and padding come from the shell's container-fluid, as on every other page here. */
+/* ============================================================================
+   IAM-USR-01 — Create a new user.
+   Design follows the approved reference image:
+     · mint hero band with a white icon tile, serif title, handwritten-feel tagline
+       and the leaves / ID-card / green-plus artwork;
+     · a tinted stepper band — numbered circles, a title and a one-line brief,
+       joined by dashed connectors, the current step highlighted;
+     · a white form card with icon-prefixed rounded fields and red required stars;
+     · the "Invitation & Security" band with the envelope-and-paper-plane art;
+     · a footer of Cancel / Back on the left and a deep-green Save & Continue on
+       the right.
+   Green derives from the app token --primary (#315746) so the page stays on
+   theme if the token changes. Page width and padding come from the shell's
+   container-fluid, as on every other page here.
+   ============================================================================ */
 
-/* ---- Step rail ----------------------------------------------------------------------------
-   Buttons rather than plain markup, because the steps are clickable: going back to fix
-   something should not mean pressing Back four times. */
+:host {
+  /* ---- Colour ---- */
+  --cu-green: var(--primary, #315746);
+  --cu-green-deep: #24463a;
+  --cu-green-soft: #e3efe6;
+  --cu-green-line: #d5e4da;
+  --cu-ink: #22332b;
+  --cu-ink-strong: #17332a;
+  --cu-muted: #6b7280;
+  --cu-field-line: #dde5df;
+  --cu-field-icon: #9aa79f;
+  --cu-card: #ffffff;
+  --cu-danger: #d84a3f;
+
+  /* ---- Type ---- */
+  --cu-font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+
+  /* ---- Shape / elevation ---- */
+  --cu-radius: 18px;
+  --cu-radius-field: 10px;
+  --cu-shadow-card: 0 1px 2px rgba(23, 58, 44, 0.05), 0 24px 48px -28px rgba(23, 58, 44, 0.22);
+  --cu-shadow-pop: 0 10px 22px -12px rgba(23, 58, 44, 0.38);
+
+  display: block;
+}
+
+/* Every card on this page — loading, failure, confirmation and the form card —
+   shares the rounded, softly-lifted look of the reference. */
+.card {
+  border-radius: var(--cu-radius);
+  border-color: var(--cu-green-line);
+  box-shadow: var(--cu-shadow-card);
+}
+
+/* ============================================================================
+   1 · HERO — icon tile, serif title, tagline, artwork, and the way back
+   ============================================================================ */
+
+/* .cu-hero {
+  position: relative;
+  border-radius: 20px;
+  border: 1px solid var(--cu-green-line);
+  background:
+    radial-gradient(420px 180px at 88% -40%, rgba(255, 255, 255, 0.9), transparent 70%),
+    linear-gradient(112deg, #f4f9f5 0%, #e9f2ec 48%, #dcebe1 100%);
+  padding: 26px 28px;
+  overflow: hidden;
+} */
+
+.cu-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.cu-hero-id {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.cu-hero-tile {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: var(--cu-card);
+  color: var(--cu-green);
+  font-size: 1.7rem;
+  box-shadow: var(--cu-shadow-pop);
+}
+
+.cu-hero-title {
+  margin: 0;
+  font-family: var(--cu-font-serif);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 2.4vw, 2.15rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--cu-ink-strong);
+}
+
+.cu-hero-sub {
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+  color: var(--cu-muted);
+}
+
+/* The handwritten-feel tagline. No script face is self-hosted, so the serif set
+   in its synthesized italic, tilted, does the same visual job without adding a
+   font the build would have to fetch. */
+.cu-hero-tag {
+  margin: 0;
+  font-family: var(--cu-font-serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  text-align: center;
+  color: #3c6a56;
+  transform: rotate(-7deg);
+  opacity: 0.92;
+  flex: none;
+}
+
+.cu-hero-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+
+.cu-hero-art {
+  width: 232px;
+  height: auto;
+  display: block;
+}
+
+/* White pill for the way back, floating top-right on wide screens as in the
+   reference; in flow on small ones where there is no room beside the title. */
+.cu-hero-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 16px;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--cu-green-line);
+  background: var(--cu-card);
+  color: var(--cu-ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: 0 6px 16px -10px rgba(23, 58, 44, 0.35);
+}
+
+.cu-hero-back:hover {
+  border-color: var(--cu-green);
+  color: var(--cu-green);
+}
+
+.cu-hero-back i {
+  font-size: 1rem;
+}
+
+/* ---- Hero artwork colours ------------------------------------------------- */
+
+.cu-art-leaf path {
+  fill: #cde2d3;
+}
+
+.cu-art-vein {
+  fill: none;
+  stroke: #9dbfab;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.cu-art-card rect {
+  fill: var(--cu-card);
+  stroke: #c9dacd;
+  stroke-width: 2;
+}
+
+.cu-art-card circle {
+  fill: var(--cu-green-soft);
+}
+
+.cu-art-card path {
+  fill: none;
+  stroke: #9dbfab;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* The text lines on the card read as a lighter rule, not an outline. */
+.cu-art-card path[d^='M150'] {
+  stroke: #cfe0d4;
+  stroke-width: 4;
+}
+
+.cu-art-plus circle {
+  fill: var(--cu-green);
+}
+
+.cu-art-plus path {
+  stroke: var(--cu-card);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* ============================================================================
+   2 · STEPPER — numbered circles, titles and briefs, dashed connectors
+   ============================================================================ */
+
+.cu-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+    border: 1px solid 
+color-mix(in srgb, var(--primary) 18%, white);
+    background: 
+color-mix(in srgb, var(--primary) 5%, white);
+  overflow-x: auto;
+}
 
 .cu-step {
-  background-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
   border: none;
-  color: #6b7280;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 8px;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  min-width: 0;
 }
 
-.cu-step:hover {
-  background-color: #f3f4f6;
+.cu-step:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.65);
 }
 
+/* The current step reads as the deeper-mint tile of the reference. */
 .cu-step.active {
-  color: #4f46e5;
-  font-weight: 600;
-  background-color: #eef2ff;
-}
-
-.cu-step.done {
-  color: #059669;
+background: 
+color-mix(in srgb, var(--primary) 10%, white);
+    box-shadow: inset 0 0 0 1px 
+color-mix(in srgb, var(--primary) 15%, white);
 }
 
 .cu-step-dot {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background-color: #eef0f4;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.cu-step.active .cu-step-dot {
-  background-color: #4f46e5;
-  color: #fff;
-}
-
-.cu-step.done .cu-step-dot {
-  background-color: #d1fae5;
-  color: #059669;
-}
-
-/* ---- Identity header ------------------------------------------------------------------------ */
-
-.cu-avatar {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: #eef2ff;
-  color: #4f46e5;
+  background: var(--cu-card);
+  border: 1px solid #d8e2da;
+  color: #8a958e;
+  font-size: 0.85rem;
   font-weight: 600;
 }
+
+.cu-step.active .cu-step-dot {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 6px 14px -6px 
+color-mix(in srgb, var(--primary) 100%, white);
+}
+
+.cu-step.done .cu-step-dot {
+  background: var(--cu-green);
+  border-color: var(--cu-green);
+  color: #fff;
+  opacity: 0.75;
+}
+
+.cu-step-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cu-step-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--cu-ink);
+  white-space: nowrap;
+}
+
+.cu-step.active .cu-step-title {
+  color: var(--cu-ink-strong);
+}
+
+.cu-step-desc {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--cu-muted);
+  white-space: nowrap;
+}
+
+.cu-step-link {
+  flex: 1 1 30px;
+  min-width: 22px;
+  border-top: 2px dashed #b9cabf;
+}
+
+/* ============================================================================
+   3 · FORM CARD — section heads, labels, icon-prefixed fields
+   ============================================================================ */
+
+.cu-section-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 1.6rem;
+}
+
+.cu-section-icon {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* background: var(--cu-green-soft); */
+  color: var(--cu-green);
+  font-size: 30px;
+}
+.cu-section-icon i{
+font-size: 30px !important;
+}
+.cu-section-title {
+  margin: 0;
+  font-family: var(--cu-font-serif);
+  font-weight: 700;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  color: var(--cu-ink-strong);
+}
+
+.cu-section-sub {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  color: var(--cu-muted);
+}
+
+.cu-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #33413a;
+}
+
+/* The little red star, as in the reference. */
+.cu-req {
+  margin-left: 2px;
+  color: var(--cu-danger);
+  font-weight: 700;
+}
+
+.cu-hint {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cu-muted);
+}
+
+/* ---- Field: bordered box with the leading icon inside, like the reference -- */
+
+.cu-field {
+  position: relative;
+}
+
+.cu-field-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  color: var(--cu-field-icon);
+  font-size: 1.05rem;
+  pointer-events: none;
+}
+
+/* A textarea's icon sits at its first line instead of its middle. */
+.cu-field--area .cu-field-icon {
+  top: 15px;
+  transform: none;
+}
+
+.cu-field .form-control,
+.cu-field .form-select {
+  min-height: 46px;
+  padding-left: 56px;
+  border-radius: var(--cu-radius-field);
+  border-color: #80808069;
+  background-color: var(--cu-card);
+  font-size: 0.92rem;
+  color: #26332c;
+}
+
+.cu-field .form-select {
+  padding-right: 2.4rem;
+}
+
+.cu-field textarea.form-control {
+  min-height: 0;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  line-height: 1.5;
+}
+
+.cu-field .form-control::placeholder {
+  color: #a4b0a8;
+}
+
+.cu-field .form-control:focus,
+.cu-field .form-select:focus {
+  border-color: var(--cu-green);
+  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.12);
+}
+
+.cu-field .form-control.is-invalid,
+.cu-field .form-select.is-invalid {
+  border-color: var(--cu-danger);
+}
+
+.invalid-feedback {
+  font-size: 0.8rem;
+}
+
+/* ---- Invitation & Security band ------------------------------------------- */
+
+.cu-invite {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 22px;
+  border-radius: 14px;
+    border: 1px solid 
+color-mix(in srgb, var(--primary) 36%, white);
+    background: 
+color-mix(in srgb, var(--primary) 3%, white);
+}
+.cu-field i{
+      font-size: 19px !important;
+    border-right: 1px solid #8080808a;
+    padding-right: 7px;
+    border-radius: 1px;
+    background: #8080800a;
+    position: absolute;
+    left: 0;
+    width: 40px;
+    height: 47px;
+    display: flex;
+    align-items: center;
+    justify-content: end;
+}
+.cu-invite-icon {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+    background: 
+color-mix(in srgb, var(--primary) 10%, white);
+    color: var(--primary);
+  font-size: 1.3rem;
+  box-shadow: 0 0 0 4px rgba(49, 87, 70, 0.08);
+}
+.cu-invite-icon i{
+  font-size: 30px !important;
+}
+.cu-invite-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cu-ink);
+}
+
+.cu-invite-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--cu-muted);
+}
+
+.cu-invite-art {
+  margin-left: auto;
+  width: 150px;
+  flex: none;
+}
+
+/* ---- Invitation artwork colours ------------------------------------------- */
+
+.cu-invite-dash {
+  fill: none;
+  stroke: #9dbfab;
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  stroke-linecap: round;
+}
+
+.cu-invite-mail rect {
+  fill: var(--cu-card);
+  stroke: var(--cu-green);
+  stroke-width: 2;
+}
+
+.cu-invite-mail path {
+  fill: none;
+  stroke: var(--cu-green);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cu-invite-plane path {
+  fill: var(--cu-card);
+  stroke: var(--cu-green);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+/* ============================================================================
+   4 · REVIEW PANEL — the read-only recap keeps its caption/value pattern
+   ============================================================================ */
+
+.cu-review {
+  background: #f7faf8;
+  border-color: var(--cu-green-line) !important;
+}
+
+/* Inside the review these captions are the small uppercase labels of the old
+   design; everywhere else .cu-label is the form label above a field. */
+.cu-review .cu-label {
+  margin-bottom: 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7a877f;
+}
+
+.cu-review .cu-value {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--cu-ink);
+  word-break: break-word;
+}
+
+/* ============================================================================
+   5 · FOOTER — Cancel / Back on the left, Save & Continue on the right
+   ============================================================================ */
+
+.cu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e4ebe5;
+}
+
+.cu-btn-ghost {
+  padding: 0.55rem 1.3rem;
+  border: 1px solid #d9e2db;
+  border-radius: var(--cu-radius-field);
+  background: var(--cu-card);
+  color: #33413a;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.cu-btn-ghost:hover:not(:disabled) {
+  border-color: var(--cu-green);
+  color: var(--cu-green);
+  background: #f6faf7;
+}
+
+.cu-btn-primary {
+  padding: 0.55rem 1.4rem;
+  border: 1px solid var(--cu-green);
+  border-radius: var(--cu-radius-field);
+  background: var(--cu-green);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 12px 22px -12px rgba(49, 87, 70, 0.65);
+}
+
+.cu-btn-primary:hover:not(:disabled) {
+  background: var(--cu-green-deep);
+  border-color: var(--cu-green-deep);
+  color: #fff;
+}
+
+.cu-btn-primary:disabled {
+  opacity: 0.55;
+}
+
+/* Alerts on this page (server-error summary, the review note, the confirmation
+   "what happens next" box) sit quietly inside the card look. */
+.alert {
+  border-radius: 12px;
+}
+
+.alert-light {
+  background: #f7faf8;
+  border-color: var(--cu-green-line);
+}
+
+/* ============================================================================
+   6 · RESPONSIVE — the hero art and tagline go first; the stepper wraps
+   ============================================================================ */
+
+@media (min-width: 992px) {
+  /* The back pill floats over the hero's top-right corner, as in the reference;
+     the row keeps clear of it. */
+  .cu-hero-back {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    margin-top: 0;
+  }
+
+  .cu-hero-row {
+    padding-right: 150px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  /* No room for the tagline and artwork beside the title. */
+  .cu-hero-side {
+    display: none;
+  }
+
+  /* Two-by-two stepper without the dashed rails. */
+  .cu-stepper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .cu-step-link {
+    display: none;
+  }
+
+  .cu-step {
+    flex: 1 1 44%;
+  }
+
+  .cu-step-desc {
+    display: none;
+  }
+
+  .cu-invite-art {
+    display: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .cu-hero {
+    padding: 20px;
+  }
+
+  .cu-hero-tile {
+    width: 52px;
+    height: 52px;
+    font-size: 1.4rem;
+  }
+
+  .cu-step {
+    flex: 1 1 100%;
+  }
+}
+
+
+
 
 /* ---- Review panel ---------------------------------------------------------------------------- */
 

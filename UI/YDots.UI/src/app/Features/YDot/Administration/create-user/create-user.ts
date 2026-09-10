@@ -60,6 +60,28 @@ export class CreateUserComponent implements OnInit {
 
   readonly activeStep = signal(0);
   readonly steps = ['Identity', 'Organisation', 'Access', 'Review'];
+
+  /**
+   * The stepper renders each step with a one-line description under its title, so the rail
+   * reads as a guide rather than four bare words. The descriptions are presentational only —
+   * `steps` above stays the single source the server-error mapping indexes into.
+   */
+  readonly stepMeta: { title: string; description: string }[] = [
+    { title: 'Identity', description: 'Basic information about the user' },
+    { title: 'Organisation', description: 'Department and reporting structure' },
+    { title: 'Access', description: 'Permissions and system access' },
+    { title: 'Review', description: 'Review details before creating' },
+  ];
+
+  /**
+   * Honorifics for the Title dropdown.
+   *
+   * The API's CreateUserRequest carries no title field — this is collected for the directory
+   * record only — so a fixed list cannot break a save. Rendered as a dropdown, as the design
+   * asks, rather than a free-text box that invites "Dr." and "Mr " into the same column.
+   */
+  readonly titles = ['Mr', 'Ms', 'Mrs', 'Mx', 'Dr', 'Prof'];
+
   readonly submitted = signal(false);
 
   /**

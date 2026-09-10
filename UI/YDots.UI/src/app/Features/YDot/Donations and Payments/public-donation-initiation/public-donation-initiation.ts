@@ -9,6 +9,8 @@ import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { CurrentUserService } from '../../../../Service/current-user.service';
 import { CampaignStoreService } from '../../../../Shared/services/campaign-store.service';
 import { GatewayCheckoutService } from '../../../../Shared/services/gateway-checkout.service';
+import { GeoMasterService } from '../../../../Shared/services/geo-master.service';
+import { MasterLookup } from '../../../../Shared/models/global-master.model';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import {
   CheckoutSession,
@@ -99,7 +101,7 @@ const DonatableCampaignStatuses: readonly string[] = ['Approved', 'Scheduled', '
   selector: 'app-public-donation-initiation',
   imports: [CommonModule, FormsModule],
   templateUrl: './public-donation-initiation.html',
-  styleUrl: './public-donation-initiation.css',
+  styleUrl:'./public-donation-initiation.css',
 })
 export class PublicDonationInitiationComponent {
   private readonly toast = inject(ToastService);
@@ -129,6 +131,24 @@ export class PublicDonationInitiationComponent {
   private campaignStoreRef: CampaignStoreService | null = null;
 
   /**
+   * The geo catalogue door, resolved only for a signed-in caller — same discipline as
+   * `campaignStoreOrNull` above. The lookups API behind `GeoMasterService` is
+   * authenticated-but-permissionless, so an anonymous donor opening this page must never be
+   * the one to construct and call it: they would collect a 401 on every address dropdown.
+   * The address block itself only renders for the internal view, so the lazy resolve costs
+   * the donor path nothing.
+   */
+  private geoMastersOrNull(): GeoMasterService | null {
+    if (!this.isInternalView()) {
+      return null;
+    }
+    this.geoMastersRef ??= this.injector.get(GeoMasterService);
+    return this.geoMastersRef;
+  }
+  private geoMastersRef: GeoMasterService | null = null;
+
+
+  /**
    * The QR code's or link's own reference, carried on the query string.
    *
    * IT IS HOW AN ANONYMOUS DONOR GETS A CAMPAIGN. Nobody signed in means no campaign list to
@@ -147,7 +167,7 @@ export class PublicDonationInitiationComponent {
    */
   protected readonly isInternalView = computed(() => this.currentUser.reference() !== '');
 
-  protected readonly pageTitle = signal('Public donation initiation');
+  protected readonly pageTitle = signal('Donation Initiation');
   protected readonly pageSubtitle = signal('Collect minimum identity, amount and consent before creating a unique intent.');
   protected readonly operatingTimeZone = signal('Asia/Kolkata · IST (UTC+05:30)');
 
@@ -360,10 +380,112 @@ export class PublicDonationInitiationComponent {
     return this.geographyCatalogue().find((g) => g.reference === reference)?.label ?? '';
   }
 
+  // ==========================================================================================
+  // Address Details block (the receipt address, per the screen design)
+  //
+  // Line 1 is `addressText` above — the signal was always the receipt's first address line,
+  // the template simply never said so. Line 2, City, State, Country and PIN are the rest of
+  // a mailable address, and the master-data Guids the intent's countryId / stateId / cityId
+  // columns want are resolvable HERE because this block is staff-only: GeoMasterService's
+  // catalogue is authenticated-but-permissionless, which an anonymous donor cannot call.
+  // ==========================================================================================
+  protected readonly addressLine2Text = signal('');
+  protected readonly pinCode = signal('');
+
+  protected readonly countryCatalogue = signal<readonly CatalogueOption[]>([]);
+  protected readonly stateCatalogue = signal<readonly CatalogueOption[]>([]);
+  protected readonly cityCatalogue = signal<readonly CatalogueOption[]>([]);
+  protected readonly countryId = signal('');
+  protected readonly stateId = signal('');
+  protected readonly cityId = signal('');
+
+  protected countryLabel(reference: string): string {
+    return this.countryCatalogue().find((c) => c.reference === reference)?.label ?? '';
+  }
+  protected stateLabel(reference: string): string {
+    return this.stateCatalogue().find((s) => s.reference === reference)?.label ?? '';
+  }
+  protected cityLabel(reference: string): string {
+    return this.cityCatalogue().find((c) => c.reference === reference)?.label ?? '';
+  }
+
+  /** A master lookup row as a picker option — active rows only, ids carried as references. */
+  private toMasterOptions(rows: readonly MasterLookup[]): readonly CatalogueOption[] {
+    return rows
+      .filter((row) => row.status === 'active')
+      .map((row) => ({ reference: row.id, label: row.name }));
+  }
+
+  /** Loads the country catalogue once, for the internal view only (see geoMastersOrNull). */
+  protected loadCountriesForAddress(): void {
+    const masters = this.geoMastersOrNull();
+    if (!masters || this.countryCatalogue().length > 0) {
+      return;
+    }
+    masters.getCountries().subscribe({
+      next: (rows) => this.countryCatalogue.set(this.toMasterOptions(rows)),
+      error: () => this.countryCatalogue.set([]),
+    });
+  }
+
+  /**
+   * The standard address cascade: a country names its states, a state names its cities, and
+   * changing a parent invalidates the child selections — a stale "Tamil Nadu" under a newly
+   * chosen country is worse than an empty box the donor refills.
+   */
+  protected onAddressCountryChange(reference: string): void {
+    this.countryId.set(reference);
+    this.stateId.set('');
+    this.cityId.set('');
+    this.stateCatalogue.set([]);
+    this.cityCatalogue.set([]);
+
+    const masters = this.geoMastersOrNull();
+    if (!masters || !reference) {
+      return;
+    }
+    masters.getStates(reference).subscribe({
+      next: (rows) => this.stateCatalogue.set(this.toMasterOptions(rows)),
+      error: () => this.stateCatalogue.set([]),
+    });
+  }
+
+  protected onAddressStateChange(reference: string): void {
+    this.stateId.set(reference);
+    this.cityId.set('');
+    this.cityCatalogue.set([]);
+
+    const masters = this.geoMastersOrNull();
+    if (!masters || !reference) {
+      return;
+    }
+    masters.getCities(reference).subscribe({
+      next: (rows) => this.cityCatalogue.set(this.toMasterOptions(rows)),
+      error: () => this.cityCatalogue.set([]),
+    });
+  }
+
+
  
   protected readonly consentPolicyVersion = signal('Privacy Notice v3.2 · Consent Terms v1.4');
   protected readonly consentChecked = signal(false);
   protected readonly consentEffectiveTime = signal<string>('');
+
+  // ==========================================================================================
+  // Sidebar stepper — the five "Donor Information" milestones, lit as the form fills.
+  // Pure reads of the same signals the validation already uses, so the guide can never
+  // claim a step is done that Submit would reject.
+  // ==========================================================================================
+  protected readonly stepIdentityDone = computed(
+    () => !!this.fullName().trim() && !!this.emailOrMobile().trim() && this.emailValid(),
+  );
+  protected readonly stepCampaignDone = computed(
+    () => !!this.selectedCampaign() || !!this.trackingReference() || !!this.campaignIdFromLink(),
+  );
+  protected readonly stepAmountDone = computed(() => !!this.donationAmount().trim() && !this.amountInvalid());
+  protected readonly stepCurrencyDone = computed(() => !!this.currency());
+  protected readonly stepTaxDone = computed(() => !!this.panOrTaxId().trim());
+
   protected toggleConsent(checked: boolean): void {
     if (this.formLocked()) {
       return;
@@ -437,6 +559,12 @@ export class PublicDonationInitiationComponent {
     if (!this.selectedCampaign() && !this.trackingReference() && !this.campaignIdFromLink()) {
       errors.push({ field: 'campaign', label: 'Campaign or appeal', message: 'Enter Campaign or appeal.' });
     }
+    // THE NAME THE FORM SHOWS A STAR FOR. The screen design marks Full name required, and the
+    // request builder was already silently substituting 'Donor' for an empty one - a receipt
+    // addressed to a placeholder. Saying so at the field beats inventing a name at the API.
+    if (!this.fullName().trim()) {
+      errors.push({ field: 'fullName', label: 'Full name', message: 'Enter Full name.' });
+    }
     if (this.mobileInvalid()) {
       errors.push({
         field: 'mobileNumber',
@@ -471,6 +599,27 @@ export class PublicDonationInitiationComponent {
         label: 'PAN or tax identifier',
         message: 'Review PAN or tax identifier. The value does not meet the stated format or range.',
       });
+    }
+    // THE ADDRESS BLOCK, REQUIRED WHERE IT IS SHOWN. The design marks line 1, City, State,
+    // Country and PIN with the star - and the block only renders for a staff member entering
+    // a donation on a donor's behalf, where a receipt that cannot be mailed is a defect. The
+    // donor's own form never renders these fields, so the star costs it nothing.
+    if (this.isInternalView()) {
+      if (!this.addressText().trim()) {
+        errors.push({ field: 'addressLine1', label: 'Address line 1', message: 'Enter Address line 1.' });
+      }
+      if (!this.cityId()) {
+        errors.push({ field: 'city', label: 'City', message: 'Enter City.' });
+      }
+      if (!this.stateId()) {
+        errors.push({ field: 'state', label: 'State', message: 'Enter State.' });
+      }
+      if (!this.countryId()) {
+        errors.push({ field: 'country', label: 'Country', message: 'Enter Country.' });
+      }
+      if (!this.pinCode().trim()) {
+        errors.push({ field: 'pinCode', label: 'PIN / ZIP Code', message: 'Enter PIN / ZIP Code.' });
+      }
     }
     if (!this.consentChecked()) {
       errors.push({ field: 'consent', label: 'Consent acknowledgement', message: 'Enter Consent acknowledgement.' });
@@ -545,13 +694,27 @@ export class PublicDonationInitiationComponent {
       taxIdentifier: this.panOrTaxId().trim() || null,
       addressLine1: this.addressText().trim() || null,
 
-      // THE CHOSEN GEOGRAPHY, RATHER THAN NOTHING. The picker's value was read by the template
-      // and by nothing else, so an administrative geography selected on this form never left
-      // the browser and no receipt address was ever the poorer for it being wrong. The API's
-      // countryId / stateId / cityId take the master catalogue's Guids, which this form cannot
-      // resolve - a public donor may not read the catalogue - so the approved label travels on
-      // the second address line, which is where a printed receipt wants it in any case.
-      addressLine2: this.geographyLabel(this.geography()) || null,
+      // THE MAILABLE ADDRESS, ASSEMBLED FROM THE BLOCK THE FORM SHOWS. Line 2, City, State and
+      // Country ride on addressLine2 comma-joined - the same convention the donor registration
+      // form uses - because a printed receipt wants them on one line and the API's city/state
+      // label columns do not exist. Where the master-data pickers resolved (internal view),
+      // the Guids go into their own columns as well, and the PIN travels as the postal code.
+      addressLine2:
+        [
+          this.addressLine2Text().trim(),
+          this.cityLabel(this.cityId()),
+          this.stateLabel(this.stateId()),
+          this.countryLabel(this.countryId()),
+        ]
+          .filter(Boolean)
+          .join(', ') || this.geographyLabel(this.geography()) || null,
+
+      // THE MASTER GUIDS, WHERE THE FORM COULD RESOLVE THEM. Empty on the donor's own form,
+      // where no catalogue is fetched and these stay null exactly as before.
+      countryId: this.countryId() || null,
+      stateId: this.stateId() || null,
+      cityId: this.cityId() || null,
+      postalCode: this.pinCode().trim() || null,
 
       // Section 11: consent is captured BEFORE the intent exists, so it travels with the
       // creation rather than being written over it afterwards.
@@ -1004,6 +1167,7 @@ export class PublicDonationInitiationComponent {
     this.prefillFromAccount();
     this.loadPublicCampaigns();
     this.loadConfig();
+    this.loadCountriesForAddress();
 
     // AND AGAIN ON EVERY LATER ARRIVAL. The constructor runs once; a donor sent back here after
     // paying may reach this route without the component being rebuilt, and that navigation is

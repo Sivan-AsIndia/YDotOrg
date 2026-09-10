@@ -519,25 +519,6 @@ export class StateComponent implements OnInit {
     return arr;
   }
 
-  onRefresh(): void {
-    this.searchText = '';
-    this.selectedStatus = '';
-    this.selectedCountryId = '';
-    this.selectedJurisdictionType = '';
-    this.currentPage = 1;
-    this.startPage = 1;
-
-    // The cached reference data goes too: a country or zone added elsewhere should appear in
-    // this screen's dropdowns without a full reload.
-    this.masters.invalidateReferenceData();
-    this.loadReferenceData();
-    this.loadData();
-    this.detailsOpen.set(false);
-    this.selectedState = null;
-    this.selectedCompany = null;
-    this.showToast('success', 'Reload successful', 'The state/province list is up to date');
-  }
-
   /**
    * Opens the detail pane.
    *

@@ -1,53 +1,40 @@
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="container-fluid px-4 py-3 lc-page">
+    <div class="container-fluid lc-page">
 
-      <!-- ============================================================ -->
-      <!-- Page header                                                   -->
-      <!-- ============================================================ -->
       <header class="lc-header">
         <div class="lc-header-main">
           <div class="lc-title-row">
-            <h1 class="lc-title"  style="
-        font-size: 40px !important;font-family:Georgia !important ;">{{ screen().title }}</h1>
+            <h1 class="lc-title">{{ screen().title }}</h1>
             <span class="badge" [class.badge-neutral]="!isSubmitted()" [class.badge-info]="isSubmitted()">
               <span class="badge-dot" aria-hidden="true"></span>{{ savedLeadReference() ? (isSubmitted() ? 'Submitted' : 'Draft') : 'New' }}
             </span>
           </div>
           <p class="lc-subtitle">{{ screen().purpose }}</p>
-          <!-- <p class="lc-meta">
-            <span>{{ savedLeadReference() || 'Not yet saved' }}</span>
-            <span class="lc-meta-dot" aria-hidden="true">&middot;</span>
-            <span>{{ screen().scope }}</span>
-            <span class="lc-meta-dot" aria-hidden="true">&middot;</span>
-            <span>Updated {{ screen().lastRefresh }}</span>
-          </p> -->
+
         </div>
 
-        <div class="lc-header-actions">
+        <svg class="lc-header-art" viewBox="0 0 380 170" fill="none" aria-hidden="true">
+ <path d="M0 164c40-20 51-117 133-117 72 0 75 57 133 39 50-15 86-17 114-4v88H0Z" fill="#edf5f1"/>
+ <g fill="#55a47a"><path d="M123 26c-28 0-29-25-29-25 28-1 31 19 29 25Z"/><path d="M74 119c-30 1-37-24-37-24 32-4 39 16 37 24Z"/><path d="M235 157c-27-1-33-30-33-30 31 2 34 23 33 30Z"/><path d="M240 141c-11-28 10-46 10-46 14 29-2 43-10 46Z"/><path d="M244 162c4-18 26-21 26-21-7 20-21 22-26 21Z"/></g>
+ <g stroke="#4c936f" stroke-width="1.4" opacity=".55"><path d="m101 7 29 30M42 99l37 26M235 126l7 43"/><path d="m279 125 22-10c8-5 10-6 19-5l17 3c8 2 7 9-1 9h-19m-34 28 15-12c7-6 9-5 19-4l15 1c7 0 11-3 16-8l25-26c7-8 0-13-6-8l-20 17m-64 42-13-19-15 11 15 22 14-11Z"/></g>
+ <path d="M327 95s-32-20-32-37c0-17 21-21 32-6 11-15 32-11 32 6 0 17-32 37-32 37Z" fill="#4f996f"/>
+ <g fill="#80b29a"><circle cx="284" cy="41" r="1.5"/><circle cx="300" cy="25" r="1.5"/><circle cx="322" cy="20" r="1.5"/><circle cx="347" cy="26" r="1.5"/><circle cx="367" cy="41" r="1.5"/><circle cx="375" cy="65" r="1.5"/><circle cx="279" cy="64" r="1.5"/></g>
+</svg>
+        <div class="lc-header-draft-action">
+
           @if (permissions()['deleteDraft']) {
-            <button
+            <button title="Delete draft"
               type="button"
               class="btn btn-outline-danger btn-sm"
               (click)="openAction('deleteDraft')"
             >
-              Delete draft
+              <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg> Delete draft
             </button>
           }
         </div>
       </header>
 
-      <div class="lc-scope-pill">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" class="lc-scope-icon">
-          <path d="M10 18s6-5.19 6-10a6 6 0 1 0-12 0c0 4.81 6 10 6 10Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
-          <circle cx="10" cy="8" r="2.1" stroke="currentColor" stroke-width="1.4" />
-        </svg>
-        <span>{{ screen().scope }}</span>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Status banners                                                -->
-      <!-- ============================================================ -->
       @if (uiState() === 'validation') {
         <div class="lc-banner lc-banner-danger" role="alert">
           <div class="lc-banner-body">
@@ -61,7 +48,7 @@
               </ul>
             }
           </div>
-          <button type="button" class="lc-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss message">&times;</button>
+          <button title="Dismiss message" type="button" class="lc-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss message">&times;</button>
         </div>
       }
 
@@ -75,162 +62,12 @@
               <span>{{ savedLeadReference() || 'Not yet saved' }} is saved. Continue editing or submit it when ready.</span>
             }
           </div>
-          <button type="button" class="lc-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss message">&times;</button>
+          <button title="Dismiss message" type="button" class="lc-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss message">&times;</button>
         </div>
       }
 
-      <!-- ============================================================ -->
-      <!-- Bulk upload                                                   -->
-      <!-- ============================================================ -->
-      <section class="lc-card lc-bulk-card">
-        <button
-          type="button"
-          class="lc-bulk-toggle"
-          (click)="isBulkUploadOpen() ? closeBulkUpload() : openBulkUpload()"
-          [attr.aria-expanded]="isBulkUploadOpen()"
-          aria-controls="bulkUploadBody"
-        >
-          <span class="lc-bulk-toggle-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="none">
-              <path d="M10 3v9m0 0 3.5-3.5M10 12l-3.5-3.5M4 14.5v.5A2 2 0 0 0 6 17h8a2 2 0 0 0 2-2v-.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </span>
-          <span class="lc-bulk-toggle-text">
-            <span class="lc-card-title">Bulk upload leads</span>
-            <span class="lc-card-subtitle">Upload a CSV or XLSX file to create multiple leads at once.</span>
-          </span>
-          <svg class="lc-chevron" [class.is-open]="isBulkUploadOpen()" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M6 8l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
 
-        @if (isBulkUploadOpen()) {
-          <div class="lc-bulk-body" id="bulkUploadBody">
 
-            <!-- WHICH OF THE TWO IS MEANT. The panel does not quietly discard a part-typed
-                 lead, and it does not quietly upload alongside one either. -->
-            @if (bulkBlockedByForm()) {
-              <div class="lc-bulk-choice" role="alert">
-                <p class="lc-bulk-choice-title">You have already started entering a lead.</p>
-                <p class="lc-bulk-choice-body">
-                  A bulk upload and a single lead are submitted separately, so this screen does one
-                  at a time. Clearing the form does not delete a draft you have already saved &mdash;
-                  that stays in the Lead Work Queue.
-                </p>
-                <div class="lc-bulk-choice-actions">
-                  <button type="button" class="btn btn-primary btn-sm" (click)="discardFormForBulk()">
-                    Clear the form and upload a file
-                  </button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="keepFormAndCloseBulk()">
-                    Keep what I typed
-                  </button>
-                </div>
-              </div>
-            } @else {
-            <div class="lc-bulk-actions">
-              <!-- A BUTTON, NOT A LINK TO A FILE. The template is built here so its columns
-                   cannot drift from the parser; the old href pointed at an asset that was never
-                   in the build and downloaded the app's index.html under a .csv name. -->
-              <button type="button" class="btn btn-outline-primary btn-sm" (click)="downloadBulkTemplate()">
-                Download template
-              </button>
-              <label class="btn btn-primary btn-sm lc-file-label">
-                Choose file
-                <input
-                  type="file"
-                  class="lc-file-input"
-                  accept=".csv,.xlsx"
-                  (change)="onBulkFileSelected($event)"
-                  aria-label="Choose a CSV or XLSX file to upload"
-                />
-              </label>
-              <span class="lc-bulk-hint">
-                Template is a ZIP with a CSV and an XLSX &middot; fill in either &middot; up to 10&nbsp;MB
-              </span>
-            </div>
-
-            @if (bulkUpload().fileName) {
-              <div class="lc-bulk-file">
-                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" class="lc-bulk-file-icon">
-                  <path d="M6 2.5h5.5L15 6v10.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-                  <path d="M11.5 2.5V6H15" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-                </svg>
-                <span class="lc-bulk-filename">{{ bulkUpload().fileName }}</span>
-                <span class="lc-bulk-filesize">{{ bulkUpload().fileSizeLabel }}</span>
-                <!-- THE WAY BACK TO THE FORM. Attaching a file locks the individual capture, so
-                     there has to be a visible way to detach one chosen by mistake. -->
-                @if (isBulkStaged()) {
-                  <button type="button" class="lc-bulk-file-remove" (click)="clearBulkFile()">
-                    Remove file
-                  </button>
-                }
-              </div>
-            }
-
-            @switch (bulkUpload().status) {
-              @case ('parsing') {
-                <p class="lc-bulk-status"><span class="lc-spinner" aria-hidden="true"></span>Reading file&hellip;</p>
-              }
-              @case ('invalid') {
-                <p class="lc-error" role="alert">{{ bulkUpload().errorMessage }}</p>
-              }
-              @case ('error') {
-                <p class="lc-error" role="alert">{{ bulkUpload().errorMessage }}</p>
-              }
-              @case ('ready') {
-                <div class="lc-bulk-stats">
-                  <div class="lc-bulk-stat">
-                    <span class="lc-bulk-stat-value">{{ bulkUpload().totalRecords }}</span>
-                    <span class="lc-bulk-stat-label">Records</span>
-                  </div>
-                  <div class="lc-bulk-stat is-success">
-                    <span class="lc-bulk-stat-value">{{ bulkUpload().validRecords }}</span>
-                    <span class="lc-bulk-stat-label">Valid</span>
-                  </div>
-                  <div class="lc-bulk-stat is-danger">
-                    <span class="lc-bulk-stat-value">{{ bulkUpload().invalidRecords }}</span>
-                    <span class="lc-bulk-stat-label">Errors</span>
-                  </div>
-                </div>
-                <!-- THIS is what submits the file. "Submit lead" at the bottom of the page
-                     submits the one lead typed into the form and has never sent this. -->
-                <button type="button" class="btn btn-primary btn-sm" (click)="importBulkUpload()">
-                  Submit {{ bulkUpload().validRecords }} lead{{ bulkUpload().validRecords === 1 ? '' : 's' }} from file
-                </button>
-                <p class="lc-bulk-note">
-                  This submits the uploaded file only. The form below stays locked until the file is
-                  imported or removed.
-                </p>
-              }
-              @case ('importing') {
-                <p class="lc-bulk-status"><span class="lc-spinner" aria-hidden="true"></span>Importing leads&hellip;</p>
-              }
-              @case ('imported') {
-                <div class="lc-bulk-success-row">
-                  <p class="lc-bulk-success">
-                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l3.5 3.5L16 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                    Import complete &mdash; {{ bulkUpload().validRecords }} lead{{ bulkUpload().validRecords === 1 ? '' : 's' }} created.
-                  </p>
-                  @if (bulkUpload().invalidRecords > 0) {
-                    <button type="button" class="btn btn-outline-primary btn-sm" (click)="downloadBulkErrorReport()">
-                      Download error report ({{ bulkUpload().invalidRecords }})
-                    </button>
-                  }
-                </div>
-              }
-            }
-            }
-          </div>
-        }
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- Form — ONE lead, typed by hand.                               -->
-      <!--                                                               -->
-      <!-- Locked while a file is staged, because the two ways of adding  -->
-      <!-- leads are separate submissions and doing both at once means    -->
-      <!-- either a discarded file or a duplicate of a row in the sheet.  -->
-      <!-- ============================================================ -->
       <form class="lc-form" (ngSubmit)="submitLead()" novalidate>
 
         @if (isBulkStaged()) {
@@ -239,33 +76,34 @@
               <strong>Bulk upload in progress.</strong>
               <span>
                 Entering a single lead is paused while &ldquo;{{ bulkUpload().fileName }}&rdquo; is
-                attached. Submit it from the panel above, or remove the file to type one lead
+                attached. Submit it from the bulk upload panel below, or remove the file to type one lead
                 instead.
               </span>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearBulkFile()">
-              Remove file
+            <button title="Remove file" type="button" class="btn btn-outline-secondary btn-sm" (click)="clearBulkFile()">
+              <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg> Remove file
             </button>
           </div>
         }
 
-        <fieldset class="lc-fieldset" [disabled]="isBulkStaged()">
+        <fieldset class="lc-fieldset" [class.lc-consent-expanded]="fields().collectConsent" [disabled]="isBulkStaged()">
 
-        <!-- Lead information -->
-        <section class="lc-card">
-          <div class="lc-card-head">
-            <h2 class="lc-card-title">Lead information</h2>
-            <p class="lc-card-subtitle">Who this lead is, in the system&rsquo;s records.</p>
+        <section class="lc-card lc-details-card">
+          <div class="lc-card-head"><svg class="lc-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>
+            <h2 class="lc-card-title">Lead &amp; contact details</h2>
+            <p class="lc-card-subtitle">Identity, contact and location</p>
           </div>
 
-          <div class="lc-grid lc-grid-3">
+          
+          <div class="lc-grid lc-identity-grid">
             <div class="lc-field" [class.has-error]="errors()['firstName']">
               <label for="firstName">First name <span class="lc-required" aria-hidden="true">*</span></label>
               <input
-                id="firstName"
+                id="firstName" placeholder="Enter first name"
+                [value]="fields().firstName"
                 type="text"
                 class="lc-input"
-              
+
                 (input)="onTextInput('firstName', $event)"
                 maxlength="100"
                 [attr.aria-invalid]="!!errors()['firstName']"
@@ -275,11 +113,11 @@
                 <p class="lc-error" id="firstName-error">{{ errors()['firstName'] }}</p>
               }
             </div>
-
             <div class="lc-field" [class.has-error]="errors()['lastName']">
               <label for="lastName">Last name <span class="lc-required" aria-hidden="true">*</span></label>
               <input
-                id="lastName"
+                id="lastName" placeholder="Enter last name"
+                [value]="fields().lastName"
                 type="text"
                 class="lc-input"
                 (input)="onTextInput('lastName', $event)"
@@ -291,11 +129,10 @@
                 <p class="lc-error" id="lastName-error">{{ errors()['lastName'] }}</p>
               }
             </div>
-
             <div class="lc-field" [class.has-error]="errors()['displayName']">
               <label for="displayName">Display name <span class="lc-required" aria-hidden="true">*</span></label>
               <input
-                id="displayName"
+                id="displayName" placeholder="Enter display name"
                 type="text"
                 class="lc-input"
                 [value]="fields().displayName"
@@ -312,23 +149,15 @@
                 }
                 <span class="lc-counter">{{ fields().displayName.length }}/150</span>
               </div>
-            </div>
+              
           </div>
-        </section>
-
-        <!-- Contact information -->
-        <section class="lc-card">
-          <div class="lc-card-head">
-            <h2 class="lc-card-title">Contact information</h2>
-            <p class="lc-card-subtitle">How &amp; where this lead can be reached.</p>
           </div>
-
-          <div class="lc-grid lc-grid-2">
-            <div class="lc-field lc-span-2" [class.has-error]="errors()['mobiles']">
+          <div class="lc-grid lc-contact-grid">
+            <div class="lc-field" [class.has-error]="errors()['mobiles']">
               <div class="lc-field-header">
                 <label id="mobilesLabel">Mobile number{{ fields().mobiles.length === 1 ? '' : 's' }} <span class="lc-required" aria-hidden="true">*</span></label>
                 @if (fields().mobiles.length < 5) {
-                  <button type="button" class="lc-link-btn" (click)="addMobile()">+ Add number</button>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="addMobile()" title="Add mobile number"><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Add</button>
                 }
               </div>
 
@@ -344,7 +173,7 @@
                       aria-label="Mobile number"
                       [attr.aria-invalid]="!!errors()['mobiles']"
                     />
-                    <button
+                    <button title="Set primary mobile number"
                       type="button"
                       class="lc-chip"
                       [class.is-active]="m.isPrimary"
@@ -356,7 +185,7 @@
                       {{ m.isPrimary ? 'Primary' : 'Set primary' }}
                     </button>
                     @if (fields().mobiles.length > 1) {
-                      <button type="button" class="lc-icon-btn" (click)="removeMobile(m.id)" aria-label="Remove this mobile number">
+                      <button title="Remove this mobile number" type="button" class="lc-icon-btn" (click)="removeMobile(m.id)" aria-label="Remove this mobile number">
                         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8m0-8-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
                       </button>
                     }
@@ -369,12 +198,11 @@
                 <p class="lc-hint">International format, for example +91 98765 43210. A 10-digit number without a prefix is saved as +91.</p>
               }
             </div>
-
             <div class="lc-field" [class.has-error]="errors()['email']">
               <label for="email">Email address <span class="lc-required" aria-hidden="true">*</span></label>
               <div class="lc-input-with-icon">
                 <input
-                  id="email"
+                  id="email" placeholder="Enter email address"
                   type="email"
                   class="lc-input"
                   [value]="fields().email"
@@ -396,9 +224,14 @@
                 <p class="lc-error" id="email-error">{{ errors()['email'] }}</p>
               }
             </div>
-
             <div class="lc-field" [class.has-error]="errors()['preferredLanguage']">
               <label for="preferredLanguage">Preferred language <span class="lc-required" aria-hidden="true">*</span></label>
+              @if (languageOptions().length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="preferredLanguage-search">Search languages</label>
+                  <input id="preferredLanguage-search" class="lc-input" type="search" autocomplete="off" placeholder="Search languages" [value]="lookupSearch()['preferredLanguage'] || ''" (input)="onLookupSearch('preferredLanguage', $event)" aria-controls="preferredLanguage" />
+                </div>
+              }
               <select
                 id="preferredLanguage"
                 class="lc-input"
@@ -407,7 +240,7 @@
                 [attr.aria-invalid]="!!errors()['preferredLanguage']"
               >
                 <option value="" disabled>Select a language</option>
-                @for (lang of languageOptions(); track lang.value) {
+                @for (lang of filterLookup('preferredLanguage', languageOptions(), fields().preferredLanguage); track lang.value) {
                   <option [value]="lang.value">{{ lang.label }}</option>
                 }
               </select>
@@ -415,8 +248,8 @@
                 <p class="lc-error">{{ errors()['preferredLanguage'] }}</p>
               }
             </div>
-
-            <div class="lc-field lc-span-2" [class.has-error]="errors()['geoCity']">
+          </div>
+          <div class="lc-field lc-location" [class.has-error]="errors()['geoCity']">
               <div class="lc-field-header">
                 <label id="geoLabel">City or geography <span class="lc-required" aria-hidden="true">*</span></label>
                 @if (serviceability(); as sv) {
@@ -426,16 +259,22 @@
                 }
               </div>
 
-              <div class="lc-grid lc-grid-3" role="group" aria-labelledby="geoLabel">
+              <div class="lc-grid lc-geography-grid" role="group" aria-labelledby="geoLabel">
                 <div class="lc-field" [class.has-error]="errors()['geoCountry']">
                   <label for="geoCountry">Country</label>
-                  <select
+                  @if (countryOptions.length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="geoCountry-search">Search countries</label>
+                  <input id="geoCountry-search" class="lc-input" type="search" autocomplete="off" placeholder="Search countries" [value]="lookupSearch()['geoCountry'] || ''" (input)="onLookupSearch('geoCountry', $event)" aria-controls="geoCountry" />
+                </div>
+              }
+              <select
                     id="geoCountry"
                     class="lc-input"
                     [value]="fields().geoCountry"
                     (change)="onGeoCountryChange($event)"
                   >
-                    @for (c of countryOptions; track c) {
+                    @for (c of filterLookup('geoCountry', countryOptions, fields().geoCountry); track c) {
                       <option [value]="c">{{ c }}</option>
                     }
                   </select>
@@ -446,7 +285,13 @@
 
                 <div class="lc-field" [class.has-error]="errors()['geoState']">
                   <label for="geoState">State</label>
-                  <select
+                  @if (stateOptions.length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="geoState-search">Search states</label>
+                  <input id="geoState-search" class="lc-input" type="search" autocomplete="off" placeholder="Search states" [value]="lookupSearch()['geoState'] || ''" (input)="onLookupSearch('geoState', $event)" aria-controls="geoState" />
+                </div>
+              }
+              <select
                     id="geoState"
                     class="lc-input"
                     [value]="fields().geoState"
@@ -454,7 +299,7 @@
                     [attr.aria-invalid]="!!errors()['geoState']"
                   >
                     <option value="" disabled>Select a state</option>
-                    @for (s of stateOptions; track s) {
+                    @for (s of filterLookup('geoState', stateOptions, fields().geoState); track s) {
                       <option [value]="s">{{ s }}</option>
                     }
                   </select>
@@ -465,7 +310,13 @@
 
                 <div class="lc-field" [class.has-error]="errors()['geoCity']">
                   <label for="geoCity">City</label>
-                  <select
+                  @if (approvedCities().length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="geoCity-search">Search cities</label>
+                  <input id="geoCity-search" class="lc-input" type="search" autocomplete="off" placeholder="Search cities" [value]="lookupSearch()['geoCity'] || ''" (input)="onLookupSearch('geoCity', $event)" aria-controls="geoCity" />
+                </div>
+              }
+              <select
                     id="geoCity"
                     class="lc-input"
                     [value]="fields().geoCity"
@@ -474,7 +325,7 @@
                     [attr.aria-invalid]="!!errors()['geoCity']"
                   >
                     <option value="" disabled>{{ approvedCities().length ? 'Select a city' : 'No approved cities for this state yet' }}</option>
-                    @for (city of approvedCities(); track city) {
+                    @for (city of filterLookup('geoCity', approvedCities(), fields().geoCity); track city) {
                       <option [value]="city">{{ city }}</option>
                     }
                   </select>
@@ -498,12 +349,10 @@
                 <p class="lc-hint">Kept exactly as entered &mdash; serviceability is verified separately against the city above.</p>
               </div>
             </div>
-          </div>
         </section>
 
-        <!-- Campaign & source -->
-        <section class="lc-card">
-          <div class="lc-card-head">
+        <section class="lc-card lc-campaign-card">
+          <div class="lc-card-head"><svg class="lc-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 10 15-6v16L4 14v-4ZM4 14l2 7h4l-2-6M19 8l3-2M19 16l3 2"/></svg>
             <h2 class="lc-card-title">Campaign &amp; source</h2>
             <p class="lc-card-subtitle">Where this lead came from.</p>
           </div>
@@ -511,6 +360,12 @@
           <div class="lc-grid lc-grid-2">
             <div class="lc-field" [class.has-error]="errors()['leadSource']">
               <label for="leadSource">Lead source <span class="lc-required" aria-hidden="true">*</span></label>
+              @if (leadSourceOptions.length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="leadSource-search">Search lead sources</label>
+                  <input id="leadSource-search" class="lc-input" type="search" autocomplete="off" placeholder="Search lead sources" [value]="lookupSearch()['leadSource'] || ''" (input)="onLookupSearch('leadSource', $event)" aria-controls="leadSource" />
+                </div>
+              }
               <select
                 id="leadSource"
                 class="lc-input"
@@ -519,7 +374,7 @@
                 [attr.aria-invalid]="!!errors()['leadSource']"
               >
                 <option value="" disabled>Select a source</option>
-                @for (src of leadSourceOptions; track src) {
+                @for (src of filterLookup('leadSource', leadSourceOptions, fields().leadSource); track src) {
                   <option [value]="src">{{ src }}</option>
                 }
               </select>
@@ -530,6 +385,12 @@
 
             <div class="lc-field">
               <label for="campaign">Campaign</label>
+              @if (campaignDropdownOptions().length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="campaign-search">Search campaigns</label>
+                  <input id="campaign-search" class="lc-input" type="search" autocomplete="off" placeholder="Search campaigns" [value]="lookupSearch()['campaign'] || ''" (input)="onLookupSearch('campaign', $event)" aria-controls="campaign" />
+                </div>
+              }
               <select
                 id="campaign"
                 class="lc-input"
@@ -537,7 +398,7 @@
                 (change)="onTextInput('campaign', $event)"
               >
                 <option value="">No campaign</option>
-                @for (c of campaignDropdownOptions(); track c.reference) {
+                @for (c of filterLookup('campaign', campaignDropdownOptions(), fields().campaign); track c.reference) {
                   <option [value]="c.label">{{ c.label }} &mdash; {{ c.context }}</option>
                 }
               </select>
@@ -566,14 +427,13 @@
           </div>
         </section>
 
-        <!-- Consent collection -->
-        <section class="lc-card">
-          <div class="lc-card-head lc-card-head-row">
+        <section class="lc-card lc-consent-card">
+          <div class="lc-card-head lc-card-head-row"><svg class="lc-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg>
             <div>
               <h2 class="lc-card-title">Consent collection</h2>
               <p class="lc-card-subtitle">Optional &mdash; can also be captured later.</p>
             </div>
-            <button
+            <button title="Collect consent for this lead"
               type="button"
               class="lc-switch"
               role="switch"
@@ -620,10 +480,16 @@
                 }
               </div>
 
-              <div class="lc-grid lc-grid-2">
-                <div class="lc-field" [class.has-error]="errors()['recognitionPreference']">
+              <div class="lc-grid lc-consent-fields">
+<div class="lc-field lc-consent-recognitionPreference" [class.has-error]="errors()['recognitionPreference']">
                   <label for="recognitionPreference">Recognition preference <span class="lc-required" aria-hidden="true">*</span></label>
-                  <select
+                  @if (recognitionOptions.length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="recognitionPreference-search">Search preferences</label>
+                  <input id="recognitionPreference-search" class="lc-input" type="search" autocomplete="off" placeholder="Search preferences" [value]="lookupSearch()['recognitionPreference'] || ''" (input)="onLookupSearch('recognitionPreference', $event)" aria-controls="recognitionPreference" />
+                </div>
+              }
+              <select
                     id="recognitionPreference"
                     class="lc-input"
                     [value]="fields().consent.recognitionPreference"
@@ -631,7 +497,7 @@
                     [attr.aria-invalid]="!!errors()['recognitionPreference']"
                   >
                     <option value="" disabled>Select a preference</option>
-                    @for (opt of recognitionOptions; track opt) {
+                    @for (opt of filterLookup('recognitionPreference', recognitionOptions, fields().consent.recognitionPreference); track opt) {
                       <option [value]="opt">{{ opt }}</option>
                     }
                   </select>
@@ -639,30 +505,57 @@
                     <p class="lc-error">{{ errors()['recognitionPreference'] }}</p>
                   }
                 </div>
-
-                <div class="lc-field lc-span-2" [class.has-error]="errors()['consentNotes']">
-                  <label for="consentNotes">Consent notes</label>
-                  <textarea
-                    id="consentNotes"
-                    class="lc-input lc-textarea"
-                    rows="3"
-                    maxlength="2000"
-                    [value]="fields().consent.consentNotes"
-                    (input)="onConsentNotesInput($event)"
-                  ></textarea>
-                  <div class="lc-field-footer">
-                    @if (errors()['consentNotes']) {
-                      <p class="lc-error">{{ errors()['consentNotes'] }}</p>
-                    } @else {
-                      <span></span>
-                    }
-                    <span class="lc-counter">{{ fields().consent.consentNotes.length }}/2000</span>
-                  </div>
+<div class="lc-field lc-consent-channelRef" [class.has-error]="errors()['channelRef']">
+                  <label for="consentChannel">Channel <span class="lc-required" aria-hidden="true">*</span></label>
+                  @if (channelOptions.length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="consentChannel-search">Search channels</label>
+                  <input id="consentChannel-search" class="lc-input" type="search" autocomplete="off" placeholder="Search channels" [value]="lookupSearch()['consentChannel'] || ''" (input)="onLookupSearch('consentChannel', $event)" aria-controls="consentChannel" />
                 </div>
-              </div>
-
-              <div class="lc-grid lc-grid-2">
-                <div class="lc-field lc-span-2" [class.has-error]="errors()['purpose']">
+              }
+              <select
+                    id="consentChannel"
+                    class="lc-input"
+                    [value]="fields().consent.channelRef"
+                    (change)="onConsentChannelChange($event)"
+                    [attr.aria-invalid]="!!errors()['channelRef']"
+                  >
+                    <option value="" disabled>Select a channel</option>
+                    @for (ch of filterLookup('consentChannel', channelOptions, fields().consent.channelRef); track ch.reference) {
+                      <option [value]="ch.reference">{{ ch.label }} &middot; {{ ch.reference }}</option>
+                    }
+                  </select>
+                  @if (errors()['channelRef']) {
+                    <p class="lc-error">{{ errors()['channelRef'] }}</p>
+                  }
+                </div>
+<div class="lc-field lc-consent-consentState" [class.has-error]="errors()['consentState']">
+                  <label for="consentStateSelect">Consent state <span class="lc-required" aria-hidden="true">*</span></label>
+                  @if (consentStateOptions().length > 20) {
+                <div class="lc-lookup-search">
+                  <label class="lc-sr-only" for="consentStateSelect-search">Search consent states</label>
+                  <input id="consentStateSelect-search" class="lc-input" type="search" autocomplete="off" placeholder="Search consent states" [value]="lookupSearch()['consentStateSelect'] || ''" (input)="onLookupSearch('consentStateSelect', $event)" aria-controls="consentStateSelect" />
+                </div>
+              }
+              <select
+                    id="consentStateSelect"
+                    class="lc-input"
+                    [value]="fields().consent.consentState"
+                    (change)="onConsentStateChange($event)"
+                    [attr.aria-invalid]="!!errors()['consentState']"
+                  >
+                    <option value="" disabled>Select a state</option>
+                    @for (st of filterLookup('consentStateSelect', consentStateOptions(), fields().consent.consentState); track st) {
+                      <option [value]="st" [disabled]="st === 'Granted' && !fields().consent.evidenceFileName">
+                        {{ st }}{{ st === 'Granted' && !fields().consent.evidenceFileName ? ' — attach evidence first' : '' }}
+                      </option>
+                    }
+                  </select>
+                  @if (errors()['consentState']) {
+                    <p class="lc-error">{{ errors()['consentState'] }}</p>
+                  }
+                </div>
+<div class="lc-field lc-consent-purpose" [class.has-error]="errors()['purpose']">
                   <label for="consentPurpose">Purpose <span class="lc-required" aria-hidden="true">*</span></label>
                   <textarea
                     id="consentPurpose"
@@ -681,51 +574,29 @@
                     <span class="lc-counter">{{ fields().consent.purpose.length }}/2000</span>
                   </div>
                 </div>
-
-                <div class="lc-field" [class.has-error]="errors()['channelRef']">
-                  <label for="consentChannel">Channel <span class="lc-required" aria-hidden="true">*</span></label>
-                  <select
-                    id="consentChannel"
-                    class="lc-input"
-                    [value]="fields().consent.channelRef"
-                    (change)="onConsentChannelChange($event)"
-                    [attr.aria-invalid]="!!errors()['channelRef']"
-                  >
-                    <option value="" disabled>Select a channel</option>
-                    @for (ch of channelOptions; track ch.reference) {
-                      <option [value]="ch.reference">{{ ch.label }} &middot; {{ ch.reference }}</option>
+<div class="lc-field lc-consent-consentNotes" [class.has-error]="errors()['consentNotes']">
+                  <label for="consentNotes">Consent notes</label>
+                  <textarea
+                    id="consentNotes"
+                    class="lc-input lc-textarea"
+                    rows="3"
+                    maxlength="2000"
+                    [value]="fields().consent.consentNotes"
+                    (input)="onConsentNotesInput($event)"
+                  ></textarea>
+                  <div class="lc-field-footer">
+                    @if (errors()['consentNotes']) {
+                      <p class="lc-error">{{ errors()['consentNotes'] }}</p>
+                    } @else {
+                      <span></span>
                     }
-                  </select>
-                  @if (errors()['channelRef']) {
-                    <p class="lc-error">{{ errors()['channelRef'] }}</p>
-                  }
+                    <span class="lc-counter">{{ fields().consent.consentNotes.length }}/2000</span>
+                  </div>
                 </div>
-
-                <div class="lc-field" [class.has-error]="errors()['consentState']">
-                  <label for="consentStateSelect">Consent state <span class="lc-required" aria-hidden="true">*</span></label>
-                  <select
-                    id="consentStateSelect"
-                    class="lc-input"
-                    [value]="fields().consent.consentState"
-                    (change)="onConsentStateChange($event)"
-                    [attr.aria-invalid]="!!errors()['consentState']"
-                  >
-                    <option value="" disabled>Select a state</option>
-                    @for (st of consentStateOptions(); track st) {
-                      <option [value]="st" [disabled]="st === 'Granted' && !fields().consent.evidenceFileName">
-                        {{ st }}{{ st === 'Granted' && !fields().consent.evidenceFileName ? ' — attach evidence first' : '' }}
-                      </option>
-                    }
-                  </select>
-                  @if (errors()['consentState']) {
-                    <p class="lc-error">{{ errors()['consentState'] }}</p>
-                  }
-                </div>
-
-                <div class="lc-field lc-span-2" [class.has-error]="errors()['evidence']">
+<div class="lc-field lc-consent-evidence" [class.has-error]="errors()['evidence']">
                   <div class="lc-field-header">
                     <label id="evidenceLabel">Evidence source</label>
-                    <label class="btn btn-outline-primary btn-sm lc-file-label">
+                    <label class="btn btn-outline-primary btn-sm lc-file-label"><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/></svg>
                       {{ fields().consent.evidenceFileName ? 'Replace file' : 'Upload file' }}
                       <input
                         type="file"
@@ -764,8 +635,7 @@
                     <p class="lc-error">{{ errors()['evidence'] }}</p>
                   }
                 </div>
-
-                <div class="lc-field" [class.has-error]="errors()['effective']">
+<div class="lc-field lc-consent-effective" [class.has-error]="errors()['effective']">
                   <label for="effectiveDate">Effective time <span class="lc-required" aria-hidden="true">*</span></label>
                   <div class="lc-datetime-group">
                     <input
@@ -790,8 +660,7 @@
                     <p class="lc-hint">Recorded as {{ fields().consent.effectiveDate }} {{ fields().consent.effectiveTime || '00:00' }} IST.</p>
                   }
                 </div>
-
-                @if (showExpiry()) {
+@if (showExpiry()) {
                   <div class="lc-field" [class.has-error]="errors()['expiry']">
                     <label for="expiryDate">Expiry time <span class="lc-required" aria-hidden="true">*</span></label>
                     <div class="lc-datetime-group">
@@ -870,46 +739,170 @@
         </fieldset>
       </form>
 
-      <div class="lc-action-bar-spacer" aria-hidden="true"></div>
+      <section class="lc-card lc-bulk-card">
+        <button title="Expand or collapse bulk upload"
+          type="button"
+          class="lc-bulk-toggle"
+          (click)="isBulkUploadOpen() ? closeBulkUpload() : openBulkUpload()"
+          [attr.aria-expanded]="isBulkUploadOpen()"
+          aria-controls="bulkUploadBody"
+        >
+          <span class="lc-bulk-toggle-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none">
+              <path d="M10 3v9m0 0 3.5-3.5M10 12l-3.5-3.5M4 14.5v.5A2 2 0 0 0 6 17h8a2 2 0 0 0 2-2v-.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="lc-bulk-toggle-text">
+            <span class="lc-card-title">Bulk upload leads</span>
+            <span class="lc-card-subtitle">Upload a CSV or XLSX file to create multiple leads at once.</span>
+          </span>
+          <svg class="lc-chevron" [class.is-open]="isBulkUploadOpen()" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M6 8l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
 
+        @if (isBulkUploadOpen()) {
+          <div class="lc-bulk-body" id="bulkUploadBody">
 
-          <div class="lc-action-bar-buttons">
-          <!-- WHAT THIS BAR SUBMITS, said plainly. It acts on the form above and nothing else;
-               an uploaded file is submitted from the bulk panel by its own button. -->
+            @if (bulkBlockedByForm()) {
+              <div class="lc-bulk-choice" role="alert">
+                <p class="lc-bulk-choice-title">You have already started entering a lead.</p>
+                <p class="lc-bulk-choice-body">
+                  A bulk upload and a single lead are submitted separately, so this screen does one
+                  at a time. Clearing the form does not delete a draft you have already saved &mdash;
+                  that stays in the Lead Work Queue.
+                </p>
+                <div class="lc-bulk-choice-actions">
+                  <button title="Clear the form and upload a file" type="button" class="btn btn-primary btn-sm" (click)="discardFormForBulk()">
+                    <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/></svg> Clear the form and upload a file
+                  </button>
+                  <button title="Keep what I typed" type="button" class="btn btn-outline-secondary btn-sm" (click)="keepFormAndCloseBulk()">
+                    <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg> Keep what I typed
+                  </button>
+                </div>
+              </div>
+            } @else {
+            <div class="lc-bulk-actions">
+
+              <button title="Download template" type="button" class="btn btn-outline-primary btn-sm" (click)="downloadBulkTemplate()">
+                <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M3 17v4h18v-4"/></svg> Download template
+              </button>
+              <label class="btn btn-primary btn-sm lc-file-label"><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/></svg>
+                Choose file
+                <input
+                  type="file"
+                  class="lc-file-input"
+                  accept=".csv,.xlsx"
+                  (change)="onBulkFileSelected($event)"
+                  aria-label="Choose a CSV or XLSX file to upload"
+                />
+              </label>
+              <span class="lc-bulk-hint">
+                Template is a ZIP with a CSV and an XLSX &middot; fill in either &middot; up to 10&nbsp;MB
+              </span>
+            </div>
+
+            @if (bulkUpload().fileName) {
+              <div class="lc-bulk-file">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" class="lc-bulk-file-icon">
+                  <path d="M6 2.5h5.5L15 6v10.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+                  <path d="M11.5 2.5V6H15" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+                </svg>
+                <span class="lc-bulk-filename">{{ bulkUpload().fileName }}</span>
+                <span class="lc-bulk-filesize">{{ bulkUpload().fileSizeLabel }}</span>
+
+                @if (isBulkStaged()) {
+                  <button title="Remove file" type="button" class="lc-bulk-file-remove" (click)="clearBulkFile()">
+                    <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg> Remove file
+                  </button>
+                }
+              </div>
+            }
+
+            @switch (bulkUpload().status) {
+              @case ('parsing') {
+                <p class="lc-bulk-status"><span class="lc-spinner" aria-hidden="true"></span>Reading file&hellip;</p>
+              }
+              @case ('invalid') {
+                <p class="lc-error" role="alert">{{ bulkUpload().errorMessage }}</p>
+              }
+              @case ('error') {
+                <p class="lc-error" role="alert">{{ bulkUpload().errorMessage }}</p>
+              }
+              @case ('ready') {
+                <div class="lc-bulk-stats">
+                  <div class="lc-bulk-stat">
+                    <span class="lc-bulk-stat-value">{{ bulkUpload().totalRecords }}</span>
+                    <span class="lc-bulk-stat-label">Records</span>
+                  </div>
+                  <div class="lc-bulk-stat is-success">
+                    <span class="lc-bulk-stat-value">{{ bulkUpload().validRecords }}</span>
+                    <span class="lc-bulk-stat-label">Valid</span>
+                  </div>
+                  <div class="lc-bulk-stat is-danger">
+                    <span class="lc-bulk-stat-value">{{ bulkUpload().invalidRecords }}</span>
+                    <span class="lc-bulk-stat-label">Errors</span>
+                  </div>
+                </div>
+
+                <button title="Import leads" type="button" class="btn btn-primary btn-sm" (click)="importBulkUpload()">
+                  <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/></svg> Submit {{ bulkUpload().validRecords }} lead{{ bulkUpload().validRecords === 1 ? '' : 's' }} from file
+                </button>
+                <p class="lc-bulk-note">
+                  This submits the uploaded file only. The form below stays locked until the file is
+                  imported or removed.
+                </p>
+              }
+              @case ('importing') {
+                <p class="lc-bulk-status"><span class="lc-spinner" aria-hidden="true"></span>Importing leads&hellip;</p>
+              }
+              @case ('imported') {
+                <div class="lc-bulk-success-row">
+                  <p class="lc-bulk-success">
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10.5l3.5 3.5L16 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    Import complete &mdash; {{ bulkUpload().validRecords }} lead{{ bulkUpload().validRecords === 1 ? '' : 's' }} created.
+                  </p>
+                  @if (bulkUpload().invalidRecords > 0) {
+                    <button title="Download error report" type="button" class="btn btn-outline-primary btn-sm" (click)="downloadBulkErrorReport()">
+                      <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M3 17v4h18v-4"/></svg> Download error report ({{ bulkUpload().invalidRecords }})
+                    </button>
+                  }
+                </div>
+              }
+            }
+            }
+          </div>
+        }
+      </section>
+
+      <div class="lc-action-bar" role="group" aria-label="Lead capture actions"><div class="lc-action-bar-buttons">
+
           @if (isBulkStaged()) {
             <span class="lc-action-bar-hint">
-              A file is attached &mdash; submit it from the bulk upload panel above.
+              A file is attached &mdash; submit it from the bulk upload panel.
             </span>
-          } @else {
-            <span class="lc-action-bar-hint">Submits the one lead entered above.</span>
           }
-          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelForm()">
-            Cancel
+          <button title="Cancel" type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelForm()">
+            <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg> Cancel
           </button>
-          @if (permissions()['save']) {
-            <button type="button" class="btn btn-outline-primary btn-sm"
-                    [disabled]="isBulkStaged()" (click)="saveDraft()">
-              Save draft
-            </button>
-          }
           @if (permissions()['submit']) {
-            <button type="button" class="btn btn-primary btn-sm"
+            <button title="Submit lead" type="button" class="btn btn-primary btn-sm"
                     [disabled]="isBulkStaged()" (click)="submitLead()">
-              Submit lead
+              <svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg> Submit lead
             </button>
           }
         </div>
-        
+
+      </div>
+
+      
+
+          
     </div>
   </div>
 
- 
-
-  <!-- ================================================================ -->
-  <!-- Confirm dialog (delete draft, and any other permissioned action)  -->
-  <!-- ================================================================ -->
   @if (confirmConfig(); as cfg) {
-    <app-confirm-modal
+    <app-lead-capture-confirm
       [config]="cfg"
       (confirm)="onConfirm($event)"
       (cancel)="onCancel()"

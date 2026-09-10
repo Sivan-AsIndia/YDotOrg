@@ -5,7 +5,7 @@
     <!-- Header -->
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
       <div class="d-flex align-items-start gap-3">
-        <div class="audit-header-icon bg-success-subtle text-success">
+        <div class="audit-header-icon text-success">
           <i class="ri-pulse-line"></i>
         </div>
         <div>
@@ -58,27 +58,37 @@
         <div class="card shadow-sm h-100 audit-stat-card bg-info-subtle">
           <div class="card-body position-relative overflow-hidden">
             <svg class="audit-stat-wave text-info" viewBox="0 0 300 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,55 C50,80 100,30 150,50 C200,70 250,35 300,55 L300,100 L0,100 Z" fill="currentColor" opacity="0.14"/>
+ <path
+    d="M0,35
+       C45,55 70,68 105,58
+       C140,48 165,75 205,82
+       C240,88 270,94 300,100
+       L0,100
+       Z"
+    fill="currentColor"
+    opacity="0.14"/>
             </svg>
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <div class="audit-stat-icon bg-white text-info"><i class="ri-file-list-3-line"></i></div>
-              <h6 class="audit-stat-label mb-0">Total Events</h6>
-              <svg class="audit-stat-spark ms-auto text-info" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="14" width="5" height="10" rx="1.5" fill="currentColor" opacity="0.35"/>
-                <rect x="9" y="9" width="5" height="15" rx="1.5" fill="currentColor" opacity="0.5"/>
-                <rect x="18" y="4" width="5" height="20" rx="1.5" fill="currentColor" opacity="0.65"/>
-                <rect x="27" y="11" width="5" height="13" rx="1.5" fill="currentColor" opacity="0.5"/>
-                <rect x="35" y="1" width="5" height="23" rx="1.5" fill="currentColor" opacity="0.85"/>
-              </svg>
+            <svg class="audit-stat-spark text-info" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="14" width="5" height="10" rx="1.5" fill="currentColor" opacity="0.35"/>
+              <rect x="9" y="9" width="5" height="15" rx="1.5" fill="currentColor" opacity="0.5"/>
+              <rect x="18" y="4" width="5" height="20" rx="1.5" fill="currentColor" opacity="0.65"/>
+              <rect x="27" y="11" width="5" height="13" rx="1.5" fill="currentColor" opacity="0.5"/>
+              <rect x="35" y="1" width="5" height="23" rx="1.5" fill="currentColor" opacity="0.85"/>
+            </svg>
+            <div class="d-flex align-items-start gap-3">
+              <i class="ri-file-list-3-line audit-stat-icon text-info"></i>
+              <div class="flex-grow-1 min-w-0">
+                <h6 class="audit-stat-label mb-1">Total Events</h6>
+                <h2 class="audit-stat-number mb-1">{{ statsTotal() }}</h2>
+                <p class="text-info small mb-0 fw-medium">
+                  @if (isTruncatedForStats()) {
+                    Most recent {{ statsTotal() }} of {{ totalCount() }}
+                  } @else {
+                    All time activities
+                  }
+                </p>
+              </div>
             </div>
-            <h2 class="audit-stat-number mb-1">{{ statsTotal() }}</h2>
-            <p class="text-info small mb-0 fw-medium">
-              @if (isTruncatedForStats()) {
-                Most recent {{ statsTotal() }} of {{ totalCount() }}
-              } @else {
-                All time activities
-              }
-            </p>
           </div>
         </div>
       </div>
@@ -87,21 +97,31 @@
         <div class="card shadow-sm h-100 audit-stat-card bg-success-subtle">
           <div class="card-body position-relative overflow-hidden">
             <svg class="audit-stat-wave text-success" viewBox="0 0 300 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,55 C50,80 100,30 150,50 C200,70 250,35 300,55 L300,100 L0,100 Z" fill="currentColor" opacity="0.14"/>
+               <path
+    d="M0,35
+       C45,55 70,68 105,58
+       C140,48 165,75 205,82
+       C240,88 270,94 300,100
+       L0,100
+       Z"
+    fill="currentColor"
+    opacity="0.14"/>
             </svg>
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <div class="audit-stat-icon bg-white text-success"><i class="ri-checkbox-circle-line"></i></div>
-              <h6 class="audit-stat-label mb-0">Succeeded</h6>
-              <svg class="audit-stat-spark ms-auto text-success" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="12" width="5" height="12" rx="1.5" fill="currentColor" opacity="0.4"/>
-                <rect x="9" y="8" width="5" height="16" rx="1.5" fill="currentColor" opacity="0.55"/>
-                <rect x="18" y="10" width="5" height="14" rx="1.5" fill="currentColor" opacity="0.6"/>
-                <rect x="27" y="5" width="5" height="19" rx="1.5" fill="currentColor" opacity="0.7"/>
-                <rect x="35" y="1" width="5" height="23" rx="1.5" fill="currentColor" opacity="0.9"/>
-              </svg>
+            <svg class="audit-stat-spark text-success" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="12" width="5" height="12" rx="1.5" fill="currentColor" opacity="0.4"/>
+              <rect x="9" y="8" width="5" height="16" rx="1.5" fill="currentColor" opacity="0.55"/>
+              <rect x="18" y="10" width="5" height="14" rx="1.5" fill="currentColor" opacity="0.6"/>
+              <rect x="27" y="5" width="5" height="19" rx="1.5" fill="currentColor" opacity="0.7"/>
+              <rect x="35" y="1" width="5" height="23" rx="1.5" fill="currentColor" opacity="0.9"/>
+            </svg>
+            <div class="d-flex align-items-start gap-3">
+              <i class="ri-checkbox-circle-line audit-stat-icon text-success"></i>
+              <div class="flex-grow-1 min-w-0">
+                <h6 class="audit-stat-label mb-1">Succeeded</h6>
+                <h2 class="audit-stat-number mb-1">{{ succeededCount() }}</h2>
+                <p class="text-success small mb-0 fw-medium">{{ succeededPct() }}% of total events</p>
+              </div>
             </div>
-            <h2 class="audit-stat-number mb-1">{{ succeededCount() }}</h2>
-            <p class="text-success small mb-0 fw-medium">{{ succeededPct() }}% of total events</p>
           </div>
         </div>
       </div>
@@ -110,21 +130,31 @@
         <div class="card shadow-sm h-100 audit-stat-card bg-danger-subtle">
           <div class="card-body position-relative overflow-hidden">
             <svg class="audit-stat-wave text-danger" viewBox="0 0 300 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,55 C50,80 100,30 150,50 C200,70 250,35 300,55 L300,100 L0,100 Z" fill="currentColor" opacity="0.14"/>
+                <path
+    d="M0,35
+       C45,55 70,68 105,58
+       C140,48 165,75 205,82
+       C240,88 270,94 300,100
+       L0,100
+       Z"
+    fill="currentColor"
+    opacity="0.14"/>
             </svg>
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <div class="audit-stat-icon bg-white text-danger"><i class="ri-close-circle-line"></i></div>
-              <h6 class="audit-stat-label mb-0">Failed</h6>
-              <svg class="audit-stat-spark ms-auto text-danger" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="4" width="5" height="20" rx="1.5" fill="currentColor" opacity="0.75"/>
-                <rect x="9" y="10" width="5" height="14" rx="1.5" fill="currentColor" opacity="0.55"/>
-                <rect x="18" y="14" width="5" height="10" rx="1.5" fill="currentColor" opacity="0.45"/>
-                <rect x="27" y="16" width="5" height="8" rx="1.5" fill="currentColor" opacity="0.4"/>
-                <rect x="35" y="18" width="5" height="6" rx="1.5" fill="currentColor" opacity="0.35"/>
-              </svg>
+            <svg class="audit-stat-spark text-danger" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="4" width="5" height="20" rx="1.5" fill="currentColor" opacity="0.75"/>
+              <rect x="9" y="10" width="5" height="14" rx="1.5" fill="currentColor" opacity="0.55"/>
+              <rect x="18" y="14" width="5" height="10" rx="1.5" fill="currentColor" opacity="0.45"/>
+              <rect x="27" y="16" width="5" height="8" rx="1.5" fill="currentColor" opacity="0.4"/>
+              <rect x="35" y="18" width="5" height="6" rx="1.5" fill="currentColor" opacity="0.35"/>
+            </svg>
+            <div class="d-flex align-items-start gap-3">
+              <i class="ri-close-circle-line audit-stat-icon text-danger"></i>
+              <div class="flex-grow-1 min-w-0">
+                <h6 class="audit-stat-label mb-1">Failed</h6>
+                <h2 class="audit-stat-number mb-1">{{ failedCount() }}</h2>
+                <p class="text-danger small mb-0 fw-medium">{{ failedPct() }}% of total events</p>
+              </div>
             </div>
-            <h2 class="audit-stat-number mb-1">{{ failedCount() }}</h2>
-            <p class="text-danger small mb-0 fw-medium">{{ failedPct() }}% of total events</p>
           </div>
         </div>
       </div>
@@ -133,18 +163,28 @@
         <div class="card shadow-sm h-100 audit-stat-card bg-secondary-subtle">
           <div class="card-body position-relative overflow-hidden">
             <svg class="audit-stat-wave text-secondary" viewBox="0 0 300 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,55 C50,80 100,30 150,50 C200,70 250,35 300,55 L300,100 L0,100 Z" fill="currentColor" opacity="0.14"/>
+               <path
+    d="M0,35
+       C45,55 70,68 105,58
+       C140,48 165,75 205,82
+       C240,88 270,94 300,100
+       L0,100
+       Z"
+    fill="currentColor"
+    opacity="0.14"/>
             </svg>
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <div class="audit-stat-icon bg-white text-secondary"><i class="ri-team-line"></i></div>
-              <h6 class="audit-stat-label mb-0">Users Involved</h6>
-              <svg class="audit-stat-spark ms-auto text-secondary" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M0 18 L9 12 L18 15 L27 6 L35 9" stroke="currentColor" stroke-width="2.5"
-                      stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.75"/>
-              </svg>
+            <svg class="audit-stat-spark text-secondary" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M0 18 L9 12 L18 15 L27 6 L35 9" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.75"/>
+            </svg>
+            <div class="d-flex align-items-start gap-3">
+              <i class="ri-team-line audit-stat-icon text-secondary"></i>
+              <div class="flex-grow-1 min-w-0">
+                <h6 class="audit-stat-label mb-1">Users Involved</h6>
+                <h2 class="audit-stat-number mb-1">{{ uniqueUsersCount() }}</h2>
+                <p class="text-secondary small mb-0 fw-medium">Unique users</p>
+              </div>
             </div>
-            <h2 class="audit-stat-number mb-1">{{ uniqueUsersCount() }}</h2>
-            <p class="text-secondary small mb-0 fw-medium">Unique users</p>
           </div>
         </div>
       </div>
@@ -153,19 +193,29 @@
         <div class="card shadow-sm h-100 audit-stat-card bg-warning-subtle">
           <div class="card-body position-relative overflow-hidden">
             <svg class="audit-stat-wave text-warning" viewBox="0 0 300 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,55 C50,80 100,30 150,50 C200,70 250,35 300,55 L300,100 L0,100 Z" fill="currentColor" opacity="0.14"/>
+               <path
+    d="M0,35
+       C45,55 70,68 105,58
+       C140,48 165,75 205,82
+       C240,88 270,94 300,100
+       L0,100
+       Z"
+    fill="currentColor"
+    opacity="0.14"/>
             </svg>
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <div class="audit-stat-icon bg-white text-warning"><i class="ri-star-line"></i></div>
-              <h6 class="audit-stat-label mb-0">Most Active User</h6>
+            <div class="d-flex align-items-start gap-3">
+              <i class="ri-star-line audit-stat-icon text-warning"></i>
+              <div class="flex-grow-1 min-w-0">
+                <h6 class="audit-stat-label mb-1">Most Active User</h6>
+                @if (mostActiveUser(); as top) {
+                  <h4 class="audit-stat-number mb-1 text-truncate">{{ top.name }}</h4>
+                  <p class="text-warning small mb-0 fw-medium">{{ top.count }} event{{ top.count === 1 ? '' : 's' }}</p>
+                } @else {
+                  <h4 class="audit-stat-number mb-1 text-muted">—</h4>
+                  <p class="text-muted small mb-0">No activity yet</p>
+                }
+              </div>
             </div>
-            @if (mostActiveUser(); as top) {
-              <h4 class="audit-stat-number mb-1 text-truncate">{{ top.name }}</h4>
-              <p class="text-warning small mb-0 fw-medium">{{ top.count }} event{{ top.count === 1 ? '' : 's' }}</p>
-            } @else {
-              <h4 class="audit-stat-number mb-1 text-muted">—</h4>
-              <p class="text-muted small mb-0">No activity yet</p>
-            }
           </div>
         </div>
       </div>

@@ -1,32 +1,38 @@
 /* =========================================================================
-   My Security — "CRM Console" theme
-   Adapted from a lead-management console visual language: light gray page,
-   white cards, royal-blue accent, navy CTA, stepper pipeline, icon-card grid.
-   All tokens scoped locally so this page doesn't depend on / clash with
-   any global design-system variables from the parent app.
+   My Security — "Premium Security Suite" theme
+   Soft, spacious, enterprise-security visual language: warm off-white page,
+   translucent white cards, deep forest-green accent, sage-green secondary,
+   semicircular security gauge, and lightweight inline-SVG illustrations.
    ========================================================================= */
 
 .app-wrapper{
-  /* --bg:#F4F5F7; */
+  --bg:#F7F8F5;
   --card:#FFFFFF;
-  --border:#E7E9EE;
-  --text:#1F2430;
-  --muted:#8A8F98;
-  --muted-light:#B0B4BC;
-  --accent:#2F5FDE;
-  --accent-soft:#EAF0FE;
-  --navy:#1B2559;
-  --navy-hover:#131B44;
-  --success:#12B76A;
-  --success-bg:#E7F7EF;
+  --card-soft:rgba(255,255,255,.72);
+  --border:#EEF1EA;
+  --border-soft:#F2F4EF;
+  --text:#1C231F;
+  --muted:#7C8580;
+  --muted-light:#A7AEA7;
+  --accent:var(--pe-primary, #2F5C46);
+  --accent-soft:color-mix(in srgb, var(--accent) 10%, white);
+  --accent-soft-2:color-mix(in srgb, var(--accent) 16%, white);
+  --sage:#8FAE7C;
+  --sage-soft:#EAF2E4;
+  --warn:#E1A238;
+  --warn-soft:#FBF0DD;
   --danger:#E5484D;
-  --danger-bg:#FDEBEC;
-  --neutral-bg:#EEF0F3;
-  --neutral-text:#5B6472;
-  --radius-lg:14px;
-  --radius-sm:8px;
-  --shadow-card:0 1px 2px rgba(17,24,39,.04), 0 6px 16px -10px rgba(17,24,39,.08);
-  --shadow-card-hover:0 3px 8px rgba(17,24,39,.05), 0 14px 28px -14px rgba(17,24,39,.12);
+  --danger-soft:#FDEBEC;
+  --success:#2F9E5C;
+  --success-soft:#E7F5EC;
+  --info:#5B7FDB;
+  --info-soft:#EAEFFC;
+  --radius-xl:10px;
+  --radius-lg:10px;
+  --radius-md:14px;
+  --radius-sm:10px;
+  --shadow-soft:0 1px 2px rgba(28,35,31,.02), 0 10px 24px -18px rgba(28,35,31,.10);
+  --shadow-soft-hover:0 2px 6px rgba(28,35,31,.03), 0 16px 32px -18px rgba(28,35,31,.12);
 
   display:block;
   background:var(--bg);
@@ -39,235 +45,721 @@
   animation:fadeIn .45s ease-out;
 }
 
+/* The page's own root block — deliberately not Bootstrap's `.container-fluid`, so this
+   screen's width behaviour is fully self-contained and never depends on a shared utility
+   class defined (and potentially changed) elsewhere in the app. Caps content width on wide
+   monitors: without a cap, short content (e.g. the "Change Password" section) leaves a large
+   dead gap on the right before the page's true edge. */
+.msec-page{
+  display:block;
+  width:100%;
+  /* max-width:1440px; */
+  margin:8px auto 48px;
+  padding:0 12px;
+  box-sizing:border-box;
+}
+
 @keyframes fadeIn{
   from{opacity:0; transform:translateY(16px);}
-  to{opacity:1; transform:translateY(0);}
+  to{opacity:1; transform:translate(0);}
 }
 
-.mono{ font-family:'JetBrains Mono', monospace; font-size:.78rem; }
-.muted-sm{ display:block; font-size:.78rem; color:var(--muted); margin-top:2px; }
+.msec-mono{ font-family:'JetBrains Mono', monospace; font-size:.78rem; }
+.msec-muted-sm{ display:block; font-size:.78rem; color:var(--muted); margin-top:2px; }
 
-/* ---------------------------------- Header --------------------------------- */
-.sec-header{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:var(--radius-lg);
-  padding:22px 26px;
-  box-shadow:var(--shadow-card);
-}
-
-.sec-header__top{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-}
-
-.sec-header__identity{
-  display:flex;
-  align-items:flex-start;
-  gap:14px;
-}
-
-.avatar-badge{
-  width:46px; height:46px;
-  border-radius:12px;
-  background:color-mix(in srgb, var(--pe-primary) 9%, white);
-  color:var(--pe-primary);
+/* ---------------------------------- Icon tokens ----------------------------- */
+.msec-icon-circle{
   display:flex; align-items:center; justify-content:center;
-  font-size:1.3rem;
   flex:none;
-  position: relative;
+  border-radius:50%;
+  background:var(--sage-soft);
+  color:var(--accent);
+}
+.msec-card {
+    border-radius: 16px;
 }
 
-.sec-header__title{
+/* =========================================================================
+   1. HERO
+   ========================================================================= */
+
+/* Wraps the hero text + top cards row. `.msec-hero__art` is an absolutely-positioned
+   sibling of `.msec-hero-content` here (not a flex item inside `.msec-hero`), sized tall
+   enough to hang down past the hero text and overlap the top of the card row beneath it —
+   `.msec-hero-content` leaves it a right-hand gutter to occupy by never growing into it. */
+.msec-hero-region{
+  position:relative;
+   overflow:visible;
+}
+.msec-hero-content{
+  width:calc(100% - 250px);
+  box-sizing:border-box;
+}
+.msec-hero{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:0 8px 10px;
+}
+.msec-hero__left{
+  display:flex;
+  align-items:flex-start;
+  gap:16px;
+  position:relative;
+  z-index:2;
+}
+.msec-hero__badge{
+  width:56px; height:56px;
+  border-radius:50%;
+  background:var(--sage-soft);
+  border:1px solid var(--border-soft);
+  color:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.5rem;
+  flex:none;
+}
+.msec-hero__title-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.msec-hero__title{
   font-family:'Inter', sans-serif;
   font-weight:700;
-  font-size:1.3rem;
+  font-size:1.75rem;
   margin:0;
-  letter-spacing:-.01em;
+  letter-spacing:-.02em;
   color:var(--text);
 }
-
-.sec-header__subtitle{
-  margin:6px 0 0;
-  font-size:.86rem;
-  color:var(--muted);
-}
-
-.tag{
+.msec-pill{
   display:inline-flex;
   align-items:center;
-  font-size:.68rem;
+  font-size:.72rem;
   font-weight:700;
-  letter-spacing:.02em;
-  padding:3px 9px;
-  border-radius:8px;
+  padding:5px 12px;
+  border-radius:20px;
+  background:var(--sage-soft);
+  color:var(--accent);
+  white-space:nowrap;
 }
-.tag--neutral{ background:var(--neutral-bg); color:var(--neutral-text); }
-.tag--accent{ background:color-mix(in srgb, var(--pe-primary) 9%, white); color:var(--pe-primary); }
+.msec-hero__subtitle{
+  margin:6px 0 0;
+  font-size:.88rem;
+  color:var(--muted);
+  max-width:56ch;
+  white-space:nowrap;
+}
 
-.sec-header__icons{
+/* Decorative shield illustration — deliberately hangs down out of the hero row and overlaps
+   the top of `.msec-top-row` beneath it, in the gutter `.msec-hero-content` leaves empty. */
+.msec-hero__art{
+  position:absolute;
+  top:0;
+  right:0;
+  width:230px;
+  height:230px;
   display:flex;
-  gap:8px;
+  align-items:center;
+  justify-content:center;
+  z-index:3;
+  pointer-events:none;
+}
+.msec-hero__art-img{
+  position:relative;
+  z-index:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 14px 20px rgba(47,92,70,.14));
+}
+
+/* =========================================================================
+   2. TOP CARDS ROW
+   ========================================================================= */
+.msec-top-row{
+ display:grid;
+   grid-template-columns:1fr 1fr;
+   gap:10px;
+   margin-bottom:20px;
+}
+
+.msec-card{
+  background:var(--card-soft);
+  border:1px solid var(--border);
+  border-radius:var(--radius-xl);
+  box-shadow:var(--shadow-soft);
+  transition:box-shadow .25s ease;
+}
+.msec-card:hover{ box-shadow:var(--shadow-soft-hover); }
+
+/* --- Info card: password / recovery --- */
+.msec-info-card{
+  display:flex;
+  align-items:stretch;
+  padding:20px 26px;
+  gap:20px;
+}
+.msec-info-section{
+   display:flex;
+  align-items:center;
+  gap:14px;
+  flex:1;
+  min-width:0;
+  background:none;
+  border:none;
+  text-align:left;
+  cursor:pointer;
+  color:inherit;
+  font-family:inherit;
+  padding:0;
+}
+.msec-info-divider{
+  width:1px;
+  align-self:stretch;
+  background:var(--border);
   flex:none;
 }
-.icon-btn{
-  width:34px; height:34px;
+.msec-info-icon{
+  background: transparent;
+}
+
+.msec-info-icon i{
+   font-size:26px !important;
+  line-height:1;
+}
+.msec-info-body{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.msec-info-label{
+  font-size:.76rem;
+  font-weight:600;
+  color:var(--muted);
+}
+.msec-info-value{
+  font-size:1.05rem;
+  font-weight:700;
+  color:var(--text);
+  line-height:1.25;
+}
+.msec-info-sub{
+  font-size:.72rem;
+  color:var(--muted-light);
+}
+.msec-info-action{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-top:1px;
+  font-size:.78rem;
+  font-weight:700;
+  color:var(--accent);
+  background:none;
+  border:none;
+  padding:0;
+  cursor:pointer;
+}
+.msec-info-action:hover{ text-decoration:underline; }
+.msec-info-action[disabled]{ color:var(--muted-light); cursor:not-allowed; }
+
+/* --- Action card: enrol MFA / change password ---
+   Mirrors .msec-info-card's row-split-by-divider layout, not stacked rows. */
+.msec-action-card{
+  display:flex;
+  align-items:stretch;
+  padding:20px 26px;
+  gap:20px;
+}
+.msec-action-section{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex:1;
+  min-width:0;
+  background:none;
+  border:none;
+  text-align:left;
+  cursor:pointer;
+  color:inherit;
+  font-family:inherit;
+  padding:0;
+}
+
+
+.msec-action-icon i{
+  font-size:26px !important;
+  line-height:1;
+  display:block;
+}
+.msec-action-icon{
+   background: transparent;
+}
+.msec-action-body{ flex:1; min-width:0; }
+.msec-action-title{
+  font-size:.92rem;
+  font-weight:700;
+  color:var(--text);
+  margin:0 0 2px;
+}
+.msec-action-subtitle{
+  font-size:.75rem;
+  color:var(--muted);
+  line-height:1.3;
+  margin:0;
+}
+.msec-action-arrow{
+  width:32px; height:32px;
   border-radius:50%;
   border:1px solid var(--border);
   background:#fff;
-  color:var(--muted);
+  color:var(--accent);
   display:flex; align-items:center; justify-content:center;
-  cursor:pointer;
-  transition:background .15s ease, color .15s ease;
+  flex:none;
+  font-size:.9rem;
+  margin-left:auto;
+  transition:background .15s ease, border-color .15s ease;
 }
-.icon-btn:hover{ background:var(--bg); color:var(--text); }
+.msec-action-section:hover .msec-action-arrow{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+}
 
-.sec-header__info-row{
+/* =========================================================================
+   Inline alerts (locked / must change password)
+   ========================================================================= */
+.msec-alert{
   display:flex;
-  align-items:stretch;
-  gap:14px;
-  margin-top:20px;
-  padding-top:20px;
-  border-top:1px solid var(--border);
-  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:10px;
+  padding:14px 18px;
+  border-radius:var(--radius-md);
+  margin-bottom:16px;
+  font-size:.85rem;
 }
-.info-box{
+.msec-alert--danger{ background:var(--danger-soft); color:#8a2c2f; }
+.msec-alert--warn{ background:var(--warn-soft); color:#7a5416; }
+.msec-alert i{ margin-top:2px; }
+.msec-alert strong{ display:block; }
+.msec-alert .small{ opacity:.85; font-size:.8rem; margin-top:2px; }
+
+/* =========================================================================
+   3. THREE-COLUMN GRID
+   ========================================================================= */
+.msec-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr) minmax(0,1.05fr);
+  gap:20px;
+  align-items:start;
+  margin-bottom:20px;
+}
+
+.msec-panel{
   display:flex;
   flex-direction:column;
-  gap:6px;
-  justify-content:center;
-  padding:10px 16px;
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  min-width:170px;
 }
-.info-box__label{
-  font-size:.68rem;
+.msec-panel__header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:16px 18px 8px;
+}
+.msec-panel__header h6{
+  margin:0;
+  font-family:'Inter', sans-serif;
+  font-weight:700;
+  font-size:1rem;
+  color:var(--text);
+  flex:1;
+}
+.msec-panel__icon{
+  width:34px; height:34px;
+  font-size:.95rem;
+     background: transparent;
+}
+.msec-panel__pill{
+  font-size:.72rem;
+  font-weight:700;
+  color:var(--accent);
+  background:var(--sage-soft);
+  padding:3px 11px;
+  border-radius:14px;
+}
+.msec-panel__body{ padding:4px 22px 22px; flex:1; display:flex; flex-direction:column; }
+
+/* --- Account Overview --- */
+.msec-account-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px 22px;
+  margin-bottom:20px;
+}
+.msec-account-item{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding-bottom:16px;
+  border-bottom:1px solid var(--border-soft);
+}
+.msec-account-item--full{ grid-column:1 / -1; }
+.msec-account-icon{
+  width:34px; height:34px;
+    background: transparent;
+  font-size:.92rem;
+  margin-top:1px;
+}
+.msec-account-icon i{
+font-size:20px !important;
+  line-height:1;
+  display:block;
+}
+.msec-account-text{ min-width:0; }
+.msec-account-label{
+  display:block;
+  font-size:.72rem;
   font-weight:600;
   text-transform:uppercase;
   letter-spacing:.04em;
   color:var(--muted-light);
+  margin-bottom:4px;
 }
-.info-box__value{
-  font-size:.9rem;
-  font-weight:600;
+.msec-account-value{
+  display:block;
+  font-size:.88rem;
+  font-weight:700;
   color:var(--text);
+  word-break:normal;
+  overflow-wrap:break-word;
 }
-.sec-header__actions{
-  display:flex;
-  gap:10px;
-  margin-left:auto;
-  align-items:center;
+.msec-account-hint{
+  display:block;
+  font-size:.78rem;
+  color:var(--muted);
+  margin-top:3px;
+}
+.msec-account-pill{
+  display:inline-flex;
+  font-size:.78rem;
+  font-weight:600;
+  color:var(--accent);
+  background:var(--sage-soft);
+  padding:4px 10px;
+  border-radius:8px;
+  margin-top:2px;
 }
 
-/* ---------------------------------- Tabs ----------------------------------- */
-.sec-tabs{
+.msec-edit-btn{
+  margin-top:auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  align-self:flex-start;
+  padding:11px 20px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:#fff;
+  color:var(--text);
+  font-size:.85rem;
+  font-weight:700;
+  cursor:pointer;
+  transition:border-color .15s ease, color .15s ease, background .15s ease;
+}
+.msec-edit-btn:hover{ border-color:var(--accent); color:var(--accent); background:var(--sage-soft); }
+
+/* --- Security Level (gauge) --- */
+.msec-gauge-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.msec-gauge{
+  position:relative;
+  width:100%;
+  max-width:260px;
+}
+.msec-gauge svg{ width:100%; height:177px; display:block; }
+.msec-gauge__center{
+  position:absolute;
+  left:50%;
+  top:64%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+}
+.msec-gauge__icon{
+  width:58px; height:58px;
+  border-radius:50%;
+  background:var(--sage-soft);
+  color:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.55rem;
+}
+.msec-gauge__icon i{
+  font-size:24px !important;
+  line-height:1;
+  display:block;
+}
+.msec-gauge__level{
+  font-size:1.4rem;
+  font-weight:700;
+  color:var(--text);
+  margin-top:-26px;
+}
+.msec-gauge__tip{
+  font-size:.86rem;
+  color:var(--muted);
+}
+
+.msec-gauge-footer{
+  display:flex;
+  border-top:1px solid var(--border-soft);
+  margin-top:22px;
+  padding-top:18px;
+}
+.msec-gauge-stat{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+  text-align:center;
+  border-left:1px solid var(--border-soft);
+  padding:0 4px;
+}
+.msec-gauge-stat:first-child{ border-left:none; }
+.msec-gauge-stat__icon{
+   width:42px;
+  height:42px;
+  border-radius:50%;
+  background:var(--sage-soft);
+  color:var(--accent);
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  flex:none;
+   font-size:1.2rem; 
+   color:var(--muted);
+   }
+   
+.msec-gauge-stat__label{ font-size:.76rem; font-weight:600; color:var(--muted); }
+.msec-gauge-stat__value{ font-size:.78rem; font-weight:700; }
+.msec-gauge-stat__value--ok{ color:var(--success); }
+.msec-gauge-stat__value--warn{ color:var(--warn); }
+.msec-gauge-stat__value--info{ color:var(--info); }
+.msec-gauge-stat__value--muted{ color:var(--muted); }
+
+/* --- Security Shortcuts --- */
+.msec-shortcuts{ display:flex; flex-direction:column; }
+.msec-shortcut-row{
+  display:flex;
+  align-items:center;
+  height: 70px;
+  gap:16px;
+  width:100%;
+  padding:14px 0;
+  border-top:1px solid var(--border-soft);
+  background:none;
+  border-left:none; border-right:none; border-bottom:none;
+  text-align:left;
+  cursor:pointer;
+  color:inherit;
+  font-family:inherit;
+}
+.msec-shortcuts .msec-shortcut-row:first-child{ border-top:none; padding-top:2px; }
+.msec-shortcut-icon{
+  width:42px; height:42px;
+   background: transparent;
+  font-size:1.05rem;
+}
+.msec-shortcut-icon i{
+   font-size:22px !important;
+ 
+}
+
+.msec-shortcut-body{ flex:1; min-width:0; }
+.msec-shortcut-title{
+  font-size:.88rem;
+  font-weight:700;
+  color:var(--text);
+  margin:0;
+}
+.msec-shortcut-subtitle{
+  font-size:.76rem;
+  color:var(--muted);
+  margin:2px 0 0;
+}
+.msec-shortcut-count{
+  min-width:28px;
+  height:28px;
+  padding:0 9px;
+  border-radius:14px;
+  background:var(--sage-soft);
+  color:var(--accent);
+  font-size:.8rem;
+  font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  flex:none;
+}
+.msec-shortcut-chevron{
+  color:var(--muted-light);
+  font-size:1.25rem;
+  flex:none;
+}
+
+/* =========================================================================
+   4. SECURITY TIP BANNER
+   ========================================================================= */
+.msec-tip-banner{
+  position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:24px;
+
+    padding:18px 28px;
+    height:120px;
+
+    overflow:hidden;
+    margin-bottom:28px;
+
+    border-radius:20px;
+}
+.msec-tip-left{   display:flex;
+    align-items:center;
+    gap:20px;
+    max-width:65%;
+    position:relative;
+    z-index:2;
+  }
+.msec-tip-icon{
+  width:56px; height:56px;
+  background: transparent;
+  font-size:1.5rem;
+}
+.msec-tip-icon i{
+  font-size:29px !important;
+  line-height:1;
+  display:block;
+}
+.msec-tip-title{
+  font-size:1.1rem;
+  font-weight:700;
+  color:var(--text);
+  margin:0 0 5px;
+}
+.msec-tip-text{
+  font-size:.88rem;
+  color:var(--muted);
+  margin:0 0 12px;
+  max-width:52ch;
+}
+.msec-tip-action{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:.85rem;
+  font-weight:700;
+  color:var(--accent);
+  background:none;
+  border:none;
+  padding:0;
+  cursor:pointer;
+}
+.msec-tip-action:hover{ text-decoration:underline; }
+.msec-tip-art{
+  position:relative;
+  flex:none;
+ width:420px;
+    height:115px;
+    margin-left:40px;
+  z-index:1;
+}
+.msec-tip-art-img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+
+/* =========================================================================
+   Legacy / lower sections — restyled to match the new visual language
+   ========================================================================= */
+.msec-tabs{
   display:flex;
   gap:24px;
   border-bottom:1px solid var(--border);
+  margin-bottom:6px;
 }
-.sec-tab{
+.msec-tab{
   padding:0 0 10px;
   font-size:.85rem;
   font-weight:600;
   color:var(--muted);
   border-bottom:2px solid transparent;
 }
-.sec-tab--active{
-  color:var(--pe-primary);
-  border-bottom-color:var(--pe-primary);
-}
+.msec-tab--active{ color:var(--accent); border-bottom-color:var(--accent); }
 
-/* ---------------------------------- Loading -------------------------------- */
-.sec-loading{
-  text-align:center;
-  padding:64px 0;
-  color:var(--muted);
-}
-.sec-spinner{
+.msec-loading{ text-align:center; padding:64px 0; color:var(--muted); }
+.msec-spinner{
   width:42px; height:42px;
   border:3px solid var(--border);
-  border-top-color:var(--pe-primary);
+  border-top-color:var(--accent);
   border-radius:50%;
   margin:0 auto 14px;
   animation:spin .8s linear infinite;
 }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
-.sec-error{
-  text-align:center;
-  padding:48px 0;
-  color:var(--danger);
-}
-.sec-error i{ display:block; margin-bottom:8px; font-size:1.4rem; }
+.msec-error{ text-align:center; padding:48px 0; color:var(--danger); }
+.msec-error i{ display:block; margin-bottom:8px; font-size:1.4rem; }
 
-/* ---------------------------------- Cards ---------------------------------- */
-.sec-card{
+.msec-section-card{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-card);
+  box-shadow:var(--shadow-soft);
   overflow:hidden;
   transition:box-shadow .25s ease;
 }
-.sec-card:hover{ box-shadow:var(--shadow-card-hover); }
+.msec-section-card:hover{ box-shadow:var(--shadow-soft-hover); }
 
-.sec-row-anim{ animation:rowSlide .4s ease-out both; }
+.msec-section-row-anim{ animation:rowSlide .4s ease-out both; }
 @keyframes rowSlide{
   from{ opacity:0; transform:translateX(-12px); }
   to{ opacity:1; transform:translate(0); }
 }
 
-.sec-card__header{
+.msec-section-card__header{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
-  padding:16px 20px;
-  border-bottom:1px solid var(--border);
+  padding:18px 22px;
+  border-bottom:1px solid var(--border-soft);
 }
-.sec-card__header h6{
+.msec-section-card__header h6{
   margin:0;
   font-family:'Inter', sans-serif;
   font-weight:700;
   font-size:.92rem;
   color:var(--text);
 }
-.count-pill{
+.msec-count-pill{
   font-size:.72rem;
   font-weight:700;
-  color:var(--pe-primary);
-  background:color-mix(in srgb, var(--pe-primary) 9%, white);
+  color:var(--accent);
+  background:var(--sage-soft);
   padding:2px 9px;
-  border-radius:8px;
+  border-radius:10px;
 }
 
-.sec-card__body{ padding:20px; }
-.sec-card__body--flush{ padding:6px 0; }
+.msec-section-card__body{ padding:20px 22px; }
+.msec-section-card__body--flush{ padding:6px 0; }
 
-/* ---------------------------------- Fields --------------------------------- */
-.field-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:16px 20px;
-}
-.field{ display:flex; flex-direction:column; gap:4px; }
-.field__label{
-  font-size:.7rem;
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-  color:var(--muted-light);
-}
-.field__value{
-  font-size:.9rem;
-  font-weight:500;
-  color:var(--text);
-}
-
-.pill{
+.msec-status-pill{
   display:inline-flex;
   align-items:center;
   gap:5px;
@@ -277,11 +769,12 @@
   padding:4px 10px;
   border-radius:8px;
 }
-.pill--accent{ background:color-mix(in srgb, var(--pe-primary) 9%, white); color:var(--pe-primary); }
-.pill--success{ background:var(--success-bg); color:var(--success); }
+.msec-status-pill--accent{ background:var(--sage-soft); color:var(--accent); }
+.msec-status-pill--success{ background:var(--success-soft); color:var(--success); }
+.msec-status-pill--danger{ background:var(--danger-soft); color:var(--danger); }
 
 /* ---------------------------------- Buttons -------------------------------- */
-.btn-solid, .btn-outline, .btn-ghost, .btn-danger-ghost{
+.msec-btn-solid, .msec-btn-outline, .msec-btn-ghost, .msec-btn-danger-ghost{
   font-family:'Inter', sans-serif;
   font-size:.83rem;
   font-weight:600;
@@ -296,209 +789,92 @@
   transition:all .18s ease;
   white-space:nowrap;
 }
-.btn-solid{
-  background:var(--pe-primary);
-  color:#fff;
-}
-.btn-solid:hover{ background:var(--navy-hover); }
-
-.btn-outline{
-  background:#fff;
-  border-color:var(--border);
-  color:var(--text);
-}
-.btn-outline:hover{ border-color:var(--pe-primary); color:var(--pe-primary); background:color-mix(in srgb, var(--pe-primary) 9%, white); }
-
-.btn-ghost{
-  background:transparent;
-  color:var(--muted);
-}
-.btn-ghost:hover{ background:var(--bg); color:var(--text); }
-
-.btn-danger-ghost{
+.msec-btn-solid{ background:var(--accent); color:#fff; }
+.msec-btn-solid:hover{ filter:brightness(.92); }
+.msec-btn-outline{ background:#fff; border-color:var(--border); color:var(--text); }
+.msec-btn-outline:hover{ border-color:var(--accent); color:var(--accent); background:var(--sage-soft); }
+.msec-btn-ghost{ background:transparent; color:var(--muted); }
+.msec-btn-ghost:hover{ background:var(--bg); color:var(--text); }
+.msec-btn-danger-ghost{
   background:transparent;
   color:var(--danger);
-  border-color:var(--danger-bg);
+  border-color:var(--danger-soft);
   font-size:.76rem;
   padding:6px 11px;
 }
-.btn-danger-ghost:hover{ background:var(--danger-bg); }
+.msec-btn-danger-ghost:hover{ background:var(--danger-soft); }
 
-.btn-solid:focus-visible, .btn-outline:focus-visible, .btn-ghost:focus-visible, .btn-danger-ghost:focus-visible, .icon-btn:focus-visible{
-  outline:2px solid var(--pe-primary);
+.msec-btn-solid:focus-visible, .msec-btn-outline:focus-visible, .msec-btn-ghost:focus-visible, .msec-btn-danger-ghost:focus-visible{
+  outline:2px solid var(--accent);
   outline-offset:2px;
 }
 
-/* ---------------------------------- Security Steps (signature) ------------- */
-.security-steps{
-  display:flex;
-  justify-content:space-between;
-  gap:6px;
-}
-.step{
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:8px;
-  flex:1;
-  z-index:1;
-}
-.step:not(:first-child)::before{
-  content:'';
-  position:absolute;
-  top:19px;
-  right:50%;
-  width:100%;
-  height:2px;
-  background:var(--border);
-  z-index:-1;
-}
-.step.is-complete:not(:first-child)::before{
-  background:var(--pe-primary);
-}
-.step__circle{
-  width:38px; height:38px;
-  border-radius:50%;
-  background:#fff;
-  border:2px solid var(--border);
-  display:flex; align-items:center; justify-content:center;
-  color:var(--muted);
-  font-weight:700;
-  font-size:.8rem;
-  transition:all .3s ease;
-}
-.step.is-complete .step__circle{
-  background:var(--pe-primary);
-  border-color:var(--pe-primary);
-  color:#fff;
-}
-.step__label{
-  font-size:.72rem;
-  font-weight:600;
-  color:var(--muted);
-  text-align:center;
-}
-.step.is-complete .step__label{ color:var(--text); }
-
 /* ---------------------------------- Lists ---------------------------------- */
-.sec-list__row{
+.msec-list__row{
   display:flex;
   align-items:center;
   gap:14px;
-  padding:14px 20px;
-  border-bottom:1px solid var(--border);
+  padding:14px 22px;
+  border-bottom:1px solid var(--border-soft);
   animation:rowSlide .4s ease-out both;
 }
-.sec-list__row:last-child{ border-bottom:none; }
+.msec-list__row:last-child{ border-bottom:none; }
 
-.session-row__icon{
+.msec-session-row__icon{
   width:38px; height:38px;
   border-radius:10px;
-  background:var(--bg);
-  color:var(--muted);
+  background:var(--sage-soft);
+  color:var(--accent);
   display:flex; align-items:center; justify-content:center;
   font-size:1.1rem;
   flex:none;
+  background: transparent;
 }
-.session-row__info{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:0;
+.msec-session-row__icon i{
+font-size:20px !important;
+  line-height:1;
+  display:block;
 }
-.session-row__info strong{ font-size:.88rem; }
+.msec-session-row__info{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.msec-session-row__info strong{ font-size:.88rem; }
 
-/* MFA icon-card grid */
-.mfa-grid{
+.msec-mfa-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));
   gap:12px;
 }
-.mfa-card{
+.msec-mfa-card{
   display:flex;
   flex-direction:column;
   align-items:center;
   gap:6px;
   padding:16px 10px;
   border:1px solid var(--border);
-  border-radius:var(--radius-sm);
+  border-radius:var(--radius-md);
   text-align:center;
   animation:rowSlide .4s ease-out both;
 }
-.mfa-card__icon{
+.msec-mfa-card__icon{
   width:38px; height:38px;
   border-radius:10px;
-  background:color-mix(in srgb, var(--pe-primary) 9%, white);
-  color:var(--pe-primary);
+  background:var(--sage-soft);
+  color:var(--accent);
   display:flex; align-items:center; justify-content:center;
   font-size:1.05rem;
 }
-.mfa-card__name{ font-size:.82rem; color:var(--text); }
-.mfa-card__status{ font-size:.72rem; font-weight:600; color:var(--success); }
+.msec-mfa-card__name{ font-size:.82rem; color:var(--text); }
+.msec-mfa-card__status{ font-size:.72rem; font-weight:600; color:var(--success); }
 
-/* Sidebar quick list */
-/* A <button> now rather than an <a>: the rows scroll within this page, and a bare
-   fragment href resolved against <base href="/"> was navigating away from it. The reset
-   below is what keeps a button looking like the row it replaced. */
-.quick-list__row{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  width:100%;
-  padding:13px 20px;
-  border:none;
-  border-bottom:1px solid var(--border);
-  background:none;
-  text-align:left;
-  cursor:pointer;
-  color:inherit;
-  text-decoration:none;
-  transition:background .15s ease;
-}
-.quick-list__row:focus-visible{
-  outline:2px solid var(--pe-primary);
-  outline-offset:-2px;
-}
-.quick-list__row:last-child{ border-bottom:none; }
-.quick-list__row:hover{ background:var(--bg); }
-.quick-list__icon{
-  width:32px; height:32px;
-  border-radius:8px;
-  background:color-mix(in srgb, var(--pe-primary) 9%, white);
-  color:var(--pe-primary);
-  display:flex; align-items:center; justify-content:center;
-  font-size:.95rem;
-  flex:none;
-}
-.quick-list__label{
-  flex:1;
-  font-size:.85rem;
-  font-weight:600;
-  color:var(--text);
-}
-.quick-list__count{
-  font-size:.78rem;
-  font-weight:700;
-  color:var(--muted);
-}
-.quick-list__chevron{
-  color:var(--muted-light);
-  font-size:1.1rem;
-}
-
-/* Sidebar activity feed */
-.activity-feed__row{
+.msec-activity-feed__row{
   display:flex;
   align-items:flex-start;
   gap:12px;
-  padding:13px 20px;
-  border-bottom:1px solid var(--border);
+  padding:13px 22px;
+  border-bottom:1px solid var(--border-soft);
   animation:rowSlide .4s ease-out both;
 }
-.activity-feed__row:last-child{ border-bottom:none; }
-.activity-feed__icon{
+.msec-activity-feed__row:last-child{ border-bottom:none; }
+.msec-activity-feed__icon{
   width:32px; height:32px;
   border-radius:50%;
   background:var(--bg);
@@ -508,33 +884,26 @@
   flex:none;
   margin-top:2px;
 }
-.activity-feed__info{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-}
-.activity-feed__info strong{ font-size:.85rem; }
+.msec-activity-feed__info{ display:flex; flex-direction:column; gap:2px; }
+.msec-activity-feed__info strong{ font-size:.85rem; }
 
 /* ---------------------------------- Modal ---------------------------------- */
-.sec-modal{ z-index:1055; }
-.sec-backdrop{
-  background:rgba(17,24,39,.45);
-  backdrop-filter:blur(2px);
-}
-.sec-modal__content{
+.msec-modal{ z-index:1055; }
+.msec-backdrop{ background:rgba(24,30,26,.45); backdrop-filter:blur(2px); }
+.msec-modal__content{
   border:none;
   border-radius:var(--radius-lg);
   overflow:hidden;
-  box-shadow:0 24px 60px rgba(17,24,39,.18);
+  box-shadow:0 24px 60px rgba(24,30,26,.18);
 }
-.sec-modal__header{
+.msec-modal__header{
   display:flex;
   align-items:center;
   justify-content:space-between;
   padding:20px 24px;
   border-bottom:1px solid var(--border);
 }
-.sec-modal__header h5{
+.msec-modal__header h5{
   margin:0;
   font-family:'Inter', sans-serif;
   font-weight:700;
@@ -544,7 +913,7 @@
   align-items:center;
   gap:8px;
 }
-.sec-modal__close{
+.msec-modal__close{
   border:none;
   background:var(--bg);
   width:32px; height:32px;
@@ -554,19 +923,19 @@
   cursor:pointer;
   transition:background .15s ease;
 }
-.sec-modal__close:hover{ background:var(--border); color:var(--text); }
+.msec-modal__close:hover{ background:var(--border); color:var(--text); }
 
-.sec-modal__body{ padding:22px 24px; }
-.form-field{ margin-bottom:16px; }
-.form-field:last-child{ margin-bottom:0; }
-.form-field label{
+.msec-modal__body{ padding:22px 24px; }
+.msec-form-field{ margin-bottom:16px; }
+.msec-form-field:last-child{ margin-bottom:0; }
+.msec-form-field label{
   display:block;
   font-size:.78rem;
   font-weight:600;
   color:var(--muted);
   margin-bottom:6px;
 }
-.sec-input{
+.msec-input{
   width:100%;
   padding:11px 14px;
   border:1px solid var(--border);
@@ -576,14 +945,14 @@
   background:var(--bg);
   transition:border-color .15s ease, background .15s ease;
 }
-.sec-input:focus{
+.msec-input:focus{
   outline:none;
-  border-color:var(--pe-primary);
+  border-color:var(--accent);
   background:#fff;
-  box-shadow:0 0 0 3px rgba(47,95,222,.15);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-.sec-modal__footer{
+.msec-modal__footer{
   display:flex;
   justify-content:flex-end;
   gap:10px;
@@ -592,31 +961,78 @@
   background:var(--bg);
 }
 
+.msec-modal-backdrop{
+  position:fixed; inset:0;
+  background:rgba(24,30,26,.45);
+  backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:1060;
+  padding:20px;
+}
+.msec-modal-backdrop .msec-modal{
+  width:100%; max-width:520px;
+  background:var(--card);
+  border-radius:var(--radius-lg);
+  box-shadow:0 24px 60px rgba(24,30,26,.2);
+}
+
+/* ---------------------------------- Lower two-col layout -------------------- */
+.msec-lower-grid{
+  display:grid;
+  grid-template-columns:1.6fr 1fr;
+  gap:20px;
+  align-items:start;
+}
+.msec-lower-grid > .stack{ display:flex; flex-direction:column; gap:20px; }
+
 /* ---------------------------------- Responsive ------------------------------ */
+@media (max-width:1300px){
+  /* The 250px gutter reserved for the full-size shield is too wide once the card row itself
+     has shrunk — "Enrol MFA" / "Change Password" start wrapping mid-word. Shrink the shield
+     and its gutter, and stack the two top cards instead of squeezing them side by side. */
+  .msec-hero-content{ width:calc(100% - 150px); }
+  .msec-hero__art{ width:130px; height:130px; }
+  .msec-top-row{ grid-template-columns:1fr; }
+}
+@media (max-width:1200px){
+  .msec-grid{ grid-template-columns:1fr 1fr; }
+  .msec-grid > :nth-child(3){ grid-column:1 / -1; }
+}
 @media (max-width:991px){
-  .sec-header__top{ flex-direction:column; }
-  .sec-header__info-row{ flex-direction:column; align-items:stretch; }
-  .sec-header__actions{ margin-left:0; width:100%; }
-  .sec-header__actions .btn-solid, .sec-header__actions .btn-outline{ flex:1; }
+  .msec-hero-content{ width:100%; }
+  .msec-hero{ flex-direction:column; align-items:flex-start; }
+  .msec-hero__art{ display:none; }
+  .msec-hero__subtitle{ white-space:normal; }
+  .msec-top-row{ grid-template-columns:1fr; }
+  .msec-grid{ grid-template-columns:1fr; }
+  .msec-grid > :nth-child(3){ grid-column:auto; }
+  .msec-lower-grid{ grid-template-columns:1fr; }
+  .msec-tip-banner{ flex-direction:column; align-items:flex-start; }
+  .msec-tip-left{ max-width:100%; }
+  .msec-tip-art{ display:none; }
 }
 @media (max-width:576px){
-  .field-grid{ grid-template-columns:1fr; }
-  .sec-header{ padding:18px; }
-  .security-steps{ flex-wrap:wrap; gap:20px; }
-  .step:not(:first-child)::before{ display:none; }
+  .msec-account-grid{ grid-template-columns:1fr; }
+  .msec-hero__title{ font-size:1.5rem; }
+  .msec-info-card{ flex-direction:column; }
+  .msec-action-card{ flex-direction:column; }
+  .msec-info-divider{ width:100%; height:1px; }
 }
 
 /* Accessibility: respect reduced motion */
 @media (prefers-reduced-motion: reduce){
-  .page-wrapper, .sec-row-anim, .sec-list__row, .mfa-card, .activity-feed__row, .step__circle{
+  .page-wrapper, .msec-section-row-anim, .msec-list__row, .msec-mfa-card, .msec-activity-feed__row{
     animation:none !important;
     transition:none !important;
   }
 }
 
-/* The card the sidebar just jumped to. A scroll on a long page is easy to miss, so the
-   destination says for a moment that it is the one that was asked for. */
-.sec-card.is-jump-target{
-  box-shadow:0 0 0 2px color-mix(in srgb, var(--pe-primary) 45%, transparent);
+/* The card the sidebar just jumped to. */
+.msec-section-card.msec-is-jump-target, .msec-panel.msec-is-jump-target{
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   transition:box-shadow .3s ease;
+}
+/* Hide only the Security Level score badge */
+.msec-security-level .msec-panel__pill {
+    display: none !important;
 }

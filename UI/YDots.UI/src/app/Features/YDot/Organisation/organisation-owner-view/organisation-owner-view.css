@@ -48,10 +48,21 @@
     padding: 32px 24px 56px;
   }
 }
+/* Beyond a big desktop monitor, a fixed px cap just becomes another blank
+   margin on the next-larger screen — a 3440px ultrawide or a 4K display would
+   still see the same 1680px column with empty space either side. Sizing off
+   the viewport instead means the page keeps using the space it's given,
+   whatever the monitor. */
 @media (min-width: 1920px) {
   .org-page {
-    max-width: 1680px;
-    padding: 40px 32px 64px;
+    max-width: 94vw;
+    padding: 40px 3vw 64px;
+  }
+}
+@media (min-width: 2560px) {
+  .org-page {
+    max-width: 96vw;
+    padding: 48px 2vw 72px;
   }
 }
 

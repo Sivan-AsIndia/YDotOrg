@@ -654,23 +654,6 @@ export class CityComponent implements OnInit {
     if (this.currentPage() < this.totalPages()) this.goToPage(this.currentPage() + 1);
   }
 
-  onRefresh(): void {
-    if (this.isLoading()) return;
-
-    this.searchText = '';
-    this.selectedStatus = '';
-    this.selectedCountryId = '';
-    this.selectedStateId = '';
-    this.currentPage.set(1);
-
-    // The cached reference data goes too: a country or state added elsewhere should appear in
-    // this screen's dropdowns without a full reload.
-    this.masters.invalidateReferenceData();
-    this.loadReferenceData();
-    this.loadListData();
-    this.showToast('info', 'Refresh', 'Data refreshed');
-  }
-
   /**
    * Opens the detail pane.
    *

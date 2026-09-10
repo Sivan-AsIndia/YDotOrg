@@ -131,6 +131,14 @@ export class MySecurityComponent {
       passwordLastChanged: model.passwordChangedAtUtc
         ? this.formatDateTime(model.passwordChangedAtUtc)
         : 'Never changed',
+      // The hero card shows the date and time on their own line, like the reference layout;
+      // Account Overview keeps the combined `passwordLastChanged` string above.
+      passwordLastChangedDate: model.passwordChangedAtUtc
+        ? this.formatDate(model.passwordChangedAtUtc)
+        : 'Never changed',
+      passwordLastChangedTime: model.passwordChangedAtUtc
+        ? this.formatTime(model.passwordChangedAtUtc)
+        : '',
       mfaRequirement: this.mfaRequirementLabel(model),
       recoveryCodesRemaining: model.recoveryCodesRemaining ?? 0,
       isLockedOut: model.isLockedOut === true,
@@ -195,6 +203,40 @@ export class MySecurityComponent {
   /** Backup codes need a factor to back up; the server refuses otherwise. */
   readonly canGenerateRecoveryCodes = computed(() =>
     this.security()?.mfaEnabled === true && this.mfaMethods().length > 0);
+
+/**
+   * The semicircular gauge is one continuous arc (viewBox "0 0 220 130", a dome sweeping
+   * left-to-top-to-right) rather than four separate chunks with gaps — a soft green-to-amber
+   * gradient stroke reveals proportionally to `securityScore()`, laid over a pale gray full-length
+   * track, so raising the score smoothly extends the coloured arc instead of snapping between
+   * flatly-coloured segments.
+   */
+  readonly gaugeTrackPath = 'M20,110 A90,90 0 0 1 200,110';
+
+  /** Arc length of a radius-90 semicircle (πr), in the same units as the path above. */
+  readonly gaugeArcLength = 90 * Math.PI;
+
+  /** How much of the arc length the achieved score should reveal. */
+  readonly gaugeFilledLength = computed(() => (this.securityScore() / 4) * this.gaugeArcLength);
+
+  /** `stroke-dasharray` for the filled arc: reveal the achieved length, hide the rest. */
+  readonly gaugeDashArray = computed(() =>
+    `${this.gaugeFilledLength()} ${this.gaugeArcLength}`);
+
+  readonly securityLevelLabel = computed(() => {
+    switch (this.securityScore()) {
+      case 4: return 'Excellent';
+      case 3: return 'Strong';
+      case 2: return 'Good';
+      case 1: return 'Fair';
+      default: return 'Weak';
+    }
+  });
+
+  readonly securityLevelTip = computed(() =>
+    this.securityScore() >= 3
+      ? 'Great job! Keep it up.'
+      : 'A few more steps will make your account safer.');
 
   readonly activeSessions = computed<SessionView[]>(() =>
     (this.security()?.activeSessions ?? []).map((session) => ({
@@ -584,7 +626,27 @@ export class MySecurityComponent {
     }
   }
 
+  private formatDate(value: string): string {
+    try {
+      return new Date(value).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+    } catch {
+      return value;
+    }
+  }
+
+  private formatTime(value: string): string {
+    try {
+      return new Date(value).toLocaleTimeString('en-IN', { timeStyle: 'short' });
+    } catch {
+      return '';
+    }
+  }
+
   goBack(): void {
     this.router.navigate(['/app/administration/access/user-directory']);
+  }
+
+  editProfile(): void {
+    this.router.navigate(['/app/administration/access/user-profile-and-access']);
   }
 }

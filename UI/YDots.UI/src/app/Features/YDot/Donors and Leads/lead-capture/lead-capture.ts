@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { map, switchMap } from 'rxjs';
 import { FormsModule } from '@angular/forms';
@@ -136,6 +136,70 @@ interface ScreenData {
   }[];
 }
 
+
+/** Page-local presentation reuses the shared reason and typed-confirm validation. */
+@Component({
+  selector: 'app-lead-capture-confirm',
+  imports: [CommonModule, FormsModule],
+  styleUrl: './lead-capture.css',
+  template: `
+    <dialog #dialog class="lc-confirm" aria-labelledby="lc-confirm-title" aria-describedby="lc-confirm-message" (cancel)="$event.preventDefault(); cancelAction()">
+      @if (config) {
+        <div class="lc-confirm-header">
+          <svg class="lc-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg>
+          <h2 id="lc-confirm-title" class="lc-card-title">{{ config.title }}</h2>
+          <button type="button" class="btn btn-outline-secondary btn-sm" title="Close" aria-label="Close" (click)="cancelAction()"><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="lc-confirm-body">
+          <p id="lc-confirm-message">{{ config.message }}</p>
+          @if (config.affectedRecord || config.effectiveTime) {
+            <dl class="lc-confirm-details">
+              @if (config.affectedRecord) { <div><dt>Affected record</dt><dd>{{ config.affectedRecord }}</dd></div> }
+              @if (config.effectiveTime) { <div><dt>Effective time</dt><dd class="lc-numeric">{{ config.effectiveTime }}</dd></div> }
+            </dl>
+          }
+          @if (config.beforeAfter?.length) {
+            <div class="lc-confirm-changes">
+              @for (row of config.beforeAfter; track row.label) {
+                <p><strong>{{ row.label }}</strong><span>{{ row.before }} → {{ row.after }}</span></p>
+              }
+            </div>
+          }
+          @if (config.requireReason) {
+            <div class="lc-field">
+              <label for="lc-reason">{{ config.reasonLabel ?? 'Reason' }} <span class="lc-required">*</span></label>
+              <textarea id="lc-reason" class="lc-input lc-textarea" rows="3" [ngModel]="reason()" (ngModelChange)="onReasonInput($event)" (blur)="onBlurReason()" [attr.aria-invalid]="touched() && !reasonValid" aria-describedby="lc-reason-help"></textarea>
+              <p id="lc-reason-help" class="lc-hint">Provide {{ reasonMin }}–{{ reasonMax }} characters. <span class="lc-counter">{{ reasonCount }} / {{ reasonMax }}</span></p>
+              @if (touched() && !reasonValid) { <p class="lc-error" role="alert">Enter a valid {{ config.reasonLabel ?? 'reason' }}.</p> }
+            </div>
+          }
+          @if (config.typedConfirm) {
+            <div class="lc-field">
+              <label for="lc-typed">Type {{ config.confirmLabel }} to confirm</label>
+              <input id="lc-typed" type="text" class="lc-input" autocomplete="off" [ngModel]="typedValue()" (ngModelChange)="onTypedInput($event)" [attr.aria-invalid]="touched() && !typedValid" />
+            </div>
+          }
+        </div>
+        <div class="lc-confirm-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" [title]="config.cancelLabel" (click)="cancelAction()" autofocus><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>{{ config.cancelLabel }}</button>
+          <button type="button" class="btn btn-sm" [class.btn-primary]="config.tone === 'primary'" [class.btn-danger]="config.tone === 'danger'" [title]="config.confirmLabel" [disabled]="!canConfirm" (click)="confirmAction()"><svg class="lc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>{{ config.confirmLabel }}</button>
+        </div>
+      }
+    </dialog>
+  `,
+})
+export class LeadCaptureConfirmComponent extends ConfirmModalComponent {
+  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+
+  constructor() {
+    super();
+    // A native modal contains keyboard focus; its backdrop has no dismissal handler.
+    afterNextRender(() => this.dialog().nativeElement.showModal());
+  }
+}
+
+type LookupOption = string | { readonly label: string; readonly value?: string; readonly reference?: string; readonly context?: string };
+
 /**
  * SCR-DON-002 — Lead capture.
  * Create a minimum-data lead with source evidence, multi-mobile contact
@@ -143,11 +207,30 @@ interface ScreenData {
  */
 @Component({
   selector: 'app-lead-capture',
-  imports: [CommonModule, FormsModule, ConfirmModalComponent],
+  imports: [CommonModule, FormsModule, LeadCaptureConfirmComponent],
   templateUrl: './lead-capture.html',
   styleUrl: './lead-capture.css',
 })
 export class LeadCaptureComponent {
+  protected readonly lookupSearch = signal<Record<string, string>>({});
+
+  protected onLookupSearch(key: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.lookupSearch.update(current => ({ ...current, [key]: value }));
+  }
+
+  protected filterLookup<T extends LookupOption>(key: string, options: readonly T[], selected: string): readonly T[] {
+    const query = this.lookupSearch()[key]?.trim().toLocaleLowerCase() ?? '';
+    if (options.length <= 20 || !query) return options;
+    return options.filter(option => {
+      if (typeof option === 'string') return option === selected || option.toLocaleLowerCase().includes(query);
+      // Keep the current selection in the DOM so filtering never changes a saved value.
+      const value = option.value ?? option.reference ?? option.label;
+      return value === selected || option.label === selected ||
+        [option.label, option.reference, option.context].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
+    });
+  }
+
   private readonly router = inject(Router);
   private readonly api = inject(DonorApiService);
   private readonly toast = inject(ToastService);

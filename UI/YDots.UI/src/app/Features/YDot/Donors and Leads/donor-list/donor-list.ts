@@ -144,8 +144,8 @@ export class DonorListComponent {
 
   /** ----- Pagination ----- */
   protected readonly currentPage = signal<number>(1);
-  protected readonly pageSize = signal<number>(5);
-  protected readonly pageSizeOptions = [5, 10, 25, 50];
+  protected readonly pageSize = signal<number>(10);
+  protected readonly pageSizeOptions = [10];
 
   protected readonly engagementTags = ENGAGEMENT_TAGS;
   protected readonly verificationTags = VERIFICATION_TAGS;
@@ -187,6 +187,17 @@ export class DonorListComponent {
       });
   }
 
+  /** Search is enabled in profile dropdowns only above 20 options. */
+  protected readonly ownerOptionSearch = signal('');
+  protected readonly campaignOptionSearch = signal('');
+  protected readonly regionOptionSearch = signal('');
+
+  protected searchDropdownOptions(options: string[], term: string, selected: string): string[] {
+    if (options.length <= 20) return options;
+    const query = term.trim().toLocaleLowerCase();
+    return options.filter(option => option === selected || option.toLocaleLowerCase().includes(query));
+  }
+
   /** ----- Derived filter option lists ----- */
   protected readonly ownerOptions = computed(() =>
     this.uniqueSorted(this.donors().map((d) => d.owner)),
@@ -216,10 +227,6 @@ export class DonorListComponent {
     const followUpsDue = list.filter((d) =>
       ['Due Today', 'Tomorrow', 'Overdue'].includes(d.followUpStatus),
     ).length;
-    const verificationPending = list.filter(
-      (d) => d.verificationStatus === 'Pending',
-    ).length;
-    const consentReviewDue = list.filter((d) => d.consentReviewRequired).length;
 
     return [
       {
@@ -245,18 +252,6 @@ export class DonorListComponent {
         label: 'Follow-Ups Due',
         value: followUpsDue,
         hint: 'Needs engagement',
-      },
-      {
-        key: 'verification',
-        label: 'Verification Pending',
-        value: verificationPending,
-        hint: 'Identity verification',
-      },
-      {
-        key: 'consent',
-        label: 'Consent Review Due',
-        value: consentReviewDue,
-        hint: 'Requires attention',
       },
     ];
   });
@@ -339,18 +334,20 @@ export class DonorListComponent {
     Math.max(1, Math.ceil(this.totalRecords() / this.pageSize())),
   );
 
+  protected readonly effectivePage = computed(() => Math.min(this.currentPage(), this.totalPages()));
+
   protected readonly paginatedDonors = computed<Donor[]>(() => {
-    const page = Math.min(this.currentPage(), this.totalPages());
+    const page = this.effectivePage();
     const size = this.pageSize();
     const start = (page - 1) * size;
     return this.filteredDonors().slice(start, start + size);
   });
 
   protected readonly rangeStart = computed(() =>
-    this.totalRecords() === 0 ? 0 : (this.currentPage() - 1) * this.pageSize() + 1,
+    this.totalRecords() === 0 ? 0 : (this.effectivePage() - 1) * this.pageSize() + 1,
   );
   protected readonly rangeEnd = computed(() =>
-    Math.min(this.currentPage() * this.pageSize(), this.totalRecords()),
+    Math.min(this.effectivePage() * this.pageSize(), this.totalRecords()),
   );
 
   protected readonly hasActiveFilters = computed(
@@ -425,6 +422,9 @@ export class DonorListComponent {
   }
 
   protected clearFilters(): void {
+    this.ownerOptionSearch.set('');
+    this.campaignOptionSearch.set('');
+    this.regionOptionSearch.set('');
     this.periodFilter.set('all');
     this.ownerFilter.set('all');
     this.campaignFilter.set('all');
@@ -583,15 +583,16 @@ export class DonorListComponent {
   }
 
   protected nextPage(): void {
-    this.goToPage(this.currentPage() + 1);
+    this.goToPage(this.effectivePage() + 1);
   }
 
   protected previousPage(): void {
-    this.goToPage(this.currentPage() - 1);
+    this.goToPage(this.effectivePage() - 1);
   }
 
   protected setPageSize(size: number): void {
-    this.pageSize.set(size);
+    if (size !== 10) return;
+    this.pageSize.set(10);
     this.currentPage.set(1);
   }
 

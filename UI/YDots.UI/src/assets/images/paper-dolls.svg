@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 170" role="presentation" aria-hidden="true">
+  <!-- Paper-doll chain: six figures holding hands, in soft rose.
+       Used as the decorative watermark behind the donation form. -->
+  <defs>
+    <g id="doll">
+      <!-- head -->
+      <circle cx="60" cy="26" r="13"/>
+      <!-- torso -->
+      <path d="M45 48 C39 51 37 60 37 68 L40 102 C40 107 44 110 48 110 L72 110 C76 110 80 107 80 102 L83 68 C83 60 81 51 75 48 C70 45 50 45 45 48 Z"/>
+      <!-- arms reaching out to clasp the neighbours' hands -->
+      <path d="M46 55 C32 66 20 76 8 88" fill="none" stroke="#ECC2BF" stroke-width="11" stroke-linecap="round"/>
+      <path d="M74 55 C88 66 100 76 112 88" fill="none" stroke="#ECC2BF" stroke-width="11" stroke-linecap="round"/>
+      <!-- legs, slight A-stance -->
+      <path d="M48 108 L54 108 L51 164 L40 164 Z"/>
+      <path d="M66 108 L72 108 L80 164 L69 164 Z"/>
+    </g>
+  </defs>
+  <g fill="#ECC2BF">
+    <use href="#doll" x="0"/>
+    <use href="#doll" x="120"/>
+    <use href="#doll" x="240"/>
+    <use href="#doll" x="360"/>
+    <use href="#doll" x="480"/>
+    <use href="#doll" x="600"/>
+  </g>
+</svg>

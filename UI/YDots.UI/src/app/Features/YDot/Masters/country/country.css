@@ -2153,17 +2153,6 @@ svg {
   flex: 0 0 auto;
 }
 
-.hero-refresh {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-}
-
-.hero-refresh svg {
-  width: 17px;
-  height: 17px;
-}
-
 .hero-create {
   min-height: 42px;
   border-radius: 10px;
@@ -2292,76 +2281,155 @@ svg {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .summary-item {
-  min-height: 76px;
+  min-height: 90px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
-  padding: 12px 15px;
+  padding: 13px 16px;
   border: 1px solid var(--line);
   border-radius: 13px;
   background: var(--surface);
   box-shadow: var(--shadow-xs);
+  opacity: 0;
+  animation: summary-card-in .55s cubic-bezier(.22, .9, .3, 1) forwards;
+}
+
+.summary-item:nth-child(1) { animation-delay: 0ms; }
+.summary-item:nth-child(2) { animation-delay: 80ms; }
+.summary-item:nth-child(3) { animation-delay: 160ms; }
+.summary-item:nth-child(4) { animation-delay: 240ms; }
+
+@keyframes summary-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-item {
+    opacity: 1;
+    animation: none;
+  }
 }
 
 .summary-item-copy {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }
 
 .summary-label {
+  overflow: hidden;
   color: var(--ink-600);
   font-size: 10.5px;
   font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .summary-item strong {
   margin-top: 2px;
+  overflow: hidden;
   color: var(--ink-950);
   font-size: 22px;
   font-weight: 750;
   line-height: 1.05;
   letter-spacing: -.02em;
+  white-space: nowrap;
 }
 
 .summary-item small {
   margin-top: 3px;
+  overflow: hidden;
   color: var(--ink-500);
   font-size: 9px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.summary-icon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+.summary-ring {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+
+.summary-ring svg {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--surface-muted);
+  stroke-width: 3;
+}
+
+.ring-progress {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s cubic-bezier(.22, .9, .3, 1);
+}
+
+.ring-progress.ring-neutral {
+  stroke: var(--green-800);
+}
+
+.ring-progress.ring-success {
+  stroke: #3b9070;
+}
+
+.ring-progress.ring-warning {
+  stroke: #c07a3a;
+}
+
+.ring-progress.ring-info {
+  stroke: var(--blue-600);
+}
+
+.ring-icon-badge {
+  position: absolute;
+  inset: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 50%;
   color: var(--green-800);
   background: var(--green-100);
 }
 
-.summary-icon.neutral {
+.ring-icon-badge.neutral {
   color: var(--green-800);
   background: var(--green-100);
 }
 
-.summary-icon.muted-state {
-  color: #727c77;
-  background: #f0f3f1;
+.ring-icon-badge.warning {
+  color: var(--amber-700);
+  background: var(--amber-100);
 }
 
-.summary-icon svg {
-  width: 16px;
-  height: 16px;
+.ring-icon-badge.info {
+  color: var(--blue-600);
+  background: var(--blue-100);
+}
+
+.ring-icon-badge svg {
+  width: 15px;
+  height: 15px;
 }
 
 /* ---------- Data workspace ---------- */
@@ -2423,14 +2491,14 @@ svg {
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 48px;
+  height: 46px;
   padding: 0 14px;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink-600);
-  background: #fcfdfc;
+  border-bottom: 2px solid var(--green-100);
+  color: var(--green-800);
+  background: linear-gradient(180deg, #fdfefd 0%, #f4f9f6 100%);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .055em;
+  letter-spacing: .07em;
   line-height: 1;
   text-align: left;
   text-transform: uppercase;
@@ -2443,6 +2511,21 @@ svg {
 
 .country-table th.col-actions {
   width: 164px;
+  color: var(--ink-600);
+}
+
+.th-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.th-label svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: var(--green-600);
+  stroke-width: 2;
 }
 
 .country-table td {
@@ -3554,6 +3637,10 @@ svg {
 
   .hide-md {
     display: none;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

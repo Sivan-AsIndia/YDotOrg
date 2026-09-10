@@ -48,10 +48,21 @@
     padding: 32px 24px 56px;
   }
 }
+/* Beyond a big desktop monitor, a fixed px cap just becomes another blank
+   margin on the next-larger screen — a 3440px ultrawide or a 4K display would
+   still see the same 1680px column with empty space either side. Sizing off
+   the viewport instead means the page keeps using the space it's given,
+   whatever the monitor. */
 @media (min-width: 1920px) {
   .org-page {
-    max-width: 1680px;
-    padding: 40px 32px 64px;
+    max-width: 94vw;
+    padding: 40px 3vw 64px;
+  }
+}
+@media (min-width: 2560px) {
+  .org-page {
+    max-width: 96vw;
+    padding: 48px 2vw 72px;
   }
 }
 
@@ -83,55 +94,295 @@
 
 /* ---------- Header ---------- */
 .org-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
   margin-bottom: 20px;
-  flex-wrap: wrap;
 }
+.org-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* The banner card — same brand-gradient, full-bleed-image, box-shadow
+   treatment used across the Organisation module, so this page's header
+   matches the profile page's rather than being a plain title row. */
+.wiz-hero {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  height: 136px;
+  border-radius: 22px;
+  /* Matches the cool white-to-mint-to-sky-blue palette of the header
+     illustration, instead of the four-colour brand gradient used
+     elsewhere — so the card reads as one piece with the artwork. */
+  background: linear-gradient(
+    115deg,
+    #ffffff 0%,
+    var(--org-meadow-soft) 45%,
+    var(--org-blue-soft) 100%
+  );
+  background-size: 220% 220%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 12px 28px -14px rgba(30, 42, 36, 0.28);
+  overflow: hidden;
+  animation: wiz-step-in 0.35s ease both, wiz-header-drift 14s ease-in-out infinite;
+}
+
+/* A quiet underline under the page title — draws in once on load and then
+   sits still; hovering the header sends a single soft sheen across it,
+   rather than looping forever. */
+.wiz-title-underline {
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 4px;
+  border-radius: 4px;
+  margin: 2px 0 10px;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--org-meadow), var(--org-blue), var(--org-plum), var(--org-gold)
+  );
+  transform-origin: left center;
+  animation: wiz-underline-grow 0.5s 0.1s cubic-bezier(0.22, 0.9, 0.32, 1) both;
+}
+
+.wiz-title-underline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  transition: left 0.7s ease;
+}
+
+.wiz-hero:hover .wiz-title-underline::after {
+  left: 140%;
+}
+
+@keyframes wiz-underline-grow {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+.wiz-hero-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 0 18px 28px;
+  z-index: 1;
+}
+
 .org-title {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1.15;
   font-weight: 400;
   letter-spacing: -0.3px;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: #000;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
+/* The header icon has one plain, always-visible copy of the glyph
+   (.wiz-icon-static) plus five clipped copies used only transiently.
+   Stacking clipped copies of a thin line-icon PERMANENTLY causes visible
+   seams (their clip edges don't anti-alias identically, so the roofline
+   and walls look doubled/thicker than a real icon) — so the five pieces
+   only exist on screen for the ~1.6s of the hover build animation. Before
+   hover, and again the instant it finishes, only the single clean static
+   icon is shown; every part and the static icon share one 1.6s timeline
+   so the hand-off between them is a hard, imperceptible cut. */
 .org-title-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  background: var(--org-meadow-soft);
-  color: var(--org-meadow);
-  font-size: 22px;
   flex: none;
+  width: 56px;
+  height: 56px;
+  color: var(--org-meadow);
+}
+
+/* !important: styles.css has a global reset that targets the bare <i> tag
+   directly (not just span/div/etc) and pins its font-size with its own
+   !important. Setting font-size on the wrapping .org-title-icon span does
+   nothing for the <i> itself — a rule matching the element directly always
+   wins over an inherited value. Each icon's own font-size has to be set
+   here, on the <i>, to out-specificity that global rule. */
+.wiz-icon-static,
+.wiz-icon-part {
+  font-size: 56px !important;
+}
+
+.wiz-icon-part {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.wiz-icon-part--base { clip-path: inset(75% 0 0 0); }
+.wiz-icon-part--side-left { clip-path: inset(50% 50% 25% 0); }
+.wiz-icon-part--side-right { clip-path: inset(50% 0 25% 50%); }
+.wiz-icon-part--mid { clip-path: inset(25% 0 50% 0); }
+.wiz-icon-part--top { clip-path: inset(0 0 75% 0); }
+
+.wiz-hero:hover .wiz-icon-static {
+  animation: wiz-icon-static-handoff 1.6s both;
+}
+.wiz-hero:hover .wiz-icon-part--base {
+  animation: wiz-icon-fall-base 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.wiz-hero:hover .wiz-icon-part--side-left,
+.wiz-hero:hover .wiz-icon-part--side-right {
+  animation: wiz-icon-fall-sides 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.wiz-hero:hover .wiz-icon-part--mid {
+  animation: wiz-icon-fall-mid 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.wiz-hero:hover .wiz-icon-part--top {
+  animation: wiz-icon-fall-top 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* The clean icon: gone the instant hover starts, back the instant every
+   piece has finished (96% = 1.53s in). */
+@keyframes wiz-icon-static-handoff {
+  0% { opacity: 1; }
+  1% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  95% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+/* Every piece falls in from above the header — as if dropped from the top
+   of the section — landing in this order: base first, then both walls,
+   then the middle, then the roof last. Only the timing window (when each
+   one starts and lands) differs between them; the motion itself is the
+   same drop-and-settle for all four. */
+@keyframes wiz-icon-fall-base {
+  0% { opacity: 0; transform: translateY(-60px); }
+  27% { opacity: 1; transform: translateY(8px); }
+  34% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+/* Both walls wait until 0.3s (19%), land by 0.85s (53%). */
+@keyframes wiz-icon-fall-sides {
+  0% { opacity: 0; transform: translateY(-60px); }
+  19% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  47% { opacity: 1; transform: translateY(8px); }
+  53% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+/* Middle waits until 0.65s (41%), lands by 1.15s (72%). */
+@keyframes wiz-icon-fall-mid {
+  0% { opacity: 0; transform: translateY(-60px); }
+  41% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  66% { opacity: 1; transform: translateY(8px); }
+  72% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+/* Roof waits until 0.95s (59%), lands last by 1.5s (94%). */
+@keyframes wiz-icon-fall-top {
+  0% { opacity: 0; transform: translateY(-60px); }
+  59% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  89% { opacity: 1; transform: translateY(8px); }
+  94% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
 }
 .org-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--org-ink-2);
   margin: 0;
-  max-width: 640px;
+  max-width: 46ch;
 }
 .org-meta {
   font-size: 13px;
   color: var(--org-muted);
   margin: 4px 0 0;
 }
-.org-header-actions {
+
+.wiz-hero-side {
+  flex: 0 0 32%;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+  min-width: 0;
+  z-index: 1;
+}
+
+.wiz-hero-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 78% 45%;
+  flex: 1 1 auto;
+  border-radius: 0 22px 22px 0;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 18%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 18%);
+}
+
+@keyframes wiz-header-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@media (max-width: 860px) {
+  .wiz-hero {
+    flex-direction: column;
+    height: auto;
+  }
+  .wiz-hero-main {
+    padding: 22px 22px 0 22px;
+  }
+  .wiz-hero-side {
+    flex: none;
+    width: 100%;
+    padding: 0 22px 22px 22px;
+  }
+  .wiz-hero-art {
+    height: 140px;
+    border-radius: 14px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiz-hero,
+  .wiz-title-underline {
+    animation: none;
+  }
+  .wiz-title-underline::after {
+    transition: none;
+  }
+  .wiz-hero:hover .wiz-title-underline::after {
+    left: -60%;
+  }
+  .wiz-hero:hover .wiz-icon-static {
+    animation: none;
+  }
+  .wiz-hero:hover .wiz-icon-part--base,
+  .wiz-hero:hover .wiz-icon-part--side-left,
+  .wiz-hero:hover .wiz-icon-part--side-right,
+  .wiz-hero:hover .wiz-icon-part--mid,
+  .wiz-hero:hover .wiz-icon-part--top {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* ---------- Buttons ---------- */
@@ -529,7 +780,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 .org-field-label {
   font-size: 12px;
@@ -537,6 +788,12 @@
   letter-spacing: 0.05em;
   color: var(--org-ink-2);
   text-transform: uppercase;
+  transition: color 0.18s ease;
+}
+/* The label picks up the brand colour the moment its own field is focused —
+   a small cue that ties the label to the box beneath it. */
+.org-field:focus-within .org-field-label {
+  color: var(--org-meadow);
 }
 .org-field-label .req {
   color: var(--org-error);
@@ -548,12 +805,19 @@
 .org-select,
 .org-textarea {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--org-border);
-  border-radius: 10px;
+  padding: 11px 15px;
+  border: 1.5px solid var(--org-border);
+  border-radius: 12px;
   font-size: 14px;
   font-family: inherit;
   color: var(--org-ink);
+  background: #fbfbf8;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.org-input:hover,
+.org-select:hover,
+.org-textarea:hover {
+  border-color: var(--org-meadow);
   background: #fff;
 }
 /* ---------- Native <select> chrome varies by browser/OS; force it to match <input> exactly ---------- */
@@ -577,7 +841,8 @@
 .org-textarea:focus {
   outline: none;
   border-color: var(--org-meadow);
-  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--org-meadow-soft);
 }
 .org-input.is-invalid,
 .org-select.is-invalid,
@@ -1201,66 +1466,357 @@
 .org-stepper {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   margin: 0 0 24px;
-  padding: 14px 16px;
-  background: var(--org-card);
-  border: 1px solid var(--org-border);
+}
+
+/* Each step carries its own accent (meadow/blue/plum/gold) via a
+   --wiz-accent/--wiz-accent-soft pair. Inactive steps wear it only as a soft
+   tint on the icon circle — enough to make the four distinguishable from
+   each other at a glance — while the card itself (border, background) stays
+   neutral so the ACTIVE step, which uses the same accent at full strength
+   plus the arrow tip, is still the one that unmistakably stands out.
+
+   `.wiz-step-inner` (a real child, not a pseudo-element) holds the actual
+   padding/content, separate from `.wiz-step` itself — see the comment on
+   `.wiz-step.is-active` below for why the active card's arrow shape needs
+   this split. */
+.wiz-step {
+  --wiz-accent: var(--org-meadow);
+  --wiz-accent-soft: var(--org-meadow-soft);
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 0;
   border-radius: 14px;
+  background: var(--org-card);
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 6px 16px -10px rgba(30, 42, 36, 0.22);
+  opacity: 0;
+  /* Fades in on load via a keyframe that only touches opacity — never
+     transform. A finished CSS animation keeps "owning" any property it
+     animates for as long as it matches (even with nothing left to do),
+     which would silently block the plain :hover transform below if this
+     entrance also animated transform (as wiz-step-in, used elsewhere on
+     this page, does). */
+  animation: wiz-step-fade-in 0.35s ease both;
+  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.org-step {
+/* The card itself lifts on hover — not the icon — so the whole step reads
+   as one interactive unit rather than drawing attention to one glyph. */
+.wiz-step:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 10px rgba(30, 42, 36, 0.06), 0 20px 34px -14px rgba(34, 60, 48, 0.34);
+}
+
+.wiz-step-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  transition: border-color 0.25s ease;
+}
+
+.wiz-step:hover .wiz-step-inner {
+  border-color: var(--wiz-accent);
+}
+
+.wiz-step--blue { --wiz-accent: var(--org-blue); --wiz-accent-soft: var(--org-blue-soft); }
+.wiz-step--plum { --wiz-accent: var(--org-plum); --wiz-accent-soft: var(--org-plum-soft); }
+.wiz-step--gold { --wiz-accent: var(--org-gold); --wiz-accent-soft: var(--org-gold-soft); }
+
+.wiz-step-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 1 1 0;
-  gap: 9px;
-  padding: 8px 16px 8px 8px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  color: var(--wiz-accent);
+  transition: color 0.2s ease;
+}
+
+/* !important: styles.css has a global reset that targets the bare <i> tag
+   directly and pins its font-size with its own !important. Setting
+   font-size on the wrapping .wiz-step-icon span does nothing for the <i>
+   itself — it has to be set on the <i> to out-specificity that rule. */
+.wiz-step-icon i {
+  font-size: 30px !important;
+}
+
+.wiz-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wiz-step-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wiz-step-num {
+  font-size: 20px;
+  font-weight: 700;
   color: var(--org-muted);
-  background: transparent;
+}
+
+.wiz-step-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--org-ink);
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* A step is "active" once it has been REACHED, not only while it is current - the template binds
-   stepNumber() >= n. That is what makes the trail behind you read as completed. */
-.org-step.is-active {
-  color: var(--org-meadow);
-  background: var(--org-meadow-soft);
+.wiz-step-sub {
+  font-size: 12px;
+  color: var(--org-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.org-step-index {
+/* The current step — a soft, rounded arrow tip on the right edge, not a
+   sharp polygon cut. clip-path can't produce a rounded point (it's always
+   hard-edged, and it strips borders off the diagonal entirely — see the
+   comment above `.wiz-step`), so this uses a different, well-worn CSS
+   trick instead: the card's own right edge is left open (no border,
+   square corners on that side), and a small square — rotated 45° with
+   only its top+right border showing and a border-radius on that one
+   corner — is glued onto the middle of that edge. Rotated, that corner
+   becomes a soft-tipped point continuing the card's own border, and
+   because it's plain borders (no clip-path involved) they render exactly
+   like any other border, with no missing lines anywhere. */
+.wiz-step.is-active {
+  border: 1.5px solid var(--wiz-accent);
+  border-right: none;
+  border-radius: 14px 0 0 14px;
+  box-shadow: 0 2px 4px rgba(30, 42, 36, 0.06), 0 16px 30px -12px rgba(34, 60, 48, 0.35);
+  animation: wiz-step-fade-in 0.35s ease both;
+}
+
+.wiz-step.is-active::after {
+  content: '';
+  /* :host * sets border-box everywhere in this component, but that
+     universal selector doesn't reach ::before/::after — they fall back to
+     the CSS default (content-box), which silently grows this box by its
+     border width and throws off the size/position math below, showing up
+     as a visible seam between this piece and the card. */
+  box-sizing: border-box;
+  position: absolute;
+  top: 50%;
+  right: -11px;
+  width: 22px;
+  height: 22px;
+  background: var(--org-card);
+  border-top: 1.5px solid var(--wiz-accent);
+  border-right: 1.5px solid var(--wiz-accent);
+  border-radius: 0 6px 0 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.wiz-step.is-active .wiz-step-inner {
+  border-color: transparent;
+  padding-right: 34px;
+}
+
+.wiz-step.is-active .wiz-step-icon {
+  color: var(--wiz-accent);
+}
+
+.wiz-step.is-active .wiz-step-num {
+  color: var(--org-ink);
+}
+
+/* A step already passed — dark rather than left looking identical to one
+   not yet reached. */
+.wiz-step.is-done .wiz-step-num {
+  color: var(--org-ink);
+}
+
+.wiz-step-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--org-border);
+  font-size: 20px;
+  flex: none;
+  opacity: 0;
+  animation: wiz-step-in 0.35s 0.15s ease both;
+}
+
+@keyframes wiz-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes wiz-step-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Step section header (icon + title + "Step n of 4" badge) ---------- */
+/* A crisp white card with a bold accent bar down the left edge and a soft
+   colour glow tucked in the corner — clearer visual weight than a flat,
+   barely-there pastel wash. Lifts slightly on hover like the other cards
+   on this page. */
+.wiz-section-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 24px 18px 22px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background: #fff;
+  border-left: 5px solid var(--org-meadow);
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 10px 24px -16px rgba(30, 42, 36, 0.24);
+  overflow: hidden;
+  animation: wiz-step-fade-in 0.35s ease both;
+  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wiz-section-head::after {
+  content: '';
+  position: absolute;
+  top: -60%;
+  right: -6%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--org-meadow-soft) 0%, transparent 72%);
+  pointer-events: none;
+}
+
+.wiz-section-head:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(30, 42, 36, 0.05), 0 18px 32px -16px rgba(30, 42, 36, 0.3);
+}
+
+.wiz-section-head-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* The glyph now sits in its own rounded, tinted tile — a badge, not a bare
+   icon floating next to the text — so this row carries real visual weight. */
+.wiz-section-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--org-border);
-  color: var(--org-ink-2);
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--org-meadow-soft);
+  color: var(--org-meadow);
+  box-shadow: 0 2px 4px rgba(30, 42, 36, 0.05);
+}
+
+.wiz-section-icon.is-good {
+  background: var(--org-good-soft);
+  color: var(--org-good);
+}
+
+/* !important: styles.css has a global reset that targets the bare <i> tag
+   directly and pins its font-size with its own !important. Setting
+   font-size on the wrapping .wiz-section-icon span does nothing for the
+   <i> itself — it has to be set on the <i> to out-specificity that rule. */
+.wiz-section-icon i {
+  font-size: 26px !important;
+}
+
+.wiz-section-head-main h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 3px;
+  color: var(--org-ink);
+}
+
+.wiz-section-head-main p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--org-muted);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.wiz-section-badge {
+  display: flex;
+  align-items: center;
+  flex: none;
+  position: relative;
+  z-index: 1;
+}
+
+.wiz-section-badge-pill {
   font-size: 12px;
   font-weight: 700;
-  flex: 0 0 auto;
-}
-
-.org-step.is-active .org-step-index {
+  padding: 6px 14px;
+  border-radius: 20px;
   background: var(--org-meadow);
   color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(34, 60, 48, 0.5);
+  white-space: nowrap;
 }
 
-/* The connector between steps. A pseudo-element rather than markup, so the template stays a plain
-   list of four steps. */
-.org-step:not(:last-child)::after {
-  content: "";
-  flex: 1 1 auto;
-  min-width: 20px;
-  height: 1px;
-  margin-left: 8px;
-  background: var(--org-border);
+@media (prefers-reduced-motion: reduce) {
+  .wiz-step,
+  .wiz-step-arrow,
+  .wiz-section-head {
+    animation: none;
+    opacity: 1;
+  }
+  .wiz-step.is-active {
+    animation: none;
+  }
+  .wiz-step,
+  .wiz-section-head {
+    transition: none;
+  }
+  .wiz-step:hover,
+  .wiz-section-head:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .org-stepper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wiz-step-arrow {
+    display: none;
+  }
+  .wiz-step.is-active {
+    border-right: 1.5px solid var(--wiz-accent);
+    border-radius: 14px;
+  }
+  .wiz-step.is-active::after {
+    display: none;
+  }
+  .wiz-step.is-active .wiz-step-inner {
+    padding-right: 18px;
+  }
 }
 
 /* ---------- The address field and its domain suffix ---------- */
@@ -1540,25 +2096,19 @@
 /* ---------- Narrow screens ---------- */
 @media (max-width: 720px) {
   .org-stepper {
-    gap: 4px;
-    padding: 11px 12px;
+    gap: 6px;
   }
 
-  /* The labels go and the numbers stay: four numbered circles still show where you are, and the
-     step's own heading says what it is. */
-  .org-step {
-    font-size: 0;
-    padding: 5px;
-    gap: 0;
+  .wiz-step {
+    padding: 10px 12px;
   }
 
-  .org-step-index {
-    font-size: 12px;
+  .wiz-step-icon {
+    width: 34px;
+    height: 34px;
   }
-
-  .org-step:not(:last-child)::after {
-    min-width: 12px;
-    margin-left: 4px;
+  .wiz-step-icon i {
+    font-size: 22px !important;
   }
 
   .org-input-group:not(.org-input-group--gap) {

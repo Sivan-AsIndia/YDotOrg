@@ -48,10 +48,21 @@
     padding: 32px 24px 56px;
   }
 }
+/* Beyond a big desktop monitor, a fixed px cap just becomes another blank
+   margin on the next-larger screen — a 3440px ultrawide or a 4K display would
+   still see the same 1680px column with empty space either side. Sizing off
+   the viewport instead means the page keeps using the space it's given,
+   whatever the monitor. */
 @media (min-width: 1920px) {
   .org-page {
-    max-width: 1680px;
-    padding: 40px 32px 64px;
+    max-width: 94vw;
+    padding: 40px 3vw 64px;
+  }
+}
+@media (min-width: 2560px) {
+  .org-page {
+    max-width: 96vw;
+    padding: 48px 2vw 72px;
   }
 }
 
@@ -83,55 +94,291 @@
 
 /* ---------- Header ---------- */
 .org-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
   margin-bottom: 20px;
+}
+.org-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 .org-title {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1.15;
   font-weight: 400;
   letter-spacing: -0.3px;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: #000;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.org-title-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  background: var(--org-meadow-soft);
-  color: var(--org-meadow);
-  font-size: 22px;
-  flex: none;
 }
 .org-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--org-ink-2);
   margin: 0;
-  max-width: 640px;
+  max-width: 46ch;
 }
 .org-meta {
   font-size: 13px;
   color: var(--org-muted);
   margin: 4px 0 0;
 }
-.org-header-actions {
+
+/* ---------- Hero banner — same brand-gradient, animated-icon, animated
+   title-underline treatment as the setup wizard's own header. ---------- */
+.org-hero {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  height: 136px;
+  border-radius: 22px;
+  /* The photo's one dominant, unifying colour is its clear blue sky — a
+     stronger sky-blue wash reads as "one piece with the image" far more
+     than trying to also echo its wood tones did. */
+  background: linear-gradient(
+    115deg,
+    #ffffff 0%,
+    #e7f2fa 40%,
+    #bfdff2 100%
+  );
+  background-size: 220% 220%;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 12px 28px -14px rgba(30, 42, 36, 0.28);
+  overflow: hidden;
+  animation: org-hero-in 0.35s ease both, org-header-drift 14s ease-in-out infinite;
+}
+
+@keyframes org-hero-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes org-header-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* A quiet underline under the page title — draws in once on load and then
+   sits still; hovering the header sends a single soft sheen across it,
+   rather than looping forever. */
+.wiz-title-underline {
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 4px;
+  border-radius: 4px;
+  margin: 2px 0 10px;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--org-meadow), var(--org-blue), var(--org-plum), var(--org-gold)
+  );
+  transform-origin: left center;
+  animation: org-underline-grow 0.5s 0.1s cubic-bezier(0.22, 0.9, 0.32, 1) both;
+}
+
+.wiz-title-underline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  transition: left 0.7s ease;
+}
+
+.org-hero:hover .wiz-title-underline::after {
+  left: 140%;
+}
+
+@keyframes org-underline-grow {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+.org-hero-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 0 18px 28px;
+  z-index: 1;
+}
+
+/* The header icon has one plain, always-visible copy of the glyph
+   (.wiz-icon-static) plus five clipped copies used only transiently, on
+   hover, to animate — same technique as the setup wizard's header icon.
+   Stacking clipped copies of a thin line-icon PERMANENTLY causes visible
+   seams (their clip edges don't anti-alias identically), so the five
+   pieces only exist on screen for the ~1.6s hover animation; before hover,
+   and again the instant it finishes, only the single clean static icon is
+   shown, with a hard, imperceptible cut between the two. */
+.org-title-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  color: var(--org-meadow);
+}
+
+/* !important: styles.css has a global reset that targets the bare <i> tag
+   directly and pins its font-size with its own !important. Setting
+   font-size on the wrapping .org-title-icon span does nothing for the <i>
+   itself — it has to be set on the <i> to out-specificity that rule. */
+.wiz-icon-static,
+.wiz-icon-part {
+  font-size: 56px !important;
+}
+
+.wiz-icon-part {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+  justify-content: center;
+  opacity: 0;
+}
+
+.wiz-icon-part--base { clip-path: inset(75% 0 0 0); }
+.wiz-icon-part--side-left { clip-path: inset(50% 50% 25% 0); }
+.wiz-icon-part--side-right { clip-path: inset(50% 0 25% 50%); }
+.wiz-icon-part--mid { clip-path: inset(25% 0 50% 0); }
+.wiz-icon-part--top { clip-path: inset(0 0 75% 0); }
+
+/* Every piece falls in from above the header — as if dropped from the top
+   of the section — landing in this order: base first, then both walls,
+   then the middle, then the roof last. */
+.org-hero:hover .wiz-icon-static {
+  animation: wiz-icon-static-handoff 1.6s both;
+}
+.org-hero:hover .wiz-icon-part--base {
+  animation: wiz-icon-fall-base 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--side-left,
+.org-hero:hover .wiz-icon-part--side-right {
+  animation: wiz-icon-fall-sides 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--mid {
+  animation: wiz-icon-fall-mid 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.org-hero:hover .wiz-icon-part--top {
+  animation: wiz-icon-fall-top 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* The clean icon: gone the instant hover starts, back the instant every
+   piece has finished (96% = 1.53s in). */
+@keyframes wiz-icon-static-handoff {
+  0% { opacity: 1; }
+  1% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  95% { opacity: 0; animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes wiz-icon-fall-base {
+  0% { opacity: 0; transform: translateY(-60px); }
+  27% { opacity: 1; transform: translateY(8px); }
+  34% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-sides {
+  0% { opacity: 0; transform: translateY(-60px); }
+  19% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  47% { opacity: 1; transform: translateY(8px); }
+  53% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-mid {
+  0% { opacity: 0; transform: translateY(-60px); }
+  41% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  66% { opacity: 1; transform: translateY(8px); }
+  72% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+@keyframes wiz-icon-fall-top {
+  0% { opacity: 0; transform: translateY(-60px); }
+  59% { opacity: 0; transform: translateY(-60px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  89% { opacity: 1; transform: translateY(8px); }
+  94% { opacity: 1; transform: translateY(0); }
+  95% { opacity: 1; transform: translateY(0); animation-timing-function: steps(1, jump-end); }
+  96% { opacity: 0; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+.org-hero-side {
+  flex: 0 0 32%;
+  display: flex;
+  min-width: 0;
+  z-index: 1;
+}
+
+.org-hero-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 100% 26%;
+  flex: 1 1 auto;
+  border-radius: 0 22px 22px 0;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 18%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 18%);
+}
+
+@media (max-width: 860px) {
+  .org-hero {
+    flex-direction: column;
+    height: auto;
+  }
+  .org-hero-main {
+    padding: 22px 22px 0 22px;
+  }
+  .org-hero-side {
+    flex: none;
+    width: 100%;
+    padding: 0 22px 22px 22px;
+  }
+  .org-hero-art {
+    height: 140px;
+    border-radius: 14px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-hero,
+  .wiz-title-underline {
+    animation: none;
+  }
+  .wiz-title-underline::after {
+    transition: none;
+  }
+  .org-hero:hover .wiz-title-underline::after {
+    left: -60%;
+  }
+  .org-hero:hover .wiz-icon-static {
+    animation: none;
+  }
+  .org-hero:hover .wiz-icon-part--base,
+  .org-hero:hover .wiz-icon-part--side-left,
+  .org-hero:hover .wiz-icon-part--side-right,
+  .org-hero:hover .wiz-icon-part--mid,
+  .org-hero:hover .wiz-icon-part--top {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* ---------- Buttons ---------- */
@@ -395,6 +642,227 @@
   border-bottom-color: var(--org-good);
 }
 
+/* ---------- Filters card ---------- */
+/* Same asymmetric corner shape and one-shot sheen as the stat cards above,
+   flipping to the mirror shape on hover rather than lifting. */
+.org-filters-card {
+  background: var(--org-card);
+  border: 1px solid var(--org-border);
+  border-radius: 30px 10px 30px 10px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 4px 10px -8px rgba(30, 42, 36, 0.2);
+  transition: border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+.org-filters-card:hover {
+  border-radius: 10px 30px 10px 30px;
+  box-shadow: 0 3px 6px rgba(30, 42, 36, 0.04), 0 14px 26px -12px rgba(30, 42, 36, 0.2);
+}
+.org-filters-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  transform: skewX(-15deg);
+  transition: left 0.65s ease;
+  pointer-events: none;
+}
+.org-filters-card:hover::after {
+  left: 130%;
+}
+
+/* ---------- Shared section header: icon tile + title + subtitle, with
+   actions on the right. Used above both the filters and the results. ---------- */
+.org-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.org-section-head-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.org-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--org-meadow);
+  font-size: 28px;
+  flex: none;
+}
+.org-section-icon i {
+  font-size: 28px !important;
+}
+.org-section-head-main h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 3px;
+  color: var(--org-ink);
+}
+.org-section-head-main p {
+  font-size: 13px;
+  color: var(--org-muted);
+  margin: 0;
+}
+.org-section-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Card view / table view toggle ---------- */
+.org-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f0f0eb;
+}
+.org-view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--org-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.org-view-toggle-btn:hover {
+  color: var(--org-ink);
+}
+.org-view-toggle-btn.is-active {
+  background: var(--org-meadow);
+  color: #fff;
+  box-shadow: 0 2px 6px -2px rgba(34, 60, 48, 0.5);
+}
+
+/* ---------- Organisation card grid ---------- */
+.org-org-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+/* Each card's gradient and corner watermark both key off --org-org-tint,
+   which the .is-* modifier classes below set to that card's OWN status
+   colour — so "Profile incomplete" cards read gold, "Invitation sent"
+   cards read blue, and so on, rather than every card looking the same. */
+.org-org-card {
+  --org-org-tint: var(--org-meadow-soft);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(150deg, #ffffff 0%, #ffffff 45%, var(--org-org-tint) 145%);
+  border: 1px solid var(--org-border);
+  border-radius: 16px;
+  padding: 20px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 6px 16px -10px rgba(30, 42, 36, 0.2);
+  transition: box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.org-org-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(30, 42, 36, 0.05), 0 18px 30px -14px rgba(30, 42, 36, 0.28);
+}
+.org-org-card.is-good { --org-org-tint: var(--org-good-soft); }
+.org-org-card.is-warn { --org-org-tint: var(--org-warn-soft); }
+.org-org-card.is-error { --org-org-tint: var(--org-error-soft); }
+.org-org-card.is-info { --org-org-tint: var(--org-blue-soft); }
+.org-org-card.is-plum { --org-org-tint: rgba(107, 74, 114, 0.18); }
+.org-org-card.is-muted { --org-org-tint: #eef1ec; }
+/* A soft, decorative watermark tucked in the corner — purely visual. */
+.org-org-card::after {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--org-org-tint) 0%, transparent 72%);
+  pointer-events: none;
+}
+.org-org-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+.org-org-card-num {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--org-border);
+  line-height: 1;
+}
+.org-org-card-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--org-ink);
+  margin: 14px 0 2px;
+  position: relative;
+  z-index: 1;
+}
+.org-org-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 0;
+  position: relative;
+  z-index: 1;
+}
+.org-org-card-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--org-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-org-card-info-row i {
+  color: var(--org-muted);
+  font-size: 14px;
+  flex: none;
+}
+.org-org-card-flag {
+  align-self: flex-start;
+  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+}
+.org-org-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--org-border);
+  position: relative;
+  z-index: 1;
+}
+.org-org-card-actions .org-btn {
+  flex: 1 1 auto;
+}
+
 /* ---------- Stat summary boxes ---------- */
 .org-stat-grid {
   display: grid;
@@ -402,18 +870,43 @@
   gap: 16px;
   margin-bottom: 20px;
 }
+/* An asymmetric, "twisted" corner shape — two corners rounded generously,
+   the other two barely at all — rather than a plain uniform rounded
+   rectangle, and it flips to the mirror shape on hover instead of just
+   lifting the whole card. */
 .org-stat-card {
   display: block;
   width: 100%;
   text-align: left;
   font-family: inherit;
-  background: var(--org-card);
   border: 1px solid var(--org-border);
-  border-radius: 16px;
+  border-radius: 28px 8px 28px 8px;
   padding: 20px 22px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 4px 10px -8px rgba(30, 42, 36, 0.2);
+  transition: border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+.org-stat-card:hover {
+  border-radius: 8px 28px 8px 28px;
+  box-shadow: 0 3px 6px rgba(30, 42, 36, 0.04), 0 14px 26px -12px rgba(30, 42, 36, 0.22);
+}
+/* A one-shot diagonal sheen that sweeps across on hover, rather than an
+   always-on loop. */
+.org-stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  transform: skewX(-15deg);
+  transition: left 0.65s ease;
+  pointer-events: none;
+}
+.org-stat-card:hover::after {
+  left: 130%;
 }
 .org-stat-card::before {
   content: '';
@@ -433,28 +926,45 @@
 .org-stat-card.is-error::before {
   background: var(--org-error);
 }
+/* A full tinted background, not just the top accent line, so each card's
+   tone reads at a glance rather than needing a close look at a 4px bar. */
+.org-stat-card {
+  background: #f7f7f4;
+}
+.org-stat-card.is-accent {
+  background: var(--org-good-soft);
+}
+.org-stat-card.is-warn {
+  background: var(--org-warn-soft);
+}
+.org-stat-card.is-error {
+  background: var(--org-error-soft);
+}
+.org-stat-card.is-info {
+  background: var(--org-blue-soft);
+}
+/* Bare, uncontained icons — no circle behind them — a little larger to
+   still carry visual weight on their own, and springing into a tilt on
+   hover instead of just riding along with the card lift. */
 .org-stat-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  font-size: 18px;
+  font-size: 28px;
   margin-bottom: 12px;
-  background: #eef1ec;
   color: var(--org-muted);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.org-stat-card:hover .org-stat-icon {
+  transform: rotate(-10deg) scale(1.18);
 }
 .org-stat-card.is-accent .org-stat-icon {
-  background: var(--org-good-soft);
   color: var(--org-good);
 }
 .org-stat-card.is-warn .org-stat-icon {
-  background: var(--org-warn-soft);
   color: var(--org-warn);
 }
 .org-stat-card.is-error .org-stat-icon {
-  background: var(--org-error-soft);
   color: var(--org-error);
 }
 .org-stat-label {
@@ -682,6 +1192,34 @@
 .org-badge-muted {
   background: #eef1ec;
   color: var(--org-muted);
+}
+
+/* statusClass() returns these bare "is-*" names directly (not the
+   "org-badge-*" names above) — without these, every status pill rendered
+   with no background or colour at all, i.e. as plain text. */
+.org-badge.is-good {
+  background: var(--org-good-soft);
+  color: var(--org-good);
+}
+.org-badge.is-warn {
+  background: var(--org-warn-soft);
+  color: var(--org-warn);
+}
+.org-badge.is-error {
+  background: var(--org-error-soft);
+  color: var(--org-error);
+}
+.org-badge.is-muted {
+  background: #eef1ec;
+  color: var(--org-muted);
+}
+.org-badge.is-info {
+  background: var(--org-blue-soft);
+  color: var(--org-blue);
+}
+.org-badge.is-plum {
+  background: rgba(107, 74, 114, 0.12);
+  color: var(--org-plum);
 }
 
 /* ---------- Table ---------- */
@@ -1005,12 +1543,6 @@
   .org-span-2 {
     grid-column: span 1;
   }
-  .org-header {
-    flex-direction: column;
-  }
-  .org-title {
-    font-size: 26px;
-  }
   .org-header-actions {
     width: 100%;
   }
@@ -1018,9 +1550,6 @@
 @media (max-width: 640px) {
   .org-page {
     padding: 18px 14px 40px;
-  }
-  .org-title {
-    font-size: 22px;
   }
   .org-stat-grid {
     grid-template-columns: 1fr;
@@ -1073,7 +1602,6 @@
 }
 
 .org-stat-card.is-info .org-stat-icon {
-  background: var(--org-blue-soft);
   color: var(--org-blue);
 }
 

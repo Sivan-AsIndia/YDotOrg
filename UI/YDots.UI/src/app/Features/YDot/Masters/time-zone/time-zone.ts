@@ -381,19 +381,6 @@ export class TimeZoneComponent implements OnInit {
     this.applyFilters();
   }
 
-  onRefresh(): void {
-    this.searchText = '';
-    this.selectedStatus = '';
-    this.selectedDST = '';
-    this.currentPage = 1;
-
-    // The reference-data cache goes too: a zone added or retired here appears in the State
-    // form's dropdown, and a cached list would keep offering the old one.
-    this.masters.invalidateReferenceData();
-    this.loadData();
-    this.showToast('info', 'Refresh', 'Data refreshed');
-  }
-
   /* ============================================================
      Pagination
      ============================================================ */

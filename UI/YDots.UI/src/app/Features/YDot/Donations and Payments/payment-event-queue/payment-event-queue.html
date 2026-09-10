@@ -10,6 +10,8 @@
       <p class="pr-subtitle">{{ pageSubtitle }}</p>
     </div>
 
+    
+
     <!-- DECORATIVE ILLUSTRATION, after the reference image: the receipt, its confirmation
          check, a sprig of leaves and the rupee coin. Purely presentational - hidden from
          assistive technology and dropped on small screens where it only costs height. -->
@@ -23,19 +25,19 @@
         <circle class="t-dot" cx="62" cy="30" r="2.6"/>
         <circle class="t-spark-dot" cx="196" cy="10" r="2.6"/>
         <!-- wavy ground line under the sprout -->
-        <path class="t-ground" d="M30 138C55 134 82 141 114 137"/>
+        <!-- <path class="t-ground" d="M30 138C55 134 82 141 114 137"/> -->
         <!-- two-leaf sprout -->
-        <path class="t-leaf2-stem" d="M68 137C65 126 62 113 61 102M68 137C70 126 70 113 69 101"/>
+        <!-- <path class="t-leaf2-stem" d="M68 137C65 126 62 113 61 102M68 137C70 126 70 113 69 101"/>
         <g transform="translate(61 102) rotate(-30)"><g class="leaf-sway">
           <path class="t-leaf2" d="M0 0C-6 -2 -10 -9 -10 -17C-10 -26 -6 -34 0 -38C6 -34 10 -26 10 -17C10 -9 6 -2 0 0Z"/>
           <path class="t-leaf2-vein" d="M0 -2C-1 -10 1 -24 0 -35"/>
           <path class="t-leaf2-vein-sm" d="M0 -10Q-4 -12 -7 -15M0 -16Q-4 -18 -7 -21M0 -10Q4 -12 7 -15M0 -16Q4 -18 7 -21"/>
-        </g></g>
-        <g transform="translate(69 101) rotate(18)"><g class="leaf-sway leaf-sway-alt">
+        </g></g> -->
+        <!-- <g transform="translate(69 101) rotate(18)"><g class="leaf-sway leaf-sway-alt">
           <path class="t-leaf2" d="M0 0C-7 -2 -12 -10 -12 -20C-12 -30 -7 -39 0 -44C7 -39 12 -30 12 -20C12 -10 7 -2 0 0Z"/>
           <path class="t-leaf2-vein" d="M0 -2C-1 -13 1 -29 0 -42"/>
           <path class="t-leaf2-vein-sm" d="M0 -11Q-5 -13 -9 -17M0 -18Q-5 -20 -9 -23M0 -11Q5 -13 9 -17M0 -18Q5 -20 9 -23"/>
-        </g></g>
+        </g></g> -->
         <!-- scroll paper with rolled corners -->
         <rect class="t-paper" x="96" y="20" width="72" height="100" rx="10" fill="#ffffff" stroke-width="2"/>
         <path class="t-curl" d="M154 20c14 2 20 10 20 24-6-1-9-6-10-12-1-5-5-9-10-12z"/>
@@ -69,7 +71,7 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Total Events</span>
-        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-neutral))">{{ totalEvents() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">{{ totalEvents() }}</span>
         <span class="pr-tile-note">In selected scope</span>
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V14C40 2 80 24 120 18 160 12 190 20 220 8V30Z" fill="currentColor"/></svg>
@@ -80,7 +82,7 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Total Amount</span>
-        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-gold))">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">₹{{ totalAmount().toLocaleString('en-IN') }}</span>
         <span class="pr-tile-note">In selected scope</span>
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V20C26 6 54 4 86 14 118 24 146 22 174 12 194 5 210 12 220 16V30Z" fill="currentColor"/></svg>
@@ -91,7 +93,7 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Successful</span>
-        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-meadow))">{{ successfulCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">{{ successfulCount() }}</span>
         <span class="pr-tile-note">Receipt sent</span>
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V22C44 26 78 10 114 12 150 14 182 2 220 14V30Z" fill="currentColor"/></svg>
@@ -102,7 +104,7 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Pending</span>
-        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-blue))">{{ pendingCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">{{ pendingCount() }}</span>
         <span class="pr-tile-note">Awaiting payment</span>
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V12C38 6 68 12 102 17 136 22 168 19 220 15V30Z" fill="currentColor"/></svg>
@@ -113,7 +115,7 @@
       </span>
       <div class="pr-tile-body">
         <span class="pr-tile-label">Failed</span>
-        <span class="pr-tile-value" style="color:var(--tile-accent, var(--pr-danger))">{{ failedCount() }}</span>
+        <span class="pr-tile-value" style="color:var(--tile-accent-strong, var(--pr-ink))">{{ failedCount() }}</span>
         <span class="pr-tile-note">Needs retry</span>
       </div>
       <svg class="pr-tile-wave" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30V16C20 6 36 24 54 18 72 12 88 24 106 18 124 12 140 24 158 18 176 12 194 22 220 14V30Z" fill="currentColor"/></svg>
@@ -242,23 +244,31 @@
 
       <!-- READY / CONFLICT / DEPENDENCY-FAILURE keep the index visible -->
       @else {
-        <div class="pr-table-scroll">
+        <div class="">
           <table class="pr-table">
             <thead>
               <tr>
+                <th scope="col" class="pr-col-event d-none d-xl-table-cell"></th>
+
                 <th scope="col" class="pr-col-event">Event / Receipt ref</th>
-                <th scope="col" class="pr-col-center">Donor name</th>
-                <th scope="col" class="pr-col-center">Email</th>
-                <th scope="col" class="pr-col-center">Campaign</th>
-                <th scope="col" class="pr-col-center">Amount</th>
-                <th scope="col" class="pr-col-center">Payment status</th>
-                <th scope="col" class="pr-col-center">Received at</th>
+                <th scope="col" class="pr-col-center d-none d-xxl-table-cell">Donor name</th>
+                <th scope="col" class="pr-col-center d-none d-xs-table-cell">Email</th>
+                <th scope="col" class="pr-col-center d-none d-xl-table-cell">Campaign</th>
+                <th scope="col" class="pr-col-center d-none d-xxl-table-cell">Amount</th>
+                <th scope="col" class="pr-col-center d-none d-xxl-table-cell">Payment status</th>
+                <th scope="col" class="pr-col-center d-none d-xxl-table-cell">Received at</th>
                 <th scope="col" class="pr-col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
               @for (r of pagedRecords(); track r.eventReference) {
                 <tr >
+                  <td class="pr-cell-plus d-none d-xl-table-cell">
+                    <button type="button" class="plus-icon" (click)="openRowPopup(r); $event.stopPropagation()"
+                            [attr.aria-label]="'View details for ' + r.eventReference" title="View details">
+                      <i class="bi bi-plus" aria-hidden="true"></i>
+                    </button>
+                  </td>
                   <td class="pr-cell-event" data-label="Event / Receipt ref">
                     <span class="pr-event-doc" [class]="receiptDocClass(r.receiptStatus)" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg>
@@ -268,11 +278,11 @@
                       <span class="pr-event-sub">{{ r.receiptOrIntentRef }}</span>
                     </span>
                   </td>
-                  <td class="pr-col-center" data-label="Donor name">{{ r.donorName }}</td>
-                  <td class="pr-col-center" data-label="Email">{{ r.donorEmail || '—' }}</td>
-                  <td class="pr-col-center" data-label="Campaign">{{ r.campaignName || '—' }}</td>
-                  <td class="pr-col-center" data-label="Amount">{{ r.currency }} {{ formatAmount(r.amount) }}</td>
-                  <td class="pr-col-center" data-label="Payment status">
+                  <td class="pr-col-center d-none d-xxl-table-cell" data-label="Donor name">{{ r.donorName }}</td>
+                  <td class="pr-col-center d-none d-xl-table-cell" data-label="Email">{{ r.donorEmail || '—' }}</td>
+                  <td class="pr-col-center d-none d-xl-table-cell" data-label="Campaign">{{ r.campaignName || '—' }}</td>
+                  <td class="pr-col-center d-none d-xxl-table-cell" data-label="Amount">{{ r.currency }} {{ formatAmount(r.amount) }}</td>
+                  <td class="pr-col-center d-none d-xxl-table-cell" data-label="Payment status">
                     @switch (r.paymentStatus) {
                       @case ('Success') {
                         <span class="pr-status pr-status-good pr-tip pr-tip-good" data-tip="Payment successful" role="img" aria-label="Payment successful">
@@ -291,7 +301,7 @@
                       }
                     }
                   </td>
-                  <td class="pr-col-center" data-label="Received at">{{ r.receivedTime }}</td>
+                  <td class="pr-col-center d-none d-xxl-table-cell" data-label="Received at">{{ r.receivedTime }}</td>
                   <td class="pr-col-actions" (click)="$event.stopPropagation()">
                     <button type="button" class="pr-icon-btn" (click)="inspect(r.eventReference)"
                             [attr.aria-label]="'View ' + r.eventReference" title="View details">
@@ -300,7 +310,7 @@
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="8" class="pr-table-empty">No payments or receipts match this scope and filter.</td></tr>
+                <tr><td colspan="9" class="pr-table-empty">No payments or receipts match this scope and filter.</td></tr>
               }
             </tbody>
           </table>
@@ -319,6 +329,33 @@
         </div>
       }
     </section>
+
+    <!-- ---------- ROW QUICK-VIEW POPUP: the plus icon on a row. Shows the data the table hides
+         on md screens and below (Donor, Email, Campaign, Amount, statuses, received time) so
+         nothing is lost when the index collapses. Same modal language as the resend confirm. ---- -->
+    @if (rowPopup(); as r) {
+      <div class="pr-modal-backdrop" (click)="closeRowPopup()">
+        <div class="pr-modal" role="dialog" aria-modal="true" aria-labelledby="pr-row-popup-title" (click)="$event.stopPropagation()">
+          <h2 class="pr-modal-title" id="pr-row-popup-title">{{ r.eventReference }}</h2>
+          <p class="pr-modal-lead">{{ r.receiptOrIntentRef }}</p>
+
+          <dl class="pr-kv">
+            <div><dt>Donor name</dt><dd>{{ r.donorName }}</dd></div>
+            <div><dt>Email</dt><dd>{{ r.donorEmail || '—' }}</dd></div>
+            <div><dt>Campaign</dt><dd>{{ r.campaignName || '—' }}</dd></div>
+            <div><dt>Amount</dt><dd>{{ r.currency }} {{ formatAmount(r.amount) }}</dd></div>
+            <div><dt>Payment status</dt><dd><span class="pr-badge" [class]="paymentStatusClass(r.paymentStatus)">{{ r.paymentStatus }}</span></dd></div>
+            <div><dt>Received at</dt><dd>{{ r.receivedTime }}</dd></div>
+            <div><dt>Receipt status</dt><dd><span class="pr-badge" [class]="receiptStatusClass(r.receiptStatus)">{{ r.receiptStatus }}</span></dd></div>
+            @if (r.receiptReference) {
+              <div><dt>Receipt reference</dt><dd>{{ r.receiptReference }}</dd></div>
+            }
+          </dl>
+
+         
+        </div>
+      </div>
+    }
 
     <!-- ---------- DETAIL DRAWER: Event details (matches reference image) ---------- -->
     @if (selectedEvent(); as e) {
@@ -348,10 +385,31 @@
             <circle class="t-rupee-badge" cx="226" cy="52" r="8"/>
             <path class="t-line-strong" d="M242 48h30" stroke-width="4" stroke-linecap="round"/>
             <path class="t-line" d="M222 68h76M222 80h62M222 92h76M222 104h48M222 116h64" stroke-width="5" stroke-linecap="round"/>
-            <!-- confirmation check on right edge -->
-            <g class="t-check-pop">
-              <circle class="t-check" cx="320" cy="98" r="24"/>
-              <path d="m309 98 8 8 16-16" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Status icon: changes based on payment status -->
+            <g class="t-status-icon">
+              @switch (e.paymentStatus) {
+                @case ('Success') {
+                  <!-- Checkmark icon for successful payment -->
+                  <g class="t-check-pop">
+                    <circle class="t-check" cx="320" cy="98" r="24"/>
+                    <path d="m309 98 8 8 16-16" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </g>
+                }
+                @case ('Pending') {
+                  <!-- Clock icon for pending payment -->
+                  <g class="t-pending-icon">
+                    <circle class="t-pending-circle" cx="320" cy="98" r="24"/>
+                    <path class="t-pending-hand" d="M320 86v12l8 4" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </g>
+                }
+                @case ('Fail') {
+                  <!-- X icon for failed payment -->
+                  <g class="t-fail-icon">
+                    <circle class="t-fail-circle" cx="320" cy="98" r="24"/>
+                    <path d="m310 88 20 20M330 88l-20 20" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </g>
+                }
+              }
             </g>
           </svg>
         </div>
@@ -381,14 +439,14 @@
                  more, because retrying charges somebody else's card. A caller without the
                  permission sees no button rather than a disabled one. -->
             @if (e.paymentStatus === 'Fail' && canRetry()) {
-              <button type="button" class="pr-btn pr-btn-danger pr-btn-block" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
+              <button type="button" class="btn btn-danger btn-sm  pr-btn-block" (click)="retryPaymentFromQueue(e)" [disabled]="retryingRef() !== null">
                 {{ retryingRef() === e.eventReference ? 'Processing…' : 'Retry' }}
               </button>
               <p class="pr-hint">Retries the same payment. A second failure sends this to Payment Support &amp; Safe Retry.</p>
             }
             <!-- CONTINUE TO PAY, likewise: the table gives it to Donor/Initiator only. -->
             @if (e.paymentStatus === 'Pending' && canContinuePayment()) {
-              <button type="button" class="pr-btn pr-btn-primary btn-sm pr-btn-block" (click)="continuePaymentFromQueue(e)">
+              <button type="button" class="btn btn-primary btn-sm pr-btn-block" (click)="continuePaymentFromQueue(e)">
                 Continue payment
               </button>
             }

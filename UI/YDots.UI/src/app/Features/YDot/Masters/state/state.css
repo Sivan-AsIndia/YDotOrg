@@ -283,32 +283,6 @@
   line-height: 0;
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 36px;
-  padding: 0;
-  color: var(--muted);
-  background: rgba(255,255,255,.92);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-  transition: .15s ease;
-}
-
-.icon-btn:hover {
-  color: var(--primary);
-  border-color: #c9ddd3;
-  background: var(--primary-pale);
-}
-
-.icon-btn.is-spinning svg {
-  animation: state-spin .75s linear infinite;
-}
-
 /* Stats -------------------------------------------------------------------- */
 
 .stats-row {

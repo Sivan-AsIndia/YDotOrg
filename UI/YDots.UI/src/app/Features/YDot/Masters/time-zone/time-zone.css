@@ -233,23 +233,6 @@
   gap: 10px;
 }
 
-.tz-icon-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: none;
-  background: #fff;
-  color: var(--tz-green-900);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--tz-shadow);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-.tz-icon-btn svg { width: 19px; height: 19px; }
-.tz-icon-btn:hover { background: var(--tz-mint-100); transform: translateY(-1px); }
-
 .tz-btn-primary {
   display: inline-flex;
   align-items: center;

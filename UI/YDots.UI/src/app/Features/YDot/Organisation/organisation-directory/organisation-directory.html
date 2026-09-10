@@ -3,20 +3,34 @@
 <div class="org-page">
 
   <div class="org-header">
-    <div>
-      <h1 class="org-title">
-        <span class="org-title-icon"><i class="ri-building-4-line"></i></span>
-        Organisations
-      </h1>
-      <p class="org-subtitle">
-        Every organisation on the platform, and where each one has reached in onboarding.
-      </p>
-    </div>
     <div class="org-header-actions">
       <a routerLink="/app/administration/organisation/setup-wizard"
          class="org-btn org-btn-primary org-btn-sm">
         <i class="ri-add-line"></i> Create organisation
       </a>
+    </div>
+
+    <div class="org-hero">
+      <div class="org-hero-main">
+        <span class="org-title-icon" aria-hidden="true">
+          <i class="ri-building-4-line wiz-icon-static"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--base"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--side-left"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--side-right"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--mid"></i>
+          <i class="ri-building-4-line wiz-icon-part wiz-icon-part--top"></i>
+        </span>
+        <div>
+          <h1 class="org-title">Organisations</h1>
+          <span class="wiz-title-underline" aria-hidden="true"></span>
+          <p class="org-subtitle">
+            Every organisation on the platform, and where each one has reached in onboarding.
+          </p>
+        </div>
+      </div>
+      <div class="org-hero-side">
+        <img class="org-hero-art" src="assets/images/pages/orgpic4.png" alt="" aria-hidden="true">
+      </div>
     </div>
   </div>
 
@@ -51,8 +65,17 @@
     </div>
   }
 
-  <section class="org-doc-section">
-    <h3 class="org-doc-heading org-doc-heading--blue">Filters</h3>
+  <section class="org-filters-card">
+    <div class="org-section-head">
+      <div class="org-section-head-main">
+        <span class="org-section-icon"><i class="ri-filter-3-line"></i></span>
+        <div>
+          <h3>Filters</h3>
+          <p>Find and manage organisations easily.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="org-grid org-grid-4">
       <div class="org-field org-field--tight">
         <label class="org-field-label" for="org-search">Search</label>
@@ -92,14 +115,6 @@
         </select>
       </div>
     </div>
-
-    @if (hasActiveFilters()) {
-      <div class="org-filter-actions">
-        <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="clearFilters()">
-          <i class="ri-close-line"></i> Clear filters
-        </button>
-      </div>
-    }
   </section>
 
   @if (loading()) {
@@ -138,147 +153,179 @@
     </div>
   } @else {
     <section class="org-doc-section">
-      <h3 class="org-doc-heading org-doc-heading--good">
-        {{ totalCount() }} organisation{{ totalCount() === 1 ? '' : 's' }}
-      </h3>
-
-      <div class="org-table-scroll">
-        <table class="org-table">
-          <thead>
-            <tr>
-              <th>Organisation</th>
-              <th>Web address</th>
-              <th>Administrator</th>
-              <th>People</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th class="text-end">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (org of organisations(); track trackById($index, org)) {
-              <tr>
-                <td>
-                  <button type="button" class="org-name-link" (click)="view(org.id!)">
-                    {{ org.name }}
-                  </button>
-                  <span class="org-code">{{ org.code }}</span>
-                </td>
-                <td><span class="org-code">{{ org.hostName }}</span></td>
-                <td>{{ org.adminEmail || '—' }}</td>
-                <td>{{ org.userCount ?? 0 }}</td>
-                <td>
-                  <span class="org-badge" [ngClass]="statusClass(org.status)">
-                    {{ org.statusDisplay || org.status }}
-                  </span>
-                  @if (org.isAwaitingReview) {
-                    <span class="org-badge is-warn">Needs review</span>
-                  }
-                </td>
-                <td>{{ org.createdAtUtc | date: 'mediumDate' }}</td>
-                <td class="text-end">
-                  <div class="org-row-actions">
-                    <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
-                            (click)="view(org.id!)" title="View" aria-label="View">
-                      <i class="ri-eye-line"></i>
-                    </button>
-
-                    @if (org.isAwaitingReview) {
-                      <button type="button" class="org-btn org-btn-primary org-btn-sm org-btn-icon"
-                              (click)="review(org.id!)" title="Review" aria-label="Review">
-                        <i class="ri-shield-check-line"></i>
-                      </button>
-                    }
-
-                    @if (awaitingInvitation(org)) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
-                              (click)="resendInvitation(org)"
-                              title="Re-send invitation" aria-label="Re-send invitation">
-                        <i class="ri-mail-send-line"></i>
-                      </button>
-                    }
-
-                    <!--
-                      Stepping into an Organisation re-issues the token against it. The root
-                      user's own record is untouched — selecting is an operating context, not
-                      ownership.
-                    -->
-                    @if (isSuperAdmin()) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
-                              [disabled]="switching() === org.id"
-                              (click)="enter(org)"
-                              [title]="switching() === org.id ? 'Switching…' : 'Work inside'"
-                              [attr.aria-label]="switching() === org.id ? 'Switching…' : 'Work inside'">
-                        @if (switching() === org.id) {
-                          <i class="ri-loader-4-line"></i>
-                        } @else {
-                          <i class="ri-login-box-line"></i>
-                        }
-                      </button>
-                    }
-
-                    <!-- Suspend puts a running Organisation on hold; Reactivate is the way back.
-                         Offered only in the states the server's own transition table allows. -->
-                    @if (canSuspend(org)) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
-                              (click)="beginDecision(org, 'suspend')">
-                        <i class="ri-pause-circle-line"></i> Suspend
-                      </button>
-                    }
-
-                    @if (canReactivate(org)) {
-                      <button type="button" class="org-btn org-btn-ghost org-btn-sm"
-                              (click)="beginDecision(org, 'reactivate')">
-                        <i class="ri-play-circle-line"></i> Reactivate
-                      </button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+      <div class="org-section-head">
+        <div class="org-section-head-main">
+          <span class="org-section-icon"><i class="ri-building-4-line"></i></span>
+          <div>
+            <h3>Organisations</h3>
+            <p>Every organisation on the platform, and where each one has reached in onboarding.</p>
+          </div>
+        </div>
+        <div class="org-section-head-actions">
+          <div class="org-view-toggle">
+            <button type="button" class="org-view-toggle-btn" [class.is-active]="viewMode() === 'cards'"
+                    (click)="viewMode.set('cards')">
+              <i class="ri-layout-grid-line"></i> Card view
+            </button>
+            <button type="button" class="org-view-toggle-btn" [class.is-active]="viewMode() === 'table'"
+                    (click)="viewMode.set('table')">
+              <i class="ri-list-check-2"></i> Table view
+            </button>
+          </div>
+          <a routerLink="/app/administration/organisation/setup-wizard"
+             class="org-btn org-btn-primary org-btn-sm">
+            <i class="ri-add-line"></i> Create organisation
+          </a>
+        </div>
       </div>
 
-      <!-- Suspend / reactivate confirmation. Suspending stops everybody inside the Organisation
-           working, so it asks for a reason and records it with the decision. -->
-      @if (decidingOn(); as target) {
-        <div class="org-modal-backdrop" (click)="cancelDecision()">
-          <div class="org-modal" role="dialog" aria-modal="true"
-               aria-labelledby="org-decide-title" (click)="$event.stopPropagation()">
-            <h2 id="org-decide-title" class="org-modal-title">
-              {{ decision() === 'suspend' ? 'Suspend' : 'Reactivate' }} {{ target.name }}
-            </h2>
-            <p class="org-modal-lead">
-              @if (decision() === 'suspend') {
-                Nobody inside this Organisation will be able to sign in until it is reactivated.
-                Its data is untouched.
-              } @else {
-                People inside this Organisation will be able to sign in again.
+      @if (viewMode() === 'cards') {
+        <div class="org-org-grid">
+          @for (org of organisations(); track trackById($index, org)) {
+            <div class="org-org-card" [ngClass]="statusClass(org.status)">
+              <div class="org-org-card-top">
+                <span class="org-badge" [ngClass]="statusClass(org.status)">
+                  {{ org.statusDisplay || org.status }}
+                </span>
+                <span class="org-org-card-num">{{ ordinal($index) }}</span>
+              </div>
+
+              <h4 class="org-org-card-name">{{ org.name }}</h4>
+              <span class="org-code">{{ org.code }}</span>
+
+              <div class="org-org-card-info">
+                <div class="org-org-card-info-row">
+                  <i class="ri-global-line"></i> {{ org.hostName }}
+                </div>
+                <div class="org-org-card-info-row">
+                  <i class="ri-user-line"></i> {{ org.adminEmail || '—' }}
+                </div>
+                <div class="org-org-card-info-row">
+                  <i class="ri-team-line"></i> {{ org.userCount ?? 0 }}
+                </div>
+                <div class="org-org-card-info-row">
+                  <i class="ri-calendar-line"></i> {{ org.createdAtUtc | date: 'mediumDate' }}
+                </div>
+              </div>
+
+              @if (org.isAwaitingReview) {
+                <span class="org-badge is-warn org-org-card-flag">Needs review</span>
               }
-            </p>
 
-            <label class="org-field-label" for="org-decide-reason">
-              {{ decision() === 'suspend' ? 'Reason (required, at least 10 characters)' : 'Note (optional)' }}
-            </label>
-            <textarea id="org-decide-reason" class="org-textarea" rows="3"
-                      [ngModel]="decisionReason()" (ngModelChange)="decisionReason.set($event)"
-                      [placeholder]="decision() === 'suspend'
-                        ? 'Why this Organisation is being put on hold.'
-                        : 'Anything worth recording with the decision.'"></textarea>
-            @if (decision() === 'suspend' && decisionReason().length > 0 && !suspendReasonValid()) {
-              <p class="org-field-error">Enter at least 10 characters.</p>
-            }
+              <div class="org-org-card-actions">
+                <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="view(org.id!)">
+                  <i class="ri-eye-line"></i> View
+                </button>
 
-            <div class="org-modal-actions">
-              <button type="button" class="org-btn org-btn-ghost" (click)="cancelDecision()">Cancel</button>
-              <button type="button" class="org-btn org-btn-primary"
-                      [disabled]="deciding() || (decision() === 'suspend' && !suspendReasonValid())"
-                      (click)="confirmDecision()">
-                {{ deciding() ? 'Working…' : (decision() === 'suspend' ? 'Suspend' : 'Reactivate') }}
-              </button>
+                @if (org.isAwaitingReview) {
+                  <button type="button" class="org-btn org-btn-primary org-btn-sm" (click)="review(org.id!)">
+                    <i class="ri-shield-check-line"></i> Review
+                  </button>
+                } @else if (awaitingInvitation(org)) {
+                  <button type="button" class="org-btn org-btn-outline org-btn-sm"
+                          (click)="resendInvitation(org)">
+                    <i class="ri-mail-send-line"></i> Re-send invitation
+                  </button>
+                } @else if (isSuperAdmin()) {
+                  <!--
+                    Stepping into an Organisation re-issues the token against it. The root
+                    user's own record is untouched — selecting is an operating context, not
+                    ownership.
+                  -->
+                  <button type="button" class="org-btn org-btn-outline org-btn-sm"
+                          [disabled]="switching() === org.id" (click)="enter(org)">
+                    @if (switching() === org.id) {
+                      <i class="ri-loader-4-line"></i> Switching…
+                    } @else {
+                      <i class="ri-login-box-line"></i> Work inside
+                    }
+                  </button>
+                }
+              </div>
             </div>
-          </div>
+          }
+        </div>
+      } @else {
+        <div class="org-table-scroll">
+          <table class="org-table">
+            <thead>
+              <tr>
+                <th>Organisation</th>
+                <th>Web address</th>
+                <th>Administrator</th>
+                <th>People</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (org of organisations(); track trackById($index, org)) {
+                <tr>
+                  <td>
+                    <button type="button" class="org-name-link" (click)="view(org.id!)">
+                      {{ org.name }}
+                    </button>
+                    <span class="org-code">{{ org.code }}</span>
+                  </td>
+                  <td><span class="org-code">{{ org.hostName }}</span></td>
+                  <td>{{ org.adminEmail || '—' }}</td>
+                  <td>{{ org.userCount ?? 0 }}</td>
+                  <td>
+                    <span class="org-badge" [ngClass]="statusClass(org.status)">
+                      {{ org.statusDisplay || org.status }}
+                    </span>
+                    @if (org.isAwaitingReview) {
+                      <span class="org-badge is-warn">Needs review</span>
+                    }
+                  </td>
+                  <td>{{ org.createdAtUtc | date: 'mediumDate' }}</td>
+                  <td class="text-end">
+                    <div class="org-row-actions">
+                      <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
+                              (click)="view(org.id!)" title="View" aria-label="View">
+                        <i class="ri-eye-line"></i>
+                      </button>
+
+                      @if (org.isAwaitingReview) {
+                        <button type="button" class="org-btn org-btn-primary org-btn-sm org-btn-icon"
+                                (click)="review(org.id!)" title="Review" aria-label="Review">
+                          <i class="ri-shield-check-line"></i>
+                        </button>
+                      }
+
+                      @if (awaitingInvitation(org)) {
+                        <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
+                                (click)="resendInvitation(org)"
+                                title="Re-send invitation" aria-label="Re-send invitation">
+                          <i class="ri-mail-send-line"></i>
+                        </button>
+                      }
+
+                      <!--
+                        Stepping into an Organisation re-issues the token against it. The root
+                        user's own record is untouched — selecting is an operating context, not
+                        ownership.
+                      -->
+                      @if (isSuperAdmin()) {
+                        <button type="button" class="org-btn org-btn-ghost org-btn-sm org-btn-icon"
+                                [disabled]="switching() === org.id"
+                                (click)="enter(org)"
+                                [title]="switching() === org.id ? 'Switching…' : 'Work inside'"
+                                [attr.aria-label]="switching() === org.id ? 'Switching…' : 'Work inside'">
+                          @if (switching() === org.id) {
+                            <i class="ri-loader-4-line"></i>
+                          } @else {
+                            <i class="ri-login-box-line"></i>
+                          }
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       }
 

@@ -1,7 +1,19 @@
-import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { CommonModule, DOCUMENT } from '@angular/common';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { debounceTime, Subject, Subscription } from 'rxjs';
 import { DonorApiService } from '../../../../Service/donor-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import {
@@ -121,6 +133,7 @@ type SavedView = (typeof SAVED_VIEWS)[number];
 @Component({
   selector: 'app-lead-work-queue',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './lead-work-queue.html',
   styleUrl: './lead-work-queue.css',
@@ -130,10 +143,140 @@ export class LeadWorkQueueComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(DonorApiService);
 
+  private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly searchChanges = new Subject<void>();
+  private loadSubscription?: Subscription;
+  protected readonly previewDialog = viewChild<ElementRef<HTMLDialogElement>>('leadDialog');
+  protected readonly optionSearch = signal<Partial<Record<string, string>>>({});
+  protected readonly primaryKpis = computed(() => this.kpis().filter((kpi) => kpi.id !== 'hot'));
+  protected readonly extraKpis = computed(() => this.kpis().filter((kpi) => kpi.id === 'hot'));
+  protected readonly primaryViews = computed(() => this.savedViews().slice(0, 3));
+  protected readonly extraViews = computed(() => this.savedViews().slice(3));
+  protected readonly filterFields = computed(() => {
+    const options = this.filterOptions();
+    const choices = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
+    return [
+      { key: 'stage', label: 'Stage', value: this.stageFilter(), options: choices(options.stages) },
+      {
+        key: 'temperature',
+        label: 'Temperature',
+        value: this.temperatureFilter(),
+        options: choices(options.temperatures),
+      },
+      {
+        key: 'potential',
+        label: 'Donation potential',
+        value: this.potentialFilter(),
+        options: choices(options.potentials),
+      },
+      {
+        key: 'source',
+        label: 'Lead source',
+        value: this.sourceFilter(),
+        options: choices(options.sources),
+      },
+      {
+        key: 'owner',
+        label: 'Owner',
+        value: this.ownerFilter(),
+        options: [
+          { value: 'Unassigned', label: 'Unassigned' },
+          ...this.ownerOptions().filter((owner) => owner.value !== 'Unassigned'),
+        ],
+      },
+    ];
+  });
+
+  protected onSearchChange(value: string): void {
+    this.searchTerm.set(value);
+    this.searchChanges.next();
+  }
+
+  protected setOptionSearch(key: string, value: string): void {
+    this.optionSearch.update((current) => ({ ...current, [key]: value }));
+  }
+
+  protected matchingOptions(
+    key: string,
+    options: readonly DonLookupItem[],
+    selected: string,
+  ): readonly DonLookupItem[] {
+    const query = (this.optionSearch()[key] ?? '').trim().toLocaleLowerCase();
+    return options.filter(
+      (option) => option.value === selected || option.label.toLocaleLowerCase().includes(query),
+    );
+  }
+
+  protected setFilterValue(key: string, value: string): void {
+    switch (key) {
+      case 'stage':
+        this.stageFilter.set(value);
+        break;
+      case 'temperature':
+        this.temperatureFilter.set(value);
+        break;
+      case 'potential':
+        this.potentialFilter.set(value);
+        break;
+      case 'source':
+        this.sourceFilter.set(value);
+        break;
+      case 'owner':
+        this.ownerFilter.set(value);
+        break;
+    }
+  }
+
+  protected onPreviewBackdrop(event: MouseEvent): void {
+    const dialog = this.previewDialog()?.nativeElement;
+    if (!dialog || event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    if (
+      event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom
+    ) {
+      this.closePreview();
+    }
+  }
+
+  protected readonly icons: Record<string, string> = {
+    potential: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z',
+    add: 'M12 5v14M5 12h14',
+    close: 'm6 6 12 12M6 18 18 6',
+    search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+    filter: 'M3 4h18l-7 8v7l-4 2v-9Z',
+    refresh: 'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 2M5 16a8 8 0 0 0 13 2',
+    export: 'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',
+    grid: 'M3 3h6v6H3ZM15 3h6v6h-6ZM3 15h6v6H3ZM15 15h6v6h-6Z',
+    user: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2Z',
+    users:
+      'M14 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M2 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2ZM18 4a4 4 0 0 1 0 7M21 21v-3a5 5 0 0 0-2-4',
+    assign: 'M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M2 21v-2a6 6 0 0 1 6-6h3M18 13v8m-4-4h8',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    chat: 'M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z',
+    list: 'M4 5h16M4 12h16M4 19h16',
+    file: 'M6 2h8l5 5v15H6ZM14 2v6h5M9 12h7M9 16h7',
+    copy: 'M9 9h12v12H9ZM5 15H3V3h12v2',
+    check: 'm5 12 4 4L19 6',
+    calendar: 'M4 5h16v16H4ZM16 3v4M8 3v4M4 11h16',
+    clock: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M12 6v6l4 2',
+    arrow: 'M5 12h14m-6-6 6 6-6 6',
+    alert: 'm12 3 10 18H2ZM12 9v5M12 17v1',
+  };
+
   // Palette used to derive a consistent, distinct avatar colour per lead name.
   private readonly avatarPalette: readonly string[] = [
-    '#2d6a4f', '#3b82c4', '#b45309', '#6d28d9',
-    '#0f766e', '#c53030', '#0e7490', '#4f46e5',
+    '#2d6a4f',
+    '#3b82c4',
+    '#b45309',
+    '#6d28d9',
+    '#0f766e',
+    '#c53030',
+    '#0e7490',
+    '#4f46e5',
   ];
 
   // ===========================================================================================
@@ -141,9 +284,9 @@ export class LeadWorkQueueComponent {
   // ===========================================================================================
   protected readonly screen = signal({
     viewId: 'SCR-DON-001',
-    title: 'Lead Queue',
+    title: 'Lead Work Queue',
     route: '/app/fundraising/relationships/lead-work-queue',
-    purpose: 'Manage and monitor all fundraising leads.',
+    purpose: 'Manage and monitor all leads within the tenant.',
     scope: '',
     lastRefresh: '',
     breadcrumb: ['Fundraising', 'Relationships', 'Lead Queue'] as readonly string[],
@@ -183,7 +326,22 @@ export class LeadWorkQueueComponent {
   protected readonly copiedField = signal<string | null>(null);
 
   constructor() {
-    this.load();
+    this.searchChanges
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.load());
+    this.destroyRef.onDestroy(() => this.loadSubscription?.unsubscribe());
+    afterRenderEffect((onCleanup) => {
+      const lead = this.selectedLead();
+      const dialog = this.previewDialog()?.nativeElement;
+      if (!lead || !dialog) return;
+      const previousOverflow = this.document.body.style.overflow;
+      this.document.body.style.overflow = 'hidden';
+      if (!dialog.open) dialog.showModal();
+      onCleanup(() => {
+        if (dialog.open) dialog.close();
+        this.document.body.style.overflow = previousOverflow;
+      });
+    });
 
     // Coming back from Lead Capture. The reference is the API's, not one this browser minted,
     // so the row it opens is the row that was actually saved.
@@ -191,6 +349,7 @@ export class LeadWorkQueueComponent {
     if (createdLeadId) {
       this.openAfterLoad = createdLeadId;
     }
+    this.load();
   }
 
   private openAfterLoad: string | null = null;
@@ -209,13 +368,17 @@ export class LeadWorkQueueComponent {
     this.uiState.set('loading');
     this.errorMessage.set('');
 
-    this.api.getLeadWorkQueue(this.buildFilter()).subscribe({
-      next: (response) => this.applyResponse(response),
-      error: (error: unknown) => {
-        this.errorMessage.set(apiErrorMessage(error));
-        this.uiState.set('error');
-      },
-    });
+    this.loadSubscription?.unsubscribe();
+    this.loadSubscription = this.api
+      .getLeadWorkQueue(this.buildFilter())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyResponse(response),
+        error: (error: unknown) => {
+          this.errorMessage.set(apiErrorMessage(error));
+          this.uiState.set('error');
+        },
+      });
   }
 
   /** The saved view and the filter controls, translated into the API's query string. */
@@ -278,11 +441,31 @@ export class LeadWorkQueueComponent {
     const summary = response.summary;
     this.kpis.set([
       { id: 'total', label: 'Total Leads', value: summary.totalLeads, hint: 'In selected scope' },
-      { id: 'unassigned', label: 'Unassigned Leads', value: summary.unassignedLeads, hint: 'In selected scope' },
-      { id: 'assigned', label: 'Assigned Leads', value: summary.assignedLeads, hint: 'In selected scope' },
+      {
+        id: 'unassigned',
+        label: 'Unassigned Leads',
+        value: summary.unassignedLeads,
+        hint: 'In selected scope',
+      },
+      {
+        id: 'assigned',
+        label: 'Assigned Leads',
+        value: summary.assignedLeads,
+        hint: 'In selected scope',
+      },
       { id: 'hot', label: 'Hot Leads', value: summary.hotLeads, hint: 'In selected scope' },
-      { id: 'converted', label: 'Converted Leads', value: summary.convertedLeads, hint: 'Donation recorded' },
-      { id: 'potential', label: 'High Donation Potential', value: summary.highDonationPotential, hint: 'In selected scope' },
+      {
+        id: 'converted',
+        label: 'Converted Leads',
+        value: summary.convertedLeads,
+        hint: 'Donation recorded',
+      },
+      {
+        id: 'potential',
+        label: 'High Donation Potential',
+        value: summary.highDonationPotential,
+        hint: 'In selected scope',
+      },
     ]);
 
     this.pipeline.set(
@@ -404,7 +587,10 @@ export class LeadWorkQueueComponent {
       chips.push({ key: 'source', label: `Source: ${this.sourceFilter()}` });
     }
     if (this.ownerFilter()) {
-      chips.push({ key: 'owner', label: `Owner: ${this.ownerFilter()}` });
+      chips.push({
+        key: 'owner',
+        label: `Owner: ${this.ownerOptions().find((owner) => owner.value === this.ownerFilter())?.label ?? this.ownerFilter()}`,
+      });
     }
     return chips;
   });
@@ -474,18 +660,33 @@ export class LeadWorkQueueComponent {
 
   protected removeFilterChip(key: string): void {
     switch (key) {
-      case 'view': this.savedView.set('All Leads'); break;
-      case 'search': this.searchTerm.set(''); break;
-      case 'stage': this.stageFilter.set(''); break;
-      case 'temperature': this.temperatureFilter.set(''); break;
-      case 'potential': this.potentialFilter.set(''); break;
-      case 'source': this.sourceFilter.set(''); break;
-      case 'owner': this.ownerFilter.set(''); break;
+      case 'view':
+        this.savedView.set('All Leads');
+        break;
+      case 'search':
+        this.searchTerm.set('');
+        break;
+      case 'stage':
+        this.stageFilter.set('');
+        break;
+      case 'temperature':
+        this.temperatureFilter.set('');
+        break;
+      case 'potential':
+        this.potentialFilter.set('');
+        break;
+      case 'source':
+        this.sourceFilter.set('');
+        break;
+      case 'owner':
+        this.ownerFilter.set('');
+        break;
     }
     this.load();
   }
 
   protected clearAdvancedFilters(): void {
+    this.optionSearch.set({});
     this.stageFilter.set('');
     this.temperatureFilter.set('');
     this.potentialFilter.set('');
@@ -611,13 +812,31 @@ export class LeadWorkQueueComponent {
 
   private exportRows(rows: readonly LeadItem[]): void {
     const headers = [
-      'Lead ID', 'Name', 'Mobile', 'Email', 'Source', 'Campaign',
-      'Stage', 'Temperature', 'Donation Potential', 'Owner', 'Next Follow-Up',
+      'Lead ID',
+      'Name',
+      'Mobile',
+      'Email',
+      'Source',
+      'Campaign',
+      'Stage',
+      'Temperature',
+      'Donation Potential',
+      'Owner',
+      'Next Follow-Up',
     ];
     const lines = rows.map((lead) =>
       [
-        lead.reference, lead.name, lead.mobile, lead.email, lead.source, lead.campaign,
-        lead.stage, lead.temperature, lead.donationPotential, lead.owner, lead.nextFollowUp,
+        lead.reference,
+        lead.name,
+        lead.mobile,
+        lead.email,
+        lead.source,
+        lead.campaign,
+        lead.stage,
+        lead.temperature,
+        lead.donationPotential,
+        lead.owner,
+        lead.nextFollowUp,
       ]
         .map((value) => `"${String(value).replace(/"/g, '""')}"`)
         .join(','),
@@ -674,32 +893,50 @@ export class LeadWorkQueueComponent {
 
   protected stageClass(stage: string): string {
     switch (stage) {
-      case 'New': return 'lq-badge-blue';
-      case 'Assigned': return 'lq-badge-meadow';
-      case 'Contacted': return 'lq-badge-warn';
-      case 'Engaged': return 'lq-badge-good';
-      case 'Dormant': return 'lq-badge-muted';
-      case 'Lost': return 'lq-badge-danger';
-      case 'Converted': return 'lq-badge-good';
-      default: return 'lq-badge-muted';
+      case 'New':
+        return 'lq-badge-blue';
+      case 'Assigned':
+        return 'lq-badge-warn';
+      case 'Nurture':
+        return 'lq-badge-plum';
+      case 'Contacted':
+        return 'lq-badge-warn';
+      case 'Engaged':
+        return 'lq-badge-good';
+      case 'Dormant':
+        return 'lq-badge-muted';
+      case 'Lost':
+        return 'lq-badge-danger';
+      case 'Converted':
+        return 'lq-badge-good';
+      default:
+        return 'lq-badge-muted';
     }
   }
 
   protected temperatureClass(temp: string): string {
     switch (temp) {
-      case 'Hot': return 'lq-badge-danger';
-      case 'Warm': return 'lq-badge-warn';
-      case 'Cold': return 'lq-badge-muted';
-      default: return 'lq-badge-muted';
+      case 'Hot':
+        return 'lq-badge-danger';
+      case 'Warm':
+        return 'lq-badge-warn';
+      case 'Cold':
+        return 'lq-badge-muted';
+      default:
+        return 'lq-badge-muted';
     }
   }
 
   protected potentialClass(pot: string): string {
     switch (pot) {
-      case 'High': return 'lq-badge-good';
-      case 'Medium': return 'lq-badge-warn';
-      case 'Low': return 'lq-badge-muted';
-      default: return 'lq-badge-muted';
+      case 'High':
+        return 'lq-badge-good';
+      case 'Medium':
+        return 'lq-badge-warn';
+      case 'Low':
+        return 'lq-badge-muted';
+      default:
+        return 'lq-badge-muted';
     }
   }
 
@@ -752,8 +989,11 @@ export class LeadWorkQueueComponent {
     return Number.isNaN(parsed.getTime())
       ? ''
       : parsed.toLocaleString('en-GB', {
-          day: '2-digit', month: 'short', year: 'numeric',
-          hour: '2-digit', minute: '2-digit',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
         });
   }
 }
