@@ -54,15 +54,10 @@ textarea:focus-visible {
   box-shadow: var(--shadow-focus);
 }
 
-.app-wrapper,
-.page-wrapper { width: 100%; min-height: 100%; }
+/* .app-wrapper, */
+/* .page-wrapper { width: 100%; min-height: 100%; } */
 
-.container-fluid {
-  width: 100%;
-  max-width: 1540px;
-  margin: 0 auto;
-  padding: 22px 26px 34px;
-}
+
 
 /* ---------- Page header ---------- */
 

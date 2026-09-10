@@ -516,7 +516,7 @@ export class PaymentEventQueueComponent {
   }
 
   // ===========================================================================================
-<<<<<<< HEAD
+
   // Row quick-view popup - the plus icon on a row. Carries the columns the table hides on
   // md screens and below (td-xl-none), so the collapsed index never loses its data.
   // ===========================================================================================
@@ -539,9 +539,8 @@ export class PaymentEventQueueComponent {
 
   // ===========================================================================================
   // Retry (Fail rows) - unchanged from the queue's safe-retry flow
-=======
+
   // Retry (Fail rows) - verify, then actually issue the link the verification earned
->>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
   // ===========================================================================================
   //
   // WHAT "RETRY" DID BEFORE, AND WHY THE TOAST WAS A LIE. Pressing it called safe-retry, which

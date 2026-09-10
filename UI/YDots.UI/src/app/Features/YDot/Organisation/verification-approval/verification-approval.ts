@@ -6,13 +6,12 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { map } from 'rxjs';
 import { OrganisationStateService } from '../../../../Service/organisation-state.service';
 import { verificationStatusLabel, verificationBadgeClass } from '../../../../Shared/models/organisation.model';
-import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 
 
 @Component({
   selector: 'app-verification-approval',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, ReadableIdPipe],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './verification-approval.html',
   styleUrl: './verification-approval.css',
 })

@@ -1707,15 +1707,7 @@
 :host *::after {
   box-sizing: border-box;
 }
-.app-wrapper {
-  background: radial-gradient(ellipse at 70% 0%, #f9fcff, #f1f7fe);
-  min-height: 100%;
-}
-.container-fluid {
-  padding: 24px 30px !important;
-  max-width: 1920px;
-  margin-inline: auto;
-}
+
 h1,
 h2,
 h3,

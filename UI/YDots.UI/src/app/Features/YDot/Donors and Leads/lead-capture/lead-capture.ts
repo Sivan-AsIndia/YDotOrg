@@ -208,7 +208,7 @@ type LookupOption = string | { readonly label: string; readonly value?: string; 
 @Component({
   selector: 'app-lead-capture',
   imports: [CommonModule, FormsModule, LeadCaptureConfirmComponent],
-  templateUrl: './lead-capture.html',
+  templateUrl:'./lead-capture.html',
   styleUrl: './lead-capture.css',
 })
 export class LeadCaptureComponent {

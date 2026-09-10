@@ -13,6 +13,7 @@ export interface CreateOrganisationInput {
   legalStructure: OrganisationRecord['legalStructure'];
   registrationNumber: string;
   registrationDate: string;
+  description: string;
   addressLine1: string;
   addressLine2: string;
   country: string;
@@ -39,6 +40,7 @@ export type EditableOrganisationFields = Partial<
     | 'legalStructure'
     | 'registrationNumber'
     | 'registrationDate'
+    | 'description'
     | 'addressLine1'
     | 'addressLine2'
     | 'country'
@@ -94,6 +96,7 @@ export class OrganisationStateService {
         legalStructure: 'Trust',
         registrationNumber: `REG-${id.slice(4)}`,
         registrationDate: '2024-04-01',
+        description: '',
         addressLine1: '12 MG Road',
         addressLine2: '',
         country: 'India',
@@ -244,11 +247,6 @@ export class OrganisationStateService {
    */
   private toRecord(item: OrganisationListItemResponse): OrganisationRecord {
     return {
-      // THE CODE FIRST, THE GUID ONLY AS A KEY. `id` is what `getById` matches on and what the
-      // screens navigate by, so it cannot be blanked for an organisation the API returned without
-      // a code - every such record would collide on the empty string. It is the RENDERING that is
-      // guarded instead: the templates print it through the `readableId` pipe, which shows the
-      // code and withholds a GUID. See Shared/pipes/readable-id.pipe.
       id: item.code ?? item.id ?? '',
       name: item.name ?? '',
       status: (item.statusDisplay ?? item.status ?? 'Draft') as OrganisationStatus,
@@ -412,6 +410,7 @@ export class OrganisationStateService {
       legalStructure: input.legalStructure,
       registrationNumber: input.registrationNumber.trim(),
       registrationDate: input.registrationDate,
+      description: input.description.trim(),
       addressLine1: input.addressLine1.trim(),
       addressLine2: input.addressLine2.trim(),
       country: input.country.trim(),

@@ -30,7 +30,7 @@
         </div>
       </div>
       <div class="wiz-hero-side">
-        <img class="wiz-hero-art" src="assets/images/pages/orgpic3.png" alt="" aria-hidden="true">
+        <img class="wiz-hero-art" src="assets/images/orgpic3.png" alt="" aria-hidden="true">
       </div>
     </div>
   </div>
@@ -199,7 +199,7 @@
           <select id="org-type" class="org-select"
                   [ngModel]="form().organisationType"
                   (ngModelChange)="update('organisationType', $event)">
-            <option value="">Select Organisation Type</option>
+            <option value="">Not specified</option>
             @for (type of organisationTypes; track type) {
               <option [value]="type">{{ type }}</option>
             }
@@ -259,7 +259,6 @@
             <select class="org-select org-select-narrow"
                     [ngModel]="form().contactPhoneCountryCode"
                     (ngModelChange)="update('contactPhoneCountryCode', $event)">
-              <option value="" disabled>Select Code</option>
               @for (code of countryCodes(); track code) {
                 <option [value]="code">{{ code }}</option>
               }

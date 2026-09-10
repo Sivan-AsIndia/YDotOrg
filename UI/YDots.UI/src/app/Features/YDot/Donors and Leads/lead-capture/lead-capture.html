@@ -274,14 +274,12 @@
                     [value]="fields().geoCountry"
                     (change)="onGeoCountryChange($event)"
                   >
-<<<<<<< HEAD
                     @for (c of filterLookup('geoCountry', countryOptions, fields().geoCountry); track c) {
-=======
                     <option value="" disabled>Select Country</option>
                     @for (c of countryOptions; track c) {
->>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
                       <option [value]="c">{{ c }}</option>
                     }
+                  }
                   </select>
                   @if (errors()['geoCountry']) {
                     <p class="lc-error">{{ errors()['geoCountry'] }}</p>
@@ -329,15 +327,15 @@
                     [disabled]="!approvedCities().length"
                     [attr.aria-invalid]="!!errors()['geoCity']"
                   >
-<<<<<<< HEAD
+
                     <option value="" disabled>{{ approvedCities().length ? 'Select a city' : 'No approved cities for this state yet' }}</option>
                     @for (city of filterLookup('geoCity', approvedCities(), fields().geoCity); track city) {
-=======
+
                     <option value="" disabled>{{ approvedCities().length ? 'Select City' : 'No approved cities for this state yet' }}</option>
                     @for (city of approvedCities(); track city) {
->>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
                       <option [value]="city">{{ city }}</option>
                     }
+                  }
                   </select>
                   @if (errors()['geoCity']) {
                     <p class="lc-error">{{ errors()['geoCity'] }}</p>
@@ -407,15 +405,14 @@
                 [value]="fields().campaign"
                 (change)="onTextInput('campaign', $event)"
               >
-<<<<<<< HEAD
                 <option value="">No campaign</option>
                 @for (c of filterLookup('campaign', campaignDropdownOptions(), fields().campaign); track c.reference) {
-=======
+
                 <option value="">Select Campaign</option>
                 @for (c of campaignDropdownOptions(); track c.reference) {
->>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
                   <option [value]="c.label">{{ c.label }} &mdash; {{ c.context }}</option>
                 }
+              }
               </select>
               <p class="lc-hint">Leave unselected if this lead is not tied to a campaign.</p>
             </div>

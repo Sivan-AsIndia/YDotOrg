@@ -1,11 +1,12 @@
-import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
-import { OrganisationStateService } from '../../../../Service/organisation-state.service';
-import { SearchableSelectComponent } from '../../../../Shared/components/searchable-select/searchable-select';
-import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
-import { ORGANISATION_TYPES, LEGAL_STRUCTURES, OrganisationType, LegalStructure } from '../../../../Shared/models/organisation.model';
+import { CommonModule } from "@angular/common";
+import { Component, inject, signal, computed } from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import { RouterModule, Router } from "@angular/router";
+import { OrganisationStateService } from "../../../../Service/organisation-state.service";
+import { SearchableSelectComponent } from "../../../../Shared/components/searchable-select/searchable-select";
+import { ORGANISATION_TYPES, LEGAL_STRUCTURES, OrganisationType, LegalStructure } from "../../../../Shared/models/organisation.model";
+import { createGeoCascade } from "../../../../Shared/services/geo-cascade";
+
 
 
 @Component({
@@ -40,8 +41,8 @@ export class OrganisationsCreateComponent {
 
   // Organisation Information
   protected readonly name = signal('');
-  protected readonly organisationType = signal<OrganisationType | ''>('');
-  protected readonly legalStructure = signal<LegalStructure | ''>('');
+  protected readonly organisationType = signal<OrganisationType>('Non-Profit / NGO');
+  protected readonly legalStructure = signal<LegalStructure>('Trust');
   protected readonly registrationNumber = signal('');
   protected readonly registrationDate = signal('');
   protected readonly description = signal('');
@@ -122,13 +123,6 @@ export class OrganisationsCreateComponent {
   });
   protected readonly phoneError = computed(() => (this.touched() && !this.phone().trim() ? 'Phone number is required.' : ''));
 
-  protected readonly organisationTypeError = computed(() =>
-    this.touched() && !this.organisationType() ? 'Organisation type is required.' : '',
-  );
-  protected readonly legalStructureError = computed(() =>
-    this.touched() && !this.legalStructure() ? 'Legal structure is required.' : '',
-  );
-
   protected readonly ownerNameError = computed(() => (this.touched() && !this.ownerName().trim() ? 'Owner name is required.' : ''));
   protected readonly ownerEmailError = computed(() => {
     if (!this.touched()) return '';
@@ -143,8 +137,6 @@ export class OrganisationsCreateComponent {
     () =>
       !this.nameError() &&
       !this.duplicateError() &&
-      !this.organisationTypeError() &&
-      !this.legalStructureError() &&
       !this.emailError() &&
       !this.phoneError() &&
       !this.ownerNameError() &&
@@ -165,8 +157,8 @@ export class OrganisationsCreateComponent {
       const record = this.orgState.create(
         {
           name: this.name(),
-          organisationType: this.organisationType() as OrganisationType,
-          legalStructure: this.legalStructure() as LegalStructure,
+          organisationType: this.organisationType(),
+          legalStructure: this.legalStructure(),
           registrationNumber: this.registrationNumber(),
           registrationDate: this.registrationDate(),
           description: this.description(),

@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { OrganisationStateService, EditableOrganisationFields } from '../../../../Service/organisation-state.service';
 import { OwnerSessionService } from '../../../../Service/owner-session.service';
 import { verificationStatusLabel, verificationBadgeClass, OrganisationDocument } from '../../../../Shared/models/organisation.model';
-import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 
 
 type OwnerTab = 'info' | 'documents' | 'review';
@@ -15,7 +14,7 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 @Component({
   selector: 'app-organisation-owner-view',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReadableIdPipe],
+  imports: [CommonModule, FormsModule],
   templateUrl: './organisation-owner-view.html',
   styleUrl: './organisation-owner-view.css',
 })

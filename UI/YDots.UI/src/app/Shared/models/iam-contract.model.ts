@@ -801,6 +801,7 @@ export interface CreateOrganisationRequest {
   code?: string | null;
   legalName?: string | null;
   organisationType?: string | null;
+  description?: string | null;
   contactPhoneCountryCode?: string | null;
   contactPhone?: string | null;
   adminUsername?: string | null;
@@ -1183,13 +1184,6 @@ export interface MenuDefinitionResponse {
   opensInNewTab?: boolean;
   badgeKey?: string | null;
   version?: number;
-
-  /** Null for a platform catalogue row; the organisation that added it otherwise. */
-  ownerTenantId?: string | null;
-
-  /** False when a person added this node rather than the shipped catalogue. */
-  isSystemDefined?: boolean;
-
   children?: MenuDefinitionResponse[] | null;
 }
 
@@ -2126,11 +2120,9 @@ export interface RoleMenuNodeResponse {
   route?: string | null;
   requiredPermissionCode?: string | null;
   isVisible?: boolean;
-  /** Whether the ROLE holds the permission this node needs. */
   isPermitted?: boolean;
+isEnabledForOrganisation?: boolean;
   isLandingPage?: boolean;
-  /** Whether the ORGANISATION offers this node at all - the other tab's decision. */
-  isEnabledForOrganisation?: boolean;
   children?: RoleMenuNodeResponse[] | null;
 }
 
@@ -2338,9 +2330,11 @@ export interface TenantMenuItemRequest {
 
 export interface TenantMenuNodeResponse {
   menuDefinitionId?: string;
+  parentMenuDefinitionId?: string | null;
   code?: string | null;
   catalogueName?: string | null;
   resolvedName?: string | null;
+    version?: number;
   level?: MenuLevel;
   moduleCode?: string | null;
   route?: string | null;
@@ -2349,19 +2343,10 @@ export interface TenantMenuNodeResponse {
   resolvedOrder?: number;
   isEnabled?: boolean;
   isMandatory?: boolean;
+  isOrganisationOwned?: boolean;
   displayNameOverride?: string | null;
   iconOverride?: string | null;
   displayOrderOverride?: number | null;
-
-  /** True when this organisation added the node itself and may edit or delete it. */
-  isOrganisationOwned?: boolean;
-
-  /** Concurrency stamp, required to edit or delete an organisation-owned node. */
-  version?: number;
-
-  /** The node's parent, so the editor can re-parent without walking the tree. */
-  parentMenuDefinitionId?: string | null;
-
   children?: TenantMenuNodeResponse[] | null;
 }
 

@@ -4,13 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { OrganisationStateService } from '../../../../Service/organisation-state.service';
 import { OrganisationRecord, verificationStatusLabel } from '../../../../Shared/models/organisation.model';
-import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 
 
 @Component({
   selector: 'app-super-admin-view',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, ReadableIdPipe],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './super-admin-view.html',
   styleUrl: './super-admin-view.css',
 })

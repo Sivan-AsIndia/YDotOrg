@@ -136,6 +136,7 @@ export interface OrganisationRecord {
   legalStructure: LegalStructure;
   registrationNumber: string;
   registrationDate: string;
+  description: string;
 
   addressLine1: string;
   addressLine2: string;

@@ -349,7 +349,7 @@
    flush to the card's top, right and bottom edges (a photo panel), while the
    text side keeps the card's normal inset. */
 .org-hero-side {
-  flex: 0 0 38%;
+  flex: 0 0 19%;
   display: flex;
   min-width: 0;
   z-index: 1;

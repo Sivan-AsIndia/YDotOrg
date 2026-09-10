@@ -35,7 +35,7 @@
       <h3 class="org-doc-heading org-doc-heading--blue">Organisation Summary</h3>
       <dl class="org-dl">
         <div class="org-dl-row"><dt>Organisation Name</dt><dd>{{ org.name }}</dd></div>
-        <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id | readableId: '' }}</dd></div>
+        <div class="org-dl-row"><dt>Organisation ID</dt><dd>{{ org.id }}</dd></div>
         <div class="org-dl-row"><dt>Type</dt><dd>{{ org.organisationType }}</dd></div>
         <div class="org-dl-row"><dt>Owner</dt><dd>{{ org.ownerName }} &middot; {{ org.ownerEmail }}</dd></div>
         <div class="org-dl-row"><dt>Submitted / Updated</dt><dd>{{ org.updatedDate }}</dd></div>
@@ -133,7 +133,7 @@
               @for (item of verificationQueue(); track item.id) {
                 <tr>
                   <td>{{ item.name }}</td>
-                  <td>{{ item.id | readableId: '' }}</td>
+                  <td>{{ item.id }}</td>
                   <td><span class="org-badge" [ngClass]="item.statusClass">{{ item.status }}</span></td>
                   <td>{{ item.updatedDate }}</td>
                   <td class="text-end">

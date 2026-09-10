@@ -59,7 +59,7 @@
         </div>
 
         <div class="org-hero-side">
-          <img class="org-hero-art" src="assets/images/pages/orgpic1.png" alt="" aria-hidden="true">
+          <img class="org-hero-art" src="assets/images/orgpic1.png" alt="" aria-hidden="true">
         </div>
       </div>
     </div>
@@ -282,7 +282,6 @@
                 <select class="org-select org-select-narrow"
                         [ngModel]="form().contactPhoneCountryCode"
                         (ngModelChange)="update('contactPhoneCountryCode', $event)">
-                  <option value="" disabled>Select Code</option>
                   @for (code of countryCodes(); track code) {
                     <option [value]="code">{{ code }}</option>
                   }
@@ -394,7 +393,7 @@
                   <span class="org-identity-about-label">About</span>
                   <p>{{ org.description || 'No description has been added yet.' }}</p>
                 </div>
-                <img class="org-identity-art" src="assets/images/pages/orgpic2.png" alt="" aria-hidden="true">
+                <img class="org-identity-art" src="assets/images/orgpic2.png" alt="" aria-hidden="true">
               </aside>
 
               <div class="org-profile-content">

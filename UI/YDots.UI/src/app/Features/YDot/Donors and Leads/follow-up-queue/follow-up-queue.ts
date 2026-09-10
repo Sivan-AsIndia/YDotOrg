@@ -1,33 +1,17 @@
-<<<<<<< HEAD
-import {
-  Component,
-  HostListener,
-  computed,
-  inject,
-  linkedSignal,
-  signal,
-} from "@angular/core";
-import { ActivatedRoute, Router } from "@angular/router";
+
 import { CommonModule } from "@angular/common";
+import { Component, inject, signal, computed, linkedSignal, HostListener } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { forkJoin, catchError, map, of } from "rxjs";
+import { Router, ActivatedRoute } from "@angular/router";
+import { forkJoin, map, catchError, of } from "rxjs";
 import { DonorApiService } from "../../../../Service/donor-api.service";
 import { apiErrorMessage } from "../../../../Shared/models/api-response.model";
-=======
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
-import { readableIdentifier } from '../../../../Shared/models/identifier';
-import { ActivatedRoute, Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { forkJoin, catchError, map, of } from 'rxjs';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
->>>>>>> bd58b5eb7ccc10b4b23801982f896e250b0331d0
 import {
   DonLookupItem,
   FollowUp as ApiFollowUp,
   FollowUpPlannerResponse,
 } from "../../../../Shared/models/donor-contract.model";
+import { readableIdentifier } from "../../../../Shared/models/identifier";
 
 export type RecordType = "Lead" | "Donor";
 export type FollowUpType =
@@ -250,7 +234,7 @@ function emptyFilters(): GeneralFilters {
   selector: "app-follow-up-queue",
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: "./follow-up-queue.html",
+  templateUrl:"./follow-up-queue.html",
   styleUrls: ["./follow-up-queue.css"],
 })
 export class FollowUpQueueComponent {
