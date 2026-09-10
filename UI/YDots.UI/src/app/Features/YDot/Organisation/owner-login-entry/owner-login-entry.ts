@@ -4,6 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { map } from 'rxjs';
 import { OrganisationStateService } from '../../../../Shared/services/organisation-state.service';
+import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 // Canonical shared store — the SAME root instance used by Directory, Setup Wizard,
 // Details and Verification & Approval, so records created this session are visible here.
 
@@ -11,7 +12,7 @@ import { OrganisationStateService } from '../../../../Shared/services/organisati
 @Component({
   selector: 'app-owner-login-entry',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, ReadableIdPipe],
   templateUrl: './owner-login-entry.html',
   styleUrl: './owner-login-entry.css',
 })

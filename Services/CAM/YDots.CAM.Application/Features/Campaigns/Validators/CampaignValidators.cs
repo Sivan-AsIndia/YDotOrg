@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using YDots.CAM.Application.Common.Abstractions.Security;
 using YDots.CAM.Application.Common.Abstractions.Services;
 using YDots.CAM.Application.Common.Constants;
@@ -159,6 +159,22 @@ public sealed class CreateCampaignRequestValidator : AbstractValidator<CreateCam
             .WithMessage($"A campaign cannot run for more than {maximumDurationDays} days.")
             .When(request => request.EndDate >= request.StartDate);
 
+        // ---- The campaign amount ---------------------------------------------------------------
+        //
+        // REQUIRED, AND GREATER THAN ZERO. Unlike the target and budget below, this one IS
+        // collected - step 1 asks for it immediately after the code - so a request that arrives
+        // without it is a form that was not finished rather than a module that is on hold.
+        //
+        // AN UPPER BOUND AS WELL AS A LOWER ONE. The column is numeric(18,2), so a figure past
+        // 9,999,999,999,999,999.99 is refused by the database with an error nobody can read; this
+        // says the same thing in words, and rules out the pasted-account-number class of typo.
+        RuleFor(request => request.CampaignAmount)
+            .GreaterThan(0m).WithMessage("Enter the campaign amount.")
+            .LessThanOrEqualTo(9_999_999_999_999_999.99m)
+            .WithMessage("That campaign amount is larger than this field can hold.")
+            .Must(amount => decimal.Round(amount, 2) == amount)
+            .WithMessage("A campaign amount can have at most two decimal places.");
+
         // TARGET AND BUDGET ARE NOT VALIDATED HERE WHILE TARGET & BUDGET IS ON HOLD.
         //
         // The wizard has no Target & Budget step, so the client never sends either value and a
@@ -287,6 +303,22 @@ public sealed class UpdateCampaignRequestValidator : AbstractValidator<UpdateCam
             .WithName(nameof(UpdateCampaignRequest.EndDate))
             .WithMessage($"A campaign cannot run for more than {maximumDurationDays} days.")
             .When(request => request.EndDate >= request.StartDate);
+
+        // ---- The campaign amount ---------------------------------------------------------------
+        //
+        // REQUIRED, AND GREATER THAN ZERO. Unlike the target and budget below, this one IS
+        // collected - step 1 asks for it immediately after the code - so a request that arrives
+        // without it is a form that was not finished rather than a module that is on hold.
+        //
+        // AN UPPER BOUND AS WELL AS A LOWER ONE. The column is numeric(18,2), so a figure past
+        // 9,999,999,999,999,999.99 is refused by the database with an error nobody can read; this
+        // says the same thing in words, and rules out the pasted-account-number class of typo.
+        RuleFor(request => request.CampaignAmount)
+            .GreaterThan(0m).WithMessage("Enter the campaign amount.")
+            .LessThanOrEqualTo(9_999_999_999_999_999.99m)
+            .WithMessage("That campaign amount is larger than this field can hold.")
+            .Must(amount => decimal.Round(amount, 2) == amount)
+            .WithMessage("A campaign amount can have at most two decimal places.");
 
         // TARGET AND BUDGET ARE NOT VALIDATED HERE WHILE TARGET & BUDGET IS ON HOLD.
         //

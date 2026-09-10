@@ -215,6 +215,7 @@
             <div class="col-md-6">
               <label class="form-label small fw-semibold">Request Type</label>
               <select class="form-select" [ngModel]="newRequestForm().requestType" (ngModelChange)="newRequestForm.set({...newRequestForm(), requestType: $event})">
+                <option value="" disabled>Select Request Type</option>
                 @for (type of data()?.requestTypeOptions ?? []; track type.id) {
                   <option [value]="type.id">{{ type.name }}</option>
                 }
@@ -248,6 +249,7 @@
             <div class="col-md-6">
               <label class="form-label small fw-semibold">Scope Type</label>
               <select class="form-select" [ngModel]="newRequestForm().scopeType" (ngModelChange)="newRequestForm.set({...newRequestForm(), scopeType: $event})">
+                <option value="">Select Scope Type</option>
                 @for (scope of data()?.scopeTypeOptions ?? []; track scope.id) {
                   <option [value]="scope.id">{{ scope.name }}</option>
                 }

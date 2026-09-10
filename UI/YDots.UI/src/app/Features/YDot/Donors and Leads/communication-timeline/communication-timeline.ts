@@ -67,13 +67,13 @@ interface CommunicationRecord {
 }
 
 interface CommunicationForm {
-  type: CommunicationType;
+  type: CommunicationType | '';
   date: string;
   time: string;
-  direction: 'Incoming' | 'Outgoing';
-  outcome: Outcome;
-  engagement: EngagementLevel;
-  quality: CommunicationQuality;
+  direction: 'Incoming' | 'Outgoing' | '';
+  outcome: Outcome | '';
+  engagement: EngagementLevel | '';
+  quality: CommunicationQuality | '';
   summary: string;
   notes: string;
   attachmentName: string;
@@ -135,11 +135,11 @@ export class CommunicationTimelineComponent {
   readonly formErrors = signal<string[]>([]);
 
   readonly currentTemperature = signal<Temperature>('Warm');
-  readonly newTemperature = signal<Temperature>('Warm');
+  readonly newTemperature = signal<Temperature | ''>('');
   readonly temperatureReason = signal('');
 
   readonly donationPotential = signal<DonationPotential>('Medium');
-  readonly newDonationPotential = signal<DonationPotential>('Medium');
+  readonly newDonationPotential = signal<DonationPotential | ''>('');
   readonly donationPotentialReason = signal('');
 
   readonly typeFilter = signal<string>('All');
@@ -315,7 +315,7 @@ export class CommunicationTimelineComponent {
     return `${day} ${this.monthNames[value.getMonth()]} ${value.getFullYear()}`;
   }
 
-  readonly form = signal<CommunicationForm>(this.createEmptyForm('Call'));
+  readonly form = signal<CommunicationForm>(this.createEmptyForm());
 
 
   readonly filteredRecords = computed(() => {
@@ -567,6 +567,16 @@ export class CommunicationTimelineComponent {
       return;
     }
 
+    // validateForm has just refused a blank on each of the five choice fields, so they are
+    // narrowed once here rather than cast at every point they are read below.
+    const chosen = {
+      type: value.type as CommunicationType,
+      direction: value.direction as 'Incoming' | 'Outgoing',
+      outcome: value.outcome as Outcome,
+      engagement: value.engagement as EngagementLevel,
+      quality: value.quality as CommunicationQuality,
+    };
+
     const displayDate = this.toDisplayDate(value.date);
     const editingId = this.editingId();
 
@@ -576,13 +586,13 @@ export class CommunicationTimelineComponent {
           record.id === editingId
             ? {
                 ...record,
-                type: value.type,
+                type: chosen.type,
                 date: displayDate,
                 time: value.time,
-                direction: value.direction,
-                outcome: value.outcome,
-                engagement: value.engagement,
-                quality: value.quality,
+                direction: chosen.direction,
+                outcome: chosen.outcome,
+                engagement: chosen.engagement,
+                quality: chosen.quality,
                 summary: value.summary.trim(),
                 notes: value.notes.trim() || undefined,
                 attachment: value.attachmentName || record.attachment,
@@ -594,14 +604,14 @@ export class CommunicationTimelineComponent {
     } else {
       const newRecord: CommunicationRecord = {
         id: `COM-${Date.now()}`,
-        type: value.type,
+        type: chosen.type,
         date: displayDate,
         time: value.time,
         createdBy: this.relationship().owner,
-        direction: value.direction,
-        outcome: value.outcome,
-        engagement: value.engagement,
-        quality: value.quality,
+        direction: chosen.direction,
+        outcome: chosen.outcome,
+        engagement: chosen.engagement,
+        quality: chosen.quality,
         summary: value.summary.trim(),
         notes: value.notes.trim() || undefined,
         important: value.important,
@@ -627,8 +637,8 @@ export class CommunicationTimelineComponent {
 
     this.api
       .contactLead(leadId, {
-        channel: this.toConsentChannel(value.type),
-        outcome: value.outcome,
+        channel: this.toConsentChannel(chosen.type),
+        outcome: chosen.outcome,
 
         // THE SUMMARY LEADS THE NOTE. `ContactLeadRequest` carries one free-text field, and the
         // server uses the interaction's Name for the summary line, so both are sent together
@@ -935,6 +945,26 @@ export class CommunicationTimelineComponent {
       errors.push('Communication time is required.');
     }
 
+    if (!value.type) {
+      errors.push('Communication type is required.');
+    }
+
+    if (!value.direction) {
+      errors.push('Direction is required.');
+    }
+
+    if (!value.outcome) {
+      errors.push('Outcome is required.');
+    }
+
+    if (!value.engagement) {
+      errors.push('Engagement level is required.');
+    }
+
+    if (!value.quality) {
+      errors.push('Communication quality is required.');
+    }
+
     const summaryLength = value.summary.trim().length;
     if (summaryLength < 10) {
       errors.push('Summary must be at least 10 characters.');
@@ -949,15 +979,15 @@ export class CommunicationTimelineComponent {
     return errors;
   }
 
-  private createEmptyForm(type: CommunicationType): CommunicationForm {
+  private createEmptyForm(type: CommunicationType | '' = ''): CommunicationForm {
     return {
       type,
       date: this.getTodayIso(),
       time: '',
-      direction: 'Outgoing',
-      outcome: 'Connected',
-      engagement: 'Medium',
-      quality: 'Good',
+      direction: '',
+      outcome: '',
+      engagement: '',
+      quality: '',
       summary: '',
       notes: '',
       attachmentName: '',

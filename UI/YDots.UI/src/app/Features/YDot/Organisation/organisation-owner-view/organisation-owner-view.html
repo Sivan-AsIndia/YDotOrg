@@ -16,7 +16,7 @@
           <span class="org-badge" [ngClass]="org.statusClass">{{ org.status }}</span>
           <span class="org-badge" [ngClass]="verificationClass()">Verification: {{ verificationLabel() }}</span>
         </h1>
-        <p class="org-meta">{{ org.id }} &middot; {{ org.organisationType }} &middot; {{ org.legalStructure }}</p>
+        <p class="org-meta">{{ org.id | readableId: '' }} &middot; {{ org.organisationType }} &middot; {{ org.legalStructure }}</p>
         <p class="org-meta">Owner: {{ org.ownerName }} &middot; Last Updated {{ org.updatedDate }}</p>
       </div>
     </div>

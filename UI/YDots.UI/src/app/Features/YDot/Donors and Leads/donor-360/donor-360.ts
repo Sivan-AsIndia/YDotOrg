@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DonorApiService } from '../../../../Service/donor-api.service';
@@ -209,6 +210,12 @@ export class Donor360Component {
     readonly conversations = computed<ConversationItem[]>(() =>
       (this.response()?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
+
+        // THE ID COLUMN USED TO PRINT `conversation.id`, which is a GUID. The contract carries no
+        // reference for a conversation, so the column shows what the interaction WAS - a call, an
+        // e-mail, a meeting - which is the thing a person reading the row can actually use.
+        type: conversation.interactionType,
+
         channel: conversation.channel ?? conversation.interactionType,
         summary: conversation.description ?? conversation.name,
         date: this.formatDate(conversation.occurredAtUtc),
@@ -219,6 +226,11 @@ export class Donor360Component {
     readonly followUps = computed<FollowUpItem[]>(() =>
       (this.response()?.followUps ?? []).map((followUp) => ({
         id: followUp.id,
+
+        // FUP-2026-0007, not the row's GUID. `Execute Follow-Up` still sends `id`; this is only
+        // what the list shows.
+        reference: readableIdentifier(followUp.followUpReference, ''),
+
         title: followUp.nextAction ?? followUp.followUpReference,
         due: followUp.dueAtUtc ? this.formatDate(followUp.dueAtUtc) : '',
         owner: followUp.relationshipOwnerName ?? '',
@@ -825,8 +837,12 @@ export class Donor360Component {
   
   interface DonationStage { stage: string; amount: number; asOf: string; }
   interface CampaignHistoryItem { id: string; name: string; role: string; amount: number; date: string; status: string; }
-  interface ConversationItem { id: string; channel: string; summary: string; date: string; owner: string; }
-  interface FollowUpItem { id: string; title: string; due: string; owner: string; status: string; }
+  // `id` IS THE API'S GUID ON BOTH OF THESE and is kept only for tracking and for the calls that
+  // need it. What the tables PRINT is the readable field beside it - see the note on each map
+  // below. A conversation has no reference of its own on the contract, so its interaction type is
+  // what stands in the column; a follow-up has one and it was simply never carried across.
+  interface ConversationItem { id: string; type: string; channel: string; summary: string; date: string; owner: string; }
+  interface FollowUpItem { id: string; reference: string; title: string; due: string; owner: string; status: string; }
   interface PromiseItem { id: string; amount: number; dueDate: string; status: string; }
   interface DocumentItem { id: string; name: string; type: string; uploadedOn: string; classification: string; }
   interface DuplicateLink { id: string; reference: string; matchReason: string; similarity: string; }

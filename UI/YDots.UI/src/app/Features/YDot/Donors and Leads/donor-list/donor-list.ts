@@ -5,6 +5,7 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 import { WorkflowStateService } from '../../../../Service/workflow-state.service';
 
 /** Donor record as surfaced from the Donation & Payments module. */
@@ -83,7 +84,7 @@ const CONSENT_TAGS: ConsentStatus[] = [
 @Component({
   selector: 'app-donor-list',
   standalone: true,
-  imports: [],
+  imports: [ReadableIdPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'onEscape()',

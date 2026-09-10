@@ -221,7 +221,7 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
 
         const string Sql = """
             SELECT campaign.id, campaign.code, campaign.name, campaign.public_description,
-                   COALESCE(currency.code, 'INR')
+                   COALESCE(currency.code, 'INR'), COALESCE(campaign.campaign_amount, 0)
             FROM cam_campaigns AS campaign
             LEFT JOIN gm_currencies AS currency ON currency.id = campaign.currency_id
             WHERE campaign.tenant_id = @tenant_id
@@ -253,7 +253,8 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
                     reader.GetString(1),
                     reader.GetString(2),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
-                    reader.GetString(4)));
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? 0m : reader.GetDecimal(5)));
             }
 
             return rows;
@@ -284,7 +285,7 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
 
         const string Sql = """
             SELECT campaign.name, campaign.status, campaign.start_date, campaign.end_date,
-                   currency.code
+                   currency.code, COALESCE(campaign.campaign_amount, 0)
             FROM cam_campaigns AS campaign
             LEFT JOIN gm_currencies AS currency ON currency.id = campaign.currency_id
             WHERE campaign.tenant_id = @tenant_id AND campaign.id = @campaign_id
@@ -309,13 +310,15 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
             var status = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
             var endDate = reader.GetFieldValue<DateOnly>(3);
             var currencyCode = reader.IsDBNull(4) ? null : reader.GetString(4);
+            var campaignAmount = reader.IsDBNull(5) ? 0m : reader.GetDecimal(5);
 
             var acceptingStatuses = new[] { "Approved", "Scheduled", "Active" };
 
             if (!acceptingStatuses.Contains(status, StringComparer.OrdinalIgnoreCase))
             {
                 return new CampaignDonationEligibility(
-                    false, name, currencyCode, "This campaign is not currently accepting donations.");
+                    false, name, currencyCode,
+                    "This campaign is not currently accepting donations.", campaignAmount);
             }
 
             // The end date is inclusive - a campaign running to the 31st takes gifts all day on
@@ -324,10 +327,10 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
             if (endDate < DateOnly.FromDateTime(DateTime.UtcNow))
             {
                 return new CampaignDonationEligibility(
-                    false, name, currencyCode, "This campaign has ended.");
+                    false, name, currencyCode, "This campaign has ended.", campaignAmount);
             }
 
-            return new CampaignDonationEligibility(true, name, currencyCode, null);
+            return new CampaignDonationEligibility(true, name, currencyCode, null, campaignAmount);
         }
         catch (NpgsqlException exception)
         {
@@ -338,8 +341,10 @@ public sealed class CampaignDirectory(PaymentDbContext context, ILogger<Campaign
 
             // REFUSING IS THE SAFE ANSWER. Taking money against a campaign whose state is unknown
             // is the failure that cannot be undone; asking the donor to try again can be.
+            // ZERO FOR THE AMOUNT, and it costs nothing: CanAcceptDonations is false, so the caller
+            // refuses before the figure is ever read.
             return new CampaignDonationEligibility(
-                false, string.Empty, null, "This campaign could not be checked. Please try again.");
+                false, string.Empty, null, "This campaign could not be checked. Please try again.", 0m);
         }
     }
 

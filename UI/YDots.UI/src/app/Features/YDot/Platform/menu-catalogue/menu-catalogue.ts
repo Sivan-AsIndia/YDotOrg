@@ -20,7 +20,7 @@ interface CatalogueForm {
   code: string;
   name: string;
   description: string;
-  level: MenuLevel;
+  level: MenuLevel | '';
   moduleCode: string;
   parentMenuId: string;
   route: string;
@@ -297,7 +297,7 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
 
   private blankForm(): CatalogueForm {
     return {
-      code: '', name: '', description: '', level: 'menu', moduleCode: '',
+      code: '', name: '', description: '', level: '', moduleCode: '',
       parentMenuId: '', route: '', icon: '', requiredPermissionCode: '',
       displayOrder: '0', badgeKey: '', status: 'active',
       isPlatformOnly: false, isEnabledByDefault: true, isMandatory: false, opensInNewTab: false,
@@ -382,6 +382,10 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
         return 'Choose a module.';
       }
 
+      if (!form.level) {
+        return 'Choose a level.';
+      }
+
       if (form.level !== 'menu' && !form.parentMenuId) {
         return 'A submenu or child submenu needs a parent.';
       }
@@ -412,7 +416,7 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
       const request: CreateMenuDefinitionRequest = {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
-        level: form.level,
+        level: form.level as MenuLevel,
         moduleCode: form.moduleCode.trim().toUpperCase(),
         parentMenuId: form.parentMenuId || null,
         route: form.route.trim() || null,

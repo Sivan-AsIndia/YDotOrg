@@ -8,8 +8,8 @@
        2. Side panel  — why giving here is safe, in plain words, with the
                         hands-and-heart illustration.
        3. Form card   — "Donor & Payment Details": labelled fields with leading
-                        icons, the rupee-prefixed amount, the consent box and the
-                        required-fields note beside the primary action.
+                        icons, the campaign's own stated amount, the consent box
+                        and the required-fields note beside the primary action.
        4. Trust strip — the side panel's four promises again, as a quiet footer.
      ONLY THE MARKUP AND STYLING CHANGED. Every binding, validator, hint and
      handler is the one this form already had: the same campaign picker (locked
@@ -159,6 +159,47 @@
           }
         </div>
 
+        <!-- Campaign amount — the figure the chosen appeal is stated at, and THE AMOUNT THIS
+             DONOR PAYS. The separate "Donation amount" field this form used to carry has gone:
+             the campaign answers that question, and a second box asking the donor to type a
+             number only invited the two to disagree.
+
+             READ-ONLY AND ALWAYS DISABLED. It is a property of the campaign, not a decision the
+             donor makes, so it fills from the picker above and follows its locked state: a link
+             that named the campaign locks both, and a form without one leaves both open until a
+             campaign is chosen. -->
+        <label class="field">
+          <span class="field-label">Campaign amount</span>
+          <div class="select-wrap has-lead">
+            <svg class="lead-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
+            <select id="fld-campaignAmount" class="input has-lead" name="campaignAmount"
+                    aria-label="Campaign amount" [disabled]="campaignAmountDisabled()">
+              @if (campaignAmountOptions().length) {
+                @for (amount of campaignAmountOptions(); track amount) {
+                  <option [value]="amount" selected>{{ amount }}</option>
+                }
+              } @else {
+                <option value="">
+                  {{ selectedCampaign() ? 'This appeal does not state an amount' : 'Choose a campaign first' }}
+                </option>
+              }
+            </select>
+            <svg class="chev-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+          @if (campaignAmount() !== null) {
+            <span class="field-hint">This is the amount you will pay for this appeal.</span>
+          } @else if (campaignStatesNoAmount()) {
+            <span class="field-error">
+              This appeal does not state an amount to give. Choose another one.
+            </span>
+          }
+          @if (amountInvalid()) {
+            <span class="field-error">
+              This appeal's amount is outside the range this form can take. Contact the organisation.
+            </span>
+          }
+        </label>
+
         <!-- Full name -->
         <label class="field">
           <span class="field-label">Full name</span>
@@ -203,34 +244,21 @@
           }
         </label>
 
-        <!-- Donation amount — rupee-prefixed; the faint 0.00 at the right is only
-             a hint while the field is empty, exactly as the design shows it. -->
-        <label class="field">
-          <span class="field-label">Donation amount <span class="req-star">*</span></span>
-          <span class="input-group" [class.is-invalid]="(!donationAmount().trim() || amountInvalid()) && uiState() === 'validation'">
-            <span class="ig-lead" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
-            </span>
-            <span class="ig-prefix" aria-hidden="true">₹</span>
-            <input id="fld-donationAmount" type="text" inputmode="decimal" class="ig-input" placeholder="Enter amount"
-                   [ngModel]="donationAmount()" (ngModelChange)="donationAmount.set($event)" name="donationAmount"
-                   [attr.aria-invalid]="(!donationAmount().trim() || amountInvalid()) && uiState() === 'validation'" />
-            @if (!donationAmount()) {
-              <span class="ig-suffix" aria-hidden="true">0.00</span>
-            }
-          </span>
-          @if (!donationAmount().trim() && uiState() === 'validation') {
-            <span class="field-error">Enter Donation amount.</span>
-          }
-        </label>
+        <!-- THE DONATION AMOUNT FIELD HAS GONE. The campaign states what it asks for and the
+             donor pays that, so Campaign amount above IS the amount charged - a second box asking
+             them to type a figure was asking a question the campaign had already answered. -->
 
         <!-- Currency — controlled choice; Required -->
         <label class="field">
           <span class="field-label">Currency <span class="req-star">*</span></span>
           <div class="select-wrap has-lead">
             <svg class="lead-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9.3c-.5-1-1.6-1.8-3-1.8-1.7 0-3 1-3 2.4 0 3.1 6 1.6 6 4.6 0 1.4-1.3 2.4-3 2.4-1.4 0-2.5-.8-3-1.8"/><path d="M12 5.5v13"/></svg>
+            <!-- DISABLED ONCE THE CAMPAIGN STATES AN AMOUNT. The figure above is in the
+                 campaign's own currency, so a donor free to change this one would be charged that
+                 number in a denomination it was never stated in. -->
             <select id="fld-currency" class="input has-lead" [ngModel]="currency()" (ngModelChange)="currency.set($event)"
                     name="currency" aria-label="Currency"
+                    [disabled]="formLocked() || campaignAmount() !== null"
                     [attr.aria-invalid]="!currency() && uiState() === 'validation'">
               <option value="">Select currency</option>
               @for (c of currencyCatalogue(); track c.reference) { <option [value]="c.reference">{{ c.label }}</option> }

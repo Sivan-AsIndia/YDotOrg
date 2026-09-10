@@ -7,6 +7,10 @@
     <!-- IServiceCollection registrations and services.Configure<T>(IConfiguration). -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- ILogger<T> on the command and query handlers. PAY.Application and CAM.Application both
+         carry this; DON's handlers took the same logging dependency without it, so the project
+         did not compile. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

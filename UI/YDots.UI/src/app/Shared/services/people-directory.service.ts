@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { UserDirectoryApiService } from '../../Service/user-directory-api.service';
+import { readableIdentifier } from '../models/identifier';
 import { OrganisationScopeService } from './organisation-scope.service';
 import { UserSearchFilter } from '../models/user-directory.model';
 
@@ -151,9 +152,17 @@ export class PeopleDirectoryService {
   /**
    * The display name for a person.
    *
-   * IT FALLS BACK TO THE REFERENCE ITSELF rather than to a placeholder name. An unresolved id
-   * shown as an id is a visible loose end somebody can chase; the same id shown as 'Arun Kumar'
-   * is a wrong answer nobody will ever question.
+   * IT NEVER FALLS BACK TO A GUID, and that is the change. It used to return the reference itself
+   * when the lookup missed - on the reasoning that an unresolved id shown as an id is a loose end
+   * somebody can chase, where a wrong NAME is an answer nobody will question. The first half of
+   * that still holds; the second half assumed the reference was readable. It is not: it is the
+   * user's GUID, so every miss printed thirty-six characters of hexadecimal into an Owner or an
+   * Approved-by field - on the readiness checklist, the campaign detail, the close-request
+   * record - and a miss is ordinary rather than rare, because the directory loads asynchronously
+   * and a person who has left the Organisation is never in it at all.
+   *
+   * A HUMAN REFERENCE IS STILL SHOWN AS ITSELF. Somebody passing 'USR-00001' gets it back, which
+   * keeps the loose end chaseable exactly as intended - it is only the GUID form that is replaced.
    */
   name(reference: string | null | undefined): string {
     if (!reference) {
@@ -164,7 +173,23 @@ export class PeopleDirectoryService {
       (person) => person.reference === reference || person.code === reference,
     );
 
-    return match?.name ?? reference;
+    if (match?.name) {
+      return match.name;
+    }
+
+    // Not resolved. Show whatever of it a person could actually use, and a plain sentence when
+    // there is nothing - never the raw id. See Shared/models/identifier.
+    return readableIdentifier(match?.code ?? reference, 'Unknown user');
+  }
+
+  /**
+   * The human reference for a person - USR-00001 - for a screen that wants to print one.
+   *
+   * IT IS THE ONE TO USE BESIDE A NAME. Screens reach for the raw reference because it is what
+   * they are holding, and the raw reference is a GUID; this is the half that belongs on screen.
+   */
+  code(reference: string | null | undefined): string {
+    return readableIdentifier(this.get(reference)?.code, '');
   }
 
   /** One person by id or by human reference. */

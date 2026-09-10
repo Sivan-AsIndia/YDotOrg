@@ -85,6 +85,15 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     cancelDraft: this.currentUser.hasPermission('cam.campaigns.delete-draft'),
   }));
 
+  /**
+   * True when the caller holds NO lifecycle right on this campaign at all.
+   *
+   * STILL A PERMISSION QUESTION AND NOT A STATE ONE, which is why it stays on the token rather
+   * than moving to `permittedActions`: this drives the panel's "you may read this but not change
+   * it" banner, and that sentence has to stay true regardless of which state the campaign happens
+   * to be in today. `isViewOnlyForState` is the other question - permitted, but nothing applies
+   * right now - and the two are deliberately separate.
+   */
   protected readonly isViewOnly = computed(() => {
     const p = this.permissions();
     return p.view && !p.activate && !p.pause && !p.resume && !p.requestClose && !p.approveClose && !p.cancelDraft;
@@ -172,7 +181,14 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
       placement: 'primary',
       permissionKey: 'activate',
       permissionCode: 'cam.campaigns.activate',
-      allowedStates: ['Scheduled'],
+      serverAction: 'Activate',
+
+      // APPROVED AS WELL AS SCHEDULED. The server accepts both - a campaign approved on or after
+      // its own start date stays Approved because there is no future trigger left to wait for,
+      // and Activate is the only way it ever goes live. Listing Scheduled alone hid the button on
+      // exactly the campaigns that need pressing, which is most of what "Manage lifecycle shows
+      // nothing" turned out to be.
+      allowedStates: ['Approved', 'Scheduled'],
       requiresReasonCategory: true,
       requiresDetailedReason: false,
       requiresCommunicationImpact: false,
@@ -188,6 +204,7 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
       placement: 'primary',
       permissionKey: 'pause',
       permissionCode: 'cam.campaigns.pause',
+      serverAction: 'Pause',
       allowedStates: ['Active'],
       requiresReasonCategory: true,
       requiresDetailedReason: true,
@@ -204,6 +221,7 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
       placement: 'primary',
       permissionKey: 'resume',
       permissionCode: 'cam.campaigns.resume',
+      serverAction: 'Resume',
       allowedStates: ['Paused'],
       requiresReasonCategory: false,
       requiresDetailedReason: false,
@@ -220,6 +238,7 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
       placement: 'danger',
       permissionKey: 'requestClose',
       permissionCode: 'cam.campaigns.request-close',
+      serverAction: 'RequestClose',
       allowedStates: ['Active', 'Paused'],
       requiresReasonCategory: true,
       requiresDetailedReason: true,
@@ -232,51 +251,118 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     },
     {
       id: 'approve_close',
-      label: 'Approve close',
+
+      // "Close" IS THE NAME THE WORKFLOW USES for this action, and it is the one on the button.
+      // The description says what it actually does - approve the outstanding request - because
+      // the two-step close is exactly the thing an operator has to understand here.
+      label: 'Close campaign',
       placement: 'danger',
       permissionKey: 'approveClose',
       permissionCode: 'cam.campaigns.close',
-      allowedStates: ['Active', 'Paused'],
+
+      // CLOSING, NOT Active/Paused. Requesting a close moves the campaign TO Closing, so the
+      // state this action is taken from is never the one it was requested from - and listing the
+      // requesting states meant the button appeared while a request was pending and was then
+      // refused as "not available from Closing state" by the panel's own eligibility check. It
+      // could not be pressed at any point in the campaign's life.
+      //
+      // Active and Paused are kept alongside it for a campaign whose request was raised before
+      // this was fixed and whose status therefore never moved.
+      allowedStates: ['Closing', 'Active', 'Paused'],
       requiresReasonCategory: true,
       requiresDetailedReason: false,
       requiresCommunicationImpact: false,
       requiresClosureSummary: false,
-      confirmVerb: 'Confirm approve close',
+      serverAction: 'ApproveClose',
+      confirmVerb: 'Confirm close',
       typedConfirm: true,
       description:
-        'Records an independent closure decision. Cannot be performed by the person who requested close. Moves the campaign to Closing (or Closed when no dependencies remain).',
+        'Approves the outstanding close request and closes the campaign. Cannot be performed by the person who requested the close.',
     },
   ];
 
   /**
-   * The lifecycle actions offered for the campaign's CURRENT state — not every permitted action.
-   * An action must be permitted AND relevant to the current state, so the panel only ever shows the
-   * moves that actually apply:
-   *   • Scheduled → Activate
-   *   • Active    → Pause (never Activate)
-   *   • Paused    → Resume, Request close
-   *   • a pending close request → Approve close (surfaced on top of the state's own actions)
+   * What the SERVER says this caller may do to THIS campaign next.
+   *
+   * THE AUTHORITY FOR EVERY BUTTON ON THIS PANEL, replacing the local permission map that used to
+   * be. `permittedActions` is recomputed by CAM on every read of the campaign and folds together
+   * three things a browser cannot decide on its own - the campaign's current status, the
+   * permissions on the token, and whether this caller is independent of whoever created,
+   * submitted or requested. The local check answered only the second, which is why this panel and
+   * the API disagreed about who could do what.
+   *
+   * EMPTY UNTIL THE DETAIL HAS LOADED, which is why `detailLoaded` is consulted below rather than
+   * treating an empty list as "nothing is allowed": showing no buttons for a moment is honest,
+   * and showing none for ever because the detail had not been fetched is the bug this panel had.
+   */
+  protected readonly permittedActions = computed(
+    () => new Set(this.campaign()?.permittedActions ?? []),
+  );
+
+  /** True once the campaign's full detail - and therefore its permitted actions - has arrived. */
+  protected readonly permissionsResolved = computed(() => !!this.campaign()?.detailLoaded);
+
+  /**
+   * The lifecycle actions offered for the campaign's CURRENT state.
+   *
+   * TWO CONDITIONS, AND BOTH COME FROM SOMEWHERE DIFFERENT. The STATE decides which moves are
+   * interesting - a live campaign offers Pause, not Activate - and the SERVER decides whether
+   * this particular person may make them. The state table lives here; the second half is
+   * `permittedActions` and is not second-guessed.
+   *
+   *   Approved / Scheduled → Activate
+   *   Active               → Pause, Request close
+   *   Paused               → Resume, Request close
+   *   Closing              → Close
+   *
+   * REQUEST CLOSE IS OFFERED FROM ACTIVE AS WELL AS PAUSED. The API accepts both; restricting it
+   * to Paused meant an operator had to pause a running campaign before they could ask for it to
+   * be closed, which is a step the workflow does not ask for and which stops solicitation earlier
+   * than intended.
+   *
+   * BEFORE THE DETAIL LOADS, NOTHING IS OFFERED. See `permissionsResolved`.
    */
   protected readonly visibleActions = computed(() => {
     const state = this.currentState();
     const pending = this.hasPendingCloseRequest();
+
+    if (!this.permissionsResolved()) {
+      return [] as readonly ActionConfig[];
+    }
+
     return this.actions.filter((a) => {
-      if (!this.permissions()[a.permissionKey]) {
+      if (!this.permittedActions().has(a.serverAction)) {
         return false;
       }
-      // Approve close appears only while a close request is awaiting approval — regardless of the
-      // underlying Active/Paused state it was requested from.
+
+      // Close appears only while a close request is awaiting a decision. The server already
+      // withholds ApproveClose when there is none, so this is belt and braces for a record whose
+      // detail is a moment stale.
       if (a.id === 'approve_close') {
         return pending;
       }
-      // Request close is offered from Paused only, and only when no request is already pending.
+
+      // Request close is withheld while one is already pending, so the panel offers Review rather
+      // than a second request nobody can raise.
       if (a.id === 'request_close') {
-        return state === 'Paused' && !pending;
+        return !pending && state !== null && a.allowedStates.includes(state);
       }
-      // Everything else (Activate / Pause / Resume) shows strictly for its own allowed state.
+
       return state !== null && a.allowedStates.includes(state);
     });
   });
+
+  /**
+   * True when the caller may see the panel but may take none of its actions.
+   *
+   * DECIDED FROM THE SERVER'S LIST TOO, not from the permission map. An Organisation
+   * Administrator holds every campaign permission, so the old check - "holds view and none of the
+   * other six" - was false for them on every campaign in every state, and the panel therefore
+   * never told them why it was empty when the campaign's state offered nothing.
+   */
+  protected readonly isViewOnlyForState = computed(
+    () => this.permissionsResolved() && this.visibleActions().length === 0,
+  );
 
   /** True when the acting session requested the pending close — blocks self-approval. */
   protected readonly isOwnCloseRequest = computed(() => {
@@ -297,7 +383,10 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
    *  Request close, not auto-blocked; approve_close additionally needs a pending request from a
    *  different user; financial exceptions remain a genuine blocking dependency. */
   protected actionIsEligible(action: ActionConfig): boolean {
-    if (!this.permissions()[action.permissionKey] || !this.stateCompatible(action)) {
+    // THE SERVER'S LIST, NOT THE TOKEN'S PERMISSIONS. See `permittedActions` - this is the check
+    // that used to disagree with the API, offering an Approver a close they had raised themselves
+    // and refusing an administrator a move they were entitled to make.
+    if (!this.permittedActions().has(action.serverAction) || !this.stateCompatible(action)) {
       return false;
     }
     if (action.id === 'approve_close') {
@@ -312,6 +401,9 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
   protected ineligibleReason(action: ActionConfig): string {
     if (!this.stateCompatible(action)) {
       return `Not available from ${this.currentState() ?? '—'} state.`;
+    }
+    if (!this.permittedActions().has(action.serverAction)) {
+      return `You do not hold ${action.permissionCode} on this campaign.`;
     }
     if (action.id === 'request_close') {
       if (this.hasPendingCloseRequest()) {
@@ -389,6 +481,21 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
     effect(() => {
       this.panelOpenChange.emit(this.activeAction() !== null);
     });
+
+    // FETCH THE DETAIL AS SOON AS THE CAMPAIGN EXISTS, not only in ngOnInit.
+    //
+    // `loadDetail` needs the campaign's server id, and the store only holds one once the register
+    // has come back - which on a cold open is AFTER this panel has initialised. The single call in
+    // ngOnInit therefore returned without doing anything on exactly the load where it mattered,
+    // leaving `permittedActions` empty and every lifecycle button withheld. This runs again the
+    // moment the record appears, and stops once its detail is in.
+    effect(() => {
+      const campaign = this.campaign();
+
+      if (campaign && !campaign.detailLoaded) {
+        untracked(() => this.campaignStore.loadDetail(this.campaignRef));
+      }
+    });
   }
 
   /** Runs after Angular applies the @Input campaignRef binding (unlike the constructor,
@@ -396,6 +503,15 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
    *  host-supplied reference, not the field's default. */
   ngOnInit(): void {
     this.closeStore.ensure(this.campaignRef);
+
+    // THE FULL RECORD, NOT THE REGISTER ROW. `permittedActions` is only on the DETAIL response,
+    // and every button on this panel is now drawn from it - so without this call the panel opens
+    // against a list projection that carries none, and offers nothing whatever the caller holds.
+    // That is what "Manage lifecycle shows nothing for TenantAdmin" was: an administrator with
+    // every campaign permission, looking at a record whose permitted actions had never been
+    // fetched.
+    this.campaignStore.loadDetail(this.campaignRef);
+
     setTimeout(() => {
       if (this.viewState() !== 'loading') {
         return;
@@ -422,6 +538,13 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
   refresh(): void {
     const prev = this.viewState();
     this.viewState.set('loading');
+
+    // RE-READ THE DETAIL, not just the snapshot. Refresh exists to pick up a change somebody else
+    // made, and what changes with it is which actions are permitted - so re-reading the record
+    // without re-reading those would leave the buttons describing the state it used to be in.
+    this.closeStore.load(this.campaignRef);
+    this.campaignStore.loadDetail(this.campaignRef);
+
     setTimeout(() => {
       this.syncSnapshot();
       this.lastRefreshed.set(this.nowLabel());
@@ -825,47 +948,61 @@ export class PauseResumeCloseCampaignComponent implements OnInit {
         this.campaignStore.setStatus(this.campaignRef, 'Active', settle);
         break;
       case 'request_close':
-        // Creates a close-request record ONLY - the campaign lifecycle state is unchanged.
-        this.closeStore.update(this.campaignRef, {
-          requestState: 'Requested',
-          requestedByRef: actorRef,
-          requestedByName: actorName,
-          requestedAt: this.effectiveDateTimeLabel(),
-          reasonCategory: this.reasonCategory().trim(),
-          detailedReason: this.detailedReason().trim(),
-          communicationImpact: this.communicationImpact().trim(),
-          closureSummary: this.closureSummary().trim(),
-        });
-        resultingState = previousState as CampaignStatus;
-        nextAction = 'An independent approver must Approve close.';
+        // ==================================================================================
+        // IT NOW ACTUALLY ASKS THE SERVER. This branch called `closeStore.update(...)` - the
+        // store's LOCAL patch, which writes to a signal and sends nothing - and then called
+        // settle({ applied: true }) unconditionally. So Request close reported success, drew the
+        // outcome panel and appended a history entry, and no close request existed anywhere but
+        // in that browser tab: reload the page and it was gone, and the approver it was supposedly
+        // waiting on never saw one. `closeStore.requestClose` was written for this and had no
+        // caller in the application at all.
+        //
+        // THE CAMPAIGN'S STATE DOES MOVE, contrary to the comment that was here. CAM puts a
+        // campaign into Closing when a close is requested - that is the point of the two-step
+        // close, so the campaign is visibly winding up rather than silently still soliciting -
+        // and the store's reload after the call brings the real status back.
+        // ==================================================================================
+        resultingState = 'Closing';
+        nextAction = 'An independent approver must close the campaign.';
         accountableOwner = 'Awaiting independent closure approval';
-        settle({ applied: true });
+
+        this.closeStore.requestClose(
+          this.campaignRef,
+          this.reasonCategory().trim(),
+          this.detailedReason().trim(),
+          this.communicationImpact().trim(),
+          this.closureSummary().trim(),
+          settle,
+        );
         break;
       case 'approve_close': {
-        const depsRemain = (this.openDonationIntentsCount() ?? 0) > 0 || this.activeTrackingAssetsCount() > 0;
-        resultingState = depsRemain ? 'Closing' : 'Closed';
-        nextAction =
-          resultingState === 'Closing'
-            ? 'Closure in progress. Remaining dependencies must settle before Closed.'
-            : 'Closure complete. Historical record available in Related and history.';
-        accountableOwner = `Approved by ${actorName}`;
+        // ==================================================================================
+        // IT NOW CALLS THE APPROVE ENDPOINT. This routed through
+        // `campaignStore.setStatus(ref, 'Closing' | 'Closed')`, and both of those cases map to
+        // `close()`, which posts to REQUEST-close - so pressing Approve close raised a SECOND
+        // close request against a campaign that already had one pending, and the server answered
+        // 409 "A close request is already pending for this campaign." The one path that finishes
+        // a closure was unreachable from the only screen that offers it.
+        //
+        // THE RESULTING STATE IS THE SERVER'S DECISION, not a guess from local dependency counts.
+        // Approving a close moves the campaign to Closed; the reload behind the call brings back
+        // whatever CAM actually recorded.
+        // ==================================================================================
+        resultingState = 'Closed';
+        nextAction = 'Closure complete. Historical record available in Related and history.';
+        accountableOwner = `Closed by ${actorName}`;
 
-        this.campaignStore.setStatus(this.campaignRef, resultingState, (result) => {
-          // THE CLOSE REQUEST IS ONLY MARKED APPROVED IF THE CLOSURE WAS. Marking it first would
-          // leave a campaign whose request says "approved by" somebody while the campaign itself
-          // is still running - and with Approve close no longer offered to anybody.
-          if (result.applied) {
-            this.closeStore.update(this.campaignRef, {
-              requestState: 'Approved',
-              approvedByRef: actorRef,
-              approvedByName: actorName,
-              approvedAt: this.effectiveDateTimeLabel(),
-              decisionReason: this.reasonCategory().trim(),
-            });
-          }
+        this.closeStore.approveClose(
+          this.campaignRef,
+          this.detailedReason().trim() || this.reasonCategory().trim(),
+          (result) => {
+            if (result.applied) {
+              this.campaignStore.refresh();
+            }
 
-          settle(result);
-        });
+            settle(result);
+          },
+        );
         break;
       }
       case 'cancel_draft':

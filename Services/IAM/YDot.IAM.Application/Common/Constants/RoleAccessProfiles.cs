@@ -73,9 +73,16 @@ public static class RoleAccessProfiles
         PermissionCodes.GlobalMaster.TimeZonesActivate, PermissionCodes.GlobalMaster.TimeZonesDeactivate,
 
         // ---- CAM: running a campaign that has been approved ----------------------------------
-        // Activate, pause and resume are all downstream of the approval; returning a campaign to
-        // draft is the checker sending work back, which is the other half of refusing it.
-        "cam.campaigns.activate",
+        //
+        // PAUSE AND RESUME ARE THE CHECKER'S, and per the Campaign Management workflow they are
+        // the checker's ALONE - see the note beside them in CheckerOnlyOperations. Returning a
+        // campaign to draft is the checker sending work back, which is the other half of refusing
+        // it.
+        //
+        // ACTIVATE IS NOT ON THIS LIST ANY MORE. The workflow names Activate under Tenant Admin
+        // and under nobody else - Approver's line reads "Approve, Pause, Resume, Approve Close" -
+        // so it moved to AdministratorOnlyCodes, which takes it away from both working roles
+        // rather than handing it to one of them.
         "cam.campaigns.pause",
         "cam.campaigns.resume",
         "cam.tracking-assets.activate",
@@ -151,19 +158,40 @@ public static class RoleAccessProfiles
     /// </summary>
     private static readonly IReadOnlyList<string> CheckerOnlyOperations =
     [
-        // TAKING A CAMPAIGN LIVE. It is the last act of the approval chain, not the first act of
-        // running the campaign: `PostApprovalOperations` above says in as many words that activate
-        // is "downstream of the approval", and it was still reaching the maker because that list
-        // only ADDS codes to the checker and nothing took this one away from INITIATOR. So the
-        // person who created a campaign and submitted it for approval could then activate it
-        // themselves the moment somebody approved it - and worse, an Initiator who was shown the
-        // Activate action on an Approved campaign they had raised could put it live with no
-        // second person involved in that step at all.
+        // PAUSING AND RESUMING A LIVE CAMPAIGN. Both used to sit with the maker, on the reasoning
+        // that stopping the spend this afternoon is the maker's job and neither one starts or ends
+        // anything.
         //
-        // PAUSE AND RESUME STAY WITH THE MAKER. Those are running a campaign that is already
-        // live - noticing a problem this afternoon and stopping the spend is exactly the maker's
-        // job, and neither one starts or ends anything.
-        "cam.campaigns.activate",
+        // THE CAMPAIGN MANAGEMENT WORKFLOW PUTS THEM WITH THE CHECKER, and its role lines are
+        // explicit about it: Initiator is "create Campaign (Draft/Submitted), Request Close" and
+        // Approver is "Approve, Pause, Resume, Approve Close". Pausing a live campaign stops
+        // solicitation against a launch a second person signed off, so the workflow treats
+        // reversing that decision as belonging to whoever took it.
+        //
+        // THE MAKER KEEPS REQUEST CLOSE, which is how they raise the problem they have noticed.
+        // Both codes stay on PostApprovalOperations, so APPROVER goes on holding them.
+        "cam.campaigns.pause",
+        "cam.campaigns.resume",
+
+        // TAKING A TRACKING ASSET LIVE. The workflow's asset line stops the maker at "Create Asset
+        // -> Draft/Submit -> Request Disable", and activation is the step after approval - it is
+        // where the tracking reference and the generated URL are actually minted, which is the
+        // moment the asset starts attributing real money. A maker who could both submit an asset
+        // and mint it has completed both halves of the asset's approval.
+        //
+        // IT STAYS WITH THE CHECKER, unlike the campaign verb above which went to the
+        // administrator alone. The difference is that a campaign has an automatic route to Active
+        // - CampaignActivationService takes a Scheduled campaign live on its start date with
+        // nobody involved - and an asset has none. Withholding it from APPROVER as well would mean
+        // no tracking asset could ever go live without an Organisation Administrator, and the
+        // workflow lists Active under Tenant Admin's "All Access" rather than as theirs alone.
+        "cam.tracking-assets.activate",
+
+        // SENDING A READINESS CHECKLIST BACK TO DRAFT. The workflow's readiness lines give the
+        // maker "Create checklist -> pass/Fail, Assign Blocker" and Request Approval; returning
+        // the work is the other half of refusing it, and belongs with whoever the approval was
+        // sent to. It stays on PostApprovalOperations, so APPROVER keeps it.
+        "cam.readiness.return-to-draft",
 
         // TURNING A ROLE ON. Role creation runs draft -> submit -> activate for the same reason
         // campaigns do: a role is a grant of permissions, and the person who chose the permissions
@@ -220,6 +248,20 @@ public static class RoleAccessProfiles
     /// </summary>
     private static readonly IReadOnlyList<string> AdministratorOnlyCodes =
     [
+        // TAKING A CAMPAIGN LIVE BY HAND.
+        //
+        // The Campaign Management workflow lists Activate under Tenant Admin only. Initiator's
+        // line is "create Campaign (Draft/Submitted), Request Close" and Approver's is "Approve,
+        // Pause, Resume, Approve Close" - the contrast is deliberate, because the two names appear
+        // in the same block and only one of them carries the verb.
+        //
+        // NOTHING IS STRANDED BY IT. Approving a campaign whose start date is still ahead leaves
+        // it Scheduled, and CampaignActivationService takes a Scheduled campaign live on its start
+        // date with no person involved at all. Manual activation is the exception - bringing a
+        // launch forward, or starting a campaign approved on or after its own start date - and the
+        // workflow puts that in the administrator's hands.
+        "cam.campaigns.activate",
+
         PermissionCodes.PaymentGatewaysView,
         PermissionCodes.PaymentGatewaysManage,
         PermissionCodes.PaymentGatewaysDelete,
@@ -286,7 +328,27 @@ public static class RoleAccessProfiles
                 // THE MAKER NO LONGER DISABLES A LIVE TRACKING ASSET. Taking one down stops a
                 // printed QR code resolving, which is a decision and not an edit; the maker now
                 // asks with `cam.tracking-assets.request-disable` and a checker decides.
-                "cam.tracking-assets.deactivate"
+                "cam.tracking-assets.deactivate",
+
+                // PAUSING AND RESUMING A LIVE CAMPAIGN MOVED TO THE CHECKER. See the note in
+                // CheckerOnlyOperations: the Campaign Management workflow gives Initiator "create
+                // Campaign (Draft/Submitted), Request Close" and nothing else on the lifecycle.
+                // Named here as well as excluded from the profile, because the reconciliation only
+                // adds rows - without these two lines every Organisation that has already run
+                // would keep granting them.
+                "cam.campaigns.pause",
+                "cam.campaigns.resume",
+
+                // ACTIVATE WAS ALREADY OFF THE INITIATOR PROFILE, but an Organisation seeded
+                // before that change still holds the row. Withdrawn here so those databases catch
+                // up rather than being the only ones where a maker can put a campaign live.
+                "cam.campaigns.activate",
+
+                // MINTING A TRACKING ASSET AND RETURNING A CHECKLIST TO DRAFT both moved to the
+                // checker with the same reasoning as the campaign verbs above. See
+                // CheckerOnlyOperations.
+                "cam.tracking-assets.activate",
+                "cam.readiness.return-to-draft"
             ],
 
             [RoleCodes.Approver] =
@@ -300,7 +362,13 @@ public static class RoleAccessProfiles
                 // and then approves has approved their own change.
                 "cam.campaigns.edit",
                 "cam.tracking-assets.edit",
-                "cam.readiness.edit"
+                "cam.readiness.edit",
+
+                // TAKING A CAMPAIGN LIVE IS THE ADMINISTRATOR'S. See AdministratorOnlyCodes: the
+                // Campaign Management workflow names Activate under Tenant Admin and leaves it off
+                // Approver's line. Withdrawn rather than merely ungranted, so Organisations seeded
+                // while APPROVER held it are brought in line on start-up.
+                "cam.campaigns.activate"
             ]
         };
 

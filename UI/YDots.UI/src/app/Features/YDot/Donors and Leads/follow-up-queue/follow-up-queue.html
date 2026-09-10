@@ -288,11 +288,11 @@
                     @for (f of filteredFollowUps(); track trackById($index, f)) {
                       <tr [class.row-overdue]="isOverdue(f)">
                         <td class="checkbox-cell">
-                          <label class="visually-hidden" [attr.for]="'sel-' + f.id">Select {{ f.id }}</label>
+                          <label class="visually-hidden" [attr.for]="'sel-' + f.id">Select {{ f.reference || f.recordName }}</label>
                           <input [id]="'sel-' + f.id" type="checkbox" class="fq-checkbox" [checked]="isSelected(f.id)" (change)="toggleSelect(f.id)" />
                         </td>
                         <!-- <td>
-                          <button type="button" class="fu-id-link" (click)="openPreview(f.id)">{{ f.id }}</button>
+                          <button type="button" class="fu-id-link" (click)="openPreview(f.id)">{{ f.reference || f.recordName }}</button>
                         </td> -->
                         <td>
                           <button type="button" class="record-name-btn" (click)="openPreview(f.id)">{{ f.recordName }}</button>
@@ -324,12 +324,12 @@
                               type="button"
                               class="icon-btn"
                               [disabled]="!canExecute(f) || f.status !== 'Pending'"
-                              [attr.aria-label]="'Execute ' + f.id"
+                              [attr.aria-label]="'Execute ' + (f.reference || f.recordName)"
                               [title]="canExecute(f) ? 'Execute' : 'Blocked: ' + (f.dependencyBlockedReason ?? 'dependency pending')"
                               (click)="executeFollowUp(f)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v18l15-9L5 3Z"/></svg>
                             </button>
-                            <button type="button" class="icon-btn" [attr.aria-label]="'More actions for ' + f.id" (click)="toggleActionMenu(f.id, $event)">
+                            <button type="button" class="icon-btn" [attr.aria-label]="'More actions for ' + (f.reference || f.recordName)" (click)="toggleActionMenu(f.id, $event)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                             </button>
                             @if (openActionMenuId() === f.id) {
@@ -372,7 +372,7 @@
                     }
                     @for (f of col.items; track trackById($index, f)) {
                       <div class="kanban-card" draggable="true" (dragstart)="onDragStart(f.id, $event)" (click)="openPreview(f.id)">
-                        <span class="kanban-card-id">{{ f.id }}</span>
+                        <span class="kanban-card-id">{{ f.reference }}</span>
                         <p class="kanban-card-name">{{ f.recordName }}</p>
                         <div class="kanban-card-meta">
                           <span class="badge" [ngClass]="priorityClass(f.priority)">{{ f.priority }}</span>
@@ -508,10 +508,10 @@
   <!-- ============================== PREVIEW DRAWER ============================== -->
   @if (previewFollowUp(); as f) {
     <button type="button" class="drawer-backdrop" aria-label="Close preview" (click)="closePreview()"></button>
-    <aside class="preview-drawer" role="dialog" aria-modal="true" [attr.aria-label]="'Follow-up ' + f.id">
+    <aside class="preview-drawer" role="dialog" aria-modal="true" [attr.aria-label]="'Follow-up ' + (f.reference || f.recordName)">
       <div class="drawer-header">
         <div>
-          <p class="drawer-id">{{ f.id }}</p>
+          <p class="drawer-id">{{ f.reference }}</p>
           <h2 class="drawer-record-name">{{ f.recordName }}</h2>
           <div class="drawer-header-badges">
             <span class="badge" [ngClass]="priorityClass(f.priority)">{{ f.priority }}</span>

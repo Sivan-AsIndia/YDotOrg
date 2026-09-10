@@ -35,6 +35,19 @@ public class Campaign : TenantEntity, ICodedEntity
 
     public decimal TargetAmount { get; set; }
 
+    /// <summary>
+    /// THE CAMPAIGN AMOUNT - the fixed figure this campaign asks a donor for.
+    ///
+    /// A SEPARATE COLUMN FROM <see cref="TargetAmount"/> AND NOT A RENAME OF IT, because the two
+    /// answer different questions. The target is what the campaign hopes to raise in total and
+    /// belongs to the Target and Budget module; this is the single amount the campaign is stated
+    /// at, captured on step 1 of the wizard beside the code and shown to a donor the moment they
+    /// pick the campaign on either donation form.
+    ///
+    /// STORED IN THE CAMPAIGN'S OWN <see cref="CurrencyId"/>, like every other money column here.
+    /// </summary>
+    public decimal CampaignAmount { get; set; }
+
     /// <summary>Row in the IAM currency master. Not an FK - see the type comment.</summary>
     public Guid CurrencyId { get; set; }
 

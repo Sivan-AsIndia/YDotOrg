@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using YDots.CAM.Application.Common.Constants;
 using YDots.CAM.Domain.Entities;
@@ -52,6 +52,12 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         builder.Property(campaign => campaign.TargetAmount).HasPrecision(18, 2).IsRequired();
         builder.Property(campaign => campaign.BudgetAmount).HasPrecision(18, 2);
 
+        // THE CAMPAIGN AMOUNT. Same precision as the other two for the same reason, and
+        // NON-NULLABLE WITH A ZERO DEFAULT so the campaigns that existed before this column did
+        // still load. Zero is "never captured", which is what the migration leaves behind it; the
+        // create and update validators refuse it, so no campaign written from here on holds one.
+        builder.Property(campaign => campaign.CampaignAmount).HasPrecision(18, 2).IsRequired();
+
         // Enums as TEXT, matching IAM and DON. A status reads as "Active" in a database console
         // rather than as a 5 nobody can decode.
         builder.Property(campaign => campaign.Status)
@@ -98,6 +104,9 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
 
             table.HasCheckConstraint(
                 "ck_cam_campaigns_target", "target_amount >= 0");
+
+            table.HasCheckConstraint(
+                "ck_cam_campaigns_campaign_amount", "campaign_amount >= 0");
 
             table.HasCheckConstraint(
                 "ck_cam_campaigns_budget", "budget_amount IS NULL OR budget_amount >= 0");

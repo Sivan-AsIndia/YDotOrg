@@ -53,7 +53,7 @@
     owningFunction: string;
     approvalState: string;
     privilegeLevel: string;
-    isPrivileged: boolean;
+    isPrivileged: boolean | null;
     isDefaultRole: boolean;
     isSystemRole: boolean;
     grantsAllPermissions: boolean;
@@ -253,8 +253,8 @@
       description: '',
       displayTag: '',
       priority: 100,
-      isPrivileged: false,
-      isDefaultRole: false,
+      isPrivileged: null as boolean | null,
+      isDefaultRole: null as boolean | null,
     });
 
     /**
@@ -523,8 +523,8 @@
         description: '',
         displayTag: '',
         priority: 100,
-        isPrivileged: false,
-        isDefaultRole: false,
+        isPrivileged: null,
+        isDefaultRole: null,
       });
       this.selectedPermissionCodes.set([]);
       this.selectedDeniedCodes.set([]);
@@ -667,6 +667,11 @@
 
       if (!form.name.trim() || !form.code.trim()) {
         this.toast.show('Check the form', 'A role needs a name and a code.', 'warning');
+        return;
+      }
+
+      if (form.isPrivileged === null || form.isDefaultRole === null) {
+        this.toast.show('Check the form', 'Choose a privilege level and whether everybody gets this role.', 'warning');
         return;
       }
 

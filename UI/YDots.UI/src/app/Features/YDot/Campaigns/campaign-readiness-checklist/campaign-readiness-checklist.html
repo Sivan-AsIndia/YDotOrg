@@ -508,7 +508,7 @@
       <div class="crc-review-row"><span>Affected record</span><strong>{{ campaignName() }} · {{ campaignRef }}</strong></div>
       <div class="crc-review-row"><span>Consequence</span><strong>Lifecycle {{ lifecycleState() }} → {{ launchTarget() }}</strong></div>
       <div class="crc-review-row"><span>Effective time</span><strong>{{ lastRefresh() }}</strong></div>
-      <div class="crc-review-row"><span>Approver</span><strong>{{ currentUserName() }} ({{ currentUserRef() }})</strong></div>
+      <div class="crc-review-row"><span>Approver</span><strong>{{ currentUserName() }}@if (currentUserCode()) { ({{ currentUserCode() }}) }</strong></div>
     </div>
     <div class="crc-field">
       <label class="crc-field-label" for="crc-approve-reason">Reason</label>

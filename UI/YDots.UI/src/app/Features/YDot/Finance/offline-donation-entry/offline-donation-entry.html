@@ -218,6 +218,7 @@
           <span class="ode-field-label">Currency <span class="ode-req">*</span></span>
           <span class="ode-select-wrap">
             <select class="ode-select" [ngModel]="currency()" (ngModelChange)="currency.set($event)" aria-label="Currency">
+              <option value="" disabled>Select Currency</option>
               @for (c of currencyCatalogue(); track c) {
                 <option [value]="c">{{ c }}</option>
               }
@@ -243,6 +244,7 @@
           <span class="ode-field-label">Donor</span>
           <span class="ode-select-wrap">
             <select class="ode-select" [ngModel]="donor()" (ngModelChange)="donor.set($event)" aria-label="Donor">
+              <option value="">Select Donor</option>
               @for (d of donorOptions; track d.reference) {
                 <option [value]="d.reference">{{ d.name }} · {{ d.context }}</option>
               }

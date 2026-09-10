@@ -526,7 +526,7 @@ export class LeadCaptureComponent {
       mobiles: [this.createEmptyMobile(true)],
       email: '',
       preferredLanguage: '',
-      geoCountry: 'India',
+      geoCountry: '',
       geoState: '',
       geoCity: '',
       addressDetails: '',

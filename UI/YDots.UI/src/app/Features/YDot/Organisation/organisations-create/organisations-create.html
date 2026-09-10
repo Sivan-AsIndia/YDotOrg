@@ -27,12 +27,14 @@
           <div class="org-field">
             <label class="org-field-label">Organisation Type<span class="req">*</span></label>
             <select class="org-select" [ngModel]="organisationType()" (ngModelChange)="organisationType.set($event)">
+              <option value="" disabled>Select Organisation Type</option>
               @for (t of organisationTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
           <div class="org-field">
             <label class="org-field-label">Legal Structure<span class="req">*</span></label>
             <select class="org-select" [ngModel]="legalStructure()" (ngModelChange)="legalStructure.set($event)">
+              <option value="" disabled>Select Legal Structure</option>
               @for (t of legalStructures; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
@@ -60,14 +62,14 @@
           </div>
           <div class="org-field">
             <label class="org-field-label">Country</label>
-            <app-searchable-select [options]="geo.countryNames()" [value]="country()" (valueChange)="onCountryChange($event)" placeholder="Search country..."></app-searchable-select>
+            <app-searchable-select [options]="geo.countryNames()" [value]="country()" (valueChange)="onCountryChange($event)" placeholder="Select Country"></app-searchable-select>
           </div>
           <div class="org-field">
             <label class="org-field-label">State / Province</label>
             <!-- A dropdown when the catalogue knows this country's subdivisions, a text box when
                  it does not. Singapore has none to know, so typing is the only sensible answer. -->
             @if (hasStateOptions()) {
-              <app-searchable-select [options]="geo.stateNames()" [value]="state()" (valueChange)="onStateChange($event)" placeholder="Search state..."></app-searchable-select>
+              <app-searchable-select [options]="geo.stateNames()" [value]="state()" (valueChange)="onStateChange($event)" placeholder="Select State"></app-searchable-select>
             } @else {
               <input class="org-input" [ngModel]="state()" (ngModelChange)="onStateChange($event)" placeholder="State / Province">
             }
@@ -75,7 +77,7 @@
           <div class="org-field">
             <label class="org-field-label">City</label>
             @if (availableCities().length) {
-              <app-searchable-select [options]="availableCities()" [value]="city()" (valueChange)="city.set($event)" [disabled]="!state()" placeholder="Search city..." disabledPlaceholder="Select a state first"></app-searchable-select>
+              <app-searchable-select [options]="availableCities()" [value]="city()" (valueChange)="city.set($event)" [disabled]="!state()" placeholder="Select City" disabledPlaceholder="Select a state first"></app-searchable-select>
             } @else {
               <input class="org-input" [ngModel]="city()" (ngModelChange)="city.set($event)" placeholder="City">
             }

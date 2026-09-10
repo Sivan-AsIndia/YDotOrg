@@ -265,7 +265,7 @@ export class ReconciliationWorkspaceComponent {
   protected readonly activeRow = signal<string>('');
   protected selectRow(reference: string): void {
     this.activeRow.set(this.activeRow() === reference ? '' : reference);
-    this.selectedSettlementLine.set(this.suggestedCandidate()?.settlementLine ?? '');
+    this.selectedSettlementLine.set('');
   }
 
   protected performAutoMatch(): void {
@@ -295,6 +295,10 @@ export class ReconciliationWorkspaceComponent {
   /** Confirmed match — matched items go on to independent approval (Master workflow: matched → Maker-Checker Review). */
   protected confirmManualMatch(): void {
     if (!this.matchReasonValid()) return;
+    if (!this.selectedSettlementLine()) {
+      this.toast.show('Choose a match', 'Select the settlement line this payment matches.', 'warning');
+      return;
+    }
     this.manualMatchDialogOpen.set(false);
     this.uiState.set('success');
     this.lastRefresh.set(this.financeState.nowDisplay());

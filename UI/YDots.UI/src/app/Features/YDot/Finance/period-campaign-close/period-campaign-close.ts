@@ -68,7 +68,7 @@ export class PeriodCampaignCloseComponent {
 
   // ================= Context and filters (4.6.1) =================
   protected readonly closureReference = 'CLS-2025-Q2-001';
-  protected readonly periodOrCampaign = signal('PER-2025-Q2');
+  protected readonly periodOrCampaign = signal('');
   protected readonly periodOptions = [
     { reference: 'PER-2025-Q2', label: 'FY25 Q2 Period (Apr–Jun 2025)' },
     { reference: 'CAMP-2025-0011', label: 'Educate a Child 2025' },
@@ -184,7 +184,9 @@ export class PeriodCampaignCloseComponent {
   // ================= Actions, eligibility and result (4.6.3) =================
   private readonly inWorkflowState = () => this.workflowPermittedStates.includes(this.lifecycleState());
 
-  protected readonly validateAllowed = computed(() => this.permissions.validate && this.inWorkflowState());
+  protected readonly validateAllowed = computed(
+    () => this.permissions.validate && this.inWorkflowState() && !!this.periodOrCampaign(),
+  );
   /** Sign-off is blocked while the checklist has a blocking item outstanding (4.6 Flow: "If blocking issue → remain open and show required correction"). */
   protected readonly signOffAllowed = computed(
     () => this.permissions.signOff && this.inWorkflowState() && this.checklistStatus().tone !== 'danger',

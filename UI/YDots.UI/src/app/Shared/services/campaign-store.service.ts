@@ -235,6 +235,7 @@ export class CampaignStoreService {
       startDate: draft.startDate ?? '',
       endDate: draft.endDate ?? '',
       targetAmount: draft.targetAmount ?? 0,
+      campaignAmount: draft.campaignAmount ?? 0,
       budgetAmount: draft.budgetAmount,
       reconciledAmount: draft.reconciledAmount ?? 0,
       progress: draft.progress ?? 0,
@@ -278,6 +279,10 @@ export class CampaignStoreService {
         endDate: draft.endDate ?? today,
         // targetAmount and budgetAmount are NOT sent: Target & Budget is on hold, no step
         // collects them, and they are no longer on the server's contract either.
+        //
+        // campaignAmount IS sent, and is a different field entirely - step 1 collects it beside
+        // the code, and the server requires it to be greater than zero.
+        campaignAmount: draft.campaignAmount ?? 0,
         currencyId: draft.currency ?? '',
         countryId: draft.country ?? '',
         ownerIds: [...(draft.ownerReferences ?? [draft.ownerReference ?? draft.createdByRef])],
@@ -355,8 +360,13 @@ export class CampaignStoreService {
         fundOrProgramme: merged.fundProgramme ?? '',
         startDate: merged.startDate,
         endDate: merged.endDate,
-        // Not sent on edit either, which is what stops a save from writing 0 over a target the
-        // record already holds.
+        // The campaign amount is sent from the MERGED record, so an edit that does not touch it
+        // re-sends what the record already holds rather than zeroing it - which is the trap the
+        // note below describes for the target.
+        campaignAmount: merged.campaignAmount ?? 0,
+
+        // targetAmount is not sent on edit either, which is what stops a save from writing 0 over
+        // a target the record already holds.
         currencyId: merged.currency ?? '',
         countryId: merged.country ?? '',
         ownerIds: [...(merged.ownerReferences ?? [merged.ownerReference])],
@@ -750,6 +760,8 @@ export class CampaignStoreService {
       ownerReference: detail.ownerIds?.[0] ?? record.ownerReference,
       ownerReferences: detail.ownerIds?.length ? [...detail.ownerIds] : record.ownerReferences,
 
+      campaignAmount: detail.campaignAmount ?? record.campaignAmount ?? 0,
+
       currency: detail.currencyId,
       currencyName: detail.currencyCode ?? undefined,
 
@@ -882,6 +894,7 @@ export class CampaignStoreService {
       startDate: item.startDate,
       endDate: item.endDate,
       targetAmount: item.targetAmount,
+      campaignAmount: item.campaignAmount ?? existing?.campaignAmount ?? 0,
       budgetAmount: item.budgetAmount ?? undefined,
 
       // NOT ON THE LIST PROJECTION. The reconciled figure belongs to the PAYMENTS module and is

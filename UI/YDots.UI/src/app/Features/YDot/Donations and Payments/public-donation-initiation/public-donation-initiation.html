@@ -171,8 +171,14 @@
                 <div class="field">
                 <span class="field-label" id="lbl-campaign">Campaign or appeal <span class="req-star">*</span></span>
                 <div class="scope-picker">
+                  <!-- LOCKED BY THE LINK IS ALSO DISABLED, not merely ignored on click. The click
+                       handler already refused to open the picker for a link-bound campaign, but a
+                       control that looks live and does nothing reads as broken - and on a page
+                       whose only job is to take a donation, that is the worst thing it can read
+                       as. The donor-form beside this one has always disabled it. -->
                   <button type="button" id="fld-campaign" class="input picker-trigger" (click)="toggleCampaignPicker()"
-                          [disabled]="formLocked()"
+                          [disabled]="formLocked() || campaignLockedByLink()"
+                          [class.is-locked]="campaignLockedByLink()"
                           [attr.aria-invalid]="!selectedCampaign() && uiState() === 'validation'"
                           aria-haspopup="listbox" [attr.aria-expanded]="campaignPickerOpen()" aria-labelledby="lbl-campaign">
                     @if (selectedCampaign()) {
@@ -255,30 +261,63 @@
                 }
               </label>
 
-                 <label class="field">
-                <span class="field-label">Donation amount <span class="req-star">*</span></span>
-                @if (!formLocked()) {
-                  <input id="fld-donationAmount" type="text" inputmode="decimal" class="input"
-                         placeholder="0.00"
-                         [ngModel]="donationAmount()" (ngModelChange)="donationAmount.set($event)" name="donationAmount"
-                         [attr.aria-invalid]="(!donationAmount().trim() || amountInvalid()) && uiState() === 'validation'" />
-                } @else {
-                  <span class="input input-readonly">{{ formattedAmount() || '—' }}</span>
+              <!-- Campaign amount — the figure the chosen appeal is stated at, and THE AMOUNT
+                   THIS DONOR PAYS. The separate "Donation amount" field this form used to carry
+                   has gone: the campaign answers that question.
+
+                   READ-ONLY AND ALWAYS DISABLED. It is a property of the campaign, not a decision
+                   the donor makes, so it fills from the picker above and follows its locked
+                   state. -->
+              <label class="field">
+                <span class="field-label">Campaign amount</span>
+                <select id="fld-campaignAmount" class="input" name="campaignAmount"
+                        aria-label="Campaign amount" [disabled]="campaignAmountDisabled()">
+                  @if (campaignAmountOptions().length) {
+                    @for (amount of campaignAmountOptions(); track amount) {
+                      <option [value]="amount" selected>{{ amount }}</option>
+                    }
+                  } @else {
+                    <option value="">
+                      {{ selectedCampaign() ? 'This appeal does not state an amount' : 'Choose a campaign first' }}
+                    </option>
+                  }
+                </select>
+                @if (campaignAmount() !== null) {
+                  <span class="field-hint">This is the amount you will pay for this appeal.</span>
+                } @else if (campaignStatesNoAmount()) {
+                  <span class="field-error">
+                    This appeal does not state an amount to give. Choose another one.
+                  </span>
                 }
-                <!-- <span class="field-hint">Decimal precision follows the selected currency.</span> -->
-                @if (!donationAmount().trim() && uiState() === 'validation') {
-                  <span class="field-error">Enter Donation amount.</span>
-                } @else if (amountInvalid()) {
-                  <span class="field-error">Review Donation amount. The value does not meet the stated format or range.</span>
+                @if (amountInvalid()) {
+                  <span class="field-error">
+                    This appeal's amount is outside the range this form can take. Contact the organisation.
+                  </span>
                 }
               </label>
+
+              <!-- THE DONATION AMOUNT FIELD HAS GONE. The campaign states what it asks for and the
+                   donor pays that, so Campaign amount above IS the amount charged. A reopened
+                   intent still shows what it was created with, which is what the read-only line
+                   below reports. -->
+              @if (formLocked()) {
+                <label class="field">
+                  <span class="field-label">Amount</span>
+                  <span class="input input-readonly">{{ formattedAmount() || '—' }}</span>
+                  <span class="field-hint">The amount this donation was started for.</span>
+                </label>
+              }
 
               <!-- Currency — searchable controlled choice; Required (4.2.2) -->
               <label class="field">
                 <span class="field-label">Currency <span class="req-star">*</span></span>
                 <div class="select-wrap">
+                  <!-- DISABLED ONCE THE CAMPAIGN STATES AN AMOUNT. The figure above is in the
+                       campaign's own currency, so a donor free to change this one would be charged
+                       that number in a denomination it was never stated in. -->
                   <select id="fld-currency" class="input" [ngModel]="currency()" (ngModelChange)="currency.set($event)"
-                          name="currency" aria-label="Currency" [disabled]="formLocked()"
+                          name="currency" aria-label="Currency"
+                          [disabled]="formLocked() || campaignAmount() !== null"
                           [attr.aria-invalid]="!currency() && uiState() === 'validation'">
                     <option value="">Select currency</option>
                     @for (c of currencyCatalogue(); track c.reference) { <option [value]="c.reference">{{ c.label }}</option> }

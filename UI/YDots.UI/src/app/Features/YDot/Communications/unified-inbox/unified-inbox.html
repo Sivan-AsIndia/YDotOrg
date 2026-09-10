@@ -415,7 +415,8 @@
               <label for="targetQueue">Target queue <span class="req">*</span></label>
               <select id="targetQueue" [ngModel]="m.targetQueue" (ngModelChange)="m.targetQueue = $event" name="targetQueue"
                       [attr.aria-invalid]="!!m.errors['targetQueue']" [attr.aria-describedby]="m.errors['targetQueue'] ? 'targetQueueErr' : null">
-                <option *ngFor="let q of inScopeQueueNames" [value]="q" [disabled]="q === m.conversation.queue">{{ q }}</option>
+                <option value="" disabled>Select Target Queue</option>
+              <option *ngFor="let q of inScopeQueueNames" [value]="q" [disabled]="q === m.conversation.queue">{{ q }}</option>
               </select>
               <p class="field-error" id="targetQueueErr" *ngIf="m.errors['targetQueue']">{{ m.errors['targetQueue'] }}</p>
             </div>

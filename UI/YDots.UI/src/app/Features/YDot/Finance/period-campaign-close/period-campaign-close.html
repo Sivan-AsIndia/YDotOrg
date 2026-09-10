@@ -151,6 +151,7 @@
             <span class="pci-field-label">Period or campaign <span class="pci-req">*</span></span>
             <span class="pci-select-wrap">
               <select class="pci-select" [ngModel]="periodOrCampaign()" (ngModelChange)="periodOrCampaign.set($event)" aria-label="Period or campaign">
+                <option value="" disabled>Select Period Or Campaign</option>
                 @for (p of periodOptions; track p.reference) {
                   <option [value]="p.reference">{{ p.label }}</option>
                 }

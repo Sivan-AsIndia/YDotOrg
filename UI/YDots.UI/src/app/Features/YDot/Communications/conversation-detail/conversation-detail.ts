@@ -207,7 +207,7 @@ export class ConversationDetailComponent {
   ];
 
   composerOpen = true;
-  replyChannel = 'sms';
+  replyChannel = '';
   approvedTemplateId = '';
   templateQuery = '';
   templateMenuOpen = false;

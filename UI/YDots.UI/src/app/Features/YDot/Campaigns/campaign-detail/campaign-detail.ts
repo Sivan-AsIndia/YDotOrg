@@ -617,6 +617,37 @@ export class CampaignDetailComponent {
   });
   /** Fund or programme — captured on Wizard step 1. */
   protected readonly fundProgramme = computed(() => this.liveRecord()?.fundProgramme || '—');
+
+  /**
+   * The campaign amount, as the summary card prints it.
+   *
+   * THIS IS THE FIGURE STEP 1 COLLECTS, and it is why the card can show money again. The note on
+   * the card explains why Target & Budget is still absent: those two are collected by no screen,
+   * so printing "₹0 target" on every campaign put a number in front of people that nobody had
+   * entered. This one was typed by whoever created the campaign, and it is the same number the
+   * donation forms show a donor - so a campaign whose two screens disagreed about the amount
+   * would be the visible symptom of a real problem.
+   *
+   * A DASH FOR ZERO. Campaigns created before the column existed hold 0, which means "never
+   * stated" rather than "free".
+   */
+  protected readonly campaignAmountLabel = computed(() => {
+    const record = this.liveRecord();
+    const amount = record?.campaignAmount ?? 0;
+
+    if (!amount) {
+      return '—';
+    }
+
+    const formatted = amount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const code = (record?.currencyName ?? '').split('—')[0].split('-')[0].trim();
+
+    return code ? `${code} ${formatted}` : formatted;
+  });
   // CURRENCY IS NO LONGER SHOWN. The summary card carried a Currency row, but no wizard step
   // asks for one - the API requires a CurrencyId, so the client sends the Organisation's default
   // - and nothing on this screen displays an amount for it to qualify. The row therefore reported
@@ -698,16 +729,35 @@ export class CampaignDetailComponent {
     { key: 'tracking', label: 'Tracking' },
     { key: 'payments', label: 'Payments' },
   ];
-  protected readonly activeTab = signal<string>('targets');
+  /**
+   * The tab shown on arrival: whichever one is FIRST, read from the list above.
+   *
+   * IT WAS THE LITERAL 'targets', AND THAT TAB NO LONGER EXISTS. When Targets and Budget were
+   * withdrawn the default was left behind pointing at one of them, so `activeTab()` matched no
+   * panel and the whole section rendered as an empty bordered box - tab labels across the top and
+   * nothing underneath - until somebody clicked one. It looked like a loading failure and was
+   * simply a default naming a tab that had been removed.
+   *
+   * READING IT FROM `tabs[0]` MEANS IT CANNOT DRIFT AGAIN. Withdraw or reorder a tab and the
+   * default follows; there is no second place holding a key that has to be kept in step.
+   */
+  protected readonly activeTab = signal<string>(this.tabs[0]?.key ?? '');
   protected selectTab(key: string): void {
     this.activeTab.set(key);
   }
 
   // ================= Context and filters =================
-  /** Active data scope — this campaign's own country/region, not a fixed org name. */
+  /**
+   * Active data scope - this campaign's own country and state.
+   *
+   * IT READS THE NAMES, NOT THE IDS. `country` and `region` hold master-data GUIDs, so this line
+   * printed "a8f3... · 91bc... · This campaign" at the top of the screen: thirty-six characters of
+   * identifier where a person expected "India". The `*Name` twins beside them are what the API
+   * resolves them to and what a reader can actually use.
+   */
   protected readonly scope = computed(() => {
     const rec = this.liveRecord();
-    const parts = [rec?.country, rec?.region].filter((v): v is string => !!v);
+    const parts = [rec?.countryName, rec?.regionName].filter((v): v is string => !!v);
     return parts.length ? `${parts.join(' · ')} · This campaign` : 'This campaign';
   });
 
@@ -849,10 +899,20 @@ export class CampaignDetailComponent {
     this.lifecyclePopupOpen.set(false);
     this.lifecyclePanelOpen.set(false);
   }
-  /** The campaign reference to hand to the popup — this record's own reference when it's
-   *  backed by a real shared-store record; otherwise the popup's own seeded demo campaign
-   *  (matching the sample fallback this page used before it carried a real ?ref). */
-  protected readonly lifecyclePopupRef = computed(() => (this.liveRecord() ? this.reference : 'CAMP-2025-0011'));
+  /**
+   * The campaign reference handed to the lifecycle panel. Always THIS campaign's.
+   *
+   * IT USED TO FALL BACK TO 'CAMP-2025-0011' - a seeded demo reference from before this screen
+   * carried a real ?ref - whenever `liveRecord()` was null. That is not a rare state: the record
+   * is null for the whole of the first load, and for every load where the register has not
+   * finished refreshing. Manage lifecycle opened in that window pointed the panel at a campaign
+   * that does not exist in the Organisation, so it found no record, showed no state and offered
+   * no actions - and did it while displaying this campaign's name in the header behind it.
+   *
+   * The panel has its own empty state for a reference it cannot resolve, which is the honest
+   * answer while the record is still loading.
+   */
+  protected readonly lifecyclePopupRef = computed(() => this.reference);
 
   /**
    * The header's maker action — Submit / Approve / Complete closure — in its in-place high-risk
@@ -983,6 +1043,7 @@ export class CampaignDetailComponent {
       ['Status', this.status()],
       ['Owner', this.ownerLine()],
       ['Fund or programme', this.fundProgramme()],
+      ['Campaign amount', this.campaignAmountLabel()],
       ['Purpose', this.purpose()],
       ['Start date', this.launchDate()],
       ['End date', this.endDate()],

@@ -428,12 +428,12 @@
                 @if (conversations().length) {
                   <div class="table-scroll">
                     <table class="data-table">
-                      <thead><tr><th>ID</th><th>Channel</th><th>Summary</th><th>Date</th><th class="text-end">Owner</th></tr></thead>
+                      <thead><tr><th>Type</th><th>Channel</th><th>Summary</th><th>Date</th><th class="text-end">Owner</th></tr></thead>
                       <tbody>
                         @for (c of conversations(); track c.id) {
-                          @if (matchesSearch(c.id, c.channel, c.summary, c.owner)) {
+                          @if (matchesSearch(c.type, c.channel, c.summary, c.owner)) {
                             <tr>
-                              <td class="mono cell-id">{{ c.id }}</td>
+                              <td class="cell-id">{{ c.type }}</td>
                               <td>{{ c.channel }}</td>
                               <td class="cell-muted">{{ c.summary }}</td>
                               <td class="cell-muted">{{ c.date }}</td>
@@ -460,9 +460,9 @@
                 @if (followUps().length) {
                   <ul class="simple-list">
                     @for (f of followUps(); track f.id) {
-                      @if (matchesSearch(f.id, f.title, f.owner, f.status)) {
+                      @if (matchesSearch(f.reference, f.title, f.owner, f.status)) {
                         <li>
-                          <span class="mono cell-id">{{ f.id }}</span>
+                          <span class="mono cell-id">{{ f.reference }}</span>
                           <span>{{ f.title }}</span>
                           <span class="cell-muted">Due {{ f.due }}</span>
                           <span class="badge-pill badge-{{ badgeClass(f.status) }} badge-sm">{{ f.status }}</span>
@@ -619,13 +619,14 @@
           <label class="field">
             <span class="field-label">Relationship owner</span>
             <select [ngModel]="correctOwner()" (ngModelChange)="correctOwner.set($any($event))" name="correctOwner">
-              <option value="">Unassigned</option>
+              <option value="">Select Relationship Owner</option>
               @for (person of ownerOptions(); track person.reference) {
                 <option [value]="person.reference">
                   {{ person.name }}@if (person.context) { · {{ person.context }} }
                 </option>
               }
             </select>
+            <span class="field-hint">Leave unselected to leave this donor unassigned.</span>
             @if (people.isLoading()) { <span class="field-hint">Loading colleagues…</span> }
             @else if (people.loadError()) { <span class="field-error">{{ people.loadError() }}</span> }
             @else if (ownerOptions().length === 0) { <span class="field-hint">No colleagues are available to own this relationship.</span> }

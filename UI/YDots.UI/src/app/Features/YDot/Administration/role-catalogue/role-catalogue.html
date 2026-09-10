@@ -576,7 +576,8 @@
               <label class="form-label small fw-semibold" for="privilegeLevelSelect">Privilege Level</label>
               <select id="privilegeLevelSelect" class="form-select rc-input"
                       [ngModel]="createRoleForm().isPrivileged"
-                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isPrivileged: $event === 'true' || $event === true})">
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isPrivileged: $event === null ? null : ($event === 'true' || $event === true)})">
+                <option [ngValue]="null" disabled>Select Privilege Level</option>
                 <option [ngValue]="false">Standard</option>
                 <option [ngValue]="true">Privileged — assignment is reviewed</option>
               </select>
@@ -656,7 +657,8 @@
               <label class="form-label small fw-semibold" for="defaultRoleSelect">Given To Everybody</label>
               <select id="defaultRoleSelect" class="form-select rc-input"
                       [ngModel]="createRoleForm().isDefaultRole"
-                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isDefaultRole: $event === 'true' || $event === true})">
+                      (ngModelChange)="createRoleForm.set({...createRoleForm(), isDefaultRole: $event === null ? null : ($event === 'true' || $event === true)})">
+                <option [ngValue]="null" disabled>Select Option</option>
                 <option [ngValue]="false">No — assigned individually</option>
                 <option [ngValue]="true">Yes — every new person gets it</option>
               </select>

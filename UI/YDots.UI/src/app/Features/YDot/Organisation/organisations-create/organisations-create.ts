@@ -40,8 +40,8 @@ export class OrganisationsCreateComponent {
 
   // Organisation Information
   protected readonly name = signal('');
-  protected readonly organisationType = signal<OrganisationType>('Non-Profit / NGO');
-  protected readonly legalStructure = signal<LegalStructure>('Trust');
+  protected readonly organisationType = signal<OrganisationType | ''>('');
+  protected readonly legalStructure = signal<LegalStructure | ''>('');
   protected readonly registrationNumber = signal('');
   protected readonly registrationDate = signal('');
 
@@ -121,6 +121,13 @@ export class OrganisationsCreateComponent {
   });
   protected readonly phoneError = computed(() => (this.touched() && !this.phone().trim() ? 'Phone number is required.' : ''));
 
+  protected readonly organisationTypeError = computed(() =>
+    this.touched() && !this.organisationType() ? 'Organisation type is required.' : '',
+  );
+  protected readonly legalStructureError = computed(() =>
+    this.touched() && !this.legalStructure() ? 'Legal structure is required.' : '',
+  );
+
   protected readonly ownerNameError = computed(() => (this.touched() && !this.ownerName().trim() ? 'Owner name is required.' : ''));
   protected readonly ownerEmailError = computed(() => {
     if (!this.touched()) return '';
@@ -135,6 +142,8 @@ export class OrganisationsCreateComponent {
     () =>
       !this.nameError() &&
       !this.duplicateError() &&
+      !this.organisationTypeError() &&
+      !this.legalStructureError() &&
       !this.emailError() &&
       !this.phoneError() &&
       !this.ownerNameError() &&
@@ -155,8 +164,8 @@ export class OrganisationsCreateComponent {
       const record = this.orgState.create(
         {
           name: this.name(),
-          organisationType: this.organisationType(),
-          legalStructure: this.legalStructure(),
+          organisationType: this.organisationType() as OrganisationType,
+          legalStructure: this.legalStructure() as LegalStructure,
           registrationNumber: this.registrationNumber(),
           registrationDate: this.registrationDate(),
           addressLine1: this.addressLine1(),

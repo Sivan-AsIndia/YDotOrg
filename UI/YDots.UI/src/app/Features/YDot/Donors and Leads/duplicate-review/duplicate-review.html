@@ -191,11 +191,20 @@
               <div class="candidate-name">
                 <span class="candidate-label">A</span>
                 <strong>{{ p.candidateAName }}</strong>
-                <button type="button" class="copy-btn" (click)="copyValue(p.candidateAId)" [title]="p.candidateAId">{{ p.candidateAId }}</button>
+                <!-- ONLY WHEN THERE IS SOMETHING TO COPY. `candidateAId` is never populated -
+                     the list projection carries the candidates' NAMES and no ids - so this
+                     rendered an empty copy button on every pair, and copying it put an empty
+                     string on the clipboard. Hidden rather than filled with the pair's GUID:
+                     a donor id is not something a person can use. -->
+                @if (p.candidateAId) {
+                  <button type="button" class="copy-btn" (click)="copyValue(p.candidateAId)" [title]="p.candidateAId">{{ p.candidateAId }}</button>
+                }
               </div>
               <span class="badge" [ngClass]="confidenceTone(p.confidence)">{{ p.confidence }} · {{ p.confidenceScore }}%</span>
               <div class="candidate-name align-right">
-                <button type="button" class="copy-btn" (click)="copyValue(p.candidateBId)" [title]="p.candidateBId">{{ p.candidateBId }}</button>
+                @if (p.candidateBId) {
+                  <button type="button" class="copy-btn" (click)="copyValue(p.candidateBId)" [title]="p.candidateBId">{{ p.candidateBId }}</button>
+                }
                 <strong>{{ p.candidateBName }}</strong>
                 <span class="candidate-label">B</span>
               </div>
@@ -253,6 +262,7 @@
                 <select id="field-decision" class="control select" [class.has-error]="errors().decision"
                         [ngModel]="decision()" (ngModelChange)="decision.set($event); onDecisionChange()"
                         [attr.aria-invalid]="!!errors().decision">
+                  <option value="" disabled>Select Decision</option>
                   <option *ngFor="let d of decisionOptions" [value]="d.value">{{ d.label }}</option>
                 </select>
                 <p class="field-error" *ngIf="errors().decision">{{ errors().decision }}</p>
@@ -264,7 +274,7 @@
                        [class.has-error]="errors().surviving || (mergePreview()?.unrecognised)"
                        [ngModel]="surviving()" (ngModelChange)="surviving.set($event)"
                        [attr.aria-invalid]="!!errors().surviving"
-                       placeholder="Enter the surviving reference, e.g. {{ p.candidateAId }}" />
+                       placeholder="Enter the surviving candidate's name or reference" />
                 <p class="field-error" *ngIf="errors().surviving">{{ errors().surviving }}</p>
                 <p class="field-error" *ngIf="!errors().surviving && mergePreview()?.unrecognised">
                   Review Surviving record. Enter a candidate reference shown in this review.
@@ -321,7 +331,10 @@
               <button type="button" role="tab" class="tab" [class.is-active]="activeTab() === 'integration'" (click)="setTab('integration')">Integration</button>
             </div>
             <div class="tab-panel" role="tabpanel">
-              <p *ngIf="activeTab() === 'linked'">Household record HH-{{ p.candidateAId }} links both candidates through a shared mailing address.</p>
+              <!-- THE HOUSEHOLD LINE NAMED A RECORD BUILT FROM `candidateAId`, which is never
+                   populated - so it read "Household record HH- links both candidates". It names
+                   the candidates instead, which is what the panel is actually about. -->
+              <p *ngIf="activeTab() === 'linked'">{{ p.candidateAName }} and {{ p.candidateBName }} are linked through a shared mailing address.</p>
               <p *ngIf="activeTab() === 'documents'">No supporting documents attached to this comparison yet.</p>
               <p *ngIf="activeTab() === 'activity'">Queued for review on {{ p.lastActivity }} by matching engine v3.2.</p>
               <p *ngIf="activeTab() === 'integration'">CRM synchronisation: up to date. Email platform: pending next sync window.</p>

@@ -96,7 +96,19 @@ public sealed record PublicCampaignSummary(
     string Code,
     string Name,
     string? PublicDescription,
-    string CurrencyCode);
+    string CurrencyCode,
+
+    /// <summary>
+    /// The campaign amount - the fixed figure this appeal is stated at.
+    ///
+    /// PUBLIC BY CONSTRUCTION, like everything else on this record, and for the same reason: it
+    /// is the number printed on the poster the donor scanned. It is NOT the campaign's target and
+    /// NOT what it has raised - neither of those is here and neither should be.
+    ///
+    /// ZERO MEANS "NOT STATED", which is what a campaign created before the column existed holds.
+    /// A donation form treats zero as "no amount to prefill" rather than as a free gift.
+    /// </summary>
+    decimal CampaignAmount);
 
 /// <summary>
 /// What a tracking reference resolves to.
@@ -129,8 +141,23 @@ public sealed record CampaignDonationEligibility(
     /// Donor-facing, deliberately. "This campaign has closed" is something a donor can act on;
     /// "campaign status is PendingApproval" is not.
     /// </summary>
-    string? Reason)
+    string? Reason,
+
+    /// <summary>
+    /// THE AMOUNT THE CAMPAIGN ASKS FOR, and therefore the amount a donor giving to it pays.
+    ///
+    /// IT IS HERE SO THE SERVER CAN SET IT RATHER THAN BELIEVE IT. The donation forms no longer
+    /// ask anybody to type an amount - the campaign states one and the donor pays it - which means
+    /// the figure on the create request is now entirely derived from a record the server already
+    /// holds. A value the client cannot legitimately choose is a value the client must not be
+    /// trusted to send: the initiate endpoint is anonymous, so anybody could post a rupee against
+    /// a five-thousand-rupee appeal and the platform would have taken it.
+    ///
+    /// ZERO MEANS NOT STATED - a campaign created before the column existed. The handler falls
+    /// back to the requested amount there, so nothing that predates this stops working.
+    /// </summary>
+    decimal CampaignAmount)
 {
     public static CampaignDonationEligibility NotFound { get; } =
-        new(false, string.Empty, null, "This campaign could not be found.");
+        new(false, string.Empty, null, "This campaign could not be found.", 0m);
 }

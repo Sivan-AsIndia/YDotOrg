@@ -359,7 +359,7 @@
             <select class="form-select form-select-sm"
                     [ngModel]="d.permission" (ngModelChange)="patchDraft({ permission: $event })"
                     [disabled]="!draftIsOwned()">
-              <option value="">Anyone signed in</option>
+              <option value="">Select Permission</option>
               @for (option of permissionOptions(); track option.code) {
                 <option [value]="option.code">{{ option.name }} — {{ option.code }}</option>
               }

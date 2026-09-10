@@ -206,6 +206,15 @@ public static class DependencyInjection
 
         services.AddAuthorization(options => options.AddIamPolicies());
 
+        // EVERY REFUSAL LEAVES A ROW. Replacing the framework's result handler is the only hook
+        // that sees a 403: policy evaluation runs in the authorization middleware, ahead of model
+        // binding and of every action filter, so nothing downstream of it ever learns that the
+        // request was refused. See AuditingAuthorizationResultHandler - it changes no response,
+        // it only writes the Denied row on the way past.
+        services.AddSingleton<
+            Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler,
+            AuditingAuthorizationResultHandler>();
+
         return services;
     }
 

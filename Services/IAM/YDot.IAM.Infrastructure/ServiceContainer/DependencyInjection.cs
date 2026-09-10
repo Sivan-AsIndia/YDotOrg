@@ -101,6 +101,11 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();
         services.AddScoped<IBulkOperationRepository, BulkOperationRepository>();
         services.AddScoped<IAuditRepository, AuditRepository>();
+
+        // THE OUTCOMES NO HANDLER CAN RECORD. See IRequestOutcomeAuditor - a refusal is decided
+        // before any handler runs and a failure unwinds past one, so without this the trail could
+        // only ever hold rows whose outcome was Succeeded.
+        services.AddScoped<IRequestOutcomeAuditor, RequestOutcomeAuditor>();
         services.AddScoped<ILookupRepository, LookupRepository>();
 
         // The five global masters, migrated in from the standalone GlobalMaster service. One

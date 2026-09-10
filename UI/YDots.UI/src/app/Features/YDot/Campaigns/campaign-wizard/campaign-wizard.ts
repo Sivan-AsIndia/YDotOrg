@@ -209,7 +209,16 @@ export class CampaignWizardComponent {
     const r = this.requiredValid();
     switch (step) {
       case 0:
-        return r.campaignName && r.campaignCode && r.purpose && r.fundProgramme && r.owner && r.startDate && r.endDate;
+        return (
+          r.campaignName &&
+          r.campaignCode &&
+          r.campaignAmount &&
+          r.purpose &&
+          r.fundProgramme &&
+          r.owner &&
+          r.startDate &&
+          r.endDate
+        );
       case 1:
         return (
           r.reminderDaysBefore &&
@@ -246,6 +255,75 @@ export class CampaignWizardComponent {
     // rarely intentional (a leading one especially, since it's invisible in the field).
     this.campaignCode.set(value.replace(/\s+/g, '').toUpperCase().slice(0, this.campaignCodeMax));
   }
+
+  // --- Campaign amount — the fixed figure the campaign is stated at. ---
+  //
+  // IT IS NOT THE TARGET. `targetAmount` belongs to the Target & Budget module, is collected by
+  // no screen, and is still deliberately absent from the create and update contracts. This is a
+  // separate column with a separate contract field, required and greater than zero, and it is the
+  // number the donor sees on both donation forms the moment they choose this campaign.
+  //
+  // HELD AS TEXT, NOT AS A NUMBER, for the same reason every other money input in this
+  // application is: a numeric signal cannot tell an empty field from a zero, and `<input
+  // type="number">` accepts "1e5" and "--3" from the keyboard while reporting an empty string for
+  // both. The keystroke filter below is what keeps the value a number, and `campaignAmountValue`
+  // is the single place it becomes one.
+  protected readonly campaignAmount = signal('');
+
+  /** Digits, at most one decimal point, at most two places after it. Nothing else survives. */
+  protected setCampaignAmount(value: string): void {
+    const cleaned = (value ?? '')
+      .replace(/[^0-9.]/g, '')
+      // Only the FIRST dot is a decimal point; later ones are dropped rather than the whole
+      // entry being rejected, so a stray keypress does not clear what was typed before it.
+      .replace(/(\..*)\./g, '$1');
+
+    const [whole, fraction] = cleaned.split('.');
+
+    this.campaignAmount.set(
+      fraction === undefined ? whole : `${whole}.${fraction.slice(0, 2)}`,
+    );
+  }
+
+  /** The typed value as a number. NaN and the empty field both become 0. */
+  protected readonly campaignAmountValue = computed(() => {
+    const parsed = Number(this.campaignAmount().trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+
+  /**
+   * Greater than zero, and inside what the column can hold.
+   *
+   * THE UPPER BOUND MATCHES THE SERVER'S. The column is numeric(18,2) and the validator refuses
+   * anything past it, so checking the same figure here means the pasted-account-number typo is
+   * caught on the step it was typed on rather than as a 400 three steps later.
+   */
+  protected readonly campaignAmountMaximum = 9_999_999_999_999_999.99;
+  protected readonly campaignAmountValid = computed(() => {
+    const value = this.campaignAmountValue();
+    return value > 0 && value <= this.campaignAmountMaximum;
+  });
+
+  /** The ISO code of the resolved currency, for the field's prefix. Empty until it loads. */
+  protected readonly currencyCode = computed(
+    () => this.currencyLabel().split('—')[0]?.trim() ?? '',
+  );
+
+  /** The campaign amount as it reads on the summary and the review recap. */
+  protected readonly campaignAmountLabel = computed(() => {
+    if (!this.campaignAmountValid()) {
+      return '—';
+    }
+
+    const formatted = this.campaignAmountValue().toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const code = this.currencyCode();
+
+    return code ? `${code} ${formatted}` : formatted;
+  });
 
   // --- Purpose — rich-text editor with character counter, 10–1,000 chars.
   // purpose holds the plain-text mirror used for length validation; purposeHtml
@@ -925,6 +1003,7 @@ export class CampaignWizardComponent {
   protected readonly requiredValid = computed(() => ({
     campaignName: this.campaignNameValid(),
     campaignCode: this.campaignCode().trim().length > 0,
+    campaignAmount: this.campaignAmountValid(),
     purpose: this.purposeValid(),
     fundProgramme: this.fundProgrammeValid(),
     owner: this.selectedOwners().length > 0,
@@ -951,7 +1030,16 @@ export class CampaignWizardComponent {
   /** Steps whose required fields are all satisfied (drives the "n of 4 completed" summary). */
   protected readonly step1Complete = computed(() => {
     const r = this.requiredValid();
-    return r.campaignName && r.campaignCode && r.purpose && r.fundProgramme && r.owner && r.startDate && r.endDate;
+    return (
+      r.campaignName &&
+      r.campaignCode &&
+      r.campaignAmount &&
+      r.purpose &&
+      r.fundProgramme &&
+      r.owner &&
+      r.startDate &&
+      r.endDate
+    );
   });
   protected readonly step2Complete = computed(() => {
     const r = this.requiredValid();
@@ -990,6 +1078,7 @@ export class CampaignWizardComponent {
     const labels: Record<string, string> = {
       campaignName: 'Campaign name',
       campaignCode: 'Campaign code',
+      campaignAmount: 'Campaign amount',
       purpose: 'Purpose',
       fundProgramme: 'Fund or programme',
       owner: 'Owner',
@@ -1065,6 +1154,13 @@ export class CampaignWizardComponent {
 
     this.campaignName.set(record.name);
     this.setCampaignCode(record.code);
+
+    // BLANK RATHER THAN "0" FOR A CAMPAIGN THAT PREDATES THE COLUMN. Those rows hold zero, and
+    // seeding the field with it would show a figure nobody entered AND satisfy nothing - the
+    // validator refuses zero - so the step would look complete and the save would be refused.
+    this.campaignAmount.set(
+      record.campaignAmount && record.campaignAmount > 0 ? String(record.campaignAmount) : '',
+    );
     this.purpose.set(record.purpose ?? '');
     this.purposeHtml.set(record.purpose ?? '');
     this.fundProgramme.set(record.fundProgramme ?? '');
@@ -1151,6 +1247,13 @@ export class CampaignWizardComponent {
       fundProgramme: this.fundProgramme().trim() || undefined,
       startDate: this.startDate(),
       endDate: this.endDate(),
+
+      // THE CAMPAIGN AMOUNT IS ALWAYS SENT, unlike the two below, because step 1 always collects
+      // it. On an edit the store merges this over the stored record, so re-sending what was
+      // loaded is exactly right - the hazard the next paragraph describes is about keys the
+      // wizard has no value for at all.
+      campaignAmount: this.campaignAmountValue(),
+
       // TARGET AND BUDGET ARE OMITTED, not set to a default. The keys must be ABSENT rather
       // than undefined: the store merges `{ ...current, ...patch }`, so a present-but-undefined
       // key would blank a stored target on every edit. Absent, a create takes the store's
@@ -1469,6 +1572,7 @@ export class CampaignWizardComponent {
   private resetForm(): void {
     this.campaignName.set('');
     this.campaignCode.set('');
+    this.campaignAmount.set('');
     this.selectedOwners.set([]);
     this.ownerQuery.set('');
     this.ownerOpen.set(false);

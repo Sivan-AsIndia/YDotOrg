@@ -410,11 +410,12 @@
           <span class="rwn-field-label">Selected match</span>
           <span class="rwn-select-wrap">
             <select class="rwn-select" [ngModel]="selectedSettlementLine()" (ngModelChange)="selectedSettlementLine.set($event)" aria-label="Selected match">
+              <option value="" disabled>Select Match</option>
               <option [value]="candidate.settlementLine">{{ candidate.settlementLine }} (suggested)</option>
               @for (line of manualMatchAlternatives(); track line.lineReference) {
                 <option [value]="line.lineReference">{{ line.lineReference }} (manual · ₹{{ formatAmount(line.net) }})</option>
               } @empty {
-                <option value="" disabled>No other unclaimed settlement lines available</option>
+                <option disabled>No other unclaimed settlement lines available</option>
               }
             </select>
             <svg class="rwn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

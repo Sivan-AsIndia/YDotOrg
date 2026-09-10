@@ -80,6 +80,13 @@ export class CampaignRegisterComponent {
     create: this.user.hasPermission('cam.campaigns.create'),
     export: this.user.hasPermission('cam.campaigns.export'),
     deleteDraft: this.user.hasPermission('cam.campaigns.delete-draft'),
+
+    // EDIT WAS MISSING, and its absence showed: `canEdit` asked only whether the row was a Draft,
+    // so the Edit action appeared for every caller who could see one. An APPROVER holds no
+    // `cam.campaigns.edit` at all - deliberately, because a checker who edits the campaign it is
+    // about to approve has approved its own change - and was offered it anyway, on a row where
+    // the wizard would then refuse the save.
+    edit: this.user.hasPermission('cam.campaigns.edit'),
   }));
 
   /** Accountable owner shown in the task header — the active session's identity. */
@@ -460,9 +467,15 @@ export class CampaignRegisterComponent {
     this.router.navigate(['/app/fundraising/campaigns/campaign-detail'], { queryParams: { ref: record.code } });
   }
 
-  /** Edit is offered only for a Draft — opens the Campaign Wizard pre-filled with this record. */
+  /**
+   * Edit is offered for a Draft, to a caller who holds the edit permission.
+   *
+   * BOTH HALVES, WHICH IT DID NOT HAVE. The status half was here and the permission half was not,
+   * so an Approver - a role defined by not editing what it approves - was shown Edit on every
+   * draft on the register.
+   */
   protected canEdit(record: CampaignRecord): boolean {
-    return record.status === 'Draft';
+    return this.permissions().edit && record.status === 'Draft';
   }
   protected openEdit(record: CampaignRecord): void {
     this.closeRowMenu();
@@ -540,15 +553,24 @@ export class CampaignRegisterComponent {
   }
 
   /**
-   * Delete unused draft is offered only for a Draft with no downstream reference
-   * AND when the current user is that draft's creator.
+   * Delete unused draft: a Draft, with nothing hanging off it, to a caller who holds the
+   * permission.
+   *
+   * THE "ONLY ITS OWN CREATOR" CLAUSE HAS GONE, and it was wrong in one direction that mattered.
+   * The server's rule is the three conditions above and no fourth - a draft is deletable while it
+   * is unused, by anybody trusted with `cam.campaigns.delete-draft` - and the Campaign Management
+   * workflow gives Tenant Admin all access. So an Organisation Administrator tidying up a draft
+   * somebody else abandoned found the action missing from every row but their own, with nothing
+   * on screen to say why, while the endpoint behind it would have accepted the call.
+   *
+   * A CLIENT RULE STRICTER THAN THE SERVER'S IS STILL A BUG. It cannot protect anything - the
+   * endpoint is reachable regardless - and it withholds an action the person is entitled to.
    */
   protected canDeleteDraft(record: CampaignRecord): boolean {
     return (
       this.permissions().deleteDraft &&
       record.status === 'Draft' &&
-      !record.hasDownstreamReference &&
-      record.createdByRef === this.user.reference()
+      !record.hasDownstreamReference
     );
   }
 

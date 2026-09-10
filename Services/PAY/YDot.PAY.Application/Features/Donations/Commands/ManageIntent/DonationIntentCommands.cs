@@ -61,6 +61,10 @@ public sealed class DonationIntentCommandHandler(
     IDonationRepository donations,
     IGatewayAccountRepository gatewayAccounts,
     IDonorDirectory donorDirectory,
+
+    // Read-only, over the shared database. It is how the amount stops being something the browser
+    // gets to choose - see the block at the top of the create handler.
+    ICampaignDirectory campaigns,
     IPaymentGateway paymentGateway,
     IReferenceGenerator references,
     IAuditWriter audit,
@@ -102,6 +106,59 @@ public sealed class DonationIntentCommandHandler(
 
         var tenantId = tenantContext.RequireTenantId();
         var now = clock.UtcNow;
+
+        // ==================================================================================
+        // THE AMOUNT COMES FROM THE CAMPAIGN, NOT FROM THE BROWSER.
+        //
+        // The donation forms no longer ask anybody to type a figure: a campaign states what it
+        // asks for and a donor giving to it pays that. So the amount on this request is entirely
+        // derived from a record this server already holds - and a value the client cannot
+        // legitimately choose is a value the client must not be trusted to send. THIS ENDPOINT IS
+        // ANONYMOUS: without this, anybody could post one rupee against a five-thousand-rupee
+        // appeal, and the platform would have raised a payment link for it.
+        //
+        // It is the same principle the gateway checkout already works on - the amount lives on
+        // the provider's own order record so the browser cannot change it - applied one step
+        // earlier, to the intent that order is created from.
+        //
+        // THE CURRENCY TRAVELS WITH IT. A figure stated in the campaign's currency, charged in a
+        // currency the caller named, is a real charge in the wrong denomination that nothing
+        // downstream can detect.
+        //
+        // A CAMPAIGN THAT STATES NOTHING CHANGES NOTHING. Campaigns created before the amount
+        // column existed hold zero, which means "never stated"; the requested amount stands there,
+        // exactly as it did before, so no donation that used to work stops working.
+        if (request.CampaignId is { } campaignId && campaignId != Guid.Empty)
+        {
+            var eligibility = await campaigns.GetDonationEligibilityAsync(
+                tenantId, campaignId, cancellationToken);
+
+            // AND A CAMPAIGN THAT CANNOT TAKE MONEY IS REFUSED HERE. Nothing checked it on the way
+            // in - only the later donation-recording path did - so a draft, paused or closed
+            // campaign named directly on the request produced a live intent and a payment link,
+            // and left the money with nowhere legitimate to be reported. The reason is the
+            // directory's own donor-facing sentence.
+            if (!eligibility.CanAcceptDonations)
+            {
+                logger.LogWarning(
+                    "Donation intent creation refused for campaign {CampaignId}: {Reason}",
+                    campaignId, eligibility.Reason);
+
+                return Result.Failure<DonationIntentResponse>(Error.Validation(
+                    eligibility.Reason ?? "This campaign is not currently accepting donations."));
+            }
+
+            if (eligibility.CampaignAmount > 0m)
+            {
+                request = request with
+                {
+                    Amount = eligibility.CampaignAmount,
+                    CurrencyCode = string.IsNullOrWhiteSpace(eligibility.CurrencyCode)
+                        ? request.CurrencyCode
+                        : eligibility.CurrencyCode
+                };
+            }
+        }
 
         var normalisedEmail = request.Email.Trim().ToLowerInvariant();
 

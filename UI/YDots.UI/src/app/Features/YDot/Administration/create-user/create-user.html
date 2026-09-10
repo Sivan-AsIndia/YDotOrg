@@ -172,6 +172,7 @@
               <label class="form-label small" for="cuCategory">Account type *</label>
               <select id="cuCategory" class="form-select" [value]="form().accountCategory"
                       (change)="update('accountCategory', $any($event.target).value)">
+                <option value="" disabled>Select Account Type</option>
                 @for (option of accountCategories(); track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
                 }
@@ -281,6 +282,7 @@
                       [class.is-invalid]="errorFor('mobileCountryCode')"
                       [value]="form().mobileCountryCode"
                       (change)="update('mobileCountryCode', $any($event.target).value)">
+                <option value="" disabled>Select Country Code</option>
                 @for (code of countryCodes(); track code) {
                   <option [value]="code">{{ code }}</option>
                 }
@@ -334,6 +336,7 @@
               <select id="cuEngagement" class="form-select" [value]="form().engagementType"
                       (change)="update('engagementType', $any($event.target).value)"
                      [class.is-invalid]="isFieldInvalid('engagementType')">
+                <option value="" disabled>Select Engagement</option>
                 @for (option of engagementTypes(); track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
                 }
@@ -348,7 +351,7 @@
               <select id="cuUnit" class="form-select"
                       [value]="form().organisationUnitId"
                       (change)="update('organisationUnitId', $any($event.target).value)">
-                <option value="">Not set</option>
+                <option value="">Select Organisation Unit</option>
                 @for (option of organisationUnits(); track option.id) {
                   <option [value]="option.id">{{ option.name }}</option>
                 }
@@ -369,7 +372,7 @@
               @if (errorFor('departmentId')) {
                 <div class="invalid-feedback d-block">{{ errorFor('departmentId') }}</div>
               }
-                <option value="">Not set</option>
+                <option value="">Select Department</option>
                 @for (option of departments(); track option.id) {
                   <option [value]="option.id">{{ option.name }}</option>
                 }
@@ -450,7 +453,7 @@
               @if (errorFor('primaryRoleId')) {
                 <div class="invalid-feedback d-block">{{ errorFor('primaryRoleId') }}</div>
               }
-                <option value="">Choose…</option>
+                <option value="">Select Role</option>
                 @for (option of roles(); track option.id) {
                   <option [value]="option.id">{{ option.name }}</option>
                 }
@@ -462,6 +465,7 @@
               <select id="cuScope" class="form-select" [value]="form().dataScopeType"
                       (change)="update('dataScopeType', $any($event.target).value)"
                      [class.is-invalid]="isFieldInvalid('dataScopeType')">
+                <option value="" disabled>Select Data Scope</option>
                 @for (option of dataScopeTypes(); track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
                 }
@@ -489,6 +493,7 @@
               <select id="cuMfa" class="form-select" [value]="form().mfaRequirement"
                       (change)="update('mfaRequirement', $any($event.target).value)"
                      [class.is-invalid]="isFieldInvalid('mfaRequirement')">
+                <option value="" disabled>Select Two-Step Verification</option>
                 @for (option of mfaRequirements(); track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
                 }

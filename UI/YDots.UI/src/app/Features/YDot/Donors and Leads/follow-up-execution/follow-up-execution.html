@@ -255,8 +255,9 @@
                   <span class="badge" [class]="'badge-' + tempTone(data.lead.currentTemperature)">{{ data.lead.currentTemperature }}</span>
                   <span class="arrow" aria-hidden="true">&rarr;</span>
                   <select [formControl]="temperatureForm.controls.newTemperature" class="input input-compact" aria-label="New temperature">
+                    <option [ngValue]="null" disabled>Select New Temperature</option>
                     @for (opt of temperatureOptions; track opt) {
-                      <option [value]="opt">{{ opt }}</option>
+                      <option [ngValue]="opt">{{ opt }}</option>
                     }
                   </select>
                 </div>
@@ -280,8 +281,9 @@
                   <span class="badge badge-neutral">{{ data.lead.currentStage }}</span>
                   <span class="arrow" aria-hidden="true">&rarr;</span>
                   <select [formControl]="stageForm.controls.newStage" class="input input-compact" aria-label="New stage">
+                    <option [ngValue]="null" disabled>Select New Stage</option>
                     @for (opt of stageOptions; track opt) {
-                      <option [value]="opt">{{ opt }}</option>
+                      <option [ngValue]="opt">{{ opt }}</option>
                     }
                   </select>
                 </div>

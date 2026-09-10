@@ -99,10 +99,10 @@ export class AccessRequestComponent {
    * select rendered blank on open, and it was sent verbatim on submit.
    */
   newRequestForm = signal({
-    requestType: 'roleAssignment',
+    requestType: '',
     userId: '',
     requestedRole: '',
-    scopeType: 'organisation',
+    scopeType: '',
     scopeValue: '',
     effectiveFrom: '',
     effectiveTo: '',
@@ -376,10 +376,10 @@ export class AccessRequestComponent {
   // ===== NEW REQUEST =====
   openNewRequest(): void {
     this.newRequestForm.set({
-      requestType: 'roleAssignment',
+      requestType: '',
       userId: '',
       requestedRole: '',
-      scopeType: 'organisation',
+      scopeType: '',
       scopeValue: '',
       effectiveFrom: '',
       effectiveTo: '',
@@ -401,8 +401,8 @@ export class AccessRequestComponent {
 
   submitNewRequest(): void {
     const form = this.newRequestForm();
-    if (!form.userId || !form.requestedRole || !form.businessJustification.trim()) {
-      this.toast.show('Validation Error', 'User, requested role and justification are required.', 'warning');
+    if (!form.requestType || !form.userId || !form.requestedRole || !form.businessJustification.trim()) {
+      this.toast.show('Validation Error', 'Request type, user, requested role and justification are required.', 'warning');
       return;
     }
 

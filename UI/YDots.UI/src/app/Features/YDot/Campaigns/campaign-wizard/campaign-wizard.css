@@ -328,3 +328,21 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   padding: 2px 0;
   font-size: 12px;
 }
+
+/* ============ Campaign amount ============
+   The currency code sits INSIDE the input's border rather than beside it, so the field reads as
+   one control and the figure lines up with every other value on the step. The prefix is
+   pointer-events: none so a click anywhere on it still lands in the input. */
+.amount-control { position: relative; display: block; }
+.amount-prefix {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  pointer-events: none;
+}
+.amount-control:has(.amount-prefix) .control { padding-left: 52px; font-variant-numeric: tabular-nums; }

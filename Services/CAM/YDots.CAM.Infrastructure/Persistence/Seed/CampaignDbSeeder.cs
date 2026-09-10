@@ -532,6 +532,12 @@ public sealed class CampaignDbSeeder(
             EndDate = today.AddYears(1),
 
             TargetAmount = 1_000_000m,
+
+            // THE FIXED FIGURE THE CAMPAIGN IS STATED AT, which is what both donation forms show
+            // once a donor picks it. Seeded so the picker has a real amount to fill in rather
+            // than the zero the migration leaves on rows written before this column existed.
+            CampaignAmount = 5_000m,
+
             CurrencyId = InrCurrencyId,
             BudgetAmount = 100_000m,
             CountryId = IndiaCountryId,
