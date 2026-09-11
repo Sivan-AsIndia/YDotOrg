@@ -187,13 +187,8 @@
                               </td>
                               <td class="col-gst">{{ s.gstStateCode || '—' }}</td>
                               <td class="col-status">
-<<<<<<< HEAD
-                                <span class="status-pill" [class.active]="s.status === 'Active'" [class.inactive]="s.status === 'Inactive'" [class.draft]="s.status === 'Draft'">
-                                 {{ s.status }}
-=======
                                 <span class="status-pill" [class.active]="s.status === 'active'" [class.inactive]="s.status === 'inactive'" [class.draft]="s.status === 'draft'">
                                   <span class="status-dot" aria-hidden="true"></span>{{ statusLabel(s.status) }}
->>>>>>> 70cf44fac337c00c1aa0d7a280c3a9103a17e591
                                 </span>
                               </td>
                               <td class="col-action">
@@ -756,15 +751,9 @@ Cancel</button>
                 <p>Are you sure you want to deactivate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
               }
               <div class="confirm-actions">
-<<<<<<< HEAD
                 <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
-                @if (canDeactivate) {
-                  <button type="button" class="btn btn-warning btn-sm" (click)="deactivateConfirmed()">Yes, Deactivate</button>
-=======
-                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
                 @if (canDeactivate && !actionsLoading) {
-                  <button type="button" class="btn btn-warning" (click)="deactivateConfirmed()">Yes, Deactivate</button>
->>>>>>> 70cf44fac337c00c1aa0d7a280c3a9103a17e591
+                  <button type="button" class="btn btn-warning btn-sm" (click)="deactivateConfirmed()">Yes, Deactivate</button>
                 }
               </div>
             </div>
@@ -784,15 +773,9 @@ Cancel</button>
                 <div class="alert-danger-box">This action cannot be undone.</div>
               }
               <div class="confirm-actions">
-<<<<<<< HEAD
                 <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
-                @if (canDelete) {
-                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteConfirmed()">Yes, Delete</button>
-=======
-                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
                 @if (canDelete && !actionsLoading) {
-                  <button type="button" class="btn btn-danger" (click)="deleteConfirmed()">Yes, Delete</button>
->>>>>>> 70cf44fac337c00c1aa0d7a280c3a9103a17e591
+                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteConfirmed()">Yes, Delete</button>
                 }
               </div>
             </div>

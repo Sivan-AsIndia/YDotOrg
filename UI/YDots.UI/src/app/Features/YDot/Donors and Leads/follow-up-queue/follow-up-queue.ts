@@ -45,6 +45,7 @@ export interface HistoryEvent {
 
 export interface FollowUp {
   id: string;
+  reference?: string;
   recordId?: string;
   recordName: string;
   recordType: RecordType;

@@ -397,15 +397,9 @@
                 [value]="fields().campaign"
                 (change)="onTextInput('campaign', $event)"
               >
-<<<<<<< HEAD
                 <option value="">No campaign</option>
                 @for (c of filterLookup('campaign', campaignDropdownOptions(), fields().campaign); track c.reference) {
-                  <option [value]="c.label">{{ c.label }} &mdash; {{ c.context }}</option>
-=======
-                <option value="">Select Campaign</option>
-                @for (c of campaignDropdownOptions(); track c.reference) {
                   <option [value]="c.label">{{ c.label }}@if (c.context) { &mdash; {{ c.context }} }</option>
->>>>>>> 70cf44fac337c00c1aa0d7a280c3a9103a17e591
                 }
               </select>
             </div>

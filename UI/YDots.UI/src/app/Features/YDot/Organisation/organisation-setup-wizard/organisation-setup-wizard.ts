@@ -45,7 +45,7 @@ type WizardStep = 'organisation' | 'address' | 'administrator' | 'review' | 'don
   selector: 'app-organisation-setup-wizard',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule],
-  templateUrl: './organisation-setup-wizard.html',
+  templateUrl:'./organisation-setup-wizard.html',
   styleUrl: './organisation-setup-wizard.css',
 })
 export class OrganisationSetupWizardComponent implements OnDestroy {
