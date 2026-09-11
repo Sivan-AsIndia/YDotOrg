@@ -12,6 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { ToastService } from '../../../../Shared/services/toast.service';
+import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { BulkUserAdminApiService } from '../../../../Service/bulk-user-admin-api.service';
 import { RoleCatalogueApiService } from '../../../../Service/role-catalogue-api.service';
 import { UserDirectoryApiService } from '../../../../Service/user-directory-api.service';
@@ -423,7 +424,7 @@ export class BulkUserAdministrationComponent {
             this.operationId.set(operation.id ?? '');
             this.applyPreview(operation);
             this.resultFileUrl.set(
-              `bulk-operation-${operation.operationNumber ?? operation.id}.csv`);
+              `bulk-operation-${readableIdentifier(operation.operationNumber, 'result')}.csv`);
 
             // The directory listens for this so it can re-read: several of these actions change
             // rows it is showing, and a stale list after a bulk suspend is confusing.
@@ -479,7 +480,7 @@ export class BulkUserAdministrationComponent {
     const rows = [
       'User,Outcome,Detail',
       ...(operation.items ?? []).map((item) => [
-        item.sourceIdentifier ?? item.userId ?? '',
+        readableIdentifier(item.sourceIdentifier, 'User not in this organisation'),
         item.succeeded ? 'Succeeded' : item.wasSkipped ? 'Skipped' : 'Failed',
         (item.resultMessage ?? item.validationMessage ?? '').replace(/"/g, '""'),
       ].map((field) => `"${field}"`).join(',')),

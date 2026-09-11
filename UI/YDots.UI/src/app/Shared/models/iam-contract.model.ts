@@ -1027,6 +1027,12 @@ export interface EnumOptionsResponse {
   bulkActionTypes?: EnumOption[] | null;
   clientTypes?: EnumOption[] | null;
   privilegeLevels?: EnumOption[] | null;
+  recordStatuses?: EnumOption[] | null;
+  menuLevels?: EnumOption[] | null;
+  menuStatuses?: EnumOption[] | null;
+  auditResults?: EnumOption[] | null;
+  /** Stored text rather than enum members: value and label are the same label. */
+  organisationTypes?: EnumOption[] | null;
 }
 
 export interface EnumOptionsResponseApiResponse {

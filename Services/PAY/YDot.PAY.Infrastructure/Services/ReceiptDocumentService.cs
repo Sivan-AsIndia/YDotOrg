@@ -52,7 +52,9 @@ public sealed class ReceiptDocumentService(
 
             var url = await documentStore.SaveAsync(
                 receipt.Id,
-                $"receipt-{receipt.ReceiptNumber ?? receipt.Id.ToString("N")}.html",
+                // The donor sees this name when they save the receipt. The store already keeps one
+                // folder per receipt, so a receipt without a number needs no id to stay unique.
+                string.IsNullOrWhiteSpace(receipt.ReceiptNumber) ? "receipt.html" : $"receipt-{receipt.ReceiptNumber}.html",
                 Encoding.UTF8.GetBytes(html),
                 "text/html; charset=utf-8",
                 cancellationToken);

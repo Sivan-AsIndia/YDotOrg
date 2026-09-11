@@ -11,7 +11,9 @@ import {
   MenuLevel,
   MenuStatus,
 } from '../../../../Shared/models/iam-contract.model';
+import { ApiEnumOption, enumLabel } from '../../../../Shared/models/enum-option.model';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
 import { NavigationService } from '../../../../Shared/services/navigation.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 
@@ -90,7 +92,15 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
   private readonly tokens = inject(AuthTokenService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly enums = inject(EnumOptionsService);
   private readonly destroy$ = new Subject<void>();
+
+  /**
+   * The Level and Status options, from the server's enums. They were two literal option lists in
+   * the template, which could only ever disagree with the domain.
+   */
+  readonly levelOptions = signal<ApiEnumOption[]>([]);
+  readonly statusOptions = signal<ApiEnumOption[]>([]);
 
   readonly nodes = signal<MenuDefinitionResponse[]>([]);
   readonly loading = signal(true);
@@ -259,6 +269,16 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
         next: (options) => this.permissions.set(options),
         error: () => this.permissions.set([]),
       });
+
+    this.enums
+      .options('menuLevels')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({ next: (options) => this.levelOptions.set(options), error: () => undefined });
+
+    this.enums
+      .options('menuStatuses')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({ next: (options) => this.statusOptions.set(options), error: () => undefined });
   }
 
   ngOnDestroy(): void {
@@ -409,7 +429,10 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
     this.saving.set(true);
     this.formError.set('');
 
-    const order = Number.parseInt(form.displayOrder.trim(), 10);
+    // String() FIRST. The Position box is type="number", so once somebody edits it Angular's
+    // number accessor writes a NUMBER into this field, and `.trim()` on it threw - the save died
+    // in the console with nothing on screen, on every edit that touched the position.
+    const order = Number.parseInt(String(form.displayOrder ?? '').trim(), 10);
     const displayOrder = Number.isFinite(order) ? order : 0;
 
     if (this.isCreating()) {
@@ -580,13 +603,14 @@ export class MenuCatalogueComponent implements OnInit, OnDestroy {
     return `${depth * 1.5}rem`;
   }
 
+  /** A level as the server labels it. */
   levelLabel(level: string | undefined): string {
-    switch (level) {
-      case 'menu': return 'Menu';
-      case 'subMenu': return 'Submenu';
-      case 'childSubMenu': return 'Child submenu';
-      default: return '';
-    }
+    return enumLabel(this.levelOptions(), level);
+  }
+
+  /** A status as the server labels it. */
+  statusLabel(status: string | undefined): string {
+    return enumLabel(this.statusOptions(), status);
   }
 
   levelClass(level: string | undefined): string {

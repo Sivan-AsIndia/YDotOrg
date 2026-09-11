@@ -13,7 +13,9 @@ import {
   OrganisationStatisticsResponse,
   TenantStatus,
 } from '../../../../Shared/models/iam-contract.model';
+import { ApiEnumOption } from '../../../../Shared/models/enum-option.model';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
 import { NavigationService } from '../../../../Shared/services/navigation.service';
 import { OrganisationContextService } from '../../../../Shared/services/organisation-context.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
@@ -47,6 +49,7 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
   private readonly tokens = inject(AuthTokenService);
   private readonly organisationContext = inject(OrganisationContextService);
   private readonly navigation = inject(NavigationService);
+  private readonly enums = inject(EnumOptionsService);
 
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
@@ -78,24 +81,13 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
   readonly isSuperAdmin = computed(() => this.tokens.isSuperAdmin());
 
   /**
-   * The statuses to offer in the filter.
+   * The statuses to offer in the filter - the server's lifecycle, from `/reference-data/enums`.
    *
-   * Written out rather than fetched because they are the lifecycle itself, and the lifecycle is
-   * fixed by the domain — a new status means new server behaviour, not new configuration.
+   * THIS WAS A LITERAL LIST of eleven. The lifecycle is the domain's, and the server already
+   * serves it: a copy here could only drift, and a status added on the server could never be
+   * filtered for.
    */
-  readonly statusOptions: { value: TenantStatus; label: string }[] = [
-    { value: 'invited', label: 'Invitation sent' },
-    { value: 'invitationAccepted', label: 'Invitation accepted' },
-    { value: 'profileIncomplete', label: 'Profile incomplete' },
-    { value: 'submitted', label: 'Submitted' },
-    { value: 'underReview', label: 'Under review' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'resubmitted', label: 'Resubmitted' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'active', label: 'Active' },
-    { value: 'suspended', label: 'Suspended' },
-    { value: 'archived', label: 'Archived' },
-  ];
+  readonly statusOptions = signal<ApiEnumOption[]>([]);
 
   // =========================================================================================
   // Lifecycle
@@ -114,6 +106,15 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
 
     this.load();
     this.loadStatistics();
+
+    // A failure costs the filter its options and nothing else.
+    this.enums
+      .options('organisationStatuses')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (options) => this.statusOptions.set(options),
+        error: () => this.statusOptions.set([]),
+      });
   }
 
   ngOnDestroy(): void {
@@ -205,6 +206,18 @@ export class OrganisationDirectoryComponent implements OnInit, OnDestroy {
     }
 
     this.page.set(page);
+    this.load();
+  }
+
+  /**
+   * A new page size starts again at page one, with ONE request.
+   *
+   * The template used to call goToPage(1) and then load(): from any page but the first that was
+   * two identical requests racing each other.
+   */
+  onPageSizeChange(value: string | number): void {
+    this.pageSize.set(+value || 10);
+    this.page.set(1);
     this.load();
   }
 

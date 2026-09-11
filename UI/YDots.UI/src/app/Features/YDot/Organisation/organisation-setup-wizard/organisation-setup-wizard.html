@@ -109,6 +109,7 @@
             </div>
           </div>
 
+<<<<<<< HEAD
           <div class="org-field">
             <label class="org-field-label" for="org-name">Name <span class="org-required">*</span></label>
             <input id="org-name" type="text" class="org-input" maxlength="200"
@@ -118,6 +119,22 @@
                    placeholder="Hope Foundation">
             @if (fieldErrors()['name']) {
               <span class="org-field-error">{{ fieldErrors()['name'] }}</span>
+=======
+        @if (fieldErrors()['subdomain']) {
+          <span class="org-field-error">{{ fieldErrors()['subdomain'] }}</span>
+        }
+      </div>
+
+      <div class="org-grid org-grid-2">
+        <div class="org-field">
+          <label class="org-field-label" for="org-type">Type</label>
+          <select id="org-type" class="org-select"
+                  [ngModel]="form().organisationType"
+                  (ngModelChange)="update('organisationType', $event)">
+            <option value="">Not specified</option>
+            @for (type of organisationTypes(); track type) {
+              <option [value]="type">{{ type }}</option>
+>>>>>>> 70cf44fac337c00c1aa0d7a280c3a9103a17e591
             }
           </div>
 

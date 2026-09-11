@@ -1,4 +1,5 @@
 import { LookupItem as GeneratedLookupItem, OutcomeResponse as GeneratedOutcomeResponse, ValidationError } from './iam-contract.model';
+import { withoutGuids } from './identifier';
 
 /**
  * The envelope every IAM endpoint returns, for success and failure alike.
@@ -129,25 +130,32 @@ function envelopeOf(error: unknown): Partial<ApiResponse> | null {
   return null;
 }
 
-/** The message to show a person for any thrown error, with a sensible fallback. */
+/**
+ * The message to show a person for any thrown error, with a sensible fallback.
+ *
+ * NEVER WITH AN ID IN IT. A message the server composed can name a record by its GUID, and an
+ * `HttpErrorResponse` that never reached the interceptor carries Angular's own "Http failure
+ * response for <url>" - the URL holding every id in the path. Both are passed through
+ * `withoutGuids` on the way out.
+ */
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   const envelope = envelopeOf(error);
 
   if (envelope?.message) {
-    return envelope.message;
+    return withoutGuids(envelope.message);
   }
 
   // The interceptor's enrichment, which is a plain string property on the response object.
   if (error && typeof error === 'object') {
     const message = (error as Record<string, unknown>)['message'];
 
-    if (typeof message === 'string' && message.length > 0) {
-      return message;
+    if (typeof message === 'string' && message.length > 0 && !message.startsWith('Http failure')) {
+      return withoutGuids(message);
     }
   }
 
   if (error instanceof Error && error.message) {
-    return error.message;
+    return withoutGuids(error.message);
   }
 
   return fallback;

@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, forkJoin, map, switchMap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ApiResponse, OutcomeResponse, PagedResponse } from '../Shared/models/api-response.model';
+import { isGuid } from '../Shared/models/identifier';
 import {
   EnumOption,
   EnumOptionsResponse,
@@ -142,6 +143,14 @@ export class UserDirectoryApiService {
    * when one reference is a prefix of another.
    */
   getUserByReference(reference: string): Observable<UserDetailResponse> {
+    // AN ID IS ACCEPTED TOO. The directory opens a person by their id, and every screen reached
+    // from the profile (security, login-identifier change, details) carries that same route
+    // value on - but search matches names, e-mails and codes, never ids, so those screens all
+    // answered "Failed to load" for anybody opened from the directory.
+    if (isGuid(reference)) {
+      return this.getUser(reference);
+    }
+
     return this.searchUsers({ search: reference, pageSize: 5 } as UserSearchFilter).pipe(
       map((page) => {
         const match = (page.items ?? []).find(

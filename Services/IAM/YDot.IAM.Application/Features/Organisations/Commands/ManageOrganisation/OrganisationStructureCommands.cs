@@ -62,6 +62,11 @@ public sealed class OrganisationStructureCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<DepartmentResponse>(Error.TenantSelectionRequired());
+        }
+
         var tenantId = tenantContext.RequireTenantId();
         var request = command.Request;
 
@@ -116,6 +121,11 @@ public sealed class OrganisationStructureCommandHandler(
         UpdateDepartmentCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<DepartmentResponse>(Error.TenantSelectionRequired());
+        }
 
         var tenantId = tenantContext.RequireTenantId();
         var request = command.Request;
@@ -206,6 +216,11 @@ public sealed class OrganisationStructureCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
+        }
+
         var tenantId = tenantContext.RequireTenantId();
 
         var department = await structure.GetDepartmentAsync(command.Id, cancellationToken);
@@ -261,6 +276,11 @@ public sealed class OrganisationStructureCommandHandler(
         CreateOrganisationUnitCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<OrganisationUnitResponse>(Error.TenantSelectionRequired());
+        }
 
         var tenantId = tenantContext.RequireTenantId();
         var request = command.Request;
@@ -324,6 +344,11 @@ public sealed class OrganisationStructureCommandHandler(
         UpdateOrganisationUnitCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<OrganisationUnitResponse>(Error.TenantSelectionRequired());
+        }
 
         var tenantId = tenantContext.RequireTenantId();
         var request = command.Request;
@@ -406,6 +431,11 @@ public sealed class OrganisationStructureCommandHandler(
         DeleteOrganisationUnitCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<OutcomeResponse>(Error.TenantSelectionRequired());
+        }
 
         var tenantId = tenantContext.RequireTenantId();
 
@@ -646,6 +676,15 @@ public sealed class OrganisationStructureQueryHandler(
     {
         _ = query;
 
+        // A SuperAdmin at platform scope has no Organisation to read. RequireTenantId() would
+        // throw, which the pipeline turned into a 500 "something went wrong on our side" - for a
+        // request that is simply missing its context, and says so with a 409 like every other
+        // Organisation-scoped read.
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<IReadOnlyList<DepartmentResponse>>(Error.TenantSelectionRequired());
+        }
+
         var tenantId = tenantContext.RequireTenantId();
         var departments = await structure.GetDepartmentsAsync(tenantId, cancellationToken);
 
@@ -684,6 +723,12 @@ public sealed class OrganisationStructureQueryHandler(
         GetOrganisationUnitsQuery query, CancellationToken cancellationToken)
     {
         _ = query;
+
+        if (!tenantContext.HasTenant)
+        {
+            return Result.Failure<IReadOnlyList<OrganisationUnitResponse>>(
+                Error.TenantSelectionRequired());
+        }
 
         var tenantId = tenantContext.RequireTenantId();
         var units = await structure.GetUnitsAsync(tenantId, cancellationToken);

@@ -98,7 +98,8 @@ public sealed class LeadWorkQueueCommandHandler(
             PreviousOwnerUserId = previousOwnerId,
             PreviousOwnerName = previousOwnerName,
             NewOwnerUserId = currentUser.UserId,
-            NewOwnerName = currentUser.DisplayName ?? currentUser.UserId.ToString(),
+            // Printed on the assignment history, so a name or an e-mail - never the user's id.
+            NewOwnerName = currentUser.DisplayName ?? currentUser.Email ?? "Unknown user",
             AssignmentReason = command.Request.Comment?.Trim() ?? "Accepted from the lead work queue.",
             EffectiveAtUtc = now,
             AssignedByUserId = currentUser.UserId

@@ -252,7 +252,7 @@
             <select id="audit-result" class="form-select"
                     [ngModel]="result()" (ngModelChange)="result.set($event); applyFilters()">
               <option value="">All outcomes</option>
-              @for (option of results; track option.value) {
+              @for (option of results(); track option.value) {
                 <option [value]="option.value">{{ option.label }}</option>
               }
             </select>
@@ -360,7 +360,7 @@
                         </td>
 
                         <td>
-                          <span class="d-block">{{ event.actorDisplayName || 'System' }}</span>
+                          <span class="d-block">{{ event.actorDisplayName | readableId: 'System' }}</span>
                           @if (event.actorScope === 'global') {
                             <!--
                               Worth calling out: a platform administrator acting inside an
@@ -372,7 +372,7 @@
                         </td>
 
                         <td>
-                          <span class="d-block">{{ event.targetDisplayName || '—' }}</span>
+                          <span class="d-block">{{ event.targetDisplayName | readableId: '—' }}</span>
                           <small class="text-muted">{{ event.targetType }}</small>
                         </td>
 
@@ -381,7 +381,7 @@
                             {{ event.resultDisplay || event.result }}
                           </span>
                           @if (event.reason) {
-                            <small class="d-block text-muted mt-1">{{ event.reason }}</small>
+                            <small class="d-block text-muted mt-1">{{ readableText(event.reason) }}</small>
                           }
                         </td>
 
@@ -400,8 +400,8 @@
                           <td colspan="7">
                             <div class="row g-4 small">
                               <div class="col-md-4">
-                                <div class="text-muted">Correlation</div>
-                                <code>{{ event.correlationId || '—' }}</code>
+                                <div class="text-muted">Support reference</div>
+                                <code>{{ event.correlationId | supportRef }}</code>
                               </div>
                               <div class="col-md-4">
                                 <div class="text-muted">From</div>
@@ -410,7 +410,7 @@
                               </div>
                               <div class="col-md-4">
                                 <div class="text-muted">Request</div>
-                                <code>{{ event.requestPath || '—' }}</code>
+                                <code>{{ requestPathLabel(event.requestPath) }}</code>
                               </div>
 
                               @if (event.userAgent) {

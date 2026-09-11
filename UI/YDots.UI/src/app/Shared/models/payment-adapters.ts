@@ -50,6 +50,7 @@ import {
   RccReconciliationStatus,
   RccRefundCaseRecord,
 } from './refund-chargeback-case.model';
+import { readableIdentifier } from './identifier';
 
 // =============================================================================================
 // Shared formatting
@@ -710,14 +711,15 @@ export function toIntentScreenRecord(detail: DonationIntentDetail): DonationInte
       ...(detail.campaignId
         ? [
             {
-              primary: detail.campaignName ?? detail.campaignId,
+              primary: readableIdentifier(detail.campaignName, 'Unnamed campaign'),
               secondary: 'Campaign',
               meta: detail.sourceDescription,
             },
           ]
         : []),
       ...(detail.leadId
-        ? [{ primary: detail.leadId, secondary: 'Originating lead', meta: 'Donors and Leads' }]
+        // The intent carries the lead's id only, never its reference - so it is named, not printed.
+        ? [{ primary: 'Lead record', secondary: 'Originating lead', meta: 'Donors and Leads' }]
         : []),
       ...(detail.donation
         ? [

@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ToastService } from '../../../../Shared/services/toast.service';
+import { firstReadable } from '../../../../Shared/models/identifier';
 import { SecurityApiService } from '../../../../Service/security-api.service';
 import { UserDirectoryApiService } from '../../../../Service/user-directory-api.service';
 import {
@@ -143,7 +144,9 @@ export class UserSecurityComponent {
 
     return {
       user: {
-        reference: person?.code ?? this.userReference(),
+        // The user's code. The route parameter is usually their GUID - the directory links by
+        // id - so it is only used when it is itself a readable reference.
+        reference: firstReadable([person?.code, this.userReference()], ''),
         displayName: model.displayName ?? person?.displayName ?? '',
         passwordLastChanged: model.passwordChangedAtUtc
           ? this.formatDateTime(model.passwordChangedAtUtc)
@@ -526,7 +529,7 @@ export class UserSecurityComponent {
         this.api.exportUserSecurity(id).subscribe({
           next: (blob) => {
             this.directory.saveBlob(
-              blob, `security-${this.data()?.user.reference ?? id}.csv`);
+              blob, `security-${this.data()?.user.reference || 'user'}.csv`);
             done('The file has been downloaded.');
           },
           error: failed,

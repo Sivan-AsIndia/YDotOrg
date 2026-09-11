@@ -123,7 +123,7 @@
                     @else { <small class="text-muted">—</small> }
                   </td>
                   <td>
-                    <span class="badge" [class]="statusClass(node.status)">{{ node.status }}</span>
+                    <span class="badge" [class]="statusClass(node.status)">{{ statusLabel(node.status) }}</span>
                     @if (node.isMandatory) {
                       <span class="badge bg-secondary-subtle text-secondary ms-1"
                             title="Required: people must always be able to reach it">Required</span>
@@ -241,9 +241,9 @@
                   <select id="mc-level" class="form-select" [disabled]="!isCreating()"
                           [ngModel]="form().level" (ngModelChange)="patch('level', $event)">
                     <option value="" disabled>Select Level</option>
-                    <option value="menu">Menu</option>
-                    <option value="subMenu">Submenu</option>
-                    <option value="childSubMenu">Child submenu</option>
+                    @for (option of levelOptions(); track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
                   </select>
                   <small class="text-muted">Three levels; a child submenu cannot have children.</small>
                 </div>
@@ -337,10 +337,9 @@
                     <select id="mc-status" class="form-select"
                             [ngModel]="form().status" (ngModelChange)="patch('status', $event)">
                       <option value="" disabled>Select Status</option>
-                      <option value="active">Active</option>
-                      <option value="draft">Draft</option>
-                      <option value="hidden">Hidden</option>
-                      <option value="retired">Retired</option>
+                      @for (option of statusOptions(); track option.value) {
+                        <option [value]="option.value">{{ option.label }}</option>
+                      }
                     </select>
                   </div>
                 }

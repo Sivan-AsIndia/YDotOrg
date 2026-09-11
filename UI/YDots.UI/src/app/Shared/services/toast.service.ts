@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { Toast } from '../models/toast.model';
+import { withoutGuids } from '../models/identifier';
 
 @Injectable({
   providedIn:'root'
@@ -17,13 +18,15 @@ export class ToastService {
     duration:number=4000
   ){
 
+    // Many toasts relay a server sentence verbatim, so an id inside one is replaced by words
+    // here rather than at every call site. See Shared/models/identifier.
     const toast:Toast={
 
       id:++this.id,
 
-      title,
+      title:withoutGuids(title),
 
-      message,
+      message:withoutGuids(message),
 
       type
 

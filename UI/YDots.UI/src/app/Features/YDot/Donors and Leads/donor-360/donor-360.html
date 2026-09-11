@@ -384,7 +384,7 @@
                         @for (item of campaignHistory(); track item.id) {
                           @if (matchesSearch(item.id, item.name, item.status)) {
                             <tr>
-                              <td class="mono cell-id">{{ item.id }}</td>
+                              <td class="mono cell-id">{{ item.id | readableId: '—' }}</td>
                               <td>{{ item.name }}</td>
                               <td class="cell-muted">{{ item.role }}</td>
                               <td class="mono">{{ formatINR(item.amount) }}</td>
@@ -405,7 +405,7 @@
                   <ul class="simple-list">
                     @for (p of promises(); track p.id) {
                       <li>
-                        <span class="mono cell-id">{{ p.id }}</span>
+                        <span class="mono cell-id">{{ p.id | readableId: '—' }}</span>
                         <span class="mono">{{ formatINR(p.amount) }}</span>
                         <span class="cell-muted">Due {{ p.dueDate }}</span>
                         <span class="badge-pill badge-{{ badgeClass(p.status) }} badge-sm">{{ p.status }}</span>
@@ -490,7 +490,7 @@
                         @for (d of documents(); track d.id) {
                           @if (matchesSearch(d.id, d.name, d.type)) {
                             <tr>
-                              <td class="mono cell-id">{{ d.id }}</td>
+                              <td class="mono cell-id">{{ d.id | readableId: '—' }}</td>
                               <td>{{ d.name }}</td>
                               <td class="cell-muted">{{ d.type }}</td>
                               <td class="cell-muted">{{ d.uploadedOn }}</td>
@@ -510,7 +510,7 @@
                   <ul class="simple-list">
                     @for (dup of duplicateLinks(); track dup.id) {
                       <li>
-                        <span class="mono cell-id">{{ dup.reference }}</span>
+                        <span class="mono cell-id">{{ dup.reference | readableId: '—' }}</span>
                         <span class="cell-muted">{{ dup.matchReason }}</span>
                         <span class="badge-pill badge-{{ badgeClass(dup.similarity) }} badge-sm">{{ dup.similarity }}</span>
                       </li>

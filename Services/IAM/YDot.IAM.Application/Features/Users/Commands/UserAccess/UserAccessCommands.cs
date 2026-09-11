@@ -164,7 +164,7 @@ public sealed class UserAccessCommandHandler(
             assignment.RevokedAtUtc = now;
             assignment.RevokedByUserId = currentUser.UserId;
             assignment.RevocationReason = request.Justification ?? "Removed during a role change.";
-            revoked.Add(assignment.Role?.Code ?? assignment.RoleId.ToString());
+            revoked.Add(assignment.Role?.Code ?? "Role no longer available");
         }
 
         // Add what is new. An already-live assignment is left completely alone.

@@ -12,9 +12,9 @@ import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-r
 import {
   MfaRequirement,
   OrganisationDetailResponse,
-  TenantDocumentType,
 } from '../../../../Shared/models/iam-contract.model';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
 
@@ -54,8 +54,12 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly tokens = inject(AuthTokenService);
+  private readonly enums = inject(EnumOptionsService);
 
   private readonly destroy$ = new Subject<void>();
+
+  /** The tab the route asked for - 'settings' from the Settings menu item. */
+  private requestedTab: Tab | null = null;
 
   /** Set only on the platform route. Null means "my own organisation". */
   readonly organisationId = signal<string | null>(null);
@@ -110,19 +114,27 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
 
   readonly submitNotes = signal('');
 
-  readonly documentTypes: { value: TenantDocumentType; label: string }[] = [
-    { value: 'registrationCertificate', label: 'Registration certificate' },
-    { value: 'taxExemptionCertificate', label: 'Tax exemption certificate' },
-    { value: 'panCard', label: 'PAN card' },
-    { value: 'gstCertificate', label: 'GST certificate' },
-    { value: 'addressProof', label: 'Proof of address' },
-    { value: 'bankProof', label: 'Proof of bank account' },
-    { value: 'trustDeed', label: 'Trust deed' },
-    { value: 'annualReport', label: 'Annual report' },
-    { value: 'authorisedSignatoryProof', label: 'Authorised signatory proof' },
-    { value: 'logo', label: 'Logo' },
-    { value: 'other', label: 'Other' },
-  ];
+  // A literal `documentTypes` list lived here, left over from the upload form that moved to
+  // <app-document-submissions>. Nothing read it; it has been removed rather than left to drift.
+
+  /**
+   * The organisation types on offer, from the server - the same list the setup wizard offers.
+   *
+   * This box was free text, so a type picked from the wizard's list could be retyped here as
+   * anything at all.
+   */
+  readonly organisationTypes = signal<string[]>([]);
+
+  /**
+   * The types to show in the select: the server's list, plus the stored value when an older
+   * record holds something outside it - so opening the form never silently blanks it.
+   */
+  readonly organisationTypeOptions = computed(() => {
+    const current = this.form().organisationType.trim();
+    const types = this.organisationTypes();
+
+    return current && !types.includes(current) ? [current, ...types] : types;
+  });
 
   /**
    * Country, state and city from the GlobalMaster catalogue.
@@ -153,6 +165,29 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
     this.form.update((f) => ({ ...f, state: value, city: '' }));
     this.geo.selectState(value);
   }
+
+  // THE REGIONAL SETTINGS WERE SAVED BUT NEVER SHOWN IN THE FORM. saveProfile() has always sent
+  // timeZone, defaultCurrency and defaultCulture, and the read-only card displays them, but the
+  // edit form had no control for any of the three - so they could be set in the setup wizard and
+  // never changed again. The three below keep a stored value visible when the list on offer does
+  // not contain it (a country-filtered zone list, a retired currency), rather than blanking it.
+
+  protected readonly orphanTimeZone = computed(() => {
+    const value = this.form().timeZone;
+    return value && !this.geo.timeZones().some((zone) => zone.ianaKey === value) ? value : '';
+  });
+
+  protected readonly orphanCurrency = computed(() => {
+    const value = this.form().defaultCurrency;
+    return value && !this.geo.currencies().some((currency) => currency.code === value) ? value : '';
+  });
+
+  protected readonly orphanCulture = computed(() => {
+    const value = this.form().defaultCulture;
+    return value && !this.geo.languages().some((language) => language.cultureCode === value)
+      ? value
+      : '';
+  });
 
   // =========================================================================================
   // Derived
@@ -326,7 +361,44 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     this.organisationId.set(id);
+    this.requestedTab = (this.route.snapshot.data['tab'] as Tab | undefined) ?? null;
     this.load();
+
+    // A failure costs the Type select its options and nothing else; the stored value is still
+    // offered, see organisationTypeOptions.
+    this.enums
+      .organisationTypes()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (types) => this.organisationTypes.set(types),
+        error: () => this.organisationTypes.set([]),
+      });
+  }
+
+  /**
+   * Opens the tab the route asked for, once the organisation is known.
+   *
+   * THE SECURITY SETTINGS ONLY EXIST AFTER APPROVAL - the server refuses the save before then,
+   * which is why the tab is not drawn. Arriving from the Settings menu item before that point
+   * lands on the profile with a sentence saying why, rather than on a form that cannot be saved.
+   */
+  private applyRequestedTab(): void {
+    const requested = this.requestedTab;
+    this.requestedTab = null;
+
+    if (requested !== 'settings') {
+      return;
+    }
+
+    if (this.isOwnOrganisation() && this.isApproved()) {
+      this.tab.set('settings');
+      return;
+    }
+
+    this.toast.show(
+      'Security settings',
+      'These become available once the platform has approved this organisation.',
+      'info');
   }
 
   ngOnDestroy(): void {
@@ -346,6 +418,7 @@ export class OrganisationDetailComponent implements OnInit, OnDestroy {
         this.organisation.set(organisation);
         this.fillForms(organisation);
         this.loading.set(false);
+        this.applyRequestedTab();
       },
       error: (error: unknown) => {
         this.loading.set(false);

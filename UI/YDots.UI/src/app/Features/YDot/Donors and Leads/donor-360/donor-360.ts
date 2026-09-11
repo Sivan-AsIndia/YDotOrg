@@ -1,3 +1,4 @@
+import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 import { CommonModule } from '@angular/common';
 import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
@@ -18,7 +19,7 @@ import { PeopleDirectoryService } from '../../../../Shared/services/people-direc
 
 @Component({
   selector: 'app-donor-360',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ReadableIdPipe],
   templateUrl: './donor-360.html',
   styleUrl: './donor-360.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -267,7 +267,7 @@
                           <button type="button" class="link-cell" (click)="openLead(lead.reference); $event.stopPropagation()">
                             {{ lead.name }}
                           </button>
-                          <span class="cell-sub">{{ lead.reference }}</span>
+                          <span class="cell-sub">{{ lead.displayReference }}</span>
                         </td>
                         <td class="text-truncate-cell">{{ lead.campaign }}</td>
                         <!-- <td><span class="badge badge-stage">{{ lead.stage }}</span></td> -->
@@ -327,16 +327,16 @@
                 <div class="detail-list__row">
                   <dt>Lead reference</dt>
                   <dd class="ref-cell">
-                    {{ lead.reference }}
+                    {{ lead.displayReference }}
                     <button
                       type="button"
                       class="icon-btn-copy"
-                      [class.icon-btn-copy--done]="copiedRef() === lead.reference"
-                      (click)="copyReference(lead.reference, $event)"
-                      [attr.aria-label]="copiedRef() === lead.reference ? 'Copied' : 'Copy lead reference'"
-                      [title]="copiedRef() === lead.reference ? 'Copied!' : 'Copy reference'"
+                      [class.icon-btn-copy--done]="copiedRef() === lead.displayReference"
+                      (click)="copyReference(lead.displayReference, $event)"
+                      [attr.aria-label]="copiedRef() === lead.displayReference ? 'Copied' : 'Copy lead reference'"
+                      [title]="copiedRef() === lead.displayReference ? 'Copied!' : 'Copy reference'"
                     >
-                      @if (copiedRef() === lead.reference) {
+                      @if (copiedRef() === lead.displayReference) {
                         <!-- check icon -->
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                           <polyline points="20 6 9 17 4 12"></polyline>

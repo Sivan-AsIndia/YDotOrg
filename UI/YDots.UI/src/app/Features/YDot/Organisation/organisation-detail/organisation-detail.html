@@ -243,9 +243,15 @@
             </div>
             <div class="org-field">
               <label class="org-field-label" for="d-type">Type</label>
-              <input id="d-type" type="text" class="org-input" maxlength="100"
-                     [ngModel]="form().organisationType"
-                     (ngModelChange)="update('organisationType', $event)">
+              <!-- The server's list - the one the setup wizard offers. It was free text here. -->
+              <select id="d-type" class="org-select"
+                      [ngModel]="form().organisationType"
+                      (ngModelChange)="update('organisationType', $event)">
+                <option value="">Not specified</option>
+                @for (type of organisationTypeOptions(); track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
             </div>
             <div class="org-field">
               <label class="org-field-label" for="d-established">Established on</label>
@@ -363,6 +369,56 @@
               <label class="org-field-label" for="d-postal">Postal code</label>
               <input id="d-postal" type="text" class="org-input" maxlength="20"
                      [ngModel]="form().postalCode" (ngModelChange)="update('postalCode', $event)">
+            </div>
+          </div>
+
+          <!-- Saved by saveProfile() all along and shown on the profile card, but never offered
+               here. The options are the master catalogue's, narrowed to the chosen country. -->
+          <h4 class="org-doc-subheading">Regional settings</h4>
+          <div class="org-grid org-grid-2">
+            <div class="org-field">
+              <label class="org-field-label" for="d-timezone">Time zone</label>
+              <select id="d-timezone" class="org-select"
+                      [disabled]="!canEditField('timeZone')"
+                      [ngModel]="form().timeZone" (ngModelChange)="update('timeZone', $event)">
+                <option value="">Select a time zone</option>
+                @if (orphanTimeZone()) {
+                  <option [value]="orphanTimeZone()">{{ orphanTimeZone() }}</option>
+                }
+                @for (zone of geo.timeZones(); track zone.id) {
+                  <option [value]="zone.ianaKey">{{ zone.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-currency">Currency</label>
+              <select id="d-currency" class="org-select"
+                      [disabled]="!canEditField('defaultCurrency')"
+                      [ngModel]="form().defaultCurrency"
+                      (ngModelChange)="update('defaultCurrency', $event)">
+                <option value="">Select a currency</option>
+                @if (orphanCurrency()) {
+                  <option [value]="orphanCurrency()">{{ orphanCurrency() }}</option>
+                }
+                @for (currency of geo.currencies(); track currency.id) {
+                  <option [value]="currency.code">{{ currency.code }} — {{ currency.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="org-field">
+              <label class="org-field-label" for="d-culture">Language</label>
+              <select id="d-culture" class="org-select"
+                      [disabled]="!canEditField('defaultCulture')"
+                      [ngModel]="form().defaultCulture"
+                      (ngModelChange)="update('defaultCulture', $event)">
+                <option value="">Select a language</option>
+                @if (orphanCulture()) {
+                  <option [value]="orphanCulture()">{{ orphanCulture() }}</option>
+                }
+                @for (language of geo.languages(); track language.id) {
+                  <option [value]="language.cultureCode">{{ language.displayLabel }}</option>
+                }
+              </select>
             </div>
           </div>
 

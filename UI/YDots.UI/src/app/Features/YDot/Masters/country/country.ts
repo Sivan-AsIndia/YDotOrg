@@ -1,16 +1,27 @@
-import { Component, DestroyRef, OnInit, WritableSignal, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  OnInit,
+  WritableSignal,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MasterService } from '../master.service';
-import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
 import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-response.model';
+import { enumLabel } from '../../../../Shared/models/enum-option.model';
 import {
   CountryDetail,
   CountryListItem,
   CreateCountryRequest,
   EnumOption,
   GeographicRegion,
+  MasterDataStatus,
   UpdateCountryRequest,
   canPerform,
 } from '../../../../Shared/models/global-master.model';
@@ -75,23 +86,12 @@ interface Toast {
 export class Country implements OnInit {
   private readonly masterService = inject(MasterService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly people = inject(PeopleDirectoryService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
-  /**
-   * Who made a change, by name.
-   *
-   * THE AUDIT ROWS ON THIS SCREEN PRINTED THE RAW USER GUID. `createdByUserId` and
-   * `updatedByUserId` are exactly that - the API's Guid - so "Created by" and "Updated by" read
-   * as thirty-six characters of hexadecimal, which tells the reader nothing about who did it and
-   * cannot be looked up, repeated or recognised.
-   *
-   * IT NEVER FALLS BACK TO THE ID. PeopleDirectoryService resolves what it can and says "Unknown
-   * user" for what it cannot - which is the honest answer for somebody who has left the
-   * Organisation, or for a platform-scoped session where the tenant directory does not apply.
-   */
-  protected changedBy(userId?: string | null): string {
-    return userId ? this.people.name(userId) : '—';
-  }
+  // WHO MADE A CHANGE COMES FROM THE SERVER now - `createdByName` and `updatedByName` on the
+  // detail. This screen used to resolve the ids through PeopleDirectoryService, which reads the
+  // tenant user directory: at platform scope that call is refused with 403, so every row a
+  // SuperAdmin opened said "Unknown user", and a failed request was logged on every visit.
 
   /**
    * The most rows fetched for one filter.
@@ -111,6 +111,9 @@ export class Country implements OnInit {
    * expects back; `label` is what the person reads.
    */
   readonly regions = signal<EnumOption[]>([]);
+
+  /** The status filter's options, from the same call. */
+  readonly statuses = signal<EnumOption[]>([]);
 
   // ---------- view state ----------
   readonly view = signal<ViewMode>('list');
@@ -206,7 +209,10 @@ export class Country implements OnInit {
       .getReferenceData()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (data) => this.regions.set(data.regions),
+        next: (data) => {
+          this.regions.set(data.regions);
+          this.statuses.set(data.statuses);
+        },
         // A failed lookup leaves the region filter empty rather than blocking the grid. The
         // countries themselves are the point of the screen; the dropdown is a convenience.
         error: () => this.regions.set([]),
@@ -249,17 +255,14 @@ export class Country implements OnInit {
    * The quick pills win over the dropdown, which is the precedence the template already
    * implied by clearing one when the other is set.
    */
-  private resolveStatusFilter(): 'active' | 'inactive' | undefined {
+  private resolveStatusFilter(): MasterDataStatus | undefined {
     const pill = this.statusFilter();
     if (pill === 'active' || pill === 'inactive') {
       return pill;
     }
 
-    const dropdown = this.selectedStatus();
-    if (dropdown === 'Active') return 'active';
-    if (dropdown === 'Inactive') return 'inactive';
-
-    return undefined;
+    // The dropdown's values are the server's own codes, so they go straight through.
+    return (this.selectedStatus() as MasterDataStatus) || undefined;
   }
 
   private toModel(item: CountryListItem): CountryModel {
@@ -314,10 +317,11 @@ export class Country implements OnInit {
   // ================= list computed =================
 
   /**
-   * The regions actually present in the fetched rows, for the grid's own filter chips.
+   * The regions actually present in the fetched rows, for the Regions summary tile.
    *
-   * Labels come from the server's option list where one matches, so the chip reads "North
-   * America" rather than "northAmerica".
+   * NOT FOR THE FILTER, which it used to feed. Built from the rows, it shrank to the one region
+   * being filtered on, so a second region could not be chosen without clearing the first; the
+   * filter now offers the server's full region list.
    */
   readonly tableRegions = computed<string[]>(() =>
     Array.from(
@@ -325,10 +329,20 @@ export class Country implements OnInit {
     ).sort(),
   );
 
-  /** The label for a region value, falling back to the raw value when the list has not loaded. */
+  /**
+   * The label for a region value, falling back to the raw value when the list has not loaded.
+   *
+   * IT NEVER MATCHED BEFORE. The options arrived as "MiddleEast" and the rows carry "middleEast",
+   * so every lookup fell through to the raw code - which is why the filter read "middleEast" and
+   * "northAmerica". MasterService now hands the options over in the rows' own spelling.
+   */
   regionLabel(value: string | null | undefined): string {
-    if (!value) return '';
-    return this.regions().find((option) => option.value === value)?.label ?? value;
+    return enumLabel(this.regions(), value);
+  }
+
+  /** A status code as the server labels it - so a Draft row no longer reads "Inactive". */
+  statusLabel(value: string | null | undefined): string {
+    return enumLabel(this.statuses(), value);
   }
 
   /**
@@ -488,6 +502,11 @@ export class Country implements OnInit {
         next: (detail) => {
           this.country = { ...detail };
           this.editSnapshot = { ...detail };
+
+          // `country` is a plain field and nothing else changes here, so in a zoneless app the
+          // form would go on showing the grid row - blank numeric code, postal pattern and notes -
+          // until the person happened to click something.
+          this.cdr.markForCheck();
         },
         error: (error) =>
           this.showToast('error', 'Could not load the country', apiErrorMessage(error)),

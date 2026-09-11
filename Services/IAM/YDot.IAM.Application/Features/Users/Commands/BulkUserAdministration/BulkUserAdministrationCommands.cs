@@ -140,7 +140,10 @@ public sealed class BulkUserAdministrationCommandHandler(
                 BulkOperationId = operation.Id,
                 RowNumber = rowNumber,
                 UserId = userId,
-                SourceIdentifier = userId.ToString()
+
+                // Replaced by the e-mail or code below once the user is found. The job's row list
+                // shows this, so an unmatched row says so rather than printing the id it was sent.
+                SourceIdentifier = "User not in this organisation"
             };
 
             if (!byId.TryGetValue(userId, out var subject))

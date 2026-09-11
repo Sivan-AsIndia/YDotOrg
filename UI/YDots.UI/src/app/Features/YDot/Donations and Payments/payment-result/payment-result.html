@@ -113,7 +113,7 @@
         @if (verification()?.supportCorrelationReference) {
           <div class="pr-fact">
             <dt>Quote this to support</dt>
-            <dd>{{ verification()!.supportCorrelationReference }}</dd>
+            <dd>{{ verification()!.supportCorrelationReference | supportRef }}</dd>
           </div>
         }
       </dl>

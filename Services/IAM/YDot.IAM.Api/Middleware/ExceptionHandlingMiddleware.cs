@@ -67,7 +67,9 @@ public sealed class ExceptionHandlingMiddleware(
                 await auditor.RecordFailedAsync(
                     context.Request.Method,
                     context.Request.Path.Value ?? string.Empty,
-                    $"Unhandled {exception.GetType().Name}. See the log for correlation {correlationId}.",
+                    // The row carries the correlation id in its own column, so the sentence does not
+                    // repeat it - a GUID in a reason is thirty-two characters nobody can read.
+                    $"Unhandled {exception.GetType().Name}. The detail is in the service log for this request.",
                     CancellationToken.None);
             }
 

@@ -12,7 +12,7 @@ using YDot.IAM.Infrastructure.Authorization;
 namespace YDot.IAM.Api.Controllers;
 
 /// <summary>
-/// Roles and the permission catalogue.
+/// Roles. The permission catalogue is on <see cref="PermissionsController"/>.
 ///
 /// ROLES ARE TENANT-SPECIFIC, so every route here is scoped by the token. Two Organisations
 /// may both have a role coded ADMIN and neither can see the other.
@@ -282,44 +282,7 @@ public sealed class RolesController(
         return FromResult(result);
     }
 
-    // ---- Permission catalogue ---------------------------------------------------------------
-
-    [HttpGet("/api/v1/permissions")]
-    [HasPermission(PermissionCodes.PermissionsView)]
-    [ProducesResponseType(typeof(ApiResponse<PagedResponse<PermissionListItemResponse>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SearchPermissionsAsync(
-        [FromQuery] PermissionSearchFilter filter, CancellationToken cancellationToken)
-    {
-        logger.LogInformation("Searching permissions.");
-
-        var result = await queries.HandleAsync(new SearchPermissionsQuery(filter), cancellationToken);
-
-        if (result.IsFailure)
-            logger.LogWarning("Permission search failed.");
-
-        return FromResult(result);
-    }
-
-    /// <summary>
-    /// The permission matrix the role editor renders.
-    ///
-    /// Grouped by module and group, because a flat list of a hundred and thirty codes is
-    /// unusable and the point of the screen is to let somebody reason about what a role can do.
-    /// </summary>
-    [HttpGet("/api/v1/permissions/matrix")]
-    [HasPermission(PermissionCodes.PermissionsView)]
-    [ProducesResponseType(typeof(ApiResponse<PermissionMatrixResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPermissionMatrixAsync(
-        [FromQuery] Guid? roleId, CancellationToken cancellationToken)
-    {
-        logger.LogInformation("Getting permission matrix. RoleId: {RoleId}", roleId);
-
-        var result = await queries.HandleAsync(
-            new GetPermissionMatrixQuery(roleId), cancellationToken);
-
-        if (result.IsFailure)
-            logger.LogWarning("Failed to get permission matrix. RoleId: {RoleId}", roleId);
-
-        return FromResult(result);
-    }
+    // The permission catalogue (GET /api/v1/permissions and /permissions/matrix) moved to
+    // PermissionsController. It is platform data, and this controller's TenantContextRequired
+    // policy refused it to the SuperAdmin's Permission Catalogue screen at platform scope.
 }

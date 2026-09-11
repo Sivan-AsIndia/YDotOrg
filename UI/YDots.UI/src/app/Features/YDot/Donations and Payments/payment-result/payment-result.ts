@@ -5,6 +5,7 @@ import { CurrentUserService } from '../../../../Service/current-user.service';
 import { PaymentApiService } from '../../../../Service/payment-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { PaymentVerification } from '../../../../Shared/models/payment.model';
+import { SupportReferencePipe } from '../../../../Shared/pipes/support-reference.pipe';
 import {
   destinationAfterPayment,
   payerKind,
@@ -54,7 +55,7 @@ type ResultState = 'checking' | 'confirmed' | 'pending' | 'failed' | 'unknown';
  */
 @Component({
   selector: 'app-payment-result',
-  imports: [CommonModule],
+  imports: [CommonModule, SupportReferencePipe],
   templateUrl: './payment-result.html',
   styleUrl: './payment-result.css',
 })

@@ -309,7 +309,7 @@ public sealed class GovernanceQueryHandler(
                 item.Reason,
                 item.IpAddress,
                 item.ClientType.ToString(),
-                item.CorrelationId)));
+                AuditExportRow.ShortReference(item.CorrelationId))));
 
             filter.Page++;
         }

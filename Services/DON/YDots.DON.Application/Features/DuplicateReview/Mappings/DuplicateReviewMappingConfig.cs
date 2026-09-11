@@ -13,8 +13,10 @@ public static class DuplicateReviewMappingConfig
             mergeCase.Id,
             mergeCase.ReviewReference,
             mergeCase.Name,
-            mergeCase.CandidateADonor?.DisplayName ?? mergeCase.CandidateADonorId.ToString(),
-            mergeCase.CandidateBDonor?.DisplayName ?? mergeCase.CandidateBDonorId.ToString(),
+            // A candidate that did not load is named as such, never by its id: this list is read by
+            // a data steward, and a GUID in the name column is not a donor anybody can recognise.
+            CandidateName(mergeCase.CandidateADonor),
+            CandidateName(mergeCase.CandidateBDonor),
             mergeCase.IdentityConfidence.ToString(),
             mergeCase.Status.ToString(),
             mergeCase.Decision?.ToString(),
@@ -75,6 +77,11 @@ public static class DuplicateReviewMappingConfig
                 donor.CreatedAtUtc,
                 ContactMasking.Email(donor.PrimaryEmail, canSeeContact),
                 ContactMasking.Phone(donor.PrimaryPhone, canSeeContact));
+
+    private static string CandidateName(Donor? donor) =>
+        donor is null
+            ? "Donor not available"
+            : !string.IsNullOrWhiteSpace(donor.DisplayName) ? donor.DisplayName : donor.DonorNumber;
 
     /// <summary>Which review actions the case state allows.</summary>
     public static IReadOnlyList<string> PermittedActionsFor(DonorMergeCase mergeCase) =>

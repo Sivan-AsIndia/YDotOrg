@@ -89,7 +89,28 @@
                         (ngModelChange)="update('description', $event)"></textarea>
             </div>
 
-            @if (!isDepartments()) {
+            @if (isDepartments()) {
+              <!-- The API always took a head; the form never offered one, so the Head column could
+                   only ever read "—". The people are the Organisation's own, from the directory. -->
+              <div class="col-lg-6">
+                <label class="form-label small" for="s-head">Head</label>
+                <select id="s-head" class="form-select"
+                        [ngModel]="form().headUserId" (ngModelChange)="update('headUserId', $event)">
+                  <option value="">Select Head</option>
+                  @if (personMissing(form().headUserId)) {
+                    <option [value]="form().headUserId">{{ people.name(form().headUserId) }}</option>
+                  }
+                  @for (person of people.assignable(); track person.reference) {
+                    <option [value]="person.reference">
+                      {{ person.name }}@if (person.context) { — {{ person.context }} }
+                    </option>
+                  }
+                </select>
+                @if (people.loadError()) {
+                  <small class="text-danger">{{ people.loadError() }}</small>
+                }
+              </div>
+            } @else {
               <div class="col-lg-3">
                 <label class="form-label small" for="s-type">Kind</label>
                 <input id="s-type" type="text" class="form-control" maxlength="50"
@@ -97,20 +118,114 @@
                        placeholder="Head office, branch, region…">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small" for="s-city">City</label>
-                <input id="s-city" type="text" class="form-control" maxlength="100"
-                       [ngModel]="form().city" (ngModelChange)="update('city', $event)">
-              </div>
-              <div class="col-lg-3">
-                <label class="form-label small" for="s-country">Country</label>
-                <input id="s-country" type="text" class="form-control" maxlength="100"
-                       [ngModel]="form().country" (ngModelChange)="update('country', $event)">
+                <label class="form-label small" for="s-manager">Manager</label>
+                <select id="s-manager" class="form-select"
+                        [ngModel]="form().managerUserId"
+                        (ngModelChange)="update('managerUserId', $event)">
+                  <option value="">Select Manager</option>
+                  @if (personMissing(form().managerUserId)) {
+                    <option [value]="form().managerUserId">{{ people.name(form().managerUserId) }}</option>
+                  }
+                  @for (person of people.assignable(); track person.reference) {
+                    <option [value]="person.reference">{{ person.name }}</option>
+                  }
+                </select>
               </div>
               <div class="col-lg-3">
                 <label class="form-label small" for="s-email">Contact e-mail</label>
                 <input id="s-email" type="email" class="form-control" maxlength="256"
                        [ngModel]="form().contactEmail"
                        (ngModelChange)="update('contactEmail', $event)">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-phone">Contact phone</label>
+                <input id="s-phone" type="tel" class="form-control" maxlength="30"
+                       [ngModel]="form().contactPhone"
+                       (ngModelChange)="update('contactPhone', $event)">
+              </div>
+
+              <!-- The address: country, state and city from the master catalogue. They were three
+                   free-text boxes (the state not even on the form), so an office's address could
+                   not be matched to the catalogue every other address uses. -->
+              <div class="col-lg-6">
+                <label class="form-label small" for="s-address1">Address line 1</label>
+                <input id="s-address1" type="text" class="form-control" maxlength="200"
+                       [ngModel]="form().addressLine1"
+                       (ngModelChange)="update('addressLine1', $event)">
+              </div>
+              <div class="col-lg-6">
+                <label class="form-label small" for="s-address2">Address line 2</label>
+                <input id="s-address2" type="text" class="form-control" maxlength="200"
+                       [ngModel]="form().addressLine2"
+                       (ngModelChange)="update('addressLine2', $event)">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-country">Country</label>
+                <select id="s-country" class="form-select"
+                        [ngModel]="form().country" (ngModelChange)="onCountryChange($event)">
+                  <option value="">Select Country</option>
+                  @if (form().country && !geo.countryNames().includes(form().country)) {
+                    <option [value]="form().country">{{ form().country }}</option>
+                  }
+                  @for (name of geo.countryNames(); track name) {
+                    <option [value]="name">{{ name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-state">State or province</label>
+                @if (geo.hasStates()) {
+                  <select id="s-state" class="form-select"
+                          [ngModel]="form().state" (ngModelChange)="onStateChange($event)">
+                    <option value="">Select State</option>
+                    @if (form().state && !geo.stateNames().includes(form().state)) {
+                      <option [value]="form().state">{{ form().state }}</option>
+                    }
+                    @for (name of geo.stateNames(); track name) {
+                      <option [value]="name">{{ name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input id="s-state" type="text" class="form-control" maxlength="100"
+                         [ngModel]="form().state" (ngModelChange)="onStateChange($event)">
+                }
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-city">City</label>
+                @if (geo.cityNames().length) {
+                  <select id="s-city" class="form-select"
+                          [ngModel]="form().city" (ngModelChange)="update('city', $event)">
+                    <option value="">Select City</option>
+                    @if (form().city && !geo.cityNames().includes(form().city)) {
+                      <option [value]="form().city">{{ form().city }}</option>
+                    }
+                    @for (name of geo.cityNames(); track name) {
+                      <option [value]="name">{{ name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input id="s-city" type="text" class="form-control" maxlength="100"
+                         [ngModel]="form().city" (ngModelChange)="update('city', $event)">
+                }
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small" for="s-postal">Postal code</label>
+                <input id="s-postal" type="text" class="form-control" maxlength="20"
+                       [ngModel]="form().postalCode"
+                       (ngModelChange)="update('postalCode', $event)">
+              </div>
+              <div class="col-lg-6">
+                <label class="form-label small" for="s-timezone">Time zone</label>
+                <select id="s-timezone" class="form-select"
+                        [ngModel]="form().timeZone" (ngModelChange)="update('timeZone', $event)">
+                  <option value="">Select Time Zone</option>
+                  @if (orphanTimeZone()) {
+                    <option [value]="orphanTimeZone()">{{ orphanTimeZone() }}</option>
+                  }
+                  @for (zone of geo.timeZones(); track zone.id) {
+                    <option [value]="zone.ianaKey">{{ zone.name }}</option>
+                  }
+                </select>
               </div>
             }
 
@@ -124,16 +239,17 @@
             @if (editing() !== 'new') {
               <div class="col-lg-3">
                 <label class="form-label small" for="s-status">Status</label>
+                <!--
+                  Inactive is what to use instead of removing something that still has history
+                  attached: it disappears from the pickers and keeps everything that pointed at
+                  it intact. The options are the server's own statuses.
+                -->
                 <select id="s-status" class="form-select"
                         [ngModel]="form().status" (ngModelChange)="update('status', $event)">
                   <option value="" disabled>Select Status</option>
-                  <option value="active">Active</option>
-                  <!--
-                    Inactive is what to use instead of removing something that still has history
-                    attached: it disappears from the pickers and keeps everything that pointed at
-                    it intact.
-                  -->
-                  <option value="inactive">Inactive</option>
+                  @for (option of statusOptions(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
                 </select>
                 <div class="form-text">Inactive removes it from the pickers, keeping its history.</div>
               </div>
@@ -238,7 +354,7 @@
 
                   <td>
                     <span class="badge" [ngClass]="statusClass(row.status)">
-                      {{ row.status }}
+                      {{ statusLabel(row.status) }}
                     </span>
                   </td>
 

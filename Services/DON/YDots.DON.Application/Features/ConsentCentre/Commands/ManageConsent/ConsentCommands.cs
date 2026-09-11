@@ -258,7 +258,10 @@ public sealed class ConsentCommandHandler(
 
         await auditWriter.WriteAsync(
             new AuditEntry(AuditActionCodes.ConsentCorrected, nameof(Consent), corrected.Id, AuditResult.Succeeded,
-                $"Corrected {original.Id}. {command.Request.CorrectionReason.Trim()}"),
+                // The superseded row is named by what it WAS, not by its id - this sentence is read
+                // on the donor's activity history, where a GUID tells nobody which consent changed.
+                $"Corrected the {original.Channel} consent for {original.Purpose} effective " +
+                $"{original.EffectiveAtUtc:dd MMM yyyy}. {command.Request.CorrectionReason.Trim()}"),
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
