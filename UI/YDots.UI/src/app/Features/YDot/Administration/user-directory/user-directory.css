@@ -1,423 +1,1818 @@
 /* SCR-IAM-001 — User directory.
-   Folder tabs, a pill toolbar, dot-status rows and a floating bulk action bar, in the app's
-   Indigo palette. Page width, padding and position still come from the shell's app-wrapper /
-   page-wrapper / container-fluid, exactly as on every other page in this area. Nothing here
-   should try to own the page box — an earlier version did, with its own max-width and centring,
-   and the result was content sliding out from under the header. */
+   Page width, padding and position still come from the shell's app-wrapper / page-wrapper /
+   container-fluid, exactly as before — .dir-page only scopes tokens and owns nothing about the
+   page box itself, so nothing here can slide the content out from under the header again.
 
-.ud-page {
-  /* Indigo tokens — the palette the other Indigo-theme screens share. */
-  --ud-accent: #4f46e5;
-  --ud-accent-dark: #4338ca;
-  --ud-accent-soft: #eef0ff;
-  --ud-accent-ring: rgba(79, 70, 229, 0.22);
-  --ud-ink: #23263b;
-  --ud-muted: #8a8fa3;
-  --ud-faint: #b9bdcc;
-  --ud-line: #ecedf5;
-  --ud-line-soft: #f3f4fa;
-  --ud-tab-bg: #e9ebf3;
-  --ud-hover: #f8f9fe;
-  --ud-selected: #f4f5ff;
-  --ud-radius: 18px;
+   FIX: the design tokens below used to live on `.dir-page { --dir-brand: ...; }`. The popup
+   (.dir-dialog) and offcanvas (.dir-sheet) are rendered OUTSIDE .dir-page on purpose — they are
+   fixed-position overlays placed after </main> so they don't inherit the page's padding or
+   stacking context. But that also means they are not descendants of .dir-page, so every
+   var(--dir-*) inside them resolved to nothing and the popup/offcanvas design never applied.
+   Moving the tokens to :root fixes that — they now cascade to every element on the page,
+   .dir-page included. */
+
+:root {
+  --dir-brand-900: #1c2f26;
+  --dir-brand-700: #24402f;
+  --dir-brand-600: #2c4d39;
+  --dir-brand: #315746;
+  --dir-brand-400: #5a8069;
+  --dir-brand-200: #a9c4b3;
+  --dir-brand-100: #dfeae2;
+  --dir-brand-50: #f0f6f2;
+  --dir-ink-900: #182420;
+  --dir-ink-700: #3d4a44;
+  --dir-ink-500: #66756e;
+  --dir-ink-400: #8a978f;
+  --dir-line: #e2e9e4;
+  --dir-line-soft: #edf2ee;
+  --dir-amber: #a3660c;
+  --dir-amber-bg: #fbf1de;
+  --dir-amber-line: #f0dcb2;
+  --dir-red: #a5402a;
+  --dir-red-bg: #fbeae5;
+  --dir-red-line: #f0cec2;
+  --dir-blue: #35617f;
+  --dir-slate: #65706c;
+  --dir-radius-sm: 8px;
+  --dir-radius-md: 12px;
+  --dir-radius-lg: 16px;
+  --dir-shadow-1: 0 1px 2px rgba(24, 36, 32, 0.06);
+  --dir-shadow-2: 0 8px 28px rgba(24, 36, 32, 0.10), 0 2px 6px rgba(24, 36, 32, 0.06);
 }
 
-/* ---- Folder tabs --------------------------------------------------------------------------
-   The tabs ARE the status filter. The active tab is white and visually opens into the card
-   below it, which is why the card's top-left corner is square. */
+.dir-page {
+  color: var(--dir-ink-900);
+  font-size: 14px;
+}
 
-.ud-tabs {
+/* ---- Breadcrumb + header --------------------------------------------------------------- */
+
+.dir-crumb {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
-  overflow-x: auto;
-  padding: 0 2px;
+  font-size: 12.5px;
+  color: var(--dir-ink-400);
+  font-weight: 600;
+  margin-bottom: 10px;
 }
 
-.ud-tab {
+.dir-crumb-sep {
+  color: var(--dir-brand-200);
+  font-weight: 400;
+}
+
+.dir-crumb-current {
+  color: var(--dir-brand-600);
+}
+
+.dir-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.dir-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--dir-ink-900);
+  letter-spacing: -0.01em;
+}
+
+.dir-subtitle {
+  color: var(--dir-ink-500);
+  font-size: 14px;
+  max-width: 52ch;
+}
+
+.dir-scope {
+  color: var(--dir-brand-600);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ---- Buttons ---------------------------------------------------------------------------- */
+
+.dir-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border: 0;
-  background: var(--ud-tab-bg);
-  color: var(--ud-muted);
-  padding: 0.7rem 1.1rem;
-  font-size: 0.87rem;
-  font-weight: 500;
-  border-radius: 14px 14px 0 0;
-  white-space: nowrap;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 8px 14px;
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 650;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  border: 1px solid transparent;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
+  white-space: nowrap;
 }
 
-.ud-tab:hover {
-  color: var(--ud-ink);
+.dir-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
 }
 
-.ud-tab-active,
-.ud-tab-active:hover {
-  background: #ffffff;
-  color: var(--ud-accent);
-  font-weight: 600;
+.dir-btn-primary {
+  background: linear-gradient(135deg, #2f6b4f, #234e3a);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(47, 107, 79, .28);
+  border-color: #2f6b4f;
 }
 
-.ud-tab-icon {
-  font-size: 1.05rem;
+.dir-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #234e3a, #1c4130);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(47, 107, 79, .32);
 }
 
-.ud-tab-count {
-  min-width: 1.55rem;
-  padding: 0.1rem 0.45rem;
+.dir-btn-line {
+  background: #fff;
+  color: var(--dir-ink-700);
+  border-color: var(--dir-line);
+}
+
+.dir-btn-line:hover:not(:disabled) {
+  border-color: #c4dccf;
+  color: #234e3a;
+  background: #f2f7f3;
+}
+
+.dir-btn-warning {
+  background: var(--dir-amber);
+  color: #fff;
+}
+
+.dir-btn-warning:hover:not(:disabled) {
+  background: #8c580a;
+}
+
+.dir-btn-success {
+  background: var(--dir-brand);
+  color: #fff;
+}
+
+.dir-btn-success:hover:not(:disabled) {
+  background: var(--dir-brand-700);
+}
+
+.dir-btn-danger {
+  background: var(--dir-red);
+  color: #fff;
+}
+
+.dir-btn-danger:hover:not(:disabled) {
+  background: #8a3320;
+}
+
+.dir-count-chip {
+  background:
+color-mix(in srgb, var(--primary) 8%, white);
+  color: var(--primary);
   border-radius: 999px;
-  background: #dde0eb;
-  color: #6d7286;
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.5;
-  text-align: center;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  margin-left: 2px;
 }
 
-.ud-tab-active .ud-tab-count {
-  background: var(--ud-accent);
-  color: #ffffff;
+/* ---- Status tabs — base ONLY (look: kadaisi .dir-tab block) -------------------- */
+
+.dir-tabs {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-/* ---- Card --------------------------------------------------------------------------------- */
+.dir-tab {
+  min-width: 0;
+  cursor: pointer;
+}
 
-.ud-card {
-  background: #ffffff;
-  border: 1px solid var(--ud-line);
-  border-radius: 0 var(--ud-radius) var(--ud-radius) var(--ud-radius);
-  box-shadow: 0 1px 2px rgba(23, 23, 43, 0.04);
-  overflow: hidden;
+.dir-tab-num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Toolbar ------------------------------------------------------------------------------ */
 
-.ud-toolbar {
+.dir-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.ud-search {
+.dir-search {
   position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1 1 320px;
-  max-width: 480px;
+  flex: 1 1 280px;
+  max-width: 400px;
 }
 
-.ud-search-icon {
+.dir-search-icon {
   position: absolute;
-  left: 1rem;
-  color: var(--ud-muted);
-  pointer-events: none;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dir-ink-400);
+  font-size: 15px;
 }
 
-.ud-search-input {
+.dir-search-input {
   width: 100%;
-  border: 1px solid var(--ud-line);
-  border-radius: 999px;
-  padding: 0.6rem 3.1rem 0.6rem 2.5rem;
-  font-size: 0.9rem;
-  color: var(--ud-ink);
-  background: #ffffff;
+  padding: 9px 40px 9px 34px;
+  border-radius: 9px;
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  font-size: 13.5px;
+  color: var(--dir-ink-900);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color .12s ease, box-shadow .12s ease;
 }
 
-.ud-search-input::placeholder {
-  color: var(--ud-faint);
+.dir-search-input::placeholder {
+  color: var(--dir-ink-400);
 }
 
-.ud-search-input:focus {
-  border-color: var(--ud-accent);
-  box-shadow: 0 0 0 3px var(--ud-accent-ring);
+.dir-search-input:focus {
+  border-color: var(--dir-brand-400);
+  box-shadow: 0 0 0 3px var(--dir-brand-100);
 }
 
-/* The sliders button that opens the advanced filter panel, inside the pill on the right. */
-.ud-filter-toggle {
+.dir-search-adorn {
   position: absolute;
-  right: 0.4rem;
-  width: 2.1rem;
-  height: 2.1rem;
-  border: 0;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: transparent;
-  color: var(--ud-muted);
-  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--dir-ink-400);
+  display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.ud-filter-toggle:hover,
-.ud-filter-toggle-on {
-  background: var(--ud-accent-soft);
-  color: var(--ud-accent);
+.dir-search-adorn:hover,
+.dir-search-adorn-on {
+  background:
+color-mix(in srgb, var(--primary) 9%, white);
+  color: var(--primary);
 }
 
-/* ---- Toolbar buttons ---------------------------------------------------------------------- */
-
-.ud-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--ud-accent);
-  color: #ffffff;
-  font-size: 0.88rem;
-  font-weight: 600;
-  padding: 0.6rem 1.25rem;
-  cursor: pointer;
-  box-shadow: 0 8px 18px -10px rgba(79, 70, 229, 0.7);
-  transition: background-color 0.15s ease;
+.dir-select-wrap {
+  position: relative;
 }
 
-.ud-btn-primary:hover {
-  background: var(--ud-accent-dark);
-}
-
-.ud-btn-primary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.ud-btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid var(--ud-line);
-  border-radius: 999px;
-  background: #ffffff;
-  color: var(--ud-ink);
-  font-size: 0.88rem;
-  font-weight: 600;
-  padding: 0.6rem 1.15rem;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.ud-btn-ghost:hover {
-  border-color: var(--ud-faint);
-  background: #fafbff;
-}
-
-.ud-btn-ghost:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/* ---- Advanced filters --------------------------------------------------------------------- */
-
-.ud-advanced {
-  margin: 0 1.25rem 1rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--ud-line);
-  border-radius: 14px;
-  background: #fafbfe;
-}
-
-/* ---- Table --------------------------------------------------------------------------------- */
-
-.ud-table thead th {
-  padding: 0.8rem 1rem;
-  font-size: 0.8rem;
+.dir-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 9px 30px 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--ud-muted);
-  background: #fbfbfe;
-  border-bottom: 1px solid var(--ud-line);
+  color: var(--dir-ink-700);
+  cursor: pointer;
+  outline: none;
+  transition: border-color .12s ease;
+}
+
+.dir-select:focus {
+  border-color: var(--dir-brand-400);
+}
+
+.dir-select-chev {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--dir-ink-400);
+  font-size: 15px;
+}
+
+.dir-toolbar-spacer {
+  flex: 1;
+}
+
+.dir-filter-summary {
+  color: var(--dir-ink-400);
+}
+
+.dir-clear-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dir-brand-600);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+
+.dir-clear-link:hover {
+  text-decoration: underline;
+}
+
+.dir-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dir-ink-500);
+  cursor: pointer;
+}
+
+.dir-icon-btn:hover {
+  background: #f2f7f3;
+  color: #234e3a;
+  border-color: #c4dccf;
+}
+
+/* ---- Advanced filter panel ------------------------------------------------------------------ */
+
+.dir-advanced {
+  padding: 16px;
+  border: 1px solid var(--dir-line);
+  border-radius: 14px;
+  background: #fafcfb;
+  margin-bottom: 14px;
+}
+
+.dir-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dir-pill {
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  color: var(--dir-ink-500);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.dir-pill:hover {
+  border-color: var(--dir-brand-400);
+  color: var(--dir-brand-700);
+}
+
+.dir-pill-active,
+.dir-pill-active:hover {
+  background: var(--dir-brand);
+  border-color: var(--dir-brand);
+  color: #fff;
+}
+
+/* ---- Table card ------------------------------------------------------------------------- */
+
+.dir-table-card {
+  background: #fff;
+  border: 1px solid var(--dir-line);
+  border-radius: 14px;
+  box-shadow: var(--dir-shadow-1);
+  overflow: hidden;
+}
+
+.dir-table thead th {
+  font-size: 10.5px;
+  font-weight: 700;
+  /* text-transform: uppercase; */
+  letter-spacing: .05em;
+  color: black;
+  padding: 12px 16px;
+  background: #6666660d;
+  border-bottom: 1px solid #bebebe45;
   white-space: nowrap;
 }
 
-.ud-table thead th:first-child,
-.ud-table tbody td:first-child {
+.dir-table thead th:first-child,
+.dir-table tbody td:first-child {
   padding-left: 1.25rem;
 }
 
-.ud-table thead th:last-child,
-.ud-table tbody td:last-child {
+.dir-table thead th:last-child,
+.dir-table tbody td:last-child {
   padding-right: 1.25rem;
 }
 
-/* Bootstrap paints every cell from --bs-table-bg, which would hide any row colour, so the
-   state colours live on the cells themselves. */
-.ud-table tbody td {
-  padding: 0.9rem 1rem;
+.dir-table tbody td {
+  padding: 13px 16px;
   background-color: transparent;
-  border-bottom: 1px solid var(--ud-line-soft);
+  border-bottom: 1px solid var(--dir-line-soft);
   vertical-align: middle;
+  color: var(--dir-ink-700);
 }
 
-.ud-table tbody tr {
-  transition: background-color 0.12s ease;
-}
-
-.ud-table tbody tr:hover td {
-  background-color: var(--ud-hover);
-}
-
-.ud-table tbody tr.ud-row-selected td,
-.ud-table tbody tr.ud-row-selected:hover td {
-  background-color: var(--ud-selected);
-}
-
-.ud-table tbody tr.ud-row-selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--ud-accent);
-}
-
-.ud-table tbody tr:last-child td {
+.dir-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.ud-table .form-check-input {
+.dir-table tbody tr:hover td {
+  background-color: #f5f9f6;
+}
+
+.dir-table tbody tr.dir-row-selected td,
+.dir-table tbody tr.dir-row-selected:hover td {
+  background-color: color-mix(in srgb, var(--primary) 2%, white);
+}
+
+.dir-table tbody tr.dir-row-selected td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 89%, white);
+  border-radius: 0;
+}
+
+.dir-table .form-check-input {
   width: 1.05rem;
   height: 1.05rem;
   border-color: #c9cddd;
-  accent-color: var(--ud-accent);
+  accent-color: #2f6b4f;
   cursor: pointer;
 }
 
-/* Name column sort — the arrow only shows on hover or while a direction is set. */
-.ud-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 0;
-  background: none;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.ud-sort-arrow {
-  font-size: 1.05rem;
-  opacity: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.ud-sort:hover .ud-sort-arrow {
-  opacity: 0.55;
-}
-
-.ud-sort-arrow.ud-sort-on {
-  opacity: 1;
-  color: var(--ud-accent);
-}
-
-.ud-sort-arrow.ud-sort-asc {
-  transform: rotate(180deg);
-}
-
-.ud-name-btn {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--ud-ink);
-  font-weight: 600;
-  font-size: 0.92rem;
-  text-align: start;
-  cursor: pointer;
-}
-
-.ud-name-btn:hover {
-  color: var(--ud-accent);
-}
-
-/* Without an explicit min-width of 0, a flex child refuses to shrink and `text-truncate`
-   silently does nothing — long e-mail addresses would then stretch the whole table. */
 .min-w-0 {
   min-width: 0;
 }
 
-/* ---- Avatar ------------------------------------------------------------------------------ */
+.dir-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
 
-.ud-avatar {
+.dir-sort-arrow {
+  font-size: 13px;
+  opacity: .45;
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.dir-sort-on .dir-sort-arrow {
+  opacity: 1;
+  color: #2f6b4f;
+}
+
+.dir-sort-arrow.dir-sort-desc {
+  transform: rotate(180deg);
+}
+
+.dir-name-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--dir-ink-900);
+}
+
+.dir-name-btn:hover {
+  color: #234e3a;
+  text-decoration: underline;
+}
+
+.dir-email {
+  font-size: 12.5px;
+  color: var(--dir-ink-500);
+}
+
+.dir-org-primary {
+  font-size: 13px;
+  color: var(--dir-ink-700);
+  font-weight: 500;
+}
+
+.dir-org-secondary {
+  font-size: 12px;
+  color: var(--dir-ink-400);
+  margin-top: 1px;
+}
+
+.dir-role-text {
+  font-size: 12.5px;
+  color: var(--dir-ink-700);
+  max-width: 200px;
+}
+
+/* ---- Status + MFA pills (statusClass() returns ud-badge-good / danger / blue / muted) -------- */
+
+.dir-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: .01em;
+}
+
+.dir-status-pill .dir-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.ud-badge-good.dir-status-pill,
+.dir-status-pill.ud-badge-good {
+  background: #e6f4ec;
+  color: #22714d;
+  border-color: #bfe3cd;
+}
+
+.ud-badge-danger.dir-status-pill,
+.dir-status-pill.ud-badge-danger {
+  background: #fbeae9;
+  color: #a5402a;
+  border-color: #f0cec2;
+}
+
+.ud-badge-blue.dir-status-pill,
+.dir-status-pill.ud-badge-blue {
+  background: #e8f1f8;
+  color: #2f5d7d;
+  border-color: #c3d9e8;
+}
+
+.ud-badge-muted.dir-status-pill,
+.dir-status-pill.ud-badge-muted {
+  background: #eef1f5;
+  color: #5b6472;
+  border-color: #d8dde4;
+}
+
+.ud-badge-active.dir-status-pill,
+.dir-status-pill.ud-badge-active {
+  background: #e6f4ec;
+  color: #22714d;
+  border-color: #bfe3cd;
+}
+
+.ud-badge-info.dir-status-pill,
+.dir-status-pill.ud-badge-info {
+  background: #e8f1f8;
+  color: #2f5d7d;
+  border-color: #c3d9e8;
+}
+
+.ud-badge-warn.dir-status-pill,
+.dir-status-pill.ud-badge-warn {
+  background: #faf0da;
+  color: #96660a;
+  border-color: #ecd9a8;
+}
+
+.dir-locked {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dir-red);
+}
+
+.dir-mfa {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.dir-mfa i {
+  font-size: 13px;
+}
+
+.dir-mfa.ud-badge-good {
+  background: #e6f4ec;
+  color: #22714d;
+  border-color: #bfe3cd;
+}
+
+.dir-mfa.ud-badge-muted {
+  background: #eef1f5;
+  color: #5b6472;
+  border-color: #d8dde4;
+}
+
+/* ---- Kebab menu (native <details>/<summary>, no extra component state needed) ------------ */
+
+.dir-menu-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.dir-menu-wrap summary {
+  list-style: none;
+}
+
+.dir-menu-wrap summary::-webkit-details-marker {
+  display: none;
+}
+
+.dir-kebab {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--dir-ink-500);
+  border: 1px solid transparent;
+}
+
+.dir-menu-wrap[open] .dir-kebab {
+  background: var(--dir-brand-100);
+  color: var(--dir-brand-700);
+  border-color: var(--dir-brand-200);
+}
+
+.dir-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  z-index: 40;
+  background: #fff;
+  border: 1px solid var(--dir-line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(16,24,40,.18);
+  min-width: 210px;
+  padding: 6px;
+  text-align: left;
+  animation: dir-menu-in .14s ease;
+}
+
+@keyframes dir-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dir-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dir-ink-700);
+  cursor: pointer;
+  text-align: left;
+}
+
+.dir-menu button:hover {
+  background: #f0f6f2;
+  color: #24402f;
+}
+
+.dir-menu-danger {
+  color: var(--dir-red) !important;
+}
+
+.dir-menu-danger:hover {
+  background: var(--dir-red-bg) !important;
+}
+
+.dir-menu-sep {
+  height: 1px;
+  background: var(--dir-line-soft);
+  margin: 5px 4px;
+}
+
+/* ---- Avatar — letter profile, different colour per first letter -------------------------- */
+
+.dir-avatar {
   width: 38px;
   height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: var(--ud-accent-soft);
-  color: var(--ud-accent);
-  font-weight: 600;
-  font-size: 0.8rem;
+  background: linear-gradient(135deg, #2f6b4f, #5a8069);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+  border: 2px solid #fff;
+  outline: 1px solid #c4dccf;
+  box-shadow: 0 1px 3px rgba(16,24,40,.18);
+  flex-shrink: 0;
 }
 
-.ud-avatar-lg {
-  width: 56px;
-  height: 56px;
-  font-size: 1.1rem;
+/* First-letter buckets — avatarClass() in TS returns dir-av-0 … dir-av-7.
+   Unprefixed so these apply consistently both in the table (inside .dir-page) and in the
+   slide-over's larger avatar (outside .dir-page) — see FIX note at the top of this file. */
+.dir-avatar.dir-av-0 { background: linear-gradient(135deg, #2f6b4f, #5a8069); outline-color: #c4dccf; }
+.dir-avatar.dir-av-1 { background: linear-gradient(135deg, #35617f, #6ba3c4); outline-color: #c3d9e8; }
+.dir-avatar.dir-av-2 { background: linear-gradient(135deg, #6d4fc2, #9a8bd4); outline-color: #d4cdea; }
+.dir-avatar.dir-av-3 { background: linear-gradient(135deg, #a5402a, #d47a63); outline-color: #f0cec2; }
+.dir-avatar.dir-av-4 { background: linear-gradient(135deg, #a3660c, #d9a441); outline-color: #f0dcb2; }
+.dir-avatar.dir-av-5 { background: linear-gradient(135deg, #0e7490, #3fb3cf); outline-color: #bfe6f1; }
+.dir-avatar.dir-av-6 { background: linear-gradient(135deg, #4d5f6b, #8ba0ad); outline-color: #cfd9de; }
+.dir-avatar.dir-av-7 { background: linear-gradient(135deg, #334155, #7c8da6); outline-color: #c6d0da; }
+
+/* Card filter — NOTE: full look kadaisi .dir-tab block-la.
+   Inga per-tab image base + gray overlay base mattum. */
+
+.dir-tab {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #334155;
+  color: #fff;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(16,24,40,.18);
 }
 
-/* ---- Dialogs ------------------------------------------------------------------------------ */
-
-.ud-backdrop {
-  position: fixed;
+.dir-tab::before {
+  content: '';
+  position: absolute;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.55);
-  z-index: 1055;
-  overflow-y: auto;
+  z-index: -2;
+  background: linear-gradient(135deg, #334155 0%, #64748b 55%, #1e293b 100%);
 }
 
-.ud-dialog {
-  max-width: 620px;
-  /* Long records still scroll inside the dialog rather than pushing it off the screen. */
-  max-height: calc(100vh - 3rem);
-  overflow-y: auto;
+/* MELLA: gray overlay — image-ku mela, content-ku keela */
+.dir-tab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
 }
 
-.ud-dialog-icon {
-  width: 60px;
-  height: 60px;
+.dir-tab[data-tab="invited"]::before {
+  background: linear-gradient(135deg, #0c4a6e 0%, #6366f1 60%, #1e1b4b 100%);
+}
+
+.dir-tab[data-tab="suspended"]::before {
+  background: linear-gradient(135deg, #78350f 0%, #ef4444 60%, #1c1917 100%);
+}
+
+.dir-tab[data-tab="draft"]::before {
+  background: linear-gradient(135deg, #334155 0%, #64748b 60%, #0f172a 100%);
+}
+
+.dir-tab[data-tab="all"]::before,
+.dir-tab[data-tab="active"]::before {
+  background: linear-gradient(135deg, #065f46 0%, #0ea5e9 60%, #1e293b 100%);
+}
+
+.dir-tab .dir-tab-ico {
+  order: 1;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 18px;
+  background: rgba(255,255,255,.20);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.45);
+  backdrop-filter: blur(2px);
+}
+
+/* Number — bold + big (kadaisi block 34px-ku override pannum) */
+.dir-tab-num {
+  order: 2;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,.40);
+}
+
+.dir-tab-label {
+  order: 3;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(255,255,255,.94);
+  text-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+
+.dir-tab-active {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(47,107,79,.35), 0 8px 22px rgba(16,24,40,.25);
+}
+
+.dir-tab-active .dir-tab-num { color: #fff; }
+
+/* ---- Table footer / pagination — already irukura page design (card + dir tokens).
+   NOTE: the real override for this lives in the "PRO OVERRIDES" block below, targeting
+   .dir-table-foot directly — the markup has no .dir-pagination-shell wrapper, so a selector
+   requiring one never matched. */
+.dir-table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--dir-line);
+  background: #fff;
+}
+
+.dir-page-size {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dir-ink-700);
+  background: #f0f6f2;
+  outline: none;
+  cursor: pointer;
+}
+
+.dir-page-size:focus { background: #fff; border-color: #5a8069; box-shadow: 0 0 0 3px #dfeae2; }
+
+.dir-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dir-pager-btn {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  color: var(--dir-ink-500);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 1px 2px rgba(16,24,40,.05);
+}
+
+.dir-pager-btn:hover:not(:disabled) {
+  border-color: #a9c4b3;
+  color: #24402f;
+  background: #f0f6f2;
+  transform: translateY(-1px);
+}
+
+.dir-pager-current,
+.dir-pager-current:hover {
+  background: linear-gradient(135deg, #315746, #24402f);
+  border-color: #315746;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(49,87,70,.35);
+}
+
+.dir-pager-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* ---- Empty / loading / error states -------------------------------------------------------- */
+
+.dir-state {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.dir-state-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
   border-radius: 50%;
-  font-size: 26px;
+  background:
+color-mix(in srgb, var(--primary) 5%, white);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.dir-state-icon i {
+  font-size: 22px !important;
+}
+.dir-state-icon-danger {
+  background: var(--dir-red-bg);
+  color: var(--dir-red);
 }
 
-.ud-dialog-icon-warning {
-  background-color: rgba(245, 158, 11, 0.12);
-  color: #d97706;
+.dir-state-title {
+  font-weight: 600;
+  color: var(--dir-ink-900);
+  margin: 0 0 4px;
 }
 
-.ud-dialog-icon-danger {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+.dir-state-text {
+  color: var(--dir-ink-500);
+  font-size: 13.5px;
 }
 
-.ud-dialog-icon-success {
-  background-color: rgba(16, 185, 129, 0.12);
-  color: #059669;
+/* ---- Bulk bar ------------------------------------------------------------------------------- */
+
+.dir-bulk-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  background: var(--dir-brand-900);
+  color: #fff;
+  padding: 10px 12px 10px 18px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 14px 36px rgba(18, 30, 25, .32);
+  z-index: 1040;
 }
 
-.ud-dialog-icon-primary {
-  background-color: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
+.dir-bulk-count {
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
-/* ---- Detail labels -------------------------------------------------------------------------- */
-
-.ud-label {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
-  margin-bottom: 0.1rem;
+.dir-bulk-bar .dir-btn-primary {
+  background: #fff;
+  color: var(--dir-brand-900);
 }
 
-.ud-value {
-  font-size: 0.9rem;
+.dir-bulk-bar .dir-btn-primary:hover {
+  background: var(--dir-brand-100);
+}
+
+.dir-bulk-bar .dir-btn-line {
+  background: none;
+  border-color: rgba(255, 255, 255, .28);
+  color: #fff;
+}
+
+.dir-bulk-bar .dir-btn-line:hover {
+  background: rgba(255, 255, 255, .12);
+}
+
+/* ---- Overlay + slide-over ------------------------------------------------------------------ */
+
+.dir-overlay,
+.dir-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(24,36,32,.55);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+}
+
+.dir-backdrop { z-index: 1055; }
+
+.dir-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border-left: 1px solid var(--dir-line);
+  box-shadow: -20px 0 56px rgba(16,24,40,.22);
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  animation: dir-slide-in .22s ease;
+}
+
+@keyframes dir-slide-in {
+  from { transform: translateX(30px); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.dir-sheet-head {
+  padding: 20px 24px 16px;
+  background: linear-gradient(90deg, #f0f6f2 0%, #fff 60%);
+  border-bottom: 1px solid var(--dir-line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dir-sheet-name {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--dir-ink-900);
+}
+
+.dir-sheet-hint {
+  font-size: 12.5px;
+  color: var(--dir-ink-500);
+  display: block;
+  margin-top: 4px;
+  max-width: 34ch;
+}
+
+.dir-sheet-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.dir-sheet-foot {
+  padding: 16px 24px;
+  border-top: 1px solid var(--dir-line);
+  display: flex;
+  gap: 10px;
+}
+
+.dir-section-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--dir-brand-600);
+  margin: 22px 0 10px;
+}
+
+.dir-section-label:first-child {
+  margin-top: 0;
+}
+
+.dir-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.dir-k {
+  font-size: 11.5px;
+  color: var(--dir-ink-400);
+  margin-bottom: 2px;
+}
+
+.dir-v {
+  font-size: 13.5px;
+  color: var(--dir-ink-900);
   font-weight: 500;
-  color: #1f2430;
   word-break: break-word;
+}
+
+.dir-role-chip {
+  border: 1px solid var(--dir-line);
+  background: #fff;
+  color: var(--dir-ink-700);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.dir-tag {
+  color: var(--dir-brand-600);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.dir-tag-muted {
+  color: var(--dir-ink-400);
+  font-weight: 500;
+}
+
+.dir-callout {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  display: flex;
+  gap: 10px;
+  background: var(--dir-red-bg);
+  border: 1px solid var(--dir-red-line);
+  color: #7a2e1c;
+}
+
+.dir-callout i {
+  font-size: 16px;
+  color: var(--dir-red);
+  margin-top: 1px;
+}
+
+/* ---- Forms (edit sheet + dialogs) ----------------------------------------------------------- */
+
+.dir-form-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+
+.dir-f-span-1 {
+  grid-column: span 1;
+}
+
+.dir-f-span-2 {
+  grid-column: span 2;
+}
+
+.dir-f-span-3 {
+  grid-column: span 3;
+}
+
+.dir-f-span-4 {
+  grid-column: span 4;
+}
+
+.dir-f-span-6 {
+  grid-column: span 6;
+}
+
+.dir-f-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dir-ink-700);
+  margin-bottom: 5px;
+}
+
+.dir-f-control {
+width: 100%;
+    padding: 9px 11px;
+    border: 1px solid #80808059;
+    border-radius: 9px;
+    font-size: 13.5px;
+    color: black;
+    font-family: inherit;
+    outline: none;
+    background: #fff;
+}
+
+.dir-f-control:focus {
+  border-color: #5a8069;
+  box-shadow: 0 0 0 3px #dfeae2;
+}
+
+textarea.dir-f-control {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.dir-f-note {
+  font-size: 12px;
+  color: var(--dir-ink-400);
+  margin: 6px 0 0;
+}
+
+.dir-alert-inline {
+  display: flex;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  background: var(--dir-red-bg);
+  border: 1px solid var(--dir-red-line);
+  color: #7a2e1c;
+  font-size: 12.5px;
+  margin-bottom: 16px;
+}
+
+.dir-alert-inline i {
+  font-size: 15px;
+  margin-top: 1px;
+  color: var(--dir-red);
+  flex-shrink: 0;
+}
+
+/* ---- Centered dialog (suspend / reactivate / delete / invite) — page tokens match ------- */
+
+.dir-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--dir-line);
+  border-radius: 18px;
+  box-shadow: var(--dir-shadow-2);
+  z-index: 1070;
+  padding: 26px;
+  animation: dir-pop-in .18s ease;
+}
+
+@keyframes dir-pop-in {
+  from { opacity: 0; transform: translate(-50%,-48%) scale(.97); }
+  to { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
+.dir-dialog-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 23px;
+}
+
+.dir-di-warning {
+  background: var(--dir-amber-bg);
+  color: var(--dir-amber);
+}
+
+.dir-di-danger {
+  background: var(--dir-red-bg);
+  color: var(--dir-red);
+}
+
+.dir-di-success {
+  background: var(--dir-brand-100);
+  color: var(--dir-brand-700);
+}
+
+.dir-di-primary {
+  background: var(--dir-brand-100);
+  color: var(--dir-brand-700);
+}
+
+.dir-dialog-desc {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  color: var(--dir-ink-500);
+}
+
+/* ---- Responsive ------------------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .dir-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dir-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dir-f-span-1,
+  .dir-f-span-2,
+  .dir-f-span-3,
+  .dir-f-span-4 {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 680px) {
+  .dir-toolbar {
+    gap: 8px;
+  }
+
+  .dir-search {
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .dir-sheet {
+    width: 100%;
+  }
+
+  .dir-tab {
+    min-width: 76px;
+  }
+}
+
+.dir-head-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid
+color-mix(in srgb, var(--primary) 15%, white);
+  border-radius: 12px;
+  background:
+color-mix(in srgb, var(--primary) 9%, white);
+  color: var(--primary);
+  font-size: 21px;
+}
+
+.dir-head-icon i {
+  font-size: 22px !important;
+}
+
+.dir-head-text {
+  min-width: 0;
+}
+
+.dir-head {
+  align-items: center;
+  padding: 14px 18px;
+  border: 1px solid
+color-mix(in srgb, var(--primary) 15%, white);
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+color-mix(in srgb, var(--primary) 4%, white) 0%, #fff 55%);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .05);
+}
+
+.dir-title {
+  font-size: 20px;
+  letter-spacing: -.02em;
+}
+
+.dir-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 0;
+  background: none;
+  padding: 0;
+  gap: 12px;
+}
+
+.dir-tab {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(16, 24, 40, .14);
+}
+
+/* KEELA image layer, MELLA gradient layer — ::after image-ku mela varum */
+.dir-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  opacity: .9;
+}
+
+.dir-tab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.dir-tab[data-tab="all"] {
+  background: linear-gradient(135deg, #1f6a4a 0%, #2f9e6e 55%, #173f2f 100%);
+}
+
+.dir-tab[data-tab="all"]::after {
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="all"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.22'%3E%3Ccircle cx='178' cy='20' r='34'/%3E%3Ccircle cx='196' cy='46' r='52'/%3E%3Ccircle cx='36' cy='104' r='26'/%3E%3Cpath d='M150 96l14 14 26-30' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.14'%3E%3Ccircle cx='52' cy='28' r='4'/%3E%3Ccircle cx='70' cy='20' r='2.6'/%3E%3Ccircle cx='120' cy='92' r='3.4'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dir-tab[data-tab="active"] {
+  background: linear-gradient(135deg, #0f766e 0%, #22b08a 55%, #0b3f3c 100%);
+}
+
+.dir-tab[data-tab="active"]::after {
+  background:linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="active"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.24'%3E%3Ccircle cx='180' cy='26' r='36'/%3E%3Cpath d='M168 26l9 9 18-20' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M22 92l10-10 8 8 12-14' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.16'%3E%3Ccircle cx='46' cy='30' r='4'/%3E%3Ccircle cx='120' cy='88' r='3'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dir-tab[data-tab="invited"] {
+  background: linear-gradient(135deg, #1d4ed8 0%, #38bdf8 58%, #1e1b4b 100%);
+}
+
+.dir-tab[data-tab="invited"]::after {
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="invited"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.26'%3E%3Crect x='138' y='30' width='56' height='38' rx='8' stroke-width='6'/%3E%3Cpath d='M140 34l26 20 26-20' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='40' cy='88' r='24'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.16'%3E%3Ccircle cx='56' cy='26' r='3.6'/%3E%3Ccircle cx='108' cy='92' r='3'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dir-tab[data-tab="suspended"] {
+  background: linear-gradient(135deg, #b45309 0%, #f59e0b 55%, #451a03 100%);
+}
+
+.dir-tab[data-tab="suspended"]::after {
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="suspended"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.28'%3E%3Ccircle cx='180' cy='52' r='30' stroke-width='6'/%3E%3Cpath d='M172 44v16' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='172' cy='68' r='3.4' fill='%23ffffff' stroke='none'/%3E%3Cpath d='M24 88l36-36M60 88L24 52' stroke-width='6' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dir-tab[data-tab="draft"] {
+  background: linear-gradient(135deg, #475569 0%, #94a3b8 55%, #0f172a 100%);
+}
+
+.dir-tab[data-tab="draft"]::after {
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="draft"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.26'%3E%3Crect x='140' y='26' width='54' height='64' rx='9' stroke-width='6'/%3E%3Cpath d='M150 44h34M150 58h34M150 72h22' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='42' cy='86' r='24'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.15'%3E%3Ccircle cx='60' cy='26' r='3.6'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+
+.dir-tab-active {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(47,107,79,.35), 0 8px 22px rgba(16, 24, 40, .25);
+}
+.dir-tab-ico i{
+  font-size: 18px !important;
+}
+
+.dir-tab-num {
+  order: 2;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+  font-variant-numeric: tabular-nums;
+}
+
+.dir-tab-active .dir-tab-num {
+  color: #fff;
+}
+
+.dir-tab-label {
+  order: 3;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: rgba(255, 255, 255, .94);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+}
+
+.dir-tab .dir-tab-ico {
+  order: 1;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 17px;
+  background: rgba(255, 255, 255, .2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .45);
+  backdrop-filter: blur(2px);
+}
+
+.dir-toolbar {
+  border: 1px solid #e3e9e5;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .05);
+}
+
+.dir-state {
+  border-radius: 14px;
+}
+
+.dir-search input {
+  background: #f7f9f8;
+  border-color: transparent;
+}
+
+.dir-search input:focus {
+  background: #fff;
+}
+
+.dir-result-line {
+  border: 1px dashed #e3e9e5;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #fbfcfb;
+}
+
+.dir-selected-bar {
+  border-color: #c4dccf !important;
+  background: linear-gradient(90deg, #e9f3ec, #fff) !important;
+}
+
+.ud-mono {
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+}
+
+@media (max-width: 1100px) {
+  .dir-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .dir-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dir-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 992px) {
+  .d-lg-none.dir-icon-btn {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   PRO REDESIGN OVERRIDES — popup / offcanvas / pagination (page design match)
+
+   FIX applied here: these used to be scoped under `.dir-page .dir-dialog`,
+   `.dir-page .dir-sheet`, `.dir-page .dir-avatar…`, and
+   `.dir-page .dir-pagination-shell .dir-table-foot`. The dialog and sheet are rendered
+   OUTSIDE .dir-page in the template (they're fixed overlays placed after </main> on
+   purpose), and there is no .dir-pagination-shell wrapper in the markup at all — so none
+   of those selectors could ever match, and this whole block was dead CSS. The `.dir-page`
+   prefix is dropped below (the tab rules didn't need it either, since .dir-tab only
+   exists inside .dir-page, but removing it there is harmless) and `.dir-pagination-shell`
+   is dropped in favour of `.dir-table-foot` directly, which is the element that actually
+   exists.
+   ========================================================================== */
+
+/* ---- 1. Filter cards: gray overlay mela, number bold big, content white ---- */
+.dir-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+.dir-tab {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #334155;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16,24,40,.18);
+}
+
+/* KEELA: background image layer */
+.dir-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(255,255,255,.20) 0 44px, transparent 45px),
+    radial-gradient(circle at 8% 92%, rgba(255,255,255,.12) 0 30px, transparent 31px),
+    linear-gradient(135deg, #334155 0%, #64748b 55%, #1e293b 100%);
+}
+
+/* MELLA: GRAY overlay — image-ku mela, content white-la mela show aagum */
+.dir-tab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(120deg, rgba(45,55,72,.90) 0%, rgba(113,128,150,.60) 50%, rgba(26,32,44,.92) 100%);
+}
+
+.dir-tab[data-tab="all"]::before,
+.dir-tab[data-tab="active"]::before {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(16,185,129,.35) 0 46px, transparent 47px),
+    radial-gradient(circle at 8% 92%, rgba(14,165,233,.25) 0 32px, transparent 33px),
+    linear-gradient(135deg, #065f46 0%, #0ea5e9 60%, #1e293b 100%);
+}
+.dir-tab[data-tab="invited"]::before {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(56,189,248,.35) 0 46px, transparent 47px),
+    radial-gradient(circle at 8% 92%, rgba(139,92,246,.28) 0 32px, transparent 33px),
+    linear-gradient(135deg, #0c4a6e 0%, #6366f1 60%, #1e1b4b 100%);
+}
+.dir-tab[data-tab="suspended"]::before {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(245,158,11,.35) 0 46px, transparent 47px),
+    radial-gradient(circle at 8% 92%, rgba(239,68,68,.28) 0 32px, transparent 33px),
+    linear-gradient(135deg, #78350f 0%, #ef4444 60%, #1c1917 100%);
+}
+.dir-tab[data-tab="draft"]::before {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(148,163,184,.30) 0 46px, transparent 47px),
+    radial-gradient(circle at 8% 92%, rgba(100,116,139,.24) 0 32px, transparent 33px),
+    linear-gradient(135deg, #334155 0%, #64748b 60%, #0f172a 100%);
+}
+
+/* .dir-tab:hover { transform: translateY(-2px); } */
+.dir-tab-active {
+  background: #334155;
+  border: 0;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(47,107,79,.35), 0 6px 18px rgba(16,24,40,.25);
+}
+
+/* Number — BOLD + BIG */
+.dir-tab-num {
+  order: 2;
+  display: block;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,.55);
+  font-variant-numeric: tabular-nums;
+}
+.dir-tab-active .dir-tab-num { color: #fff; }
+.dir-tab-label {
+  order: 3;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: rgba(255,255,255,.94);
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.dir-tab .dir-tab-ico {
+  order: 1;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  font-size: 18px;
+  background: rgba(255,255,255,.20);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.45);
+}
+
+/* ---- 2. Letter avatar — different colour per first letter ---- */
+.dir-avatar {
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(16,24,40,.20);
+}
+
+.dir-avatar.dir-av-0 { background: linear-gradient(135deg, #2f6b4f, #5a8069); outline-color: #c4dccf; }
+.dir-avatar.dir-av-1 { background: linear-gradient(135deg, #35617f, #6ba3c4); outline-color: #c3d9e8; }
+.dir-avatar.dir-av-2 { background: linear-gradient(135deg, #6d4fc2, #9a8bd4); outline-color: #d4cdea; }
+.dir-avatar.dir-av-3 { background: linear-gradient(135deg, #a5402a, #d47a63); outline-color: #f0cec2; }
+.dir-avatar.dir-av-4 { background: linear-gradient(135deg, #a3660c, #d9a441); outline-color: #f0dcb2; }
+.dir-avatar.dir-av-5 { background: linear-gradient(135deg, #0e7490, #3fb3cf); outline-color: #bfe6f1; }
+.dir-avatar.dir-av-6 { background: linear-gradient(135deg, #4d5f6b, #8ba0ad); outline-color: #cfd9de; }
+.dir-avatar.dir-av-7 { background: linear-gradient(135deg, #334155, #7c8da6); outline-color: #c6d0da; }
+
+/* ---- 3. Popup dialog (suspend / reactivate / delete / invite) ---- */
+.dir-backdrop { background: rgba(24,36,32,.55); backdrop-filter: blur(2px); }
+.dir-dialog {
+  width: 460px;
+  border: 1px solid #e2e9e4;
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(16,24,40,.25);
+  padding: 0;
+  overflow: hidden;
+  animation: dir-pop-in .18s ease;
+}
+.dir-dialog > * { padding-left: 26px; padding-right: 26px; }
+.dir-dialog > :first-child { padding-top: 26px; }
+.dir-dialog > :last-child { padding-bottom: 26px; }
+.dir-dialog-icon {
+  width: 50px; height: 50px;
+  border-radius: 14px;
+  margin-bottom: 16px;
+}
+.dir-dialog h5 { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.dir-dialog-desc { font-size: 13.5px; }
+
+/* ---- 4. Offcanvas sheet (view profile / edit) ---- */
+.dir-sheet {
+  width: 460px;
+  border-left: 1px solid #e2e9e4;
+  box-shadow: -20px 0 56px rgba(16,24,40,.22);
+  animation: dir-slide-in .22s ease;
+}
+.dir-sheet-head {
+  background: linear-gradient(90deg, #f0f6f2 0%, #fff 60%);
+  border-bottom: 1px solid #e2e9e4;
+  padding: 20px 24px 16px;
+}
+.dir-sheet-body { padding: 20px 24px 26px; }
+.dir-sheet-name { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.dir-field { background: #f8faf9; border: 1px solid #edf2ee; border-radius: 12px;     padding: 12px;}
+.dir-kv { background: #f8faf9; border: 1px solid #edf2ee; border-radius: 10px; }
+.dir-avatar-lg { width: 60px; height: 60px; font-size: 18px; }
+
+/* ---- 5. Pagination — page design match (card + dir tokens).
+   The footer element IS .dir-table-foot directly — no wrapper class needed. ---- */
+.dir-table-foot {
+  background: #fff;
+  border: 1px solid #e2e9e4;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16,24,40,.05);
+  padding: 12px 18px;
+  margin-top: 12px;
+}
+.dir-page-size {
+  background: #f0f6f2;
+  border-color: transparent;
+  border-radius: 9px;
+  font-weight: 600;
+  padding: 7px 10px;
+}
+.dir-page-size:focus { background: #fff; border-color: #5a8069; box-shadow: 0 0 0 3px #dfeae2; outline: none; }
+.dir-pager { gap: 6px; }
+.dir-pager-btn {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.05);
+}
+.dir-pager-btn:hover:not(:disabled) {
+  border-color: #a9c4b3;
+  color: #24402f;
+  background: #f0f6f2;
+  transform: translateY(-1px);
+}
+.dir-pager-current,
+.dir-pager-current:hover {
+  background: linear-gradient(135deg, #315746, #24402f);
+  border-color: #315746;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(49,87,70,.35);
+}
+
+@media (max-width: 1100px) {
+  .dir-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .dir-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dir-tab-num { font-size: 28px; }
+  .dir-sheet { width: 100%; }
+  .dir-dialog { width: calc(100vw - 32px); }
+  .dir-table-foot { flex-direction: column; align-items: stretch; }
+  .dir-pager { justify-content: center; }
 }

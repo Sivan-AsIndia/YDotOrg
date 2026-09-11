@@ -34,7 +34,7 @@
       </div>
 
       <div class="hero-actions">
-        <button type="button" class="primary-button hero-create" (click)="openCreate()">
+        <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
           <span>Create Country</span>
         </button>
@@ -270,7 +270,7 @@
 
                       <td class="hide-sm">
                         <span class="status-badge" [class.active]="c.isActive" [class.inactive]="!c.isActive">
-                          <span class="status-dot"></span>
+                          <!-- <span class="status-dot"></span> -->
                           {{ c.isActive ? 'Active' : 'Inactive' }}
                         </span>
                       </td>
@@ -356,7 +356,7 @@
                           </span>
                           <strong>No countries found</strong>
                           <span>Try adjusting your search or filters.</span>
-                          <button type="button" class="secondary-button" (click)="openCreate()">Create Country</button>
+                          <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">Create Country</button>
                         </div>
                       </td>
                     </tr>
@@ -600,7 +600,7 @@
                       <div class="detail-row">
                         <span>Status</span>
                         <strong class="status-badge" [class.active]="sc.isActive" [class.inactive]="!sc.isActive">
-                          <span class="status-dot"></span>
+                          <!-- <span class="status-dot"></span> -->
                           {{ sc.isActive ? 'Active' : 'Inactive' }}
                         </strong>
                       </div>
@@ -642,7 +642,7 @@
               </div>
 
               <div class="details-footer">
-                <button type="button" class="secondary-button full" (click)="closeViewPanel()">
+                <button type="button" class="btn btn-outline-secondary btn-sm full" (click)="closeViewPanel()">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M15 6 9 12l6 6M9 12h11"></path>
                   </svg>
@@ -921,7 +921,7 @@
       </section>
 
       <div class="form-actions">
-        <button type="button" class="secondary-button" (click)="cancelForm()">
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelForm()">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 6 6 18M6 6l12 12"></path>
           </svg>
@@ -935,7 +935,7 @@
           Reset
         </button>
 
-        <button type="submit" class="primary-button">
+        <button type="submit" class="btn btn-primary btn-sm">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11Z"></path>
             <path d="M17 21v-8H7v8M7 3v5h8"></path>
@@ -960,8 +960,8 @@
         <h3 id="activate-title">Activate Country</h3>
         <p>Are you sure you want to activate <strong>{{ selectedCountry()?.countryName }}</strong>?</p>
         <div class="confirm-actions">
-          <button type="button" class="secondary-button" (click)="closeModals()">Cancel</button>
-          <button type="button" class="primary-button" (click)="activateConfirmed()">Yes, Activate</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="activateConfirmed()">Yes, Activate</button>
         </div>
       </div>
     </div>
@@ -983,9 +983,9 @@
           <p>Are you sure you want to deactivate <strong>{{ selectedCountry()?.countryName }}</strong>?</p>
         }
         <div class="confirm-actions">
-          <button type="button" class="secondary-button" (click)="closeModals()">Cancel</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
           @if (canDeactivate()) {
-            <button type="button" class="warning-button" (click)="deactivateConfirmed()">Yes, Deactivate</button>
+            <button type="button" class="btn btn-warning btn-sm" (click)="deactivateConfirmed()">Yes, Deactivate</button>
           }
         </div>
       </div>
@@ -1008,9 +1008,9 @@
           <div class="alert-danger">This action cannot be undone.</div>
         }
         <div class="confirm-actions">
-          <button type="button" class="secondary-button" (click)="closeModals()">Cancel</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
           @if (canDelete()) {
-            <button type="button" class="danger-button" (click)="deleteConfirmed()">Yes, Delete</button>
+            <button type="button" class="btn btn-danger btn-sm" (click)="deleteConfirmed()">Yes, Delete</button>
           }
         </div>
       </div>

@@ -1707,7 +1707,15 @@
 :host *::after {
   box-sizing: border-box;
 }
-
+.app-wrapper {
+  background: radial-gradient(ellipse at 70% 0%, #f9fcff, #f1f7fe);
+  min-height: 100%;
+}
+.container-fluid {
+  padding: 24px 30px !important;
+  max-width: 1920px;
+  margin-inline: auto;
+}
 h1,
 h2,
 h3,
@@ -2382,13 +2390,13 @@ svg {
   margin: 0;
   color: #103e35;
   font-family: var(--font-heading);
-  font-size: clamp(28px, 2.9vw, 44px);
+  font-size: 40px;
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.04em;
 }
 .fq-title-block h1::after {
-  content: '';
+  content: "";
   display: block;
   width: 40px;
   height: 3px;
@@ -2403,13 +2411,15 @@ svg {
 .kpi-value {
   font-family: var(--font-number) !important;
   font-variant-numeric: tabular-nums;
-  font-size: calc(var(--font-size-base) * 2.375) !important;
+  font-size: var(--font-size-base) !important;
   line-height: 1;
   font-weight: 600;
   letter-spacing: -0.03em;
 }
 @media (max-width: 479px) {
-  .fq-title-block h1 { font-size: 30px; }
+  .fq-title-block h1 {
+    font-size: 40px;
+  }
 }
 
 /* Decorative follow-up illustration, isolated from the header controls. */
@@ -2419,7 +2429,11 @@ svg {
   align-items: center;
   gap: 10px 24px;
 }
-.fq-title-block { grid-column: 1; grid-row: 1 / span 2; min-width: 0; }
+.fq-title-block {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
 .fq-header-art {
   display: block;
   grid-column: 2;
@@ -2431,15 +2445,156 @@ svg {
   pointer-events: none;
   user-select: none;
 }
-.fq-header-actions { grid-column: 2; grid-row: 2; justify-content: flex-end; }
+.fq-header-actions {
+  grid-column: 2;
+  grid-row: 2;
+  justify-content: flex-end;
+}
 @media (max-width: 1000px) {
-  .fq-header-row { grid-template-columns: minmax(0, 1fr) 180px; }
-  .fq-title-block { grid-row: 1; }
-  .fq-header-art { width: 180px; }
-  .fq-header-actions { grid-column: 1 / -1; }
+  .fq-header-row {
+    grid-template-columns: minmax(0, 1fr) 180px;
+  }
+  .fq-title-block {
+    grid-row: 1;
+  }
+  .fq-header-art {
+    width: 180px;
+  }
+  .fq-header-actions {
+    grid-column: 1 / -1;
+  }
 }
 @media (max-width: 560px) {
-  .fq-header-row { grid-template-columns: minmax(0, 1fr) 104px; gap: 14px 8px; }
-  .fq-header-art { width: 104px; align-self: start; }
-  .fq-header-actions { width: 100%; }
+  .fq-header-row {
+    grid-template-columns: minmax(0, 1fr) 104px;
+    gap: 14px 8px;
+  }
+  .fq-header-art {
+    width: 104px;
+    align-self: start;
+  }
+  .fq-header-actions {
+    width: 100%;
+  }
+}
+
+/* Final common-check rules. The header is the sole font-size exception. */
+:host,
+.app-wrapper,
+.page-wrapper,
+.container-fluid {
+  background: transparent !important;
+}
+.container-fluid.px-4.py-3 {
+  padding: 1rem 1.5rem !important;
+  max-width: none;
+}
+.fq-header-row {
+  align-items: start;
+  margin: 0 0 22px;
+}
+.fq-title-block {
+  align-self: start;
+  padding: 0;
+  margin: 0;
+}
+.fq-title-block h1 {
+  font-family: var(--font-heading);
+  font-size: 40px !important;
+}
+:host button,
+:host input,
+:host select,
+:host textarea {
+  font-family: var(--font-other);
+  font-size: var(--font-size-base);
+}
+.kpi-value {
+  font-size: var(--font-size-base) !important;
+}
+.kpi-value,
+.dnum,
+.strip-count,
+.page-button {
+  font-family: var(--font-number) !important;
+}
+.calendar-strip {
+  display: grid;
+  grid-template-columns: 32px repeat(7, minmax(0, 72px)) 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  overflow: visible;
+}
+.calendar-strip .strip-day {
+  min-width: 0;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 2px;
+}
+.calendar-strip .strip-day.active {
+  background: #e6f5ed !important;
+  color: #007556 !important;
+  border: 2px solid #007556 !important;
+  box-shadow: none;
+}
+.calendar-strip .date-nav {
+  width: 32px;
+  min-width: 0;
+  padding: 6px;
+}
+.row-actions .btn {
+  padding: 6px;
+}
+.fq-header-art {
+  max-height: 100px;
+}
+@media (max-width: 560px) {
+  .fq-header-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fq-title-block {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fq-header-art {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .fq-header-actions {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .calendar-strip {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .calendar-strip .date-nav:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .calendar-strip .date-nav:last-child {
+    grid-column: 7;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .calendar-strip .strip-day {
+    grid-row: 2;
+  }
+}
+
+
+/* Keep selected-date text green, including descendants styled by global buttons. */
+:host .calendar-strip .strip-day.active,
+:host .calendar-strip .strip-day.active .dow,
+:host .calendar-strip .strip-day.active .dnum,
+:host .calendar-strip .strip-day[aria-pressed="true"] .dow,
+:host .calendar-strip .strip-day[aria-pressed="true"] .dnum {
+  color: var(--fq-green-700, #007556) !important;
+  -webkit-text-fill-color: var(--fq-green-700, #007556) !important;
+  opacity: 1;
 }

@@ -316,7 +316,7 @@
 .org-hero-main {
   display: flex;
   flex: 1 1 auto;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 16px;
   position: relative;
   z-index: 1;
@@ -349,7 +349,7 @@
    flush to the card's top, right and bottom edges (a photo panel), while the
    text side keeps the card's normal inset. */
 .org-hero-side {
-  flex: 0 0 19%;
+  flex: 0 0 20%;
   display: flex;
   min-width: 0;
   z-index: 1;

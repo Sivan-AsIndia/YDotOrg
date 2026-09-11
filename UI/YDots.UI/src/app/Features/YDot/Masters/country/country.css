@@ -1,4 +1,5 @@
 :host {
+  --primary-light: #e5eee9;
   --ink-950: #17231e;
   --ink-900: #20302a;
   --ink-800: #2e4038;
@@ -135,7 +136,7 @@ svg {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -148,9 +149,12 @@ svg {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #d7e9df;
-  border-radius: 9px;
-  background: var(--green-100);
+    border: 1px solid 
+color-mix(in srgb, var(--primary) 18%, white);
+    border-radius: 8px;
+    color: var(--primary);
+    background: 
+color-mix(in srgb, var(--primary) 9%, white);
 }
 
 .kicker-icon svg {
@@ -221,7 +225,7 @@ svg {
 .icon-button:hover {
   border-color: var(--line-strong);
   background: var(--surface);
-  color: var(--green-700);
+  color: var(--primary);
 }
 
 .icon-button svg {
@@ -229,32 +233,12 @@ svg {
   height: 17px;
 }
 
-.primary-button {
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 16px;
-  border: 1px solid var(--green-800);
-  border-radius: 11px;
-  color: #fff;
-  background: var(--green-800);
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 5px 14px rgba(23, 88, 67, 0.13);
-  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-}
 
 .primary-button svg {
   width: 15px;
   height: 15px;
 }
 
-.primary-button:hover {
-  background: #124b39;
-  box-shadow: 0 7px 18px rgba(23, 88, 67, 0.17);
-}
 
 .primary-button:active,
 .secondary-button:active,
@@ -302,14 +286,14 @@ svg {
   gap: 6px;
   padding: 0;
   margin: 0 0 10px;
-  color: var(--green-700);
+  color: var(--primary);
   background: transparent;
   font-size: 12.5px;
   font-weight: 700;
 }
 
 .back-button:hover {
-  color: var(--green-800);
+  color: var(--primary);
 }
 
 .back-button svg {
@@ -374,7 +358,7 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -509,7 +493,7 @@ svg {
 }
 
 .quick-filter.active {
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--surface);
   box-shadow: 0 1px 3px rgba(23, 35, 30, 0.08);
 }
@@ -534,7 +518,7 @@ svg {
 
 .table-frame {
   min-width: 0;
-  height: 590px;
+  /* height: 590px; */
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
@@ -606,7 +590,7 @@ svg {
 }
 
 .country-table tbody tr.row-selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--green-700);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .country-table tbody tr:last-child td {
@@ -629,7 +613,7 @@ svg {
   padding: 0 8px;
   border: 1px solid #d7e9df;
   border-radius: 8px;
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-050);
   font-size: 11px;
   font-weight: 800;
@@ -694,12 +678,12 @@ svg {
 }
 
 .status-badge.active {
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-100);
 }
 
 .status-badge.active .status-dot {
-  background: var(--green-600);
+  background: var(--primary);
 }
 
 .status-badge.inactive {
@@ -737,7 +721,7 @@ svg {
 .row-action:hover,
 .row-action.selected {
   border-color: #c4d9cf;
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-050);
 }
 
@@ -874,9 +858,9 @@ svg {
 }
 
 .page-button.active {
-  border-color: var(--green-800);
+  border-color: var(--primary);
   color: #fff;
-  background: var(--green-800);
+  background: var(--primary);
 }
 
 .page-button:disabled {
@@ -1015,7 +999,7 @@ svg {
 
 .details-eyebrow {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1032,7 +1016,7 @@ svg {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 10px;
   font-weight: 750;
   white-space: nowrap;
@@ -1109,7 +1093,7 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -1124,7 +1108,7 @@ svg {
 
 .detail-section-head > div > span {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 8.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1191,7 +1175,7 @@ svg {
   min-height: 20px;
   padding: 0 7px;
   border-radius: 999px;
-  color: var(--green-800) !important;
+  color: var(--primary) !important;
   background: var(--green-100);
   font-size: 9.5px !important;
 }
@@ -1213,12 +1197,12 @@ svg {
 }
 
 .state-badge.yes {
-  color: var(--green-800) !important;
+  color: var(--primary) !important;
   background: var(--green-100);
 }
 
 .state-badge.yes span {
-  background: var(--green-600);
+  background: var(--primary);
 }
 
 .state-badge.no {
@@ -1288,7 +1272,7 @@ svg {
 .form-section-heading > div > span,
 .form-section-toggle .form-section-heading > span > span {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1311,7 +1295,7 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -1413,7 +1397,7 @@ svg {
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: var(--green-700);
+  accent-color: var(--primary);
 }
 
 .form-section.collapsible {
@@ -1475,7 +1459,7 @@ svg {
 }
 
 .text-button:hover {
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-050);
 }
 
@@ -1519,7 +1503,7 @@ svg {
 }
 
 .confirm-icon.success {
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -1636,7 +1620,7 @@ svg {
   background: var(--ink-500);
 }
 
-.toast-success .toast-dot { background: var(--green-600); }
+.toast-success .toast-dot { background: var(--primary); }
 .toast-error .toast-dot { background: var(--red-700); }
 .toast-warning .toast-dot { background: var(--amber-700); }
 .toast-info .toast-dot { background: var(--blue-600); }
@@ -1955,7 +1939,10 @@ svg {
   stroke-width: 1.8;
 }
 
-/* ---------- Shared buttons ---------- */
+/* ---------- Shared buttons: Bootstrap contract ----------
+   Save/Add/Create => class="btn btn-primary btn-sm" (uses global var(--primary)).
+   Cancel/Filter/Close => class="btn btn-outline-secondary btn-sm".
+   Legacy aliases kept below so existing markup keeps the same look. */
 
 .icon-button,
 .primary-button,
@@ -1990,7 +1977,7 @@ svg {
 .row-action:hover,
 .page-button:hover:not(:disabled),
 .details-close:hover {
-  color: var(--green-800);
+  color: var(--primary);
   border-color: #cfdcd5;
   background: var(--green-050);
 }
@@ -2004,28 +1991,28 @@ svg {
   transform: translateY(1px);
 }
 
-.primary-button {
-  min-height: 42px;
+.primary-button,
+.btn.btn-primary {
+  /* min-height: 42px; */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 17px;
-  border: 1px solid var(--green-900);
+  /* padding: 0 17px; */
+  border: 1px solid var(--primary);
   border-radius: 10px;
   color: #fff;
-  background: var(--green-900);
+  background: var(--primary);
   font-size: 12px;
   font-weight: 750;
   box-shadow: 0 5px 15px rgba(15, 77, 57, .10);
 }
 
-.primary-button:hover {
-  background: #0b402f;
-}
 
 .primary-button svg,
+.btn.btn-primary svg,
 .secondary-button svg,
+.btn.btn-outline-secondary svg,
 .text-button svg,
 .warning-button svg,
 .danger-button svg {
@@ -2033,7 +2020,8 @@ svg {
   height: 15px;
 }
 
-.secondary-button {
+.secondary-button,
+.btn.btn-outline-secondary {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -2048,7 +2036,8 @@ svg {
   font-weight: 700;
 }
 
-.secondary-button:hover {
+.secondary-button:hover,
+.btn.btn-outline-secondary:hover {
   color: var(--ink-900);
   background: var(--surface-soft);
   border-color: var(--line-strong);
@@ -2068,7 +2057,7 @@ svg {
 }
 
 .text-button:hover {
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-050);
 }
 
@@ -2084,10 +2073,11 @@ svg {
   margin-bottom: 13px;
   padding: 22px 24px;
   overflow: hidden;
-  border: 1px solid #e2e9e5;
-  border-radius: 18px;
+  border: 1px solid  color-mix(in srgb, var(--primary) 20%, white);
+  border-radius: 16px;
   background:
-    linear-gradient(90deg, #f3f9f6 0%, #f7faf8 58%, #f4f8f6 100%);
+    radial-gradient(circle at 79% 45%, rgba(45,138,104,.09) 1px, transparent 1.7px) 0 0 / 10px 10px,
+    color-mix(in srgb, var(--primary) 5%, white);
   box-shadow: var(--shadow-xs);
 }
 
@@ -2103,7 +2093,7 @@ svg {
   align-items: center;
   gap: 7px;
   margin-bottom: 8px;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .085em;
@@ -2116,10 +2106,12 @@ svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d6e8de;
-  border-radius: 8px;
-  color: var(--green-800);
-  background: var(--green-100);
+    border: 1px solid 
+color-mix(in srgb, var(--primary) 18%, white);
+    border-radius: 8px;
+    color: var(--primary);
+    background: 
+color-mix(in srgb, var(--primary) 9%, white);
 }
 
 .kicker-icon svg {
@@ -2177,19 +2169,19 @@ svg {
 
 .hero-map .map-grid {
   fill: none;
-  stroke: #c9ddd4;
+  stroke: color-mix(in srgb, var(--primary) 18%, white);
   stroke-width: 1;
 }
 
 .hero-map .map-contour {
   fill: none;
-  stroke: #c2d8ce;
+  stroke: color-mix(in srgb, var(--primary) 18%, white);
   stroke-width: 1.25;
 }
 
 .hero-map circle {
-  fill: #5c9d80;
-  stroke: #f4faf7;
+  fill: color-mix(in srgb, var(--primary) 58%, white);
+  stroke: color-mix(in srgb, var(--primary) 18%, white);
   stroke-width: 3;
 }
 
@@ -2386,7 +2378,7 @@ svg {
 }
 
 .ring-progress.ring-neutral {
-  stroke: var(--green-800);
+  stroke: var(--primary);
 }
 
 .ring-progress.ring-success {
@@ -2408,12 +2400,12 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-100);
 }
 
 .ring-icon-badge.neutral {
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -2460,8 +2452,8 @@ svg {
 
 .table-frame,
 .details-area {
-  height: 590px;
-  min-height: 590px;
+  /* height: 590px;
+  min-height: 590px; */
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
@@ -2493,9 +2485,12 @@ svg {
   z-index: 2;
   height: 46px;
   padding: 0 14px;
-  border-bottom: 2px solid var(--green-100);
-  color: var(--green-800);
-  background: linear-gradient(180deg, #fdfefd 0%, #f4f9f6 100%);
+    border-bottom: 2px solid 
+color-mix(in srgb, var(--primary) 7%, white);
+    color: var(--primary);
+    background: linear-gradient(180deg, #fdfefd 0%, 
+color-mix(in srgb, var(--primary) 4%, white) 100%);
+
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .07em;
@@ -2524,7 +2519,7 @@ svg {
   width: 13px;
   height: 13px;
   flex: 0 0 13px;
-  color: var(--green-600);
+  color: var(--primary);
   stroke-width: 2;
 }
 
@@ -2552,7 +2547,7 @@ svg {
 }
 
 .country-table tbody tr.row-selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--green-700);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .country-table tbody tr:last-child td {
@@ -2573,10 +2568,13 @@ svg {
   min-width: 36px;
   height: 27px;
   padding: 0 8px;
-  border: 1px solid #d7e9df;
-  border-radius: 8px;
-  color: var(--green-800);
-  background: var(--green-050);
+border: 1px solid 
+color-mix(in srgb, var(--primary) 18%, white);
+    border-radius: 8px;
+    color: var(--primary);
+    background: 
+color-mix(in srgb, var(--primary) 4%, white);
+
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: .04em;
@@ -2677,7 +2675,7 @@ svg {
 }
 
 .row-action.selected {
-  color: var(--green-800);
+  color: var(--primary);
   background: var(--green-100);
   border-color: #cfe3d8;
 }
@@ -2733,8 +2731,8 @@ svg {
 
 .page-button.active {
   color: #fff;
-  background: var(--green-900);
-  border-color: var(--green-900);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .page-button:disabled {
@@ -2857,7 +2855,7 @@ svg {
 
 .details-eyebrow {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .075em;
@@ -2874,7 +2872,7 @@ svg {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 9.5px;
   font-weight: 750;
   white-space: nowrap;
@@ -2951,7 +2949,7 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -2966,7 +2964,7 @@ svg {
 
 .detail-section-head > div > span {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 8px;
   font-weight: 800;
   letter-spacing: .075em;
@@ -3038,7 +3036,7 @@ svg {
 }
 
 .value-chip {
-  color: var(--green-800) !important;
+  color: var(--primary) !important;
   background: var(--green-100);
 }
 
@@ -3053,12 +3051,12 @@ svg {
 }
 
 .state-badge.yes {
-  color: var(--green-800) !important;
+  color: var(--primary) !important;
   background: var(--green-100);
 }
 
 .state-badge.yes span {
-  background: var(--green-600);
+  background: var(--primary);
 }
 
 .state-badge.no {
@@ -3132,14 +3130,14 @@ svg {
   gap: 6px;
   padding: 0;
   margin: 0 0 9px;
-  color: var(--green-800);
+  color: var(--primary);
   background: transparent;
   font-size: 11.5px;
   font-weight: 750;
 }
 
 .back-button:hover {
-  color: var(--green-900);
+  color: var(--primary);
 }
 
 .back-button svg {
@@ -3152,7 +3150,7 @@ svg {
   align-items: center;
   gap: 7px;
   margin-bottom: 8px;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: .08em;
@@ -3231,7 +3229,7 @@ svg {
 .form-section-heading > div > span,
 .form-section-toggle .form-section-heading > span > span {
   display: block;
-  color: var(--green-700);
+  color: var(--primary);
   font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .075em;
@@ -3254,7 +3252,7 @@ svg {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  color: var(--green-700);
+  color: var(--primary);
   background: var(--green-100);
 }
 
@@ -3360,7 +3358,7 @@ svg {
   width: 15px;
   height: 15px;
   margin: 0;
-  accent-color: var(--green-700);
+  accent-color: var(--primary);
 }
 
 .form-section.collapsible {
@@ -3446,7 +3444,7 @@ svg {
   height: 19px;
 }
 
-.confirm-icon.success { color: var(--green-700); background: var(--green-100); }
+.confirm-icon.success { color: var(--primary); background: var(--green-100); }
 .confirm-icon.warning { color: var(--amber-700); background: var(--amber-100); }
 .confirm-icon.danger { color: var(--red-700); background: var(--red-100); }
 
@@ -3544,7 +3542,7 @@ svg {
   background: var(--ink-500);
 }
 
-.toast-success .toast-dot { background: var(--green-600); }
+.toast-success .toast-dot { background: var(--primary); }
 .toast-error .toast-dot { background: var(--red-700); }
 .toast-warning .toast-dot { background: var(--amber-700); }
 .toast-info .toast-dot { background: var(--blue-600); }

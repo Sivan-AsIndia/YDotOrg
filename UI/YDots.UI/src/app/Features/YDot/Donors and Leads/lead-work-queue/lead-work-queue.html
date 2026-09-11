@@ -15,7 +15,7 @@
 </ng-template>
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="lq-page" [attr.aria-busy]="uiState() === 'loading'">
+    <div class="container-fluid px-4 py-3" [attr.aria-busy]="uiState() === 'loading'">
       <header class="lq-header">
         <div>
           <h1 class="lq-title">{{ screen().title }}</h1>
@@ -35,12 +35,17 @@
             >
           }
           @if (permissions().create) {
-            <button type="button" class="btn btn-primary btn-sm" title="Add" (click)="createLead()">
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              title="Lead Capture"
+              (click)="createLead()"
+            >
               <ng-container
                 [ngTemplateOutlet]="icon"
                 [ngTemplateOutletContext]="{ $implicit: 'add' }"
               />
-              Add
+              Lead Capture
             </button>
           }
           <button
@@ -150,27 +155,13 @@
       </section>
 
       <section class="lq-toolbar" aria-label="Views and filters">
-        <div class="lq-saved-views" aria-label="Assignment views">
-          @for (view of primaryViews(); track view) {
-            <button
-              type="button"
-              class="lq-view-chip"
-              [class.lq-view-chip-active]="savedView() === view"
-              [attr.aria-pressed]="savedView() === view"
-              (click)="selectSavedView(view)"
-            >
-              <ng-container
-                [ngTemplateOutlet]="icon"
-                [ngTemplateOutletContext]="{
-                  $implicit:
-                    view === 'All Leads' ? 'grid' : view === 'Unassigned Leads' ? 'assign' : 'user',
-                }"
-              />
-              {{ view === 'All Leads' ? view : view.replace(' Leads', '') }}
-            </button>
-          }
-        </div>
-        <form class="lq-search-row" (ngSubmit)="refresh()" role="search">
+        <form
+          class="lq-search-row"
+          (ngSubmit)="refresh()"
+          role="search"
+          tabindex="0"
+          aria-label="Lead search and views"
+        >
           <div class="lq-search-wrap">
             <ng-container
               [ngTemplateOutlet]="icon"
@@ -186,6 +177,32 @@
               (ngModelChange)="onSearchChange($event)"
             />
           </div>
+          <div class="lq-saved-views" aria-label="Assignment views">
+            @for (view of primaryViews(); track view) {
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm lq-view-chip"
+                [class.lq-view-chip-active]="savedView() === view"
+                [attr.aria-pressed]="savedView() === view"
+                [title]="view"
+                (click)="selectSavedView(view)"
+              >
+                <ng-container
+                  [ngTemplateOutlet]="icon"
+                  [ngTemplateOutletContext]="{
+                    $implicit:
+                      view === 'All Leads'
+                        ? 'grid'
+                        : view === 'Unassigned Leads'
+                          ? 'assign'
+                          : 'user',
+                  }"
+                />
+                {{ view === 'All Leads' ? view : view.replace(' Leads', '') }}
+              </button>
+            }
+          </div>
+
           <button
             type="button"
             class="btn btn-outline-secondary btn-sm"
@@ -217,6 +234,44 @@
         </form>
         @if (showFilters()) {
           <div class="lq-filter-panel" id="lq-filters">
+            <section class="lq-filter-extras" aria-label="Additional filters">
+              <h3>Saved views</h3>
+              <div class="lq-saved-views" aria-label="More saved views">
+                @for (view of extraViews(); track view) {
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm lq-view-chip"
+                    [class.lq-view-chip-active]="savedView() === view"
+                    [attr.aria-pressed]="savedView() === view"
+                    [title]="view"
+                    (click)="selectSavedView(view)"
+                  >
+                    {{ view }}
+                    @if (view === 'Hot Leads') {
+                      @for (kpi of extraKpis(); track kpi.id) {
+                        <span class="lq-number">({{ kpi.value | number }})</span>
+                      }
+                    }
+                  </button>
+                }
+              </div>
+
+              <h3>Pipeline</h3>
+              <div class="lq-pipeline" aria-label="Lead pipeline">
+                @for (stage of pipeline(); track stage.key) {
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm lq-view-chip"
+                    [class.lq-view-chip-active]="stageFilter() === stage.key"
+                    [attr.aria-pressed]="stageFilter() === stage.key"
+                    [title]="'Filter by ' + stage.label"
+                    (click)="selectPipelineStage(stage.key)"
+                  >
+                    {{ stage.label }} <span class="lq-number">{{ stage.count | number }}</span>
+                  </button>
+                }
+              </div>
+            </section>
             <div class="lq-filter-grid">
               @for (field of filterFields(); track field.key) {
                 <div class="lq-filter-field">
@@ -266,7 +321,7 @@
               ><button
                 type="button"
                 class="btn btn-outline-secondary btn-sm"
-                (click)="clearAdvancedFilters()"
+                (click)="clearAllFilters()"
               >
                 <ng-container
                   [ngTemplateOutlet]="icon"
@@ -284,7 +339,7 @@
                 >{{ chip.label
                 }}<button
                   type="button"
-                  class="lq-chip-remove"
+                  class="btn btn-outline-secondary btn-sm lq-chip-remove"
                   [title]="'Remove ' + chip.label"
                   [attr.aria-label]="'Remove ' + chip.label"
                   (click)="removeFilterChip(chip.key)"
@@ -299,16 +354,7 @@
         }
       </section>
 
-      <section class="lq-grid-wrap" aria-labelledby="lq-list-title">
-        <div class="lq-grid-heading">
-          <!-- <h2 id="lq-list-title">
-            <ng-container
-              [ngTemplateOutlet]="icon"
-              [ngTemplateOutletContext]="{ $implicit: 'list' }"
-            />
-            Leads <span class="lq-number">({{ totalCount() | number }})</span>
-          </h2> -->
-        </div>
+      <section class="lq-grid-wrap" aria-label="Leads">
         @if (selectionCount() > 0) {
           <div class="lq-bulk-bar" role="toolbar" aria-label="Bulk actions">
             <span
@@ -368,14 +414,14 @@
                 <button
                   type="button"
                   class="btn btn-primary btn-sm"
-                  title="Add"
+                  title="Lead Capture"
                   (click)="createLead()"
                 >
                   <ng-container
                     [ngTemplateOutlet]="icon"
                     [ngTemplateOutletContext]="{ $implicit: 'add' }"
                   />
-                  Add
+                  Lead Capture
                 </button>
               }
               <button
@@ -433,7 +479,7 @@
                     <td>
                       <button
                         type="button"
-                        class="lq-name-btn"
+                        class="btn btn-outline-secondary btn-sm lq-name-btn"
                         (click)="previewLead(lead)"
                         [title]="'View ' + lead.name"
                       >
@@ -465,7 +511,7 @@
                       <div class="lq-row-actions">
                         <button
                           type="button"
-                          class="lq-icon-btn"
+                          class="btn btn-outline-secondary btn-sm lq-icon-btn"
                           title="View lead"
                           [attr.aria-label]="'View ' + lead.name"
                           (click)="previewLead(lead)"
@@ -478,7 +524,7 @@
                         @if (lead.owner === 'Unassigned' && permissions().assign) {
                           <button
                             type="button"
-                            class="lq-icon-btn"
+                            class="btn btn-outline-secondary btn-sm lq-icon-btn"
                             title="Assign lead"
                             [attr.aria-label]="'Assign ' + lead.name"
                             (click)="onAssign(lead)"
@@ -492,7 +538,7 @@
                         @if (permissions().communicate) {
                           <button
                             type="button"
-                            class="lq-icon-btn"
+                            class="btn btn-outline-secondary btn-sm lq-icon-btn"
                             title="Communicate"
                             [attr.aria-label]="'Communicate with ' + lead.name"
                             (click)="onCommunicate(lead)"
@@ -519,46 +565,6 @@
           }
         }
       </section>
-
-      <details class="lq-insights">
-        <summary>More views &amp; pipeline</summary>
-        <div class="lq-insights-body">
-          <div class="lq-saved-views" aria-label="More saved views">
-            @for (view of extraViews(); track view) {
-              <button
-                type="button"
-                class="lq-view-chip"
-                [class.lq-view-chip-active]="savedView() === view"
-                [attr.aria-pressed]="savedView() === view"
-                (click)="selectSavedView(view)"
-              >
-                {{ view }}
-              </button>
-            }
-          </div>
-          <div class="lq-extra-kpis">
-            @for (kpi of extraKpis(); track kpi.id) {
-              <div>
-                <span>{{ kpi.label }}</span
-                ><strong class="lq-number">{{ kpi.value | number }}</strong>
-              </div>
-            }
-          </div>
-          <div class="lq-pipeline" aria-label="Lead pipeline">
-            @for (stage of pipeline(); track stage.key) {
-              <button
-                type="button"
-                class="lq-view-chip"
-                [class.lq-view-chip-active]="stageFilter() === stage.label"
-                [attr.aria-pressed]="stageFilter() === stage.label"
-                (click)="selectPipelineStage(stage.key)"
-              >
-                {{ stage.label }} <span class="lq-number">{{ stage.count | number }}</span>
-              </button>
-            }
-          </div>
-        </div>
-      </details>
     </div>
   </div>
 </main>
@@ -621,7 +627,7 @@
               {{ lead.reference
               }}<button
                 type="button"
-                class="lq-copy-btn"
+                class="btn btn-outline-secondary btn-sm lq-copy-btn"
                 title="Copy lead ID"
                 aria-label="Copy lead ID"
                 (click)="copyValue('id', lead.reference)"
@@ -642,7 +648,7 @@
               @if (lead.mobile) {
                 <button
                   type="button"
-                  class="lq-copy-btn"
+                  class="btn btn-outline-secondary btn-sm lq-copy-btn"
                   title="Copy phone number"
                   aria-label="Copy phone number"
                   (click)="copyValue('mobile', lead.mobile)"
@@ -664,7 +670,7 @@
               @if (lead.email) {
                 <button
                   type="button"
-                  class="lq-copy-btn"
+                  class="btn btn-outline-secondary btn-sm lq-copy-btn"
                   title="Copy email address"
                   aria-label="Copy email address"
                   (click)="copyValue('email', lead.email)"

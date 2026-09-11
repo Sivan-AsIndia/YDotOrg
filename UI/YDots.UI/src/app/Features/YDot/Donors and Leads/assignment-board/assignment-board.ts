@@ -1,19 +1,21 @@
-import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
-import { ConfirmModalComponent } from '../../../../Shared/components/confirm-modal/confirm-modal';
-import { ConfirmDialogConfig, UiState } from '../../../../Shared/models/donors-leads.model';
-import { DonorApiService } from '../../../../Service/donor-api.service';
-import { ToastService } from '../../../../Shared/services/toast.service';
-import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { CommonModule } from "@angular/common";
+import { Component, computed, inject, signal } from "@angular/core";
+import { ActivatedRoute, Router } from "@angular/router";
+import { FormsModule } from "@angular/forms";
+import {
+  ConfirmDialogConfig,
+  UiState,
+} from "../../../../Shared/models/donors-leads.model";
+import { DonorApiService } from "../../../../Service/donor-api.service";
+import { ToastService } from "../../../../Shared/services/toast.service";
+import { apiErrorMessage } from "../../../../Shared/models/api-response.model";
 import {
   AssignmentBoardResponse,
   AssignmentBoardRow,
   AssignmentHistoryItem,
   DonLookupItem,
   OwnerWorkload,
-} from '../../../../Shared/models/donor-contract.model';
+} from "../../../../Shared/models/donor-contract.model";
 
 interface OwnerOption {
   readonly reference: string;
@@ -43,8 +45,8 @@ interface LeadRow {
   readonly version: number;
 }
 
-type AssignMode = 'assign' | 'reassign' | 'bulkRoute';
-type ScheduleMode = 'immediate' | 'scheduled';
+type AssignMode = "assign" | "reassign" | "bulkRoute";
+type ScheduleMode = "immediate" | "scheduled";
 
 interface AssignmentDraft {
   readonly mode: AssignMode;
@@ -67,7 +69,7 @@ interface HistoryEntry {
 interface BulkResultDetail {
   readonly leadReference: string;
   readonly leadPreview: string;
-  readonly status: 'success' | 'ineligible';
+  readonly status: "success" | "ineligible";
   readonly note: string;
 }
 
@@ -119,10 +121,10 @@ interface AssignResult {
  * board like this, and the second one is refused rather than silently overwriting the first.
  */
 @Component({
-  selector: 'app-assignment-board',
-  imports: [CommonModule, FormsModule, ConfirmModalComponent],
-  templateUrl: './assignment-board.html',
-  styleUrl: './assignment-board.css',
+  selector: "app-assignment-board",
+  imports: [CommonModule, FormsModule],
+  templateUrl: "./assignment-board.html",
+  styleUrl: "./assignment-board.css",
 })
 export class AssignmentBoardComponent {
   private readonly router = inject(Router);
@@ -130,23 +132,23 @@ export class AssignmentBoardComponent {
   private readonly api = inject(DonorApiService);
   private readonly toast = inject(ToastService);
 
-  protected readonly timezoneLabel = 'Asia/Kolkata (IST)';
+  protected readonly timezoneLabel = "Asia/Kolkata (IST)";
 
-  protected readonly uiState = signal<UiState>('loading');
-  protected readonly errorMessage = signal('');
+  protected readonly uiState = signal<UiState>("loading");
+  protected readonly errorMessage = signal("");
 
   // ===========================================================================================
   // Screen chrome and lookups, all from the API
   // ===========================================================================================
 
   protected readonly screen = signal({
-    viewId: 'SCR-DON-006',
-    title: 'Assignment board',
-    route: '/app/fundraising/relationships/assignment-board',
-    purpose: 'Balance ownership by team, language, workload and SLA.',
-    scope: '',
-    lastRefresh: '',
-    timezone: 'Asia/Kolkata (IST)',
+    viewId: "SCR-DON-006",
+    title: "Assignment board",
+    route: "/app/fundraising/relationships/assignment-board",
+    purpose: "Assign or reassign owners across your records.",
+    scope: "",
+    lastRefresh: "",
+    timezone: "Asia/Kolkata (IST)",
   });
 
   protected readonly filters = signal<{
@@ -155,9 +157,15 @@ export class AssignmentBoardComponent {
     languages: readonly string[];
     workloadBands: readonly string[];
     slaStates: readonly string[];
-  }>({ campaigns: ['All'], teams: ['All'], languages: ['All'], workloadBands: ['All'], slaStates: ['All'] });
+  }>({
+    campaigns: ["All"],
+    teams: ["All"],
+    languages: ["All"],
+    workloadBands: ["All"],
+    slaStates: ["All"],
+  });
 
-  protected readonly savedFilters = signal<readonly string[]>(['All leads']);
+  protected readonly savedFilters = signal<readonly string[]>(["All leads"]);
 
   /**
    * What the caller may do, as the server listed it.
@@ -179,12 +187,12 @@ export class AssignmentBoardComponent {
   // Filter state - every change re-queries
   // ===========================================================================================
 
-  protected readonly savedFilter = signal('All leads');
-  protected readonly campaignFilter = signal('All');
-  protected readonly teamFilter = signal('All');
-  protected readonly languageFilter = signal('All');
-  protected readonly workloadFilter = signal('All');
-  protected readonly slaFilter = signal('All');
+  protected readonly savedFilter = signal("All leads");
+  protected readonly campaignFilter = signal("All");
+  protected readonly teamFilter = signal("All");
+  protected readonly languageFilter = signal("All");
+  protected readonly workloadFilter = signal("All");
+  protected readonly slaFilter = signal("All");
   protected readonly filtersOpen = signal(false);
 
   protected toggleFilters(): void {
@@ -204,7 +212,7 @@ export class AssignmentBoardComponent {
 
   protected readonly confirmConfig = signal<ConfirmDialogConfig | null>(null);
   protected readonly selectedRow = signal<LeadRow | null>(null);
-  protected readonly activeActionId = signal('');
+  protected readonly activeActionId = signal("");
   protected readonly previewRow = signal<LeadRow | null>(null);
 
   private pendingLeadId: string | null = null;
@@ -212,8 +220,11 @@ export class AssignmentBoardComponent {
 
   constructor() {
     const params = this.route.snapshot.queryParamMap;
-    this.pendingLeadId = params.get('leadId');
-    this.pendingLeadIds = (params.get('leadIds') ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+    this.pendingLeadId = params.get("leadId");
+    this.pendingLeadIds = (params.get("leadIds") ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
 
     this.load();
   }
@@ -223,54 +234,89 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   private load(): void {
-    this.uiState.set('loading');
-    this.errorMessage.set('');
+    const sequence = ++this.loadSequence;
+    if (this.recordType() === "donors") {
+      this.rows.set([]);
+      this.totalCountFromServer.set(0);
+      this.permissions.set({
+        view: false,
+        assign: false,
+        reassign: false,
+        bulkRoute: false,
+      });
+      this.previewRow.set(null);
+      this.errorMessage.set("");
+      this.uiState.set("empty");
+      return;
+    }
+    this.uiState.set("loading");
+    this.errorMessage.set("");
 
     this.api.getAssignmentBoard(this.buildFilter()).subscribe({
-      next: (response) => this.applyResponse(response),
+      next: (response) => {
+        if (sequence === this.loadSequence) this.applyResponse(response);
+      },
       error: (error: unknown) => {
+        if (sequence !== this.loadSequence) return;
         this.errorMessage.set(apiErrorMessage(error));
-        this.uiState.set('dependency-failure');
-        this.toast.show('Assignment board unavailable', this.errorMessage(), 'error');
+        this.uiState.set("dependency-failure");
+        this.toast.show(
+          "Assignment board unavailable",
+          this.errorMessage(),
+          "error",
+        );
       },
     });
   }
 
   private buildFilter(): Record<string, unknown> {
-    const filter: Record<string, unknown> = { page: this.currentPage(), pageSize: this.pageSize() };
+    const filter: Record<string, unknown> = {
+      page: this.currentPage(),
+      pageSize: this.pageSize(),
+    };
 
     // THE ID, NOT THE LABEL. The dropdowns show names; the API filters on the lookup value that
     // came with each name, so nothing here has to match one string against another.
-    const campaign = this.campaignLookup.find((c) => c.label === this.campaignFilter());
+    const campaign = this.campaignLookup.find(
+      (c) => c.label === this.campaignFilter(),
+    );
     if (campaign) {
-      filter['campaignId'] = campaign.value;
+      filter["campaignId"] = campaign.value;
     }
 
     const team = this.teamLookup.find((t) => t.label === this.teamFilter());
     if (team) {
-      filter['teamCode'] = team.value;
+      filter["teamCode"] = team.value;
     }
 
-    if (this.languageFilter() !== 'All') {
-      filter['preferredLanguage'] = this.languageFilter();
+    if (this.languageFilter() !== "All") {
+      filter["preferredLanguage"] = this.languageFilter();
     }
-    if (this.workloadFilter() !== 'All') {
-      filter['workloadBand'] = this.workloadFilter();
+    if (this.workloadFilter() !== "All") {
+      filter["workloadBand"] = this.workloadFilter();
     }
-    if (this.slaFilter() !== 'All') {
-      filter['slaState'] = this.slaFilter();
+    if (this.slaFilter() !== "All") {
+      filter["slaState"] = this.slaFilter();
     }
 
     // The board's own saved view. Unassigned is the one the document names as the entry point.
-    if (this.savedFilter() === 'Unassigned only') {
-      filter['assignmentState'] = 'Unassigned';
+    if (this.savedFilter() === "Unassigned only") {
+      filter["assignmentState"] = "Unassigned";
     }
 
+    if (this.savedFilter() === "Assigned only")
+      filter["assignmentState"] = "Assigned";
+    if (this.searchTerm().trim()) filter["search"] = this.searchTerm().trim();
+    if (this.ownerFilter()) filter["ownerUserId"] = this.ownerFilter();
     return filter;
   }
 
   private applyResponse(response: AssignmentBoardResponse): void {
-    this.rows.set(response.rows.items.map((row) => this.toRow(row, response.owners)));
+    this.rows.set(
+      response.rows.items
+        .slice(0, 10)
+        .map((row) => this.toRow(row, response.owners)),
+    );
     this.totalCountFromServer.set(response.rows.totalCount);
     this.owners.set(response.owners);
     this.bulkRouteMaximumItems.set(response.bulkRouteMaximumItems);
@@ -279,21 +325,24 @@ export class AssignmentBoardComponent {
     this.teamLookup = response.teamOptions;
 
     this.filters.set({
-      campaigns: ['All', ...response.campaignOptions.map((o) => o.label)],
-      teams: ['All', ...response.teamOptions.map((o) => o.label)],
-      languages: ['All', ...response.languageOptions.map((o) => o.label)],
-      workloadBands: ['All', ...response.workloadBandOptions.map((o) => o.label)],
-      slaStates: ['All', ...response.slaStateOptions.map((o) => o.label)],
+      campaigns: ["All", ...response.campaignOptions.map((o) => o.label)],
+      teams: ["All", ...response.teamOptions.map((o) => o.label)],
+      languages: ["All", ...response.languageOptions.map((o) => o.label)],
+      workloadBands: [
+        "All",
+        ...response.workloadBandOptions.map((o) => o.label),
+      ],
+      slaStates: ["All", ...response.slaStateOptions.map((o) => o.label)],
     });
-    this.savedFilters.set(['All leads', 'Unassigned only']);
+    this.savedFilters.set(["All leads", "Unassigned only", "Assigned only"]);
 
     const permitted = response.permittedActions ?? [];
     // VERBS, AS THE API ANSWERS THEM: ['Assign','Inspect history','Reassign','Bulk route'].
     this.permissions.set({
-      view: permitted.includes('Inspect history') || permitted.length > 0,
-      assign: permitted.includes('Assign'),
-      reassign: permitted.includes('Reassign'),
-      bulkRoute: permitted.includes('Bulk route'),
+      view: permitted.includes("Inspect history") || permitted.length > 0,
+      assign: permitted.includes("Assign"),
+      reassign: permitted.includes("Reassign"),
+      bulkRoute: permitted.includes("Bulk route"),
     });
 
     this.screen.update((current) => ({
@@ -302,12 +351,14 @@ export class AssignmentBoardComponent {
       lastRefresh: this.nowLabel(),
     }));
 
-    this.uiState.set(this.rows().length === 0 ? 'empty' : 'ready');
+    this.uiState.set(this.rows().length === 0 ? "empty" : "ready");
 
     // Arriving from the Lead Queue's Assign action, or from its bulk selection.
     if (this.pendingLeadIds.length > 0) {
       const wanted = new Set(this.pendingLeadIds);
-      const matches = this.rows().filter((r) => wanted.has(r.leadId) || wanted.has(r.leadReference));
+      const matches = this.rows().filter(
+        (r) => wanted.has(r.leadId) || wanted.has(r.leadReference),
+      );
       if (matches.length > 0) {
         this.selectionMode.set(true);
         this.selectedLeadRefs.set(new Set(matches.map((m) => m.leadReference)));
@@ -316,33 +367,44 @@ export class AssignmentBoardComponent {
     }
 
     const requested = this.pendingLeadId
-      ? this.rows().find((r) => r.leadId === this.pendingLeadId || r.leadReference === this.pendingLeadId)
+      ? this.rows().find(
+          (r) =>
+            r.leadId === this.pendingLeadId ||
+            r.leadReference === this.pendingLeadId,
+        )
       : null;
     this.pendingLeadId = null;
-    this.previewRow.set(requested ?? this.previewRow() ?? this.rows()[0] ?? null);
+    if (requested) this.selectPreview(requested);
+    else if (this.previewRow())
+      this.previewRow.set(
+        this.rows().find((r) => r.leadId === this.previewRow()?.leadId) ?? null,
+      );
   }
 
-  private toRow(row: AssignmentBoardRow, owners: readonly OwnerWorkload[]): LeadRow {
+  private toRow(
+    row: AssignmentBoardRow,
+    owners: readonly OwnerWorkload[],
+  ): LeadRow {
     const owner = owners.find((o) => o.userId === row.currentOwnerUserId);
     return {
       leadId: row.leadId,
       leadReference: row.leadReference,
       leadPreview: row.leadPreview,
-      campaign: row.campaignName ?? '—',
-      team: row.teamCode ?? '—',
+      campaign: row.campaignName ?? "—",
+      team: row.teamCode ?? "—",
       language: row.preferredLanguage,
 
       // THE OWNER'S BAND, NOT THE LEAD'S. Workload is a property of the person holding the work,
       // which is exactly what makes it useful when deciding who to hand the next lead to.
-      workloadBand: owner?.workloadBand ?? '—',
-      slaState: row.slaState,
-      currentOwner: row.currentOwnerName ?? 'Unassigned',
+      workloadBand: owner?.workloadBand ?? "—",
+      slaState: row.slaState.replace(/([a-z])([A-Z])/g, "$1 $2"),
+      currentOwner: row.currentOwnerName ?? "Unassigned",
       currentOwnerUserId: row.currentOwnerUserId,
-      suggestedOwner: row.suggestedOwnerName ?? '',
+      suggestedOwner: row.suggestedOwnerName ?? "",
       suggestedOwnerUserId: row.suggestedOwnerUserId,
-      suggestionRationale: row.suggestionRationale ?? '',
+      suggestionRationale: row.suggestionRationale ?? "",
       openWorkCount: row.currentOwnerOpenWorkCount,
-      nextActionDue: this.formatDate(row.nextActionDueUtc),
+      nextActionDue: this.formatDateTime(row.nextActionDueUtc),
       status: row.status,
       version: row.version,
     };
@@ -355,20 +417,24 @@ export class AssignmentBoardComponent {
   protected readonly allRows = computed(() => this.rows());
   protected readonly filteredRows = computed(() => this.rows());
   protected readonly paginatedRows = computed(() => this.rows());
+  protected readonly viewMode = signal<"cards" | "table">("cards");
 
   protected readonly totalCount = computed(() => this.totalCountFromServer());
   protected readonly unassignedCount = computed(
-    () => this.rows().filter((r) => r.currentOwner === 'Unassigned').length,
+    () => this.rows().filter((r) => !r.currentOwnerUserId).length,
   );
   protected readonly dueTodayCount = computed(
-    () => this.rows().filter((r) => r.slaState === 'Due today').length,
+    () =>
+      this.rows().filter(
+        (r) => r.slaState.toLowerCase().replace(/\s/g, "") === "duetoday",
+      ).length,
   );
   protected readonly overdueCount = computed(
-    () => this.rows().filter((r) => r.slaState === 'Overdue').length,
+    () => this.rows().filter((r) => r.slaState === "Overdue").length,
   );
 
   // ----- Pagination, server-side -----
-  protected readonly pageSizes = [10, 25, 50, 100];
+  protected readonly pageSizes = [10] as const;
   protected readonly pageSize = signal(10);
   protected readonly currentPage = signal(1);
 
@@ -380,14 +446,20 @@ export class AssignmentBoardComponent {
     const total = this.totalPages();
     const current = this.currentPage();
     const pages: number[] = [];
-    for (let i = Math.max(1, current - 2); i <= Math.min(total, current + 2); i++) {
+    for (
+      let i = Math.max(1, current - 2);
+      i <= Math.min(total, current + 2);
+      i++
+    ) {
       pages.push(i);
     }
     return pages;
   });
 
   protected readonly pagedStart = computed(() =>
-    this.totalCountFromServer() === 0 ? 0 : (this.currentPage() - 1) * this.pageSize() + 1,
+    this.totalCountFromServer() === 0
+      ? 0
+      : (this.currentPage() - 1) * this.pageSize() + 1,
   );
   protected readonly pagedEnd = computed(() =>
     Math.min(this.currentPage() * this.pageSize(), this.totalCountFromServer()),
@@ -397,51 +469,86 @@ export class AssignmentBoardComponent {
     if (page < 1 || page > this.totalPages() || page === this.currentPage()) {
       return;
     }
+    this.exitSelectionMode();
     this.currentPage.set(page);
     this.load();
   }
 
-  protected onPageSizeChange(size: number): void {
-    this.pageSize.set(Number(size));
+  protected onPageSizeChange(_size: number): void {
+    this.pageSize.set(10);
     this.currentPage.set(1);
     this.load();
   }
 
   protected readonly activeFilterSummary = computed(() => {
     const chips: { key: string; label: string }[] = [];
-    if (this.savedFilter() !== 'All leads') chips.push({ key: 'saved', label: `View: ${this.savedFilter()}` });
-    if (this.campaignFilter() !== 'All') chips.push({ key: 'campaign', label: `Campaign: ${this.campaignFilter()}` });
-    if (this.teamFilter() !== 'All') chips.push({ key: 'team', label: `Team: ${this.teamFilter()}` });
-    if (this.languageFilter() !== 'All') chips.push({ key: 'language', label: `Language: ${this.languageFilter()}` });
-    if (this.workloadFilter() !== 'All') chips.push({ key: 'workload', label: `Workload: ${this.workloadFilter()}` });
-    if (this.slaFilter() !== 'All') chips.push({ key: 'sla', label: `SLA: ${this.slaFilter()}` });
+    if (this.searchTerm().trim())
+      chips.push({
+        key: "search",
+        label: `Search: ${this.searchTerm().trim()}`,
+      });
+    if (this.ownerFilter())
+      chips.push({
+        key: "owner",
+        label: `Owner: ${this.owners().find((o) => o.userId === this.ownerFilter())?.name ?? "Selected owner"}`,
+      });
+    if (this.savedFilter() !== "All leads")
+      chips.push({ key: "saved", label: `View: ${this.savedFilter()}` });
+    if (this.campaignFilter() !== "All")
+      chips.push({
+        key: "campaign",
+        label: `Campaign: ${this.campaignFilter()}`,
+      });
+    if (this.teamFilter() !== "All")
+      chips.push({ key: "team", label: `Team: ${this.teamFilter()}` });
+    if (this.languageFilter() !== "All")
+      chips.push({
+        key: "language",
+        label: `Language: ${this.languageFilter()}`,
+      });
+    if (this.workloadFilter() !== "All")
+      chips.push({
+        key: "workload",
+        label: `Workload: ${this.workloadFilter()}`,
+      });
+    if (this.slaFilter() !== "All")
+      chips.push({ key: "sla", label: `SLA: ${this.slaFilter()}` });
     return chips;
   });
 
   protected removeFilterChip(key: string): void {
-    if (key === 'saved') this.savedFilter.set('All leads');
-    if (key === 'campaign') this.campaignFilter.set('All');
-    if (key === 'team') this.teamFilter.set('All');
-    if (key === 'language') this.languageFilter.set('All');
-    if (key === 'workload') this.workloadFilter.set('All');
-    if (key === 'sla') this.slaFilter.set('All');
+    this.exitSelectionMode();
+    if (key === "search") this.searchTerm.set("");
+    if (key === "owner") this.ownerFilter.set("");
+    if (key === "saved") this.savedFilter.set("All leads");
+    if (key === "campaign") this.campaignFilter.set("All");
+    if (key === "team") this.teamFilter.set("All");
+    if (key === "language") this.languageFilter.set("All");
+    if (key === "workload") this.workloadFilter.set("All");
+    if (key === "sla") this.slaFilter.set("All");
     this.currentPage.set(1);
     this.load();
   }
 
   protected clearFilters(): void {
-    this.savedFilter.set('All leads');
-    this.campaignFilter.set('All');
-    this.teamFilter.set('All');
-    this.languageFilter.set('All');
-    this.workloadFilter.set('All');
-    this.slaFilter.set('All');
+    this.recordType.set("leads");
+    this.exitSelectionMode();
+    this.searchTerm.set("");
+    this.ownerFilter.set("");
+    this.dropdownSearch.set({});
+    this.savedFilter.set("All leads");
+    this.campaignFilter.set("All");
+    this.teamFilter.set("All");
+    this.languageFilter.set("All");
+    this.workloadFilter.set("All");
+    this.slaFilter.set("All");
     this.currentPage.set(1);
     this.load();
   }
 
   /** Any dropdown change re-queries; the template binds its selects to this. */
   protected onFilterChanged(): void {
+    this.exitSelectionMode();
     this.currentPage.set(1);
     this.load();
   }
@@ -451,10 +558,9 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   protected selectPreview(row: LeadRow): void {
-    if (this.selectionMode()) {
-      this.toggleRowSelection(row.leadReference);
-      return;
-    }
+    this.openDrawer();
+    this.lastResult.set(null);
+    this.bulkResult.set(null);
     this.previewRow.set(row);
     this.draft.set(null);
     this.historyPanelRow.set(null);
@@ -465,7 +571,7 @@ export class AssignmentBoardComponent {
   }
 
   protected dismissBanner(): void {
-    this.uiState.set(this.rows().length === 0 ? 'empty' : 'ready');
+    this.uiState.set(this.rows().length === 0 ? "empty" : "ready");
   }
 
   // ===========================================================================================
@@ -473,7 +579,12 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   protected getInitials(name: string): string {
-    return name.split(' ').map((p) => p.charAt(0)).join('').slice(0, 2).toUpperCase();
+    return name
+      .split(" ")
+      .map((p) => p.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
   }
 
   protected avatarTone(index: number): string {
@@ -481,15 +592,15 @@ export class AssignmentBoardComponent {
   }
 
   protected slaClass(sla: string): string {
-    if (sla === 'Overdue') return 'ab-badge-danger';
-    if (sla === 'Due today') return 'ab-badge-warn';
-    return 'ab-badge-good';
+    if (sla === "Overdue") return "ab-badge-danger";
+    if (sla === "Due today") return "ab-badge-warn";
+    return "ab-badge-good";
   }
 
   protected workloadClass(band: string): string {
-    if (band === 'High') return 'ab-badge-danger';
-    if (band === 'Medium') return 'ab-badge-warn';
-    return 'ab-badge-good';
+    if (band === "High") return "ab-badge-danger";
+    if (band === "Medium") return "ab-badge-warn";
+    return "ab-badge-good";
   }
 
   protected trackByLead(_index: number, row: LeadRow): string {
@@ -497,18 +608,20 @@ export class AssignmentBoardComponent {
   }
 
   /** The document: Assign for an unassigned lead, Reassign for an assigned one. */
-  protected primaryActionId(row: LeadRow): 'assign' | 'reassign' {
-    return row.currentOwner === 'Unassigned' ? 'assign' : 'reassign';
+  protected primaryActionId(row: LeadRow): "assign" | "reassign" {
+    return row.currentOwnerUserId ? "reassign" : "assign";
   }
 
   protected primaryActionLabel(row: LeadRow): string {
-    return this.primaryActionId(row) === 'assign' ? 'Assign' : 'Reassign';
+    return this.primaryActionId(row) === "assign"
+      ? "Assign Owner"
+      : "Reassign Owner";
   }
 
   protected actionLabel(mode: AssignMode): string {
-    if (mode === 'assign') return 'Assign';
-    if (mode === 'reassign') return 'Reassign';
-    return 'Bulk assign';
+    if (mode === "assign") return "Assign";
+    if (mode === "reassign") return "Reassign";
+    return "Bulk assign";
   }
 
   // ===========================================================================================
@@ -519,7 +632,7 @@ export class AssignmentBoardComponent {
   protected readonly selectedLeadRefs = signal<Set<string>>(new Set());
 
   protected toggleSelectionMode(): void {
-    if (!this.permissions()['bulkRoute']) {
+    if (!this.permissions()["bulkRoute"]) {
       return;
     }
     this.selectionMode.update((v) => !v);
@@ -564,14 +677,14 @@ export class AssignmentBoardComponent {
     // whole batch after the person had already chosen an owner and typed a reason.
     if (rows.length > this.bulkRouteMaximumItems()) {
       this.toast.show(
-        'Too many leads selected',
+        "Too many leads selected",
         `Bulk assign takes at most ${this.bulkRouteMaximumItems()} leads at a time. ${rows.length} are selected.`,
-        'warning',
+        "warning",
       );
       return;
     }
 
-    this.beginAssignment('bulkRoute', rows);
+    this.beginAssignment("bulkRoute", rows);
   }
 
   // ===========================================================================================
@@ -579,13 +692,15 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   protected readonly draft = signal<AssignmentDraft | null>(null);
-  protected readonly ownerSearchTerm = signal('');
+  protected readonly ownerSearchTerm = signal("");
   protected readonly ownerPickerOpen = signal(false);
   protected readonly processing = signal(false);
   protected readonly lastResult = signal<AssignResult | null>(null);
   protected readonly bulkResult = signal<BulkResult | null>(null);
 
-  protected readonly minEffectiveTime = computed(() => this.toLocalDatetimeInput(new Date()));
+  protected readonly minEffectiveTime = computed(() =>
+    this.toLocalDatetimeInput(new Date()),
+  );
 
   /**
    * The owners a lead may be handed to.
@@ -595,16 +710,20 @@ export class AssignmentBoardComponent {
    * result up in a constant exported from the campaign register screen. Both steps could be wrong
    * and neither was checked - a lead could be offered to somebody with no claim on its campaign.
    */
-  protected readonly campaignScopedOwnerOptions = computed<readonly OwnerOption[]>(() =>
+  protected readonly campaignScopedOwnerOptions = computed<
+    readonly OwnerOption[]
+  >(() =>
     this.owners().map((owner) => ({
       reference: owner.userId,
       label: owner.name,
-      context: `${owner.teamCode ?? 'No team'} · ${owner.openWorkCount} open · ${owner.workloadBand}`,
+      context: `${owner.teamCode ?? "No team"} · ${owner.openWorkCount} open · ${owner.workloadBand}`,
       initials: this.getInitials(owner.name),
     })),
   );
 
-  protected readonly hasCampaignOwners = computed(() => this.campaignScopedOwnerOptions().length > 0);
+  protected readonly hasCampaignOwners = computed(
+    () => this.campaignScopedOwnerOptions().length > 0,
+  );
 
   protected readonly filteredOwnerOptions = computed(() => {
     const term = this.ownerSearchTerm().trim().toLowerCase();
@@ -625,7 +744,11 @@ export class AssignmentBoardComponent {
     if (!draft?.newOwnerRef) {
       return null;
     }
-    return this.campaignScopedOwnerOptions().find((o) => o.reference === draft.newOwnerRef) ?? null;
+    return (
+      this.campaignScopedOwnerOptions().find(
+        (o) => o.reference === draft.newOwnerRef,
+      ) ?? null
+    );
   });
 
   /**
@@ -638,7 +761,7 @@ export class AssignmentBoardComponent {
   protected readonly eligibleRows = computed<LeadRow[]>(() => {
     const draft = this.draft();
     if (!draft) return [];
-    if (draft.mode !== 'bulkRoute') return draft.rows;
+    if (draft.mode !== "bulkRoute") return draft.rows;
     const owner = this.selectedOwner();
     if (!owner) return draft.rows;
     return draft.rows.filter((r) => r.currentOwnerUserId !== owner.reference);
@@ -647,7 +770,7 @@ export class AssignmentBoardComponent {
   protected readonly ineligibleRows = computed<LeadRow[]>(() => {
     const draft = this.draft();
     const owner = this.selectedOwner();
-    if (!draft || draft.mode !== 'bulkRoute' || !owner) return [];
+    if (!draft || draft.mode !== "bulkRoute" || !owner) return [];
     return draft.rows.filter((r) => r.currentOwnerUserId === owner.reference);
   });
 
@@ -656,20 +779,23 @@ export class AssignmentBoardComponent {
     if (!draft || this.processing() || !draft.newOwnerRef) {
       return false;
     }
-    if (draft.scheduleMode === 'scheduled' && (!draft.effectiveTimeInput || draft.effectiveTimeError)) {
+    if (
+      draft.scheduleMode === "scheduled" &&
+      (!draft.effectiveTimeInput || draft.effectiveTimeError)
+    ) {
       return false;
     }
-    if (draft.mode === 'bulkRoute' && this.eligibleRows().length === 0) {
+    if (draft.mode === "bulkRoute" && this.eligibleRows().length === 0) {
       return false;
     }
     return true;
   });
 
   protected draftTitle(draft: AssignmentDraft): string {
-    if (draft.mode === 'bulkRoute') {
-      return `Bulk assign · ${draft.rows.length} record${draft.rows.length === 1 ? '' : 's'}`;
+    if (draft.mode === "bulkRoute") {
+      return `Bulk assign · ${draft.rows.length} record${draft.rows.length === 1 ? "" : "s"}`;
     }
-    return draft.mode === 'assign' ? 'Assign owner' : 'Reassign owner';
+    return draft.mode === "assign" ? "Assign owner" : "Reassign owner";
   }
 
   protected beginAssignment(mode: AssignMode, rows: LeadRow[]): void {
@@ -677,18 +803,20 @@ export class AssignmentBoardComponent {
       return;
     }
 
+    this.openDrawer();
     // The server's suggestion, preselected. It travelled with the row, so it needs no lookup.
-    const suggestedRef = mode !== 'bulkRoute' ? rows[0].suggestedOwnerUserId : null;
+    const suggestedRef =
+      mode !== "bulkRoute" ? rows[0].suggestedOwnerUserId : null;
 
     this.draft.set({
       mode,
       rows,
       newOwnerRef: suggestedRef,
-      scheduleMode: 'immediate',
-      effectiveTimeInput: '',
-      effectiveTimeError: '',
+      scheduleMode: "immediate",
+      effectiveTimeInput: "",
+      effectiveTimeError: "",
     });
-    this.ownerSearchTerm.set('');
+    this.ownerSearchTerm.set("");
     this.ownerPickerOpen.set(false);
     this.bulkResult.set(null);
     this.lastResult.set(null);
@@ -705,7 +833,7 @@ export class AssignmentBoardComponent {
 
   protected cancelDraft(): void {
     this.draft.set(null);
-    this.ownerSearchTerm.set('');
+    this.ownerSearchTerm.set("");
     this.ownerPickerOpen.set(false);
   }
 
@@ -718,12 +846,12 @@ export class AssignmentBoardComponent {
     if (!draft) return;
     this.draft.set({ ...draft, newOwnerRef: ref });
     this.ownerPickerOpen.set(false);
-    this.ownerSearchTerm.set('');
+    this.ownerSearchTerm.set("");
   }
 
   protected useSuggestedOwner(): void {
     const draft = this.draft();
-    if (!draft || draft.mode === 'bulkRoute') return;
+    if (!draft || draft.mode === "bulkRoute") return;
     const ref = draft.rows[0].suggestedOwnerUserId;
     if (ref) {
       this.draft.set({ ...draft, newOwnerRef: ref });
@@ -736,24 +864,28 @@ export class AssignmentBoardComponent {
     this.draft.set({
       ...draft,
       scheduleMode: mode,
-      effectiveTimeInput: mode === 'immediate' ? '' : draft.effectiveTimeInput,
-      effectiveTimeError: '',
+      effectiveTimeInput: mode === "immediate" ? "" : draft.effectiveTimeInput,
+      effectiveTimeError: "",
     });
   }
 
   protected onEffectiveTimeInput(value: string): void {
     const draft = this.draft();
     if (!draft) return;
-    let error = '';
+    let error = "";
     if (value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) {
-        error = 'Enter a valid date and time.';
+        error = "Enter a valid date and time.";
       } else if (date.getTime() < Date.now() - 60000) {
-        error = 'Effective time cannot be in the past.';
+        error = "Effective time cannot be in the past.";
       }
     }
-    this.draft.set({ ...draft, effectiveTimeInput: value, effectiveTimeError: error });
+    this.draft.set({
+      ...draft,
+      effectiveTimeInput: value,
+      effectiveTimeError: error,
+    });
   }
 
   protected continueToConfirm(): void {
@@ -763,34 +895,43 @@ export class AssignmentBoardComponent {
       return;
     }
 
-    const isBulk = draft.mode === 'bulkRoute';
+    const isBulk = draft.mode === "bulkRoute";
     const effectiveDisplay = this.formatEffectiveTimeDisplay(draft);
 
     const beforeAfter = isBulk
       ? [
-          { label: 'Selected', before: `${draft.rows.length}`, after: `${this.eligibleRows().length} eligible` },
-          { label: 'New owner', before: '—', after: owner.label },
+          {
+            label: "Selected",
+            before: `${draft.rows.length}`,
+            after: `${this.eligibleRows().length} eligible`,
+          },
+          { label: "New owner", before: "—", after: owner.label },
         ]
       : [
-          { label: 'Owner', before: draft.rows[0].currentOwner, after: owner.label },
-          { label: 'Effective time', before: '—', after: effectiveDisplay },
+          {
+            label: "Owner",
+            before: draft.rows[0].currentOwner,
+            after: owner.label,
+          },
+          { label: "Effective time", before: "—", after: effectiveDisplay },
         ];
 
     this.selectedRow.set(draft.rows[0]);
     this.activeActionId.set(draft.mode);
+    this.assignmentReason.set("");
     this.confirmConfig.set({
       title: `Confirm ${this.actionLabel(draft.mode)}`,
       message: isBulk
         ? `This will update ownership for ${this.eligibleRows().length} of ${draft.rows.length} selected record(s). ${this.ineligibleRows().length} already belong to ${owner.label} and will be skipped.`
         : `Ownership moves to ${owner.label}. The reason is recorded on the lead's assignment history.`,
       confirmLabel: this.actionLabel(draft.mode),
-      cancelLabel: 'Cancel',
-      tone: 'primary',
+      cancelLabel: "Cancel",
+      tone: "primary",
 
       // THE API REQUIRES 10 TO 2000 CHARACTERS. Matching the bounds here means the refusal is a
       // sentence under the box rather than a 400 after the button.
       requireReason: true,
-      reasonLabel: 'Assignment reason',
+      reasonLabel: "Assignment reason",
       reasonMin: 10,
       reasonMax: 2000,
       typedConfirm: false,
@@ -800,6 +941,9 @@ export class AssignmentBoardComponent {
       effectiveTime: effectiveDisplay,
       beforeAfter,
     });
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(".ab-modal")?.focus(),
+    );
   }
 
   /**
@@ -810,6 +954,7 @@ export class AssignmentBoardComponent {
    * write is refused with a conflict rather than silently overwriting the first.
    */
   protected onConfirm(reason: string): void {
+    if (reason.trim().length < 10 || reason.trim().length > 2000) return;
     const draft = this.draft();
     const owner = this.selectedOwner();
     if (!draft || !owner || this.processing()) {
@@ -820,11 +965,11 @@ export class AssignmentBoardComponent {
     this.processing.set(true);
     const effectiveDisplay = this.formatEffectiveTimeDisplay(draft);
     const effectiveAtUtc =
-      draft.scheduleMode === 'scheduled' && draft.effectiveTimeInput
+      draft.scheduleMode === "scheduled" && draft.effectiveTimeInput
         ? new Date(draft.effectiveTimeInput).toISOString()
         : null;
 
-    if (draft.mode === 'bulkRoute') {
+    if (draft.mode === "bulkRoute") {
       this.commitBulk(draft, owner, reason, effectiveAtUtc);
       return;
     }
@@ -840,7 +985,7 @@ export class AssignmentBoardComponent {
     };
 
     const call =
-      draft.mode === 'assign'
+      draft.mode === "assign"
         ? this.api.assignFromBoard(request)
         : this.api.reassignFromBoard(request);
 
@@ -850,18 +995,27 @@ export class AssignmentBoardComponent {
           leadReference: row.leadReference,
           leadPreview: row.leadPreview,
           owner: owner.label,
-          assignmentState: draft.mode === 'assign' ? 'Assigned' : 'Reassigned',
+          assignmentState: draft.mode === "assign" ? "Assigned" : "Reassigned",
           effectiveTime: effectiveDisplay,
           nextAction: row.nextActionDue,
         });
         this.bulkResult.set(null);
         this.finishCommit();
-        this.toast.show('Owner assigned', `${row.leadReference} now belongs to ${owner.label}.`, 'success');
+        this.toast.show(
+          "Owner assigned",
+          `${row.leadReference} now belongs to ${owner.label}.`,
+          "success",
+        );
       },
       error: (error: unknown) => {
         this.processing.set(false);
         this.confirmConfig.set(null);
-        this.toast.show('Assignment not saved', apiErrorMessage(error), 'error');
+        this.focusDrawer();
+        this.toast.show(
+          "Assignment not saved",
+          apiErrorMessage(error),
+          "error",
+        );
 
         // A CONFLICT MEANS SOMEBODY ELSE GOT THERE FIRST, so the board is reloaded rather than
         // left showing a version that no longer exists.
@@ -898,7 +1052,7 @@ export class AssignmentBoardComponent {
             ...ineligible.map((row) => ({
               leadReference: row.leadReference,
               leadPreview: row.leadPreview,
-              status: 'ineligible' as const,
+              status: "ineligible" as const,
               note: `Already owned by ${owner.label}`,
             })),
             ...eligible.map((row) => {
@@ -906,8 +1060,11 @@ export class AssignmentBoardComponent {
               return {
                 leadReference: row.leadReference,
                 leadPreview: row.leadPreview,
-                status: (outcome?.routed ? 'success' : 'ineligible') as 'success' | 'ineligible',
-                note: outcome?.outcome ?? 'No outcome was reported for this lead.',
+                status: (outcome?.routed ? "success" : "ineligible") as
+                  | "success"
+                  | "ineligible",
+                note:
+                  outcome?.outcome ?? "No outcome was reported for this lead.",
               };
             }),
           ];
@@ -924,12 +1081,21 @@ export class AssignmentBoardComponent {
           this.selectedLeadRefs.set(new Set());
           this.selectionMode.set(false);
           this.finishCommit();
-          this.toast.show('Bulk assignment complete', result.message, 'success');
+          this.toast.show(
+            "Bulk assignment complete",
+            result.message,
+            "success",
+          );
         },
         error: (error: unknown) => {
           this.processing.set(false);
           this.confirmConfig.set(null);
-          this.toast.show('Bulk assignment failed', apiErrorMessage(error), 'error');
+          this.focusDrawer();
+          this.toast.show(
+            "Bulk assignment failed",
+            apiErrorMessage(error),
+            "error",
+          );
           this.load();
         },
       });
@@ -940,8 +1106,9 @@ export class AssignmentBoardComponent {
     this.draft.set(null);
     this.confirmConfig.set(null);
     this.selectedRow.set(null);
-    this.activeActionId.set('');
-    this.uiState.set('success');
+    this.activeActionId.set("");
+    this.focusDrawer();
+    this.uiState.set("success");
 
     // RELOAD RATHER THAN PATCH. An assignment changes the owner's workload band and the lead's
     // version, both of which the server computes.
@@ -949,15 +1116,17 @@ export class AssignmentBoardComponent {
   }
 
   protected onCancel(): void {
+    if (this.processing()) return;
     this.confirmConfig.set(null);
     this.selectedRow.set(null);
-    this.activeActionId.set('');
+    this.activeActionId.set("");
+    this.focusDrawer();
   }
 
   protected closeResult(): void {
     this.lastResult.set(null);
     this.bulkResult.set(null);
-    this.uiState.set('ready');
+    this.uiState.set("ready");
   }
 
   // ===========================================================================================
@@ -980,6 +1149,8 @@ export class AssignmentBoardComponent {
    * times by three people showed an empty history to all of them.
    */
   protected openHistoryPanel(row: LeadRow): void {
+    this.openDrawer();
+    this.historyError.set("");
     this.historyPanelRow.set(row);
     this.draft.set(null);
     this.historyLoading.set(true);
@@ -987,12 +1158,15 @@ export class AssignmentBoardComponent {
 
     this.api.getAssignmentHistory(row.leadId).subscribe({
       next: (history) => {
-        this.historyEntries.set(history.items.map((item) => this.toHistoryEntry(item)));
+        this.historyEntries.set(
+          history.items.map((item) => this.toHistoryEntry(item)),
+        );
         this.historyLoading.set(false);
       },
       error: (error: unknown) => {
         this.historyLoading.set(false);
-        this.toast.show('History unavailable', apiErrorMessage(error), 'error');
+        this.historyError.set(apiErrorMessage(error));
+        this.toast.show("History unavailable", apiErrorMessage(error), "error");
       },
     });
   }
@@ -1000,14 +1174,14 @@ export class AssignmentBoardComponent {
   private toHistoryEntry(item: AssignmentHistoryItem): HistoryEntry {
     return {
       event: item.isBulkRoute
-        ? 'Bulk routed'
+        ? "Bulk routed"
         : item.previousOwnerUserId
-          ? 'Reassigned'
-          : 'Assigned',
+          ? "Reassigned"
+          : "Assigned",
       owner: item.newOwnerName,
       reason: item.assignmentReason,
       effectiveTime: this.formatDateTime(item.effectiveAtUtc),
-      actor: item.previousOwnerName ?? '—',
+      actor: item.previousOwnerName ?? "—",
       at: this.formatDateTime(item.effectiveAtUtc),
     };
   }
@@ -1017,9 +1191,12 @@ export class AssignmentBoardComponent {
   }
 
   protected viewFullHistory(row: LeadRow): void {
-    this.router.navigate(['/app/fundraising/relationships/communication-timeline'], {
-      queryParams: { leadId: row.leadId },
-    });
+    this.router.navigate(
+      ["/app/fundraising/relationships/communication-timeline"],
+      {
+        queryParams: { leadId: row.leadId },
+      },
+    );
   }
 
   // ===========================================================================================
@@ -1027,44 +1204,71 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   private toLocalDatetimeInput(d: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
+    const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   private formatEffectiveTimeDisplay(draft: AssignmentDraft): string {
-    if (draft.scheduleMode === 'immediate' || !draft.effectiveTimeInput) {
+    if (draft.scheduleMode === "immediate" || !draft.effectiveTimeInput) {
       return `Immediately · ${this.timezoneLabel}`;
     }
     const date = new Date(draft.effectiveTimeInput);
     if (Number.isNaN(date.getTime())) {
       return `Scheduled · ${this.timezoneLabel}`;
     }
-    return `${date.toLocaleString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    return `${date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     })} · ${this.timezoneLabel}`;
   }
 
   private formatDate(value: string | null): string {
-    if (!value) return '—';
+    if (!value) return "—";
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime())
-      ? '—'
-      : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  }
-
-  private formatDateTime(value: string | null): string {
-    if (!value) return '—';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? '—'
-      : parsed.toLocaleString('en-IN', {
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      ? "—"
+      : parsed.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
         });
   }
 
+  private formatDateTime(value: string | null): string {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? "—"
+      : parsed.toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  }
+
+  protected leadName(row: LeadRow): string {
+    const withoutReference = this.leadPreviewWithoutReference(row);
+    return withoutReference.split("·", 1)[0].trim() || row.leadPreview;
+  }
+
+  protected leadPreviewWithoutReference(row: LeadRow): string {
+    return row.leadPreview.startsWith(row.leadReference)
+      ? row.leadPreview.slice(row.leadReference.length).replace(/^[\s:·-]+/, "")
+      : row.leadPreview;
+  }
+
   private nowLabel(): string {
-    return new Date().toLocaleString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    return new Date().toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
@@ -1073,7 +1277,10 @@ export class AssignmentBoardComponent {
   // ===========================================================================================
 
   protected readonly conflictRow = signal<LeadRow | null>(null);
-  protected readonly dependencyFailure = signal<{ primary: string; dependent: string } | null>(null);
+  protected readonly dependencyFailure = signal<{
+    primary: string;
+    dependent: string;
+  } | null>(null);
 
   protected dismissConflict(): void {
     this.conflictRow.set(null);
@@ -1081,5 +1288,177 @@ export class AssignmentBoardComponent {
 
   protected dismissDependencyFailure(): void {
     this.dependencyFailure.set(null);
+  }
+
+  protected readonly recordType = signal<"leads" | "donors">("leads");
+
+  protected onRecordTypeChange(value: "leads" | "donors"): void {
+    this.recordType.set(value);
+    this.exitSelectionMode();
+    this.currentPage.set(1);
+    this.closeDrawer();
+    this.load();
+  }
+
+  protected readonly searchTerm = signal("");
+  protected readonly ownerFilter = signal("");
+  protected readonly dropdownSearch = signal<Partial<Record<string, string>>>(
+    {},
+  );
+  protected readonly drawerOpen = signal(false);
+  protected readonly historyError = signal("");
+  protected readonly assignmentReason = signal("");
+  protected readonly reasonValid = computed(() => {
+    const length = this.assignmentReason().trim().length;
+    return length >= 10 && length <= 2000;
+  });
+  protected readonly assignedCount = computed(
+    () => this.rows().filter((r) => !!r.currentOwnerUserId).length,
+  );
+  protected readonly filterFields = [
+    { key: "campaign", label: "Campaign" },
+    { key: "team", label: "Team" },
+    { key: "language", label: "Language" },
+    { key: "workload", label: "Workload band" },
+    { key: "sla", label: "SLA state" },
+  ] as const;
+  private drawerTrigger: HTMLElement | null = null;
+  private loadSequence = 0;
+
+  protected refresh(): void {
+    this.exitSelectionMode();
+    this.load();
+  }
+
+  protected searchOptions(key: string, value: string): void {
+    this.dropdownSearch.update((search) => ({ ...search, [key]: value }));
+  }
+
+  protected optionsFor(key: string): readonly string[] {
+    const f = this.filters();
+    return (
+      (
+        {
+          campaign: f.campaigns,
+          team: f.teams,
+          language: f.languages,
+          workload: f.workloadBands,
+          sla: f.slaStates,
+        } as Record<string, readonly string[]>
+      )[key] ?? []
+    );
+  }
+
+  protected visibleOptions(key: string): readonly string[] {
+    const term = (this.dropdownSearch()[key] ?? "").toLowerCase();
+    return this.optionsFor(key).filter(
+      (option) =>
+        option === "All" ||
+        option === this.filterValue(key) ||
+        option.toLowerCase().includes(term),
+    );
+  }
+
+  protected filterValue(key: string): string {
+    return (
+      (
+        {
+          campaign: this.campaignFilter(),
+          team: this.teamFilter(),
+          language: this.languageFilter(),
+          workload: this.workloadFilter(),
+          sla: this.slaFilter(),
+        } as Record<string, string>
+      )[key] ?? "All"
+    );
+  }
+
+  protected setFilterValue(key: string, value: string): void {
+    const state = {
+      campaign: this.campaignFilter,
+      team: this.teamFilter,
+      language: this.languageFilter,
+      workload: this.workloadFilter,
+      sla: this.slaFilter,
+    };
+    state[key as keyof typeof state]?.set(value);
+    this.onFilterChanged();
+  }
+
+  protected readonly visibleFilterOwners = computed(() => {
+    const term = (this.dropdownSearch()["owner"] ?? "").toLowerCase();
+    return this.owners().filter(
+      (owner) =>
+        owner.userId === this.ownerFilter() ||
+        owner.name.toLowerCase().includes(term),
+    );
+  });
+
+  protected scheduleFollowUp(row: LeadRow): void {
+    void this.router.navigate(
+      ["/app/fundraising/relationships/follow-up-planner"],
+      {
+        queryParams: { leadId: row.leadId },
+      },
+    );
+  }
+
+  private focusDrawer(): void {
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(".ab-drawer")?.focus(),
+    );
+  }
+
+  protected openDrawer(): void {
+    if (!this.drawerOpen())
+      this.drawerTrigger = document.activeElement as HTMLElement | null;
+    this.drawerOpen.set(true);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(".ab-drawer")?.focus(),
+    );
+  }
+
+  protected closeDrawer(): void {
+    if (this.processing() || this.confirmConfig()) return;
+    this.drawerOpen.set(false);
+    this.cancelDraft();
+    this.historyPanelRow.set(null);
+    this.lastResult.set(null);
+    this.bulkResult.set(null);
+    this.drawerTrigger?.focus();
+  }
+
+  protected onOverlayKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (this.confirmConfig()) {
+        if (!this.processing()) this.onCancel();
+      } else this.closeDrawer();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = event.currentTarget as HTMLElement;
+    const targets = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+      ),
+    ).filter((el) => el.getClientRects().length > 0);
+    const first = targets[0],
+      last = targets[targets.length - 1];
+    if (!first) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === dialog)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 }

@@ -1,6 +1,6 @@
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="container-fluid">
+    <div class="container-fluid px-4 py-3">
       <div class="state-module">
         <div class="toast-stack" role="region" aria-label="Notifications" aria-live="polite">
           @for (t of toasts; track t.id) {
@@ -19,9 +19,6 @@
         @if (!isInitialized) {
           <div class="page-loading-overlay" role="status" aria-live="polite" aria-label="Loading"><div class="whirly-loader"></div></div>
         } @else {
-          @if (isLoading) {
-            <div class="page-loading-overlay" role="status" aria-live="polite" aria-label="Loading"><div class="whirly-loader"></div></div>
-          }
 
           <!-- ================= LIST VIEW ================= -->
           @if (viewMode === 'list') {
@@ -42,9 +39,9 @@
                 </div>
 
                 <div class="header-actions">
-                  <button type="button" class="btn btn-primary" (click)="openCreateForm()">
+                  <button type="button" class="btn btn-primary btn-sm" (click)="openCreateForm()">
                     <span class="btn-plus">+</span>
-                    Create State
+                    Create
                   </button>
                 </div>
 
@@ -163,7 +160,7 @@
                           <th class="col-jurisdiction" scope="col">Jurisdiction</th>
                           <th class="col-gst" scope="col">GST</th>
                           <th class="col-status" scope="col">Status</th>
-                          <th class="col-action" scope="col">Actions</th>
+                          <th class="col-action text-end" scope="col">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -191,7 +188,7 @@
                               <td class="col-gst">{{ s.gstStateCode || '—' }}</td>
                               <td class="col-status">
                                 <span class="status-pill" [class.active]="s.status === 'Active'" [class.inactive]="s.status === 'Inactive'" [class.draft]="s.status === 'Draft'">
-                                  <span class="status-dot" aria-hidden="true"></span>{{ s.status }}
+                                 {{ s.status }}
                                 </span>
                               </td>
                               <td class="col-action">
@@ -359,7 +356,7 @@
                   <h4>{{ pageTitle }}</h4>
                   <h6>{{ pageSubTitle }}</h6>
                 </div>
-                <button type="button" class="btn btn-outline" (click)="cancelForm()">
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelForm()">
                   ← Back
                 </button>
               </div>
@@ -687,8 +684,12 @@
                 </div>
 
                 <div class="form-footer">
-                  <button type="button" class="btn btn-outline" (click)="cancelForm()">Cancel</button>
-                  <button type="submit" class="btn btn-primary">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelForm()">      
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="    width: 15px;"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+Cancel</button>
+                  <button type="submit" class="btn btn-primary btn-sm">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="    width: 15px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+
                     {{ isEdit ? 'Update' : 'Save' }}
                   </button>
                 </div>
@@ -705,8 +706,8 @@
               <h4 id="activate-title">Activate State/Province</h4>
               <p>Are you sure you want to activate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
               <div class="confirm-actions">
-                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
-                <button type="button" class="btn btn-success" (click)="activateConfirmed()">Yes, Activate</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" (click)="activateConfirmed()">Yes, Activate</button>
               </div>
             </div>
           }
@@ -722,9 +723,9 @@
                 <p>Are you sure you want to deactivate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
               }
               <div class="confirm-actions">
-                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
                 @if (canDeactivate) {
-                  <button type="button" class="btn btn-warning" (click)="deactivateConfirmed()">Yes, Deactivate</button>
+                  <button type="button" class="btn btn-warning btn-sm" (click)="deactivateConfirmed()">Yes, Deactivate</button>
                 }
               </div>
             </div>
@@ -742,9 +743,9 @@
                 <div class="alert-danger-box">This action cannot be undone.</div>
               }
               <div class="confirm-actions">
-                <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeModals()">Cancel</button>
                 @if (canDelete) {
-                  <button type="button" class="btn btn-danger" (click)="deleteConfirmed()">Yes, Delete</button>
+                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteConfirmed()">Yes, Delete</button>
                 }
               </div>
             </div>

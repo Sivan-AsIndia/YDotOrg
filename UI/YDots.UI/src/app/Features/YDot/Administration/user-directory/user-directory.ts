@@ -149,6 +149,17 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
   readonly unitOptions = computed<LookupItem[]>(() => this.data()?.organisationUnitOptions ?? []);
   readonly roleOptions = computed<LookupItem[]>(() => this.data()?.roleOptions ?? []);
 
+  /**
+   * Statuses that don't already have their own tab card (active/invited/suspended/draft) —
+   * e.g. expired, deactivated, withdrawn. Rendered as chips behind the sliders button, per the
+   * comment on {@link showAdvancedFilters}: the search bar's sliders button opens the filters
+   * that did not earn a tab.
+   */
+  readonly extraStatusOptions = computed<LookupItem[]>(() => {
+    const tabStatuses = new Set<string>(['active', 'invited', 'suspended', 'draft']);
+    return this.statusOptions().filter((option) => !tabStatuses.has(option.id ?? ''));
+  });
+
   /** What this caller may do, decided by the server from their permissions — not guessed here. */
   readonly permittedActions = computed(() => this.data()?.permittedActions ?? []);
 
@@ -849,6 +860,16 @@ export class UserDirectoryComponent implements OnInit, OnDestroy {
       .join('')
       .toUpperCase()
       .slice(0, 2) || '?';
+  }
+
+  /**
+   * Avatar colour per user — first letter bucket (A–Z) mapped to 8 palette
+   * classes (dir-av-0 … dir-av-7). Same letter always gets same colour.
+   */
+  avatarClass(name: string | null | undefined): string {
+    const letter = (name ?? '').trim().charAt(0).toUpperCase();
+    const code = letter >= 'A' && letter <= 'Z' ? letter.charCodeAt(0) - 65 : 0;
+    return `dir-av-${code % 8}`;
   }
 
   copy(text: string | null | undefined, field: string): void {

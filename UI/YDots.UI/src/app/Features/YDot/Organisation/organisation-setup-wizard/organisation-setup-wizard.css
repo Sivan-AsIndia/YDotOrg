@@ -20,6 +20,7 @@
   --org-blue: #58717c;
   --org-blue-soft: #e6eff3;
   --org-plum: #6b4a72;
+  --org-plum-soft: #ece5ed;
   --org-good: #2f7d4f;
   --org-good-soft: #e5efe7;
   --org-error: #c0392b;
@@ -66,6 +67,28 @@
   }
 }
 
+/* The hero's own height stayed fixed while .org-page above kept widening,
+   so on a big monitor the banner grew wide but stayed just as short — the
+   artwork's visible slice (object-fit: cover at a fixed height) ended up
+   far wider than tall, cropping it down to an oddly thin strip. Growing
+   the height at the same breakpoints keeps the crop close to its original
+   proportions instead of flattening it out. */
+@media (min-width: 1440px) {
+  .wiz-hero {
+    height: 200px;
+  }
+}
+@media (min-width: 1920px) {
+  .wiz-hero {
+    height: 230px;
+  }
+}
+@media (min-width: 2560px) {
+  .wiz-hero {
+    height: 260px;
+  }
+}
+
 /* ---------- Breadcrumb ---------- */
 .org-breadcrumb {
   display: flex;
@@ -96,14 +119,39 @@
 .org-header {
   margin-bottom: 20px;
 }
-.org-header-actions {
-  display: flex;
+
+/* Sits in the top-right corner of the hero banner, on top of the artwork —
+   a frosted pill now rather than bare text, so it still reads as a button
+   against busier parts of the photo. */
+.wiz-hero-back {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
+  gap: 6px;
+  /* padding: 8px 14px; */
+  /* border-radius: 20px; */
+  /* background: rgba(255, 255, 255, 0.68); */
+  /* backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); */
+  /* border: 1px solid rgba(255, 255, 255, 0.55); */
+  color: white;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  text-decoration: none;
+  /* box-shadow: 0 2px 8px rgba(30, 42, 36, 0.18); */
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
+.wiz-hero-back a{
+  color:white
+}
+.wiz-hero-back i {
+  font-size: 15px !important;
+}
+
+
 
 /* The banner card — same brand-gradient, full-bleed-image, box-shadow
    treatment used across the Organisation module, so this page's header
@@ -114,7 +162,7 @@
   align-items: stretch;
   justify-content: space-between;
   gap: 24px;
-  height: 136px;
+  height: 172px;
   border-radius: 22px;
   /* Matches the cool white-to-mint-to-sky-blue palette of the header
      illustration, instead of the four-colour brand gradient used
@@ -318,7 +366,7 @@
 }
 
 .wiz-hero-side {
-  flex: 0 0 32%;
+  flex: 0 0 22%;
   display: flex;
   min-width: 0;
   z-index: 1;
@@ -345,8 +393,15 @@
     flex-direction: column;
     height: auto;
   }
+  /* No longer sitting over the artwork at this width — it drops below the
+     title, so it just joins the normal stacked flow instead of floating. */
+  .wiz-hero-back {
+    position: static;
+    align-self: flex-start;
+    margin: 16px 0 0 22px;
+  }
   .wiz-hero-main {
-    padding: 22px 22px 0 22px;
+    padding: 14px 22px 0 22px;
   }
   .wiz-hero-side {
     flex: none;
@@ -1056,6 +1111,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  margin-bottom: 18px;
   font-size: 13px;
   color: var(--org-ink-2);
 }
@@ -1426,9 +1482,6 @@
   .org-title {
     font-size: 26px;
   }
-  .org-header-actions {
-    width: 100%;
-  }
 }
 @media (max-width: 640px) {
   .org-page {
@@ -1463,195 +1516,175 @@
    ========================================================= */
 
 /* ---------- The step indicator ---------- */
+/* A segmented tab bar — one bordered track divided into four tabs, the
+   current tab filled solid, the rest quiet — reads as a single control
+   rather than four separate decorated stops. Raised like the other cards
+   on this page (box-shadow) instead of sitting flush with the background. */
 .org-stepper {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 8px;
-  margin: 0 0 24px;
-}
-
-/* Each step carries its own accent (meadow/blue/plum/gold) via a
-   --wiz-accent/--wiz-accent-soft pair. Inactive steps wear it only as a soft
-   tint on the icon circle — enough to make the four distinguishable from
-   each other at a glance — while the card itself (border, background) stays
-   neutral so the ACTIVE step, which uses the same accent at full strength
-   plus the arrow tip, is still the one that unmistakably stands out.
-
-   `.wiz-step-inner` (a real child, not a pseudo-element) holds the actual
-   padding/content, separate from `.wiz-step` itself — see the comment on
-   `.wiz-step.is-active` below for why the active card's arrow shape needs
-   this split. */
-.wiz-step {
-  --wiz-accent: var(--org-meadow);
-  --wiz-accent-soft: var(--org-meadow-soft);
-  position: relative;
-  flex: 1 1 200px;
-  min-width: 0;
-  border-radius: 14px;
+  gap: 5px;
+  padding: 5px;
+  margin: 0 0 20px;
   background: var(--org-card);
-  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 6px 16px -10px rgba(30, 42, 36, 0.22);
-  opacity: 0;
-  /* Fades in on load via a keyframe that only touches opacity — never
-     transform. A finished CSS animation keeps "owning" any property it
-     animates for as long as it matches (even with nothing left to do),
-     which would silently block the plain :hover transform below if this
-     entrance also animated transform (as wiz-step-in, used elsewhere on
-     this page, does). */
-  animation: wiz-step-fade-in 0.35s ease both;
-  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  border: 1px solid var(--org-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.04), 0 10px 24px -18px rgba(30, 42, 36, 0.3);
 }
 
-/* The card itself lifts on hover — not the icon — so the whole step reads
-   as one interactive unit rather than drawing attention to one glyph. */
-.wiz-step:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 10px rgba(30, 42, 36, 0.06), 0 20px 34px -14px rgba(34, 60, 48, 0.34);
-}
-
-.wiz-step-inner {
+/* Each tab plays its own little entrance — scaling and sliding up out of
+   the bar rather than the whole thing just fading in — staggered left to
+   right so the sequence itself hints at "step 1, then 2, then 3, then 4". */
+.wiz-tab {
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-  height: 100%;
-  padding: 14px 18px;
-  border-radius: 14px;
-  border: 1px solid transparent;
-  transition: border-color 0.25s ease;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 11px;
+  opacity: 0;
+  transform: translateY(8px) scale(0.94);
+  animation: wiz-tab-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: background 0.25s ease;
 }
 
-.wiz-step:hover .wiz-step-inner {
-  border-color: var(--wiz-accent);
+.wiz-tab:nth-child(1) { animation-delay: 0ms; }
+.wiz-tab:nth-child(2) { animation-delay: 70ms; }
+.wiz-tab:nth-child(3) { animation-delay: 140ms; }
+.wiz-tab:nth-child(4) { animation-delay: 210ms; }
+
+@keyframes wiz-tab-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.wiz-step--blue { --wiz-accent: var(--org-blue); --wiz-accent-soft: var(--org-blue-soft); }
-.wiz-step--plum { --wiz-accent: var(--org-plum); --wiz-accent-soft: var(--org-plum-soft); }
-.wiz-step--gold { --wiz-accent: var(--org-gold); --wiz-accent-soft: var(--org-gold-soft); }
-
-.wiz-step-icon {
+/* The numbered badge: neutral by default, a soft tint once its step is
+   done, solid white-on-accent inside the active (solid-filled) tab. Bare
+   <span>, so font-size/font-weight need !important for the same reason
+   noted throughout this file — the global reset targets bare tags. */
+.wiz-tab-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
   flex: none;
-  color: var(--wiz-accent);
-  transition: color 0.2s ease;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--org-border);
+  color: var(--org-muted);
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
-/* !important: styles.css has a global reset that targets the bare <i> tag
-   directly and pins its font-size with its own !important. Setting
-   font-size on the wrapping .wiz-step-icon span does nothing for the <i>
-   itself — it has to be set on the <i> to out-specificity that rule. */
-.wiz-step-icon i {
-  font-size: 30px !important;
+.wiz-tab-num i {
+  font-size: 13px !important;
 }
 
-.wiz-step-text {
+/* A step just marked done gets its checkmark punched in with a little
+   overshoot, instead of silently appearing — a small reward for finishing
+   a step rather than a static state change. */
+.wiz-tab.is-done .wiz-tab-num {
+  background: var(--org-meadow-soft);
+  color: var(--org-meadow);
+}
+
+.wiz-tab.is-done .wiz-tab-num i {
+  animation: wiz-tab-check-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes wiz-tab-check-pop {
+  0% { opacity: 0; transform: scale(0.2) rotate(-40deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+/* The active tab doesn't just switch colour — it settles into place with a
+   spring-y overshoot, and a single light sweep passes across it a beat
+   later, the same way a highlighter draws attention to one line. Both
+   restart automatically whenever Angular moves [class.is-active] to a
+   different tab, because re-adding a class whose rule carries an
+   `animation` replays that animation from its 0% frame. */
+.wiz-tab.is-active {
+  background: var(--org-meadow);
+  box-shadow: 0 8px 18px -9px rgba(34, 60, 48, 0.55);
+  /* Overrides the base rule's `animation`, which would otherwise leave this
+     element's plain `opacity: 0` / `transform` (the entrance animation's
+     un-animated starting values) in place forever, since nothing here would
+     ever animate them back to visible — hence spelling both out again. Only
+     the bounce plays here; the entrance keyframe stays exclusively on the
+     base `.wiz-tab` rule so it fires once on mount, not every time the
+     active tab changes (which would fade the tab out and back in on every
+     step, reading as a glitch rather than a deliberate cue). */
+  opacity: 1;
+  transform: none;
+  animation: wiz-tab-activate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wiz-tab.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.32) 50%, transparent 70%);
+  transform: translateX(-130%);
+  animation: wiz-tab-sheen 0.9s ease 0.2s both;
+  pointer-events: none;
+}
+
+@keyframes wiz-tab-activate {
+  0% { transform: scale(0.88); }
+  55% { transform: scale(1.045); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wiz-tab-sheen {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
+}
+
+.wiz-tab.is-active .wiz-tab-num {
+  background: var(--org-card);
+  color: var(--org-meadow);
+}
+
+.wiz-tab-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
-.wiz-step-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.wiz-step-num {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--org-muted);
-}
-
-.wiz-step-title {
-  font-size: 14px;
-  font-weight: 700;
+.wiz-tab-title {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
   color: var(--org-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.25s ease;
 }
 
-.wiz-step-sub {
-  font-size: 12px;
+.wiz-tab.is-active .wiz-tab-title {
+  color: #fff;
+}
+
+.wiz-tab-sub {
+  font-size: 11px;
   color: var(--org-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.25s ease;
 }
 
-/* The current step — a soft, rounded arrow tip on the right edge, not a
-   sharp polygon cut. clip-path can't produce a rounded point (it's always
-   hard-edged, and it strips borders off the diagonal entirely — see the
-   comment above `.wiz-step`), so this uses a different, well-worn CSS
-   trick instead: the card's own right edge is left open (no border,
-   square corners on that side), and a small square — rotated 45° with
-   only its top+right border showing and a border-radius on that one
-   corner — is glued onto the middle of that edge. Rotated, that corner
-   becomes a soft-tipped point continuing the card's own border, and
-   because it's plain borders (no clip-path involved) they render exactly
-   like any other border, with no missing lines anywhere. */
-.wiz-step.is-active {
-  border: 1.5px solid var(--wiz-accent);
-  border-right: none;
-  border-radius: 14px 0 0 14px;
-  box-shadow: 0 2px 4px rgba(30, 42, 36, 0.06), 0 16px 30px -12px rgba(34, 60, 48, 0.35);
-  animation: wiz-step-fade-in 0.35s ease both;
+.wiz-tab.is-active .wiz-tab-sub {
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.wiz-step.is-active::after {
-  content: '';
-  /* :host * sets border-box everywhere in this component, but that
-     universal selector doesn't reach ::before/::after — they fall back to
-     the CSS default (content-box), which silently grows this box by its
-     border width and throws off the size/position math below, showing up
-     as a visible seam between this piece and the card. */
-  box-sizing: border-box;
-  position: absolute;
-  top: 50%;
-  right: -11px;
-  width: 22px;
-  height: 22px;
-  background: var(--org-card);
-  border-top: 1.5px solid var(--wiz-accent);
-  border-right: 1.5px solid var(--wiz-accent);
-  border-radius: 0 6px 0 0;
-  transform: translateY(-50%) rotate(45deg);
-}
-
-.wiz-step.is-active .wiz-step-inner {
-  border-color: transparent;
-  padding-right: 34px;
-}
-
-.wiz-step.is-active .wiz-step-icon {
-  color: var(--wiz-accent);
-}
-
-.wiz-step.is-active .wiz-step-num {
-  color: var(--org-ink);
-}
-
-/* A step already passed — dark rather than left looking identical to one
-   not yet reached. */
-.wiz-step.is-done .wiz-step-num {
-  color: var(--org-ink);
-}
-
-.wiz-step-arrow {
-  display: flex;
-  align-items: center;
-  color: var(--org-border);
-  font-size: 20px;
-  flex: none;
-  opacity: 0;
-  animation: wiz-step-in 0.35s 0.15s ease both;
-}
-
+/* Still used elsewhere on this page (header icon entrance, section-head
+   card entrance) — kept when the old rectangular stepper cards that used
+   to share them were replaced by the circular-node timeline above. */
 @keyframes wiz-step-in {
   from {
     opacity: 0;
@@ -1779,21 +1812,114 @@
   white-space: nowrap;
 }
 
+/* ---------- Field group cards ---------- */
+/* Groups related fields (Basic Information, Organisation Identity, Web
+   Address, Description) under their own icon-tile header and a raised,
+   shadowed card — instead of a flat, unbroken run of fields — so each
+   sub-topic reads as its own unit at a glance. */
+.wiz-field-cards-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  /* stretch (the grid default) so both cards take the height of the
+     taller one instead of each hugging its own content — a mismatched
+     "Basic Information" vs "Organisation Identity" pair otherwise looks
+     unintentional. */
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.wiz-field-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--org-card);
+  border: 1px solid var(--org-border);
+  border-radius: 16px;
+  padding: 20px 22px 6px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 10px 24px -18px rgba(30, 42, 36, 0.3);
+  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wiz-field-cards-row .wiz-field-card {
+  margin-bottom: 0;
+}
+
+.wiz-field-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(30, 42, 36, 0.05), 0 16px 32px -18px rgba(30, 42, 36, 0.36);
+}
+
+.wiz-field-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+/* No background tile — a bare, larger glyph rather than an icon-in-a-box. */
+.wiz-field-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  color: var(--org-meadow);
+}
+
+/* !important: same global bare-<i> font-size reset noted throughout this
+   file — must be set on the <i> itself, not the wrapping tile. */
+.wiz-field-card-icon i {
+  font-size: 28px !important;
+}
+
+.wiz-field-card-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--org-ink);
+  margin: 0 0 2px;
+}
+
+.wiz-field-card-sub {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--org-muted);
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .wiz-field-cards-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .wiz-step,
-  .wiz-step-arrow,
+  .wiz-field-card {
+    transition: none;
+  }
+  .wiz-field-card:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
   .wiz-section-head {
     animation: none;
     opacity: 1;
-  }
-  .wiz-step.is-active {
-    animation: none;
-  }
-  .wiz-step,
-  .wiz-section-head {
     transition: none;
   }
-  .wiz-step:hover,
+  .wiz-tab,
+  .wiz-tab.is-active,
+  .wiz-tab.is-done .wiz-tab-num i {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .wiz-tab.is-active::after {
+    display: none;
+  }
   .wiz-section-head:hover {
     transform: none;
   }
@@ -1801,21 +1927,20 @@
 
 @media (max-width: 860px) {
   .org-stepper {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .wiz-tab {
+    flex: 1 1 40%;
+  }
+}
+
+@media (max-width: 520px) {
+  .org-stepper {
     flex-direction: column;
-    align-items: stretch;
   }
-  .wiz-step-arrow {
-    display: none;
-  }
-  .wiz-step.is-active {
-    border-right: 1.5px solid var(--wiz-accent);
-    border-radius: 14px;
-  }
-  .wiz-step.is-active::after {
-    display: none;
-  }
-  .wiz-step.is-active .wiz-step-inner {
-    padding-right: 18px;
+  .wiz-tab {
+    justify-content: flex-start;
   }
 }
 
@@ -2095,20 +2220,13 @@
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 720px) {
-  .org-stepper {
-    gap: 6px;
+  .wiz-tab-sub {
+    display: none;
   }
-
-  .wiz-step {
-    padding: 10px 12px;
-  }
-
-  .wiz-step-icon {
-    width: 34px;
-    height: 34px;
-  }
-  .wiz-step-icon i {
-    font-size: 22px !important;
+  .wiz-tab-num {
+    width: 22px;
+    height: 22px;
+    font-size: 11px !important;
   }
 
   .org-input-group:not(.org-input-group--gap) {

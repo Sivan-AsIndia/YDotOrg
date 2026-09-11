@@ -1,884 +1,1820 @@
 <main class="app-wrapper">
   <div class="page-wrapper">
-    <div class="container-fluid px-4 py-3 ab-page">
-
-    
-
-      <!-- Header -->
-      <header class="ab-header">
-        <div class="ab-header-main">
-          <h1 class="ab-title">
-            {{ screen().title }}
-            <span
-              class="ab-info-icon"
-              tabindex="0"
-              role="img"
-              [attr.aria-label]="screen().purpose"
-              [title]="screen().purpose"
+    <div class="container-fluid px-4 py-3">
+      <div class="ab-page" [attr.inert]="drawerOpen() ? '' : null">
+        <header class="ab-header">
+          <div>
+            <h1>Assignment board</h1>
+            <span class="ab-title-rule" aria-hidden="true"></span>
+            <p>Assign or reassign owners across your records.</p>
+          </div>
+          <div class="ab-header-art">
+            <svg
+              class="ab-header-illustration"
+              viewBox="0 0 840 240"
+              aria-hidden="true"
+              focusable="false"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M8 7.2v3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                <circle cx="8" cy="5.1" r="0.9" fill="currentColor"/>
-              </svg>
-            </span>
-          </h1>
-          <p class="ab-subtitle">{{ screen().purpose }}</p>
-       
-        </div>
-
-        <div class="ab-header-actions">
-          <!-- <button
-            type="button"
-            class="btn btn-outline-primary btn-sm "
-            (click)="toggleFilters()"
-            [attr.aria-expanded]="filtersOpen()"
-            aria-controls="ab-filters-panel"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 3.5h12M4.5 8h7M7 12.5h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <defs>
+                <linearGradient id="ab-hill" x1="0" y1="0" x2="1">
+                  <stop class="ab-art-hill-start" />
+                  <stop class="ab-art-hill-end" offset="1" />
+                </linearGradient>
+                <linearGradient id="ab-leaf" x1="0" y1="0" x2="1" y2="1">
+                  <stop class="ab-art-leaf-start" />
+                  <stop class="ab-art-leaf-end" offset="1" />
+                </linearGradient>
+                <linearGradient id="ab-avatar" x1="0" y1="0" x2="0" y2="1">
+                  <stop class="ab-art-avatar-start" />
+                  <stop class="ab-art-avatar-end" offset="1" />
+                </linearGradient>
+              </defs>
+              <path
+                class="ab-art-hill"
+                d="M72 220c45-17 73-65 113-106 38-39 95-53 144-33 42 17 62 62 106 67 45 5 73-9 112-20 68-19 145-9 190 45 13 16 23 32 29 47H72z"
+              />
+              <g class="ab-art-leaves">
+                <path
+                  d="M168 66c-44-8-58-32-59-58 39 4 61 21 62 55-19-22-36-33-53-42 20 13 35 27 50 45z"
+                />
+                <path
+                  d="M96 169c-46-3-70-26-78-52 42-3 70 13 78 48-23-19-45-27-65-33 25 10 45 21 65 37z"
+                />
+                <path
+                  d="M716 167c10-30 32-42 56-43-6 28-22 46-54 47 20-14 31-27 39-39-12 14-24 25-41 35z"
+                />
+              </g>
+              <g class="ab-art-stems">
+                <path d="M168 65c10 7 15 15 17 24" />
+                <path d="M95 168c9 3 16 8 23 15" />
+                <path d="M718 168c-9 4-14 9-19 17" />
+              </g>
+              <g transform="translate(222 77)">
+                <g class="ab-art-record-cards">
+                  <rect width="196" height="46" rx="8" />
+                  <rect y="54" width="196" height="46" rx="8" />
+                  <rect y="108" width="196" height="46" rx="8" />
+                </g>
+                <g transform="translate(15 8)">
+                  <g class="ab-art-avatar-bg">
+                    <circle cx="20" cy="15" r="16" />
+                    <circle cx="20" cy="69" r="16" />
+                    <circle cx="20" cy="123" r="16" />
+                  </g>
+                  <g class="ab-art-avatar">
+                    <circle cx="20" cy="11" r="6" />
+                    <path d="M8 31c2-10 7-14 12-14s10 4 12 14z" />
+                    <circle cx="20" cy="65" r="6" />
+                    <path d="M8 85c2-10 7-14 12-14s10 4 12 14z" />
+                    <circle cx="20" cy="119" r="6" />
+                    <path d="M8 139c2-10 7-14 12-14s10 4 12 14z" />
+                  </g>
+                  <g class="ab-art-details">
+                    <rect x="52" y="8" width="74" height="8" rx="4" />
+                    <rect x="52" y="22" width="53" height="7" rx="3.5" />
+                    <circle cx="161" cy="19" r="7" />
+                    <rect x="52" y="62" width="74" height="8" rx="4" />
+                    <rect x="52" y="76" width="53" height="7" rx="3.5" />
+                    <circle cx="161" cy="73" r="7" />
+                    <rect x="52" y="116" width="74" height="8" rx="4" />
+                    <rect x="52" y="130" width="53" height="7" rx="3.5" />
+                    <circle cx="161" cy="127" r="7" />
+                  </g>
+                </g>
+              </g>
+              <g transform="translate(451 118)">
+                <circle class="ab-art-route-bg" cx="28" cy="28" r="28" />
+                <path class="ab-art-route-arrow" d="M15 28h24m-9-9 9 9-9 9" />
+              </g>
+              <g class="ab-art-routes">
+                <path d="M505 131c29-35 50-36 71-36" />
+                <path d="M507 146c31 0 46 9 69 27" />
+                <path d="M505 158c22 35 43 47 71 55" />
+              </g>
+              <g class="ab-art-route-heads">
+                <path d="m570 89 8 6-8 6" />
+                <path d="m570 167 8 6-9 5" />
+                <path d="m570 207 8 6-9 5" />
+              </g>
+              <g transform="translate(592 61)">
+                @for (offset of [0, 67, 134]; track offset) {
+                <g [attr.transform]="'translate(0 ' + offset + ')'">
+                  <circle class="ab-art-avatar-bg" cx="24" cy="24" r="23" />
+                  <circle class="ab-art-avatar" cx="24" cy="18" r="8" />
+                  <path
+                    class="ab-art-avatar"
+                    d="M9 43c3-13 8-18 15-18s12 5 15 18z"
+                  />
+                  <rect
+                    class="ab-art-detail-strong"
+                    x="59"
+                    y="15"
+                    width="90"
+                    height="8"
+                    rx="4"
+                  />
+                  <rect
+                    class="ab-art-detail-soft"
+                    x="59"
+                    y="30"
+                    width="60"
+                    height="7"
+                    rx="3.5"
+                  />
+                </g>
+                }
+              </g>
+              <g class="ab-art-leaves">
+                <path
+                  d="M424 222c-28-8-41-27-42-47 26 3 44 16 46 43-14-17-26-25-37-32 13 10 23 21 33 36z"
+                />
+                <path
+                  d="M462 222c3-27 18-42 38-48-1 25-12 43-36 50 14-16 21-29 26-41-7 14-15 26-28 39z"
+                />
+                <path
+                  d="M448 218c-8-33 3-55 20-68 8 30 1 52-18 69 6-22 7-39 6-54-1 18-4 34-8 53z"
+                />
+              </g>
             </svg>
-            Filters
-          </button> -->
+          </div>
+        </header>
 
-          <details class="ab-more">
-            <summary class="btn btn-outline-primary btn-sm">
-              More actions
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </summary>
-            <div class="ab-more-menu" role="menu">
-              <button type="button" role="menuitem" (click)="dismissBanner(); goToPage(1)">
-                Refresh
-              </button>
-              <button type="button" role="menuitem" disabled title="Export is not available in this workspace yet">
-                Export
-              </button>
+        <section class="ab-kpis" aria-label="Assignment summary">
+          <article class="ab-kpi ab-blue">
+            <span class="ab-kpi-icon"
+              ><svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0"
+                /></svg
+            ></span>
+            <div>
+              <h2>Total records</h2>
+              <strong>{{ totalCount() }}</strong>
+              <p>In selected scope</p>
             </div>
-          </details>
+            <span class="ab-spark" aria-hidden="true"></span>
+          </article>
+          <article class="ab-kpi ab-orange">
+            <span class="ab-kpi-icon"
+              ><svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+                /></svg
+            ></span>
+            <div>
+              <h2>Unassigned</h2>
+              <strong>{{ unassignedCount() }}</strong>
+              <p>On this page</p>
+            </div>
+            <span class="ab-spark" aria-hidden="true"></span>
+          </article>
+          <article class="ab-kpi ab-green">
+            <span class="ab-kpi-icon"
+              ><svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+                /></svg
+            ></span>
+            <div>
+              <h2>Assigned</h2>
+              <strong>{{ assignedCount() }}</strong>
+              <p>On this page</p>
+            </div>
+            <span class="ab-spark" aria-hidden="true"></span>
+          </article>
+          <article class="ab-kpi ab-purple">
+            <span class="ab-kpi-icon"
+              ><svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2"
+                /></svg
+            ></span>
+            <div>
+              <h2>Follow-up today</h2>
+              <strong>{{ dueTodayCount() }}</strong>
+              <p>On this page</p>
+            </div>
+            <span class="ab-spark" aria-hidden="true"></span>
+          </article>
+        </section>
 
-          @if (permissions()['bulkRoute']) {
-            <button
-              type="button"
-              class="btn btn-sm ab-btn-primary"
-              [class.btn-primary]="!selectionMode()"
-              [class.btn-outline-primary]="selectionMode()"
-              (click)="toggleSelectionMode()"
-              [attr.aria-pressed]="selectionMode()"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              {{ selectionMode() ? 'Exit selection' : 'Bulk assign' }}
-            </button>
-          }
-        </div>
-      </header>
-
-      <!-- Status banner -->
-      @if (uiState() !== 'ready') {
-        <div class="ab-banner" [class]="'ab-banner ab-banner--' + uiState()" role="status" aria-live="polite">
-          <span class="ab-banner-text">
-            @switch (uiState()) {
-              @case ('success') {
-                Assignment saved successfully.
-              }
-              @default {
-                Assignment board updated.
-              }
-            }
-          </span>
-          <button type="button" class="ab-banner-dismiss" (click)="dismissBanner()" aria-label="Dismiss notification">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      }
-
-      <!-- Dependency-failure state (integration-ready; rendered only when set) -->
-      @if (dependencyFailure(); as dep) {
-        <div class="ab-banner ab-banner--error" role="alert">
-          <span class="ab-banner-text">
-            <strong>{{ dep.primary }}</strong> — the dependent step ({{ dep.dependent }}) did not complete. The assignment itself was saved.
-          </span>
-          <button type="button" class="ab-banner-dismiss" (click)="dismissDependencyFailure()" aria-label="Dismiss">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      }
-
-      <!-- Conflict state (integration-ready; rendered only when set) -->
-      @if (conflictRow(); as cRow) {
-        <div class="ab-banner ab-banner--loading" role="alert">
-          <span class="ab-banner-text">
-            {{ cRow.leadReference }} changed after it was loaded.
-          </span>
-          <div class="ab-conflict-actions">
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="selectPreview(cRow); dismissConflict()">Review latest</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="dismissConflict()">Cancel</button>
-          </div>
-        </div>
-      }
-
-      <!-- KPI summary -->
-      <section class="ab-kpis" aria-label="Assignment summary">
-        <div class="ab-kpi-card">
-          <div class="ab-kpi-head">
-            <span class="ab-kpi-label">Total records</span>
-            <span class="ab-kpi-icon ab-kpi-icon--slate" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M4 2.5h8a.5.5 0 01.5.5v10.5L8 11l-4.5 2.5V3a.5.5 0 01.5-.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-            </span>
-          </div>
-          <p class="ab-kpi-value">{{ totalCount() }}</p>
-          <p class="ab-kpi-sub">In selected scope</p>
-        </div>
-
-        <div class="ab-kpi-card">
-          <div class="ab-kpi-head">
-            <span class="ab-kpi-label">Unassigned</span>
-            <span class="ab-kpi-icon ab-kpi-icon--amber" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2l6.5 11.3a1 1 0 01-.87 1.5H2.37a1 1 0 01-.87-1.5L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                <path d="M8 6.5v3.2M8 11.7h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </span>
-          </div>
-          <p class="ab-kpi-value">{{ unassignedCount() }}</p>
-          <p class="ab-kpi-sub">Waiting for an owner</p>
-        </div>
-
-        <div class="ab-kpi-card">
-          <div class="ab-kpi-head">
-            <span class="ab-kpi-label">Due today</span>
-            <span class="ab-kpi-icon ab-kpi-icon--blue" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M8 4.7V8l2.4 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </span>
-          </div>
-          <p class="ab-kpi-value">{{ dueTodayCount() }}</p>
-          <p class="ab-kpi-sub">Follow-up due today</p>
-        </div>
-
-        <div class="ab-kpi-card">
-          <div class="ab-kpi-head">
-            <span class="ab-kpi-label">Overdue</span>
-            <span class="ab-kpi-icon ab-kpi-icon--rose" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M8 5.2v3.4M8 11h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </span>
-          </div>
-          <p class="ab-kpi-value">{{ overdueCount() }}</p>
-          <p class="ab-kpi-sub">Past their SLA</p>
-        </div>
-      </section>
-
-      <!-- Filters -->
-      <section
-        id="ab-filters-panel"
-        class="ab-filters"
-        [class.is-open]="filtersOpen()"
-        aria-label="Assignment filters"
-      >
-        <div class="ab-filters-grid">
-          <div class="ab-field">
-            <label for="ab-filter-saved">Saved view</label>
-            <select
-              id="ab-filter-saved"
-              [ngModel]="savedFilter()"
-              (ngModelChange)="savedFilter.set($event); onFilterChanged()"
-            >
-              @for (option of savedFilters(); track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field">
-            <label for="ab-filter-campaign">Campaign</label>
-            <select
-              id="ab-filter-campaign"
-              [ngModel]="campaignFilter()"
-              (ngModelChange)="campaignFilter.set($event); onFilterChanged()"
-            >
-              @for (option of filters().campaigns; track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field">
-            <label for="ab-filter-team">Team</label>
-            <select
-              id="ab-filter-team"
-              [ngModel]="teamFilter()"
-              (ngModelChange)="teamFilter.set($event); onFilterChanged()"
-            >
-              @for (option of filters().teams; track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field">
-            <label for="ab-filter-language">Language</label>
-            <select
-              id="ab-filter-language"
-              [ngModel]="languageFilter()"
-              (ngModelChange)="languageFilter.set($event); onFilterChanged()"
-            >
-              @for (option of filters().languages; track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field">
-            <label for="ab-filter-workload">Workload band</label>
-            <select
-              id="ab-filter-workload"
-              [ngModel]="workloadFilter()"
-              (ngModelChange)="workloadFilter.set($event); onFilterChanged()"
-            >
-              @for (option of filters().workloadBands; track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field">
-            <label for="ab-filter-sla">SLA state</label>
-            <select
-              id="ab-filter-sla"
-              [ngModel]="slaFilter()"
-              (ngModelChange)="slaFilter.set($event); onFilterChanged()"
-            >
-              @for (option of filters().slaStates; track option) {
-                <option [ngValue]="option">{{ option }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="ab-field ab-field-reset">
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearFilters()">
-              Reset filters
-            </button>
-          </div>
-        </div>
-
-        @if (activeFilterSummary().length > 0) {
-          <ul class="ab-chip-row" aria-label="Active filters">
-            @for (chip of activeFilterSummary(); track chip.key) {
-              <li class="ab-chip">
-                <span>{{ chip.label }}</span>
-                <button
-                  type="button"
-                  class="ab-chip-remove"
-                  (click)="removeFilterChip(chip.key)"
-                  [attr.aria-label]="'Remove filter ' + chip.label"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </li>
-            }
-          </ul>
-        }
-      </section>
-
-      <!-- Selection bar (bulk assign) -->
-      @if (selectionMode()) {
-        <div class="ab-selection-bar" role="status" aria-live="polite">
-          <p class="ab-selection-count">
-            <strong>{{ selectedLeadRefs().size }}</strong> record{{ selectedLeadRefs().size === 1 ? '' : 's' }} selected for bulk assign
-          </p>
-          <div class="ab-selection-actions">
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="exitSelectionMode()">Cancel</button>
-            <button
-              type="button"
-              class="btn btn-primary btn-sm"
-              [disabled]="selectedLeadRefs().size === 0"
-              (click)="startBulkAssignment()"
-            >
-              Continue with {{ selectedLeadRefs().size }} record{{ selectedLeadRefs().size === 1 ? '' : 's' }}
-            </button>
-          </div>
-        </div>
-      }
-
-      <!-- Board -->
-      <div class="ab-board-grid">
-        <section class="ab-queue-panel" aria-label="Assignment queue">
-          <div class="ab-panel-head">
-            <h2>Assignment queue</h2>
-            <p class="ab-panel-meta">
-              {{ filteredRows().length }} in scope · refreshed {{ screen().lastRefresh }}
-            </p>
-          </div>
-
-          @if (filteredRows().length > 0) {
-            <ul class="ab-queue-list" role="list">
-              @for (row of paginatedRows(); track trackByLead($index, row)) {
-                <li
-                  class="ab-queue-card"
-                  [class.is-active]="previewRow()?.leadReference === row.leadReference"
-                  [class.is-selected]="isRowSelected(row.leadReference)"
-                >
-                  <div class="ab-queue-card-top">
-                    @if (selectionMode()) {
-                      <label class="ab-queue-checkbox">
-                        <input
-                          type="checkbox"
-                          [checked]="isRowSelected(row.leadReference)"
-                          (change)="toggleRowSelection(row.leadReference)"
-                          [attr.aria-label]="'Select ' + row.leadReference + ' for bulk assign'"
-                        />
-                      </label>
-                    }
-                    <span class="ab-queue-ref">{{ row.leadReference }}</span>
-                    <span class="ab-badge" [class]="slaClass(row.slaState)">{{ row.slaState }}</span>
-                  </div>
-
-                  <div class="ab-queue-card-id">
-                    <span
-                      class="ab-avatar"
-                      [class]="avatarTone($index)"
+        <section class="ab-filters" aria-label="Record search and selection">
+          <div
+            class="ab-filter-scroll"
+            tabindex="0"
+            role="group"
+            aria-label="Search controls; scroll horizontally on smaller screens"
+          >
+            <div class="ab-filter-grid">
+              <form
+                class="ab-field ab-search-field"
+                (ngSubmit)="onFilterChanged()"
+              >
+                <label for="ab-search">Search</label>
+                <div class="ab-search">
+                  <input
+                    id="ab-search"
+                    name="search"
+                    type="search"
+                    placeholder="Name, code, email or phone"
+                    [ngModel]="searchTerm()"
+                    (ngModelChange)="searchTerm.set($event)"
+                  /><button
+                    type="submit"
+                    class="btn btn-outline-secondary btn-sm ab-icon-button"
+                    title="Search records"
+                    aria-label="Search records"
+                  >
+                    <svg
+                      class="ab-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
                       aria-hidden="true"
-                    >{{ getInitials(row.currentOwner === 'Unassigned' ? row.suggestedOwner : row.currentOwner) }}</span>
-                    <div class="ab-queue-id-text">
-                      <p class="ab-queue-name">{{ row.leadPreview }}</p>
-                      <p class="ab-queue-owner">
-                        @if (row.currentOwner === 'Unassigned') {
-                          Unassigned · suggested {{ row.suggestedOwner }}
-                        } @else {
-                          Owned by {{ row.currentOwner }}
-                        }
-                      </p>
-                    </div>
-                  </div>
-
-                  <dl class="ab-queue-fields">
-                    <div>
-                      <dt>Campaign</dt>
-                      <dd>{{ row.campaign }}</dd>
-                    </div>
-                    <div>
-                      <dt>Team</dt>
-                      <dd>{{ row.team }}</dd>
-                    </div>
-                    <div>
-                      <dt>Language</dt>
-                      <dd>{{ row.language }}</dd>
-                    </div>
-                    <div>
-                      <dt>Workload</dt>
-                      <dd>
-                        <span class="ab-badge" [class]="workloadClass(row.workloadBand)">{{ row.workloadBand }}</span>
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <p class="ab-queue-note">
-                    Next action due {{ row.nextActionDue }} · {{ row.openWorkCount }} open item{{ row.openWorkCount === 1 ? '' : 's' }}.
-                  </p>
-
-                  <div class="ab-queue-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm" (click)="selectPreview(row)">
-                      Preview
-                    </button>
-                    @if (permissions()['view']) {
-                      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openHistoryPanel(row)">
-                        Inspect history
-                      </button>
-                    }
-                    @if (permissions()[primaryActionId(row)]) {
-                      <button type="button" class="btn btn-primary btn-sm" (click)="beginAssignment(primaryActionId(row), [row])">
-                        {{ primaryActionLabel(row) }}
-                      </button>
-                    }
-                  </div>
-                </li>
-              }
-            </ul>
-
-            <div class="ab-pagination">
-              <div class="ab-field ab-pagination-size">
-                <label for="ab-page-size">Rows per page</label>
-                <select
-                  id="ab-page-size"
-                  [ngModel]="pageSize()"
-                  (ngModelChange)="onPageSizeChange($event)"
+                    >
+                      <path
+                        d="M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </form>
+              <div class="ab-field">
+                <label for="ab-type">Record type</label
+                ><select
+                  id="ab-type"
+                  [ngModel]="recordType()"
+                  (ngModelChange)="onRecordTypeChange($event)"
                 >
-                  @for (size of pageSizes; track size) {
-                    <option [ngValue]="size">{{ size }}</option>
+                  <option value="leads">Leads</option>
+                  <option value="donors">Donors</option>
+                </select>
+              </div>
+              <div class="ab-field">
+                <label for="ab-ownership">Ownership</label
+                ><select
+                  id="ab-ownership"
+                  [ngModel]="savedFilter()"
+                  (ngModelChange)="savedFilter.set($event); onFilterChanged()"
+                >
+                  @for (option of savedFilters(); track option) {
+                  <option [ngValue]="option">
+                    {{ option === 'All leads' ? 'All ownership' : option }}
+                  </option>
                   }
                 </select>
               </div>
-
-          
-
-              <nav class="ab-pagination-nav" aria-label="Pagination">
+              <div class="ab-field">
+                <label for="ab-owner-filter">Owner</label>
+                <div class="ab-owner-filter-controls">
+                  @if (owners().length > 20) {<input
+                    type="search"
+                    placeholder="Search owners"
+                    aria-label="Search owner options"
+                    [ngModel]="dropdownSearch()['owner'] ?? ''"
+                    (ngModelChange)="searchOptions('owner', $event)"
+                  />}<select
+                    id="ab-owner-filter"
+                    [ngModel]="ownerFilter()"
+                    (ngModelChange)="ownerFilter.set($event); onFilterChanged()"
+                  >
+                    <option value="">All owners</option>
+                    @for (owner of visibleFilterOwners(); track owner.userId) {
+                    <option [value]="owner.userId">{{ owner.name }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="ab-filter-actions">
                 <button
                   type="button"
-                  class="ab-page-btn"
-                  [disabled]="currentPage() === 1"
-                  (click)="goToPage(currentPage() - 1)"
-                  aria-label="Previous page"
-                >‹</button>
-
-                @for (page of pageNumbers(); track page) {
-                  <button
-                    type="button"
-                    class="ab-page-btn"
-                    [class.is-current]="page === currentPage()"
-                    [attr.aria-current]="page === currentPage() ? 'page' : null"
-                    (click)="goToPage(page)"
-                  >{{ page }}</button>
-                }
-
+                  class="btn btn-outline-secondary btn-sm"
+                  title="More filters"
+                  (click)="toggleFilters()"
+                  [attr.aria-expanded]="filtersOpen()"
+                  aria-controls="ab-more-filters"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 7h16M4 17h16M8 4v6M16 14v6" /></svg
+                  >More filters
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
                 <button
                   type="button"
-                  class="ab-page-btn"
-                  [disabled]="currentPage() === totalPages()"
-                  (click)="goToPage(currentPage() + 1)"
-                  aria-label="Next page"
-                >›</button>
-              </nav>
-            </div>
-          } @else {
-            <div class="ab-empty">
-              <span class="ab-empty-icon" aria-hidden="true">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                  <path d="M4 6h16M4 12h16M4 18h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <p class="ab-empty-title">No assignable records available.</p>
-              <p class="ab-empty-sub">Try widening your filters, or check back once new leads reach the queue.</p>
-              <div class="ab-empty-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="clearFilters()">
-                  Clear filters
+                  class="btn btn-outline-secondary btn-sm"
+                  title="Reset filters"
+                  (click)="clearFilters()"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+                  >Reset
                 </button>
               </div>
             </div>
+          </div>
+          @if (filtersOpen()) {
+          <div id="ab-more-filters" class="ab-more-filters">
+            @for (field of filterFields; track field.key) {
+            <div class="ab-field">
+              <label [for]="'ab-filter-' + field.key">{{ field.label }}</label
+              >@if (optionsFor(field.key).length > 20) {<input
+                type="search"
+                [placeholder]="'Search ' + field.label.toLowerCase()"
+                [attr.aria-label]="'Search ' + field.label + ' options'"
+                [ngModel]="dropdownSearch()[field.key] ?? ''"
+                (ngModelChange)="searchOptions(field.key, $event)"
+              />}<select
+                [id]="'ab-filter-' + field.key"
+                [ngModel]="filterValue(field.key)"
+                (ngModelChange)="setFilterValue(field.key, $event)"
+              >
+                @for (option of visibleOptions(field.key); track option) {
+                <option [ngValue]="option">{{ option }}</option>
+                }
+              </select>
+            </div>
+            }
+          </div>
+          } @if (activeFilterSummary().length) {
+          <ul class="ab-chips" aria-label="Active filters">
+            @for (chip of activeFilterSummary(); track chip.key) {
+            <li>
+              {{ chip.label }}<button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-icon-button"
+                [title]="'Remove ' + chip.label"
+                [attr.aria-label]="'Remove ' + chip.label"
+                (click)="removeFilterChip(chip.key)"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </li>
+            }
+          </ul>
           }
         </section>
 
-        <aside class="ab-detail-panel" aria-label="Assignment detail" role="region">
+        @if (dependencyFailure(); as dep) {
+        <div class="ab-banner" role="alert">
+          <span
+            >{{ dep.primary }} saved; {{ dep.dependent }} did not
+            complete.</span
+          ><button
+            class="btn btn-outline-secondary btn-sm"
+            type="button"
+            title="Dismiss notification"
+            (click)="dismissDependencyFailure()"
+          >
+            <svg
+              class="ab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 6 12 12M18 6 6 18" /></svg
+            >Close
+          </button>
+        </div>
+        } @if (conflictRow(); as row) {
+        <div class="ab-banner" role="alert">
+          <span>{{ row.leadReference }} changed after loading.</span
+          ><button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Review latest record"
+            (click)="selectPreview(row); dismissConflict()"
+          >
+            <svg
+              class="ab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+              /></svg
+            >Review latest</button
+          ><button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Cancel"
+            (click)="dismissConflict()"
+          >
+            <svg
+              class="ab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 6 12 12M18 6 6 18" /></svg
+            >Cancel
+          </button>
+        </div>
+        }
 
-          <!-- ============ Assignment interaction (Assign / Reassign / Bulk) ============ -->
-          @if (draft(); as d) {
-            <div class="ab-detail-card ab-draft-card">
-              <div class="ab-detail-head">
-                <div class="ab-detail-head-left">
-                  <span class="ab-detail-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 class="ab-detail-title">{{ draftTitle(d) }}</h2>
-                    @if (d.mode !== 'bulkRoute') {
-                      <p class="ab-detail-ref">{{ d.rows[0].leadReference }}</p>
-                    }
-                  </div>
-                </div>
-                <button type="button" class="ab-banner-dismiss" (click)="cancelDraft()" aria-label="Cancel assignment">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                  </svg>
-                </button>
+        <section
+          class="ab-records"
+          aria-labelledby="ab-records-title"
+          [attr.aria-busy]="uiState() === 'loading'"
+        >
+          <div class="ab-section-head ab-records-head">
+            <div class="ab-section-label">
+              <span class="ab-section-icon"
+                ><svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0"
+                  /></svg
+              ></span>
+              <div>
+                <h2 id="ab-records-title">
+                  {{ recordType() === 'leads' ? 'Leads' : 'Donors' }}
+                </h2>
+                <p>Manage ownership and plan the next follow-up.</p>
               </div>
-
-              <!-- Context -->
-              <section class="ab-detail-section">
-                <h3>Context</h3>
-                @if (d.mode === 'bulkRoute') {
-                  <dl>
-                    <div><dt>Records selected</dt><dd>{{ d.rows.length }}</dd></div>
-                    <div><dt>Campaigns</dt><dd>{{ d.rows.length === 1 ? d.rows[0].campaign : 'Mixed' }}</dd></div>
-                  </dl>
-                } @else {
-                  <dl>
-                    <div><dt>Lead</dt><dd>{{ d.rows[0].leadPreview }}</dd></div>
-                    <div><dt>Campaign</dt><dd>{{ d.rows[0].campaign }}</dd></div>
-                    <div><dt>Team</dt><dd>{{ d.rows[0].team }}</dd></div>
-                    <div><dt>Language</dt><dd>{{ d.rows[0].language }}</dd></div>
-                    <div><dt>Current owner</dt><dd>{{ d.rows[0].currentOwner }}</dd></div>
-                    <div><dt>Suggested owner</dt><dd>{{ d.rows[0].suggestedOwner }}</dd></div>
-                  </dl>
-                }
-              </section>
-
-              <!-- New owner -->
-              <section class="ab-detail-section">
-                <h3>New owner <span class="ab-required-mark" aria-hidden="true">*</span></h3>
-
-                @if (selectedOwner(); as owner) {
-                  <div class="ab-owner-chip">
-                    <span class="ab-avatar avatar-tone-0" aria-hidden="true">{{ owner.initials }}</span>
-                    <div class="ab-owner-chip-text">
-                      <p class="ab-owner-chip-name">{{ owner.label }}</p>
-                      <!-- `owner.reference` is the API's user Guid, and it was being printed
-                           after the team and workload as though it were something a person reads.
-                           The context line already identifies them. -->
-                      <p class="ab-owner-chip-context">{{ owner.context }}</p>
-                    </div>
-                    <button type="button" class="btn btn-outline-primary btn-sm" (click)="toggleOwnerPicker()">
-                      Change
-                    </button>
-                  </div>
-                } @else {
-                  <p class="ab-field-hint ab-field-hint--warn">Select an eligible owner to continue.</p>
-                }
-
-                @if (d.mode !== 'bulkRoute') {
-                  <button type="button" class="ab-link-btn" (click)="useSuggestedOwner()">
-                    Use suggested owner ({{ d.rows[0].suggestedOwner }})
-                  </button>
-                }
-
-                @if (ownerPickerOpen() || !selectedOwner()) {
-                  <div class="ab-owner-picker">
-                    <input
-                      type="text"
-                      class="ab-owner-search"
-                      placeholder="Search by name, ID, team or role"
-                      [ngModel]="ownerSearchTerm()"
-                      (ngModelChange)="ownerSearchTerm.set($event)"
-                      aria-label="Search eligible owners"
-                    />
-                    <ul class="ab-owner-list" role="listbox" aria-label="Eligible owners">
-                      @for (owner of filteredOwnerOptions(); track owner.reference) {
-                        <li>
-                          <button
-                            type="button"
-                            role="option"
-                            class="ab-owner-option"
-                            [class.is-selected]="d.newOwnerRef === owner.reference"
-                            [attr.aria-selected]="d.newOwnerRef === owner.reference"
-                            (click)="selectOwner(owner.reference)"
-                          >
-                            <span class="ab-avatar avatar-tone-2" aria-hidden="true">{{ owner.initials }}</span>
-                            <span class="ab-owner-option-text">
-                              <span class="ab-owner-option-name">{{ owner.label }}</span>
-                              <span class="ab-owner-option-context">{{ owner.context }}</span>
-                            </span>
-                          </button>
-                        </li>
-                      } @empty {
-                        @if (hasCampaignOwners()) {
-                          <li class="ab-owner-empty">No eligible owners match that search.</li>
-                        } @else {
-                          <li class="ab-owner-empty">No owners are created for this campaign yet.</li>
-                        }
-                      }
-                    </ul>
-                  </div>
-                }
-              </section>
-
-              <!-- Bulk eligibility -->
-              @if (d.mode === 'bulkRoute') {
-                <section class="ab-detail-section">
-                  <h3>Eligibility</h3>
-                  <div class="ab-eligibility-row">
-                    <span class="ab-badge ab-badge-good">Eligible: {{ eligibleRows().length }}</span>
-                    <span class="ab-badge ab-badge-danger">Ineligible: {{ ineligibleRows().length }}</span>
-                  </div>
-                  @if (ineligibleRows().length > 0) {
-                    <p class="ab-field-hint">
-                      {{ ineligibleRows().length }} record{{ ineligibleRows().length === 1 ? '' : 's' }} already owned by the selected owner and will be skipped.
-                    </p>
-                  }
-                </section>
-              }
-
-              <!-- Effective time -->
-              <section class="ab-detail-section">
-                <h3>Effective time</h3>
-                <div class="ab-radio-pills">
-                  <label class="ab-radio-pill" [class.is-active]="d.scheduleMode === 'immediate'">
-                    <input type="radio" name="schedule-mode" [checked]="d.scheduleMode === 'immediate'" (change)="setScheduleMode('immediate')" />
-                    Assign immediately
-                  </label>
-                  <label class="ab-radio-pill" [class.is-active]="d.scheduleMode === 'scheduled'">
-                    <input type="radio" name="schedule-mode" [checked]="d.scheduleMode === 'scheduled'" (change)="setScheduleMode('scheduled')" />
-                    Schedule for later
-                  </label>
-                </div>
-
-                @if (d.scheduleMode === 'scheduled') {
-                  <input
-                    type="datetime-local"
-                    class="ab-datetime-input"
-                    [min]="minEffectiveTime()"
-                    [ngModel]="d.effectiveTimeInput"
-                    (ngModelChange)="onEffectiveTimeInput($event)"
-                    [attr.aria-invalid]="!!d.effectiveTimeError"
-                    aria-describedby="ab-effective-time-hint"
-                  />
-                  <p id="ab-effective-time-hint" class="ab-field-hint">
-                    Operating timezone: {{ timezoneLabel }}
-                  </p>
-                  @if (d.effectiveTimeError) {
-                    <p class="ab-field-error">{{ d.effectiveTimeError }}</p>
-                  }
-                } @else {
-                  <p class="ab-field-hint">Will take effect immediately · {{ timezoneLabel }}</p>
-                }
-              </section>
-
-              <!-- Review -->
-              <section class="ab-detail-section">
-                <h3>Review</h3>
-                <dl>
-                  <div>
-                    <dt>Current owner</dt>
-                    <dd>{{ d.mode === 'bulkRoute' ? (d.rows.length + ' record(s)') : d.rows[0].currentOwner }}</dd>
-                  </div>
-                  <div>
-                    <dt>New owner</dt>
-                    <dd>{{ selectedOwner()?.label ?? 'Not selected' }}</dd>
-                  </div>
-                  <div>
-                    <dt>Assignment reason</dt>
-                    <dd>Entered on confirm</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <div class="ab-detail-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="cancelDraft()">Cancel</button>
+            </div>
+            <div class="ab-toolbar">
+              @if (selectionMode()) {<span
+                class="ab-selection-count"
+                role="status"
+                ><svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
+                >{{ selectedLeadRefs().size }} selected</span
+              ><button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                title="Cancel selection"
+                (click)="exitSelectionMode()"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" /></svg
+                >Cancel</button
+              >}
+              <div class="ab-view-switch" role="group" aria-label="Record view">
                 <button
                   type="button"
-                  class="btn btn-primary btn-sm ab-btn-primary"
-                  [disabled]="!canContinue()"
-                  (click)="continueToConfirm()"
+                  class="btn btn-outline-secondary btn-sm ab-icon-button"
+                  [class.is-active]="viewMode() === 'cards'"
+                  [attr.aria-pressed]="viewMode() === 'cards'"
+                  title="Card view"
+                  aria-label="Card view"
+                  (click)="viewMode.set('cards')"
                 >
-                  Review &amp; confirm
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
                 </button>
-              </div>
-            </div>
-
-          <!-- ============ Inspect history ============ -->
-          } @else if (historyPanelRow(); as hRow) {
-            <div class="ab-detail-card">
-              <div class="ab-detail-head">
-                <div class="ab-detail-head-left">
-                  <span class="ab-detail-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                      <path d="M8 4.7V8l2.4 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 class="ab-detail-title">Assignment history</h2>
-                    <p class="ab-detail-ref">{{ hRow.leadReference }}</p>
-                  </div>
-                </div>
-                <button type="button" class="ab-banner-dismiss" (click)="closeHistoryPanel()" aria-label="Close history">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm ab-icon-button"
+                  [class.is-active]="viewMode() === 'table'"
+                  [attr.aria-pressed]="viewMode() === 'table'"
+                  title="Table view"
+                  aria-label="Table view"
+                  (click)="viewMode.set('table')"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18M3 14h18M9 4v16" />
                   </svg>
                 </button>
               </div>
-
-              @if (historyFor(hRow.leadReference).length > 0) {
-                <ul class="ab-history-list">
-                  @for (entry of historyFor(hRow.leadReference); track entry.at) {
-                    <li class="ab-history-item">
-                      <p class="ab-history-event">{{ entry.event }} to {{ entry.owner }}</p>
-                      <p class="ab-history-meta">{{ entry.at }} · by {{ entry.actor }} · effective {{ entry.effectiveTime }}</p>
-                      <p class="ab-history-reason">“{{ entry.reason }}”</p>
-                    </li>
-                  }
-                </ul>
-              } @else {
-                <div class="ab-detail-empty">
-                  <p>No assignment activity recorded for this session yet. History will populate here once this record is assigned, reassigned, or bulk routed.</p>
-                </div>
-              }
-
-              <div class="ab-detail-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="viewFullHistory(hRow)">
-                  Open full history
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-icon-button"
+                title="Refresh records"
+                aria-label="Refresh records"
+                [disabled]="uiState() === 'loading'"
+                (click)="refresh()"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" />
+                </svg>
+              </button>
+              @if (permissions()['bulkRoute']) {<button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-assignment-outline"
+                title="Bulk Assign / Reassign"
+                [disabled]="uiState() === 'loading' || (selectionMode() && selectedLeadRefs().size === 0)"
+                (click)="selectionMode() ? startBulkAssignment() : toggleSelectionMode()"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0"
+                  /></svg
+                >Bulk Assign / Reassign</button
+              >}
+            </div>
+          </div>
+          @if (recordType() === 'donors') {
+          <div class="ab-empty" role="status">
+            <h3>Donor assignment is not available</h3>
+            <p>
+              Donor records are not provided by the current assignment service.
+              Select Leads to manage lead ownership.
+            </p>
+          </div>
+          } @else if (uiState() === 'loading') {
+          <div class="ab-empty" role="status">
+            <span class="ab-loader" aria-hidden="true"></span>
+            <h3>Loading records</h3>
+            <p>Getting the latest ownership details.</p>
+          </div>
+          } @else if (uiState() === 'dependency-failure') {
+          <div class="ab-empty" role="alert">
+            <h3>Unable to load assignment board</h3>
+            <p>{{ errorMessage() }}</p>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              title="Retry loading"
+              (click)="refresh()"
+            >
+              <svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+              >Retry
+            </button>
+          </div>
+          } @else if (paginatedRows().length) { @if (viewMode() === 'cards') {
+          <ul class="ab-card-grid">
+            @for (row of paginatedRows(); track row.leadId) {
+            <li
+              class="ab-record-card"
+              [class.is-selected]="isRowSelected(row.leadReference)"
+            >
+              <div class="ab-card-top">
+                @if (permissions()['bulkRoute']) {<input
+                  type="checkbox"
+                  [checked]="isRowSelected(row.leadReference)"
+                  [attr.aria-label]="'Select ' + row.leadPreview"
+                  [title]="'Select ' + row.leadPreview"
+                  (change)="selectionMode.set(true); toggleRowSelection(row.leadReference)"
+                />}<span class="ab-record-type">Lead</span
+                ><span
+                  class="ab-status"
+                  [class.ab-overdue]="row.slaState === 'Overdue'"
+                  >{{ row.slaState }}</span
+                >
+              </div>
+              <h3 class="ab-card-title">
+                <button
+                  type="button"
+                  class="ab-table-link ab-number"
+                  [title]="'View ' + leadName(row)"
+                  (click)="selectPreview(row)"
+                >
+                  {{ row.leadReference }}</button
+                ><span aria-hidden="true"> · </span
+                ><button
+                  type="button"
+                  class="ab-table-link"
+                  [title]="'View ' + leadName(row)"
+                  (click)="selectPreview(row)"
+                >
+                  {{ leadPreviewWithoutReference(row) }}
                 </button>
-              </div>
-            </div>
-
-          <!-- ============ Single assignment result ============ -->
-          } @else if (lastResult(); as res) {
-            <div class="ab-detail-card">
-              <div class="ab-detail-head">
-                <div class="ab-detail-head-left">
-                  <span class="ab-detail-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 class="ab-detail-title">{{ res.assignmentState }}</h2>
-                    <p class="ab-detail-ref">{{ res.leadReference }}</p>
-                  </div>
+              </h3>
+              <p class="ab-card-line" [title]="'Campaign: ' + row.campaign">
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9 6V3h6v3M3 7h18v14H3V7ZM3 12h18M10 12v3h4v-3"
+                  /></svg
+                ><span>{{ row.campaign }}</span>
+              </p>
+              <p class="ab-card-line">
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3a18 18 0 0 0 0 18 18 18 0 0 0 0-18"
+                  /></svg
+                ><span>{{ row.language }} · {{ row.team }}</span>
+              </p>
+              <div
+                class="ab-owner-strip"
+                [class.is-unassigned]="!row.currentOwnerUserId"
+              >
+                <span class="ab-avatar" aria-hidden="true"
+                  >@if (row.currentOwnerUserId) {{{
+                  getInitials(row.currentOwner) }}} @else {<svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+                    /></svg
+                  >}</span
+                >
+                <div>
+                  <strong>{{ row.currentOwner }}</strong
+                  ><span
+                    >{{ row.currentOwnerUserId ? 'Owner' : 'No owner assigned'
+                    }}</span
+                  >
                 </div>
-                <span class="ab-badge ab-badge-good">Success</span>
               </div>
-
-              <section class="ab-detail-section">
-                <dl>
-                  <div><dt>Lead</dt><dd>{{ res.leadPreview }}</dd></div>
-                  <div><dt>New owner</dt><dd>{{ res.owner }}</dd></div>
-                  <div><dt>Effective time</dt><dd>{{ res.effectiveTime }}</dd></div>
-                  <div><dt>Next action due</dt><dd>{{ res.nextAction }}</dd></div>
-                </dl>
-              </section>
-
-              <div class="ab-detail-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeResult()">Dismiss</button>
+              <div class="ab-card-actions" aria-label="Record actions">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  [title]="'View ' + row.leadPreview"
+                  (click)="selectPreview(row)"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+                    /></svg
+                  >View
+                </button>
+                @if (permissions()[primaryActionId(row)]) {<button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm ab-assignment-button ab-assignment-outline"
+                  [title]="primaryActionLabel(row)"
+                  (click)="beginAssignment(primaryActionId(row), [row])"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+                    /></svg
+                  >{{ primaryActionLabel(row) }}</button
+                >} @if (permissions()['view']) {<button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm ab-icon-button"
+                  title="Inspect history"
+                  aria-label="Inspect history"
+                  (click)="openHistoryPanel(row)"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" />
+                  </svg></button
+                ><button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm ab-icon-button"
+                  title="Schedule Follow-up Call"
+                  aria-label="Schedule Follow-up Call"
+                  (click)="scheduleFollowUp(row)"
+                >
+                  <svg
+                    class="ab-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2"
+                    />
+                  </svg></button
+                >}
               </div>
-            </div>
-
-          <!-- ============ Bulk assignment result ============ -->
-          } @else if (bulkResult(); as bres) {
-            <div class="ab-detail-card">
-              <div class="ab-detail-head">
-                <div class="ab-detail-head-left">
-                  <span class="ab-detail-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 class="ab-detail-title">Bulk assign complete</h2>
-                    <p class="ab-detail-ref">Routed to {{ bres.newOwner }}</p>
-                  </div>
-                </div>
-                @if (bres.ineligible > 0) {
-                  <span class="ab-badge ab-badge-warn">Partial</span>
-                } @else {
-                  <span class="ab-badge ab-badge-good">Success</span>
-                }
-              </div>
-
-              <section class="ab-detail-section">
-                <dl>
-                  <div><dt>Selected</dt><dd>{{ bres.selected }}</dd></div>
-                  <div><dt>Eligible</dt><dd>{{ bres.eligible }}</dd></div>
-                  <div><dt>Ineligible</dt><dd>{{ bres.ineligible }}</dd></div>
-                  <div><dt>Successful</dt><dd>{{ bres.success }}</dd></div>
-                </dl>
-              </section>
-
-              <section class="ab-detail-section">
-                <h3>Per-record result</h3>
-                <ul class="ab-bulk-result-list">
-                  @for (detail of bres.details; track detail.leadReference) {
-                    <li class="ab-bulk-result-item">
-                      <span class="ab-badge" [class.ab-badge-good]="detail.status === 'success'" [class.ab-badge-danger]="detail.status === 'ineligible'">
-                        {{ detail.status === 'success' ? 'Assigned' : 'Skipped' }}
-                      </span>
-                      <span class="ab-bulk-result-text">
-                        <strong>{{ detail.leadReference }}</strong> · {{ detail.leadPreview }} — {{ detail.note }}
-                      </span>
-                    </li>
-                  }
-                </ul>
-              </section>
-
-              <div class="ab-detail-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeResult()">Dismiss</button>
-              </div>
-            </div>
-
-          <!-- ============ Default preview ============ -->
-          } @else if (previewRow(); as row) {
-            <div class="ab-detail-card">
-              <div class="ab-detail-head">
-                <div class="ab-detail-head-left">
-                  <span class="ab-detail-icon" aria-hidden="true">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 2h6l3 3v9H4V2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                      <path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 class="ab-detail-title">{{ row.leadPreview }}</h2>
-                    <p class="ab-detail-ref">{{ row.leadReference }}</p>
-                  </div>
-                </div>
-                <span class="ab-badge" [class]="slaClass(row.slaState)">{{ row.slaState }}</span>
-              </div>
-
-              <section class="ab-detail-section">
-                <h3>Lead</h3>
-                <dl>
-                  <div><dt>Campaign</dt><dd>{{ row.campaign }}</dd></div>
-                  <div><dt>Team</dt><dd>{{ row.team }}</dd></div>
-                  <div><dt>Language</dt><dd>{{ row.language }}</dd></div>
-                </dl>
-              </section>
-
-              <section class="ab-detail-section">
-                <h3>Ownership</h3>
-                <dl>
-                  <div><dt>Current owner</dt><dd>{{ row.currentOwner }}</dd></div>
-                  <div><dt>Suggested owner</dt><dd>{{ row.suggestedOwner }}</dd></div>
-                  <div><dt>Open work items</dt><dd>{{ row.openWorkCount }}</dd></div>
-                </dl>
-              </section>
-
-              <section class="ab-detail-section">
-                <h3>Schedule</h3>
-                <dl>
-                  <div><dt>Next action due</dt><dd>{{ row.nextActionDue }}</dd></div>
-                  <div>
-                    <dt>Workload band</dt>
-                    <dd><span class="ab-badge" [class]="workloadClass(row.workloadBand)">{{ row.workloadBand }}</span></dd>
-                  </div>
-                </dl>
-              </section>
-
-              <div class="ab-detail-actions">
-                @if (permissions()[primaryActionId(row)]) {
-                  <button type="button" class="btn btn-primary btn-sm ab-btn-primary" (click)="handlePrimaryCta()">
-                    {{ primaryActionLabel(row) }}
-                  </button>
-                } @else {
-                  <p class="ab-field-hint">You don't have permission to {{ primaryActionLabel(row).toLowerCase() }} this record.</p>
-                }
-                @if (permissions()['view']) {
-                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openHistoryPanel(row)">
-                    Inspect history
-                  </button>
-                }
-              </div>
-            </div>
+            </li>
+            }
+          </ul>
           } @else {
-            <div class="ab-detail-empty">
-              <p>Select a record from the queue to preview assignment details.</p>
-            </div>
+          <div class="ab-table-shell">
+            <table class="ab-record-table">
+              <caption class="visually-hidden">
+                Assignment board records
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Lead No</th>
+                  <th scope="col">Lead Name</th>
+                  <th scope="col">Campaign</th>
+                  <th scope="col">Owner</th>
+                  <th scope="col">Next Follow-Up</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="ab-actions-column">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of paginatedRows(); track row.leadId) {
+                <tr [class.is-selected]="isRowSelected(row.leadReference)">
+                  <td
+                    data-label="Lead No"
+                    class="ab-number ab-lead-number-cell"
+                  >
+                    <span class="ab-lead-number">
+                      @if (permissions()['bulkRoute']) {<input
+                        type="checkbox"
+                        [checked]="isRowSelected(row.leadReference)"
+                        [attr.aria-label]="'Select ' + leadName(row)"
+                        [title]="'Select ' + leadName(row)"
+                        (change)="selectionMode.set(true); toggleRowSelection(row.leadReference)"
+                      />}
+                      <button
+                        type="button"
+                        class="ab-table-link ab-number"
+                        [title]="'View ' + leadName(row)"
+                        (click)="selectPreview(row)"
+                      >
+                        {{ row.leadReference }}
+                      </button>
+                    </span>
+                  </td>
+                  <th scope="row" data-label="Lead Name">
+                    <button
+                      type="button"
+                      class="ab-table-identity ab-table-link"
+                      [title]="'View ' + leadName(row)"
+                      (click)="selectPreview(row)"
+                    >
+                      <span class="ab-avatar" aria-hidden="true"
+                        >{{ getInitials(leadName(row)) }}</span
+                      >
+                      <span class="ab-table-record">{{ leadName(row) }}</span>
+                    </button>
+                  </th>
+                  <td data-label="Campaign">{{ row.campaign }}</td>
+                  <td data-label="Owner">
+                    <span class="ab-table-owner"
+                      ><span class="ab-avatar" aria-hidden="true"
+                        >@if (row.currentOwnerUserId) {{{
+                        getInitials(row.currentOwner) }}} @else {—}</span
+                      ><span
+                        ><strong>{{ row.currentOwner }}</strong
+                        ><small
+                          >{{ row.currentOwnerUserId ? 'Owner' : 'No owner
+                          assigned' }}</small
+                        ></span
+                      ></span
+                    >
+                  </td>
+                  <td data-label="Next Follow-Up">
+                    <span class="ab-table-follow-up"
+                      ><svg
+                        class="ab-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"
+                        /></svg
+                      ><span>{{ row.nextActionDue }}</span></span
+                    >
+                  </td>
+                  <td data-label="Status">
+                    <span
+                      class="ab-status"
+                      [class.ab-overdue]="row.slaState === 'Overdue'"
+                      >{{ row.status }}</span
+                    >
+                    <span class="ab-table-subtext">{{ row.slaState }}</span>
+                  </td>
+                  <td data-label="Actions" class="ab-table-actions">
+                    <div aria-label="Record actions">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm ab-icon-button"
+                        [title]="'View ' + row.leadPreview"
+                        [attr.aria-label]="'View ' + row.leadPreview"
+                        (click)="selectPreview(row)"
+                      >
+                        <svg
+                          class="ab-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+                          />
+                        </svg>
+                      </button>
+                      @if (permissions()[primaryActionId(row)]) {<button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm ab-icon-button ab-assignment-outline"
+                        [title]="primaryActionLabel(row)"
+                        [attr.aria-label]="primaryActionLabel(row)"
+                        (click)="beginAssignment(primaryActionId(row), [row])"
+                      >
+                        <svg
+                          class="ab-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+                          />
+                        </svg></button
+                      >} @if (permissions()['view']) {<button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm ab-icon-button"
+                        title="Inspect history"
+                        aria-label="Inspect history"
+                        (click)="openHistoryPanel(row)"
+                      >
+                        <svg
+                          class="ab-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm ab-icon-button"
+                        title="Schedule Follow-up Call"
+                        aria-label="Schedule Follow-up Call"
+                        (click)="scheduleFollowUp(row)"
+                      >
+                        <svg
+                          class="ab-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2"
+                          />
+                        </svg></button
+                      >}
+                    </div>
+                  </td>
+                </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          } } @else {
+          <div class="ab-empty">
+            <span class="ab-section-icon"
+              ><svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0"
+                /></svg
+            ></span>
+            <h3>No records found</h3>
+            <p>Try changing or resetting your filters.</p>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              title="Reset filters"
+              (click)="clearFilters()"
+            >
+              <svg
+                class="ab-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+              >Reset filters
+            </button>
+          </div>
           }
-        </aside>
+          <footer class="ab-pagination">
+            <p>
+              <span class="ab-number">{{ pagedStart() }}–{{ pagedEnd() }}</span>
+              of <span class="ab-number">{{ totalCount() }}</span> records · 10
+              per page
+            </p>
+            <nav aria-label="Pagination">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-icon-button"
+                aria-label="Previous page"
+                title="Previous page"
+                [disabled]="currentPage() === 1 || uiState() === 'loading'"
+                (click)="goToPage(currentPage() - 1)"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg></button
+              >@for (page of pageNumbers(); track page) {<button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-page-button ab-number"
+                [class.is-current]="page === currentPage()"
+                [attr.aria-current]="page === currentPage() ? 'page' : null"
+                [title]="'Page ' + page"
+                [disabled]="uiState() === 'loading'"
+                (click)="goToPage(page)"
+              >
+                {{ page }}</button
+              >}<button
+                type="button"
+                class="btn btn-outline-secondary btn-sm ab-icon-button"
+                aria-label="Next page"
+                title="Next page"
+                [disabled]="currentPage() >= totalPages() || uiState() === 'loading'"
+                (click)="goToPage(currentPage() + 1)"
+              >
+                <svg
+                  class="ab-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </nav>
+          </footer>
+        </section>
       </div>
-
     </div>
   </div>
 
-  @if (confirmConfig(); as cfg) {
-    <app-confirm-modal
-      [config]="cfg"
-      (confirm)="onConfirm($event)"
-      (cancel)="onCancel()"
-    ></app-confirm-modal>
+  @if (drawerOpen()) {
+  <div
+    class="ab-drawer-backdrop"
+    (click)="closeDrawer()"
+    aria-hidden="true"
+  ></div>
+  <aside
+    class="ab-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Assignment details"
+    tabindex="-1"
+    (keydown)="onOverlayKeydown($event)"
+    [attr.inert]="confirmConfig() ? '' : null"
+  >
+    <div class="ab-drawer-close">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        title="Close assignment details"
+        [disabled]="processing()"
+        (click)="closeDrawer()"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m6 6 12 12M18 6 6 18" /></svg
+        >Close
+      </button>
+    </div>
+    @if (draft(); as d) {
+    <header class="ab-drawer-head">
+      <span class="ab-section-icon"
+        ><svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+          /></svg
+      ></span>
+      <div>
+        <h2>{{ draftTitle(d) }}</h2>
+        <p>
+          {{ d.mode === 'bulkRoute' ? 'Update ownership for the selected
+          records.' : d.rows[0].leadPreview + ' · ' + d.rows[0].leadReference }}
+        </p>
+      </div>
+    </header>
+    <section class="ab-detail-section">
+      <h3>Assignment details</h3>
+      <dl>
+        @if (d.mode === 'bulkRoute') {
+        <div>
+          <dt>Records selected</dt>
+          <dd class="ab-number">{{ d.rows.length }}</dd>
+        </div>
+        } @else {
+        <div>
+          <dt>Current owner</dt>
+          <dd>{{ d.rows[0].currentOwner }}</dd>
+        </div>
+        <div>
+          <dt>Campaign</dt>
+          <dd>{{ d.rows[0].campaign }}</dd>
+        </div>
+        <div>
+          <dt>Team / language</dt>
+          <dd>{{ d.rows[0].team }} · {{ d.rows[0].language }}</dd>
+        </div>
+        }
+      </dl>
+    </section>
+    <section class="ab-detail-section">
+      <h3>New owner <span class="ab-required">*</span></h3>
+      @if (selectedOwner(); as owner) {
+      <div class="ab-owner-strip">
+        <span class="ab-avatar">{{ owner.initials }}</span>
+        <div>
+          <strong>{{ owner.label }}</strong><span>{{ owner.context }}</span>
+        </div>
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          title="Change owner"
+          (click)="toggleOwnerPicker()"
+          [attr.aria-expanded]="ownerPickerOpen()"
+        >
+          <svg
+            class="ab-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m16 3 5 5M4 20l4-1L21 6a2 2 0 0 0-3-3L5 16l-1 4Z" /></svg
+          >Change
+        </button>
+      </div>
+      } @if (d.mode !== 'bulkRoute' && d.rows[0].suggestedOwnerUserId &&
+      d.rows[0].suggestedOwnerUserId !== d.newOwnerRef) {<button
+        type="button"
+        class="btn btn-outline-secondary btn-sm ab-suggestion"
+        title="Use suggested owner"
+        (click)="useSuggestedOwner()"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+          /></svg
+        >Use {{ d.rows[0].suggestedOwner }}
+      </button>
+      <p class="ab-hint">{{ d.rows[0].suggestionRationale }}</p>
+      } @if (ownerPickerOpen() || !selectedOwner()) {
+      <div class="ab-owner-picker">
+        <label for="ab-owner-search">Search eligible owners</label
+        ><input
+          id="ab-owner-search"
+          type="search"
+          placeholder="Name or team"
+          [ngModel]="ownerSearchTerm()"
+          (ngModelChange)="ownerSearchTerm.set($event)"
+        />
+        <ul class="ab-owner-list">
+          @for (owner of filteredOwnerOptions(); track owner.reference) {
+          <li>
+            <button
+              type="button"
+              class="ab-owner-option"
+              [attr.aria-pressed]="d.newOwnerRef === owner.reference"
+              [title]="'Select ' + owner.label"
+              (click)="selectOwner(owner.reference)"
+            >
+              <span class="ab-avatar">{{ owner.initials }}</span
+              ><span
+                ><strong>{{ owner.label }}</strong
+                ><small>{{ owner.context }}</small></span
+              >
+            </button>
+          </li>
+          } @empty {
+          <li class="ab-hint">
+            {{ hasCampaignOwners() ? 'No owners match your search.' : 'No
+            eligible owners are available.' }}
+          </li>
+          }
+        </ul>
+      </div>
+      }
+    </section>
+    @if (d.mode === 'bulkRoute') {
+    <section class="ab-detail-section">
+      <h3>Eligibility</h3>
+      <p>
+        <span class="ab-number">{{ eligibleRows().length }}</span> eligible ·
+        <span class="ab-number">{{ ineligibleRows().length }}</span> already
+        owned by the selected owner and will be skipped.
+      </p>
+    </section>
+    }
+    <section class="ab-detail-section">
+      <h3>Effective time</h3>
+      <div class="ab-radio-pills">
+        <label
+          ><input
+            type="radio"
+            name="ab-schedule"
+            [checked]="d.scheduleMode === 'immediate'"
+            (change)="setScheduleMode('immediate')"
+          />Immediately</label
+        ><label
+          ><input
+            type="radio"
+            name="ab-schedule"
+            [checked]="d.scheduleMode === 'scheduled'"
+            (change)="setScheduleMode('scheduled')"
+          />Schedule for later</label
+        >
+      </div>
+      @if (d.scheduleMode === 'scheduled') {<label for="ab-effective-time"
+        >Date and time</label
+      ><input
+        id="ab-effective-time"
+        type="datetime-local"
+        [min]="minEffectiveTime()"
+        [ngModel]="d.effectiveTimeInput"
+        (ngModelChange)="onEffectiveTimeInput($event)"
+        [attr.aria-invalid]="!!d.effectiveTimeError"
+        aria-describedby="ab-time-hint"
+      />@if (d.effectiveTimeError) {
+      <p class="ab-error" role="alert">{{ d.effectiveTimeError }}</p>
+      }}
+      <p id="ab-time-hint" class="ab-hint">{{ timezoneLabel }}</p>
+    </section>
+    <footer class="ab-drawer-actions">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        title="Cancel assignment"
+        [disabled]="processing()"
+        (click)="closeDrawer()"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m6 6 12 12M18 6 6 18" /></svg
+        >Cancel</button
+      ><button
+        type="button"
+        class="btn btn-primary btn-sm"
+        title="Review and save assignment"
+        [disabled]="!canContinue()"
+        (click)="continueToConfirm()"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 12 4 4L19 6" /></svg
+        >Save
+      </button>
+    </footer>
+    } @else if (historyPanelRow(); as row) {
+    <header class="ab-drawer-head">
+      <span class="ab-section-icon"
+        ><svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+      ></span>
+      <div>
+        <h2>Assignment history</h2>
+        <p>{{ row.leadPreview }} · {{ row.leadReference }}</p>
+      </div>
+    </header>
+    @if (historyLoading()) {
+    <p role="status">Loading history…</p>
+    } @else if (historyError()) {
+    <p class="ab-error" role="alert">{{ historyError() }}</p>
+    <button
+      type="button"
+      class="btn btn-outline-secondary btn-sm"
+      title="Retry history"
+      (click)="openHistoryPanel(row)"
+    >
+      <svg
+        class="ab-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+      >Retry</button
+    >} @else {
+    <ol class="ab-history-list">
+      @for (entry of historyFor(row.leadReference); track $index) {
+      <li>
+        <h3>{{ entry.event }} to {{ entry.owner }}</h3>
+        <p class="ab-number">{{ entry.effectiveTime }}</p>
+        <p>{{ entry.reason }}</p>
+      </li>
+      } @empty {
+      <li>No assignment activity recorded.</li>
+      }
+    </ol>
+    }
+    <footer class="ab-drawer-actions">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        title="Open full history"
+        (click)="viewFullHistory(row)"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+        >Open full history
+      </button>
+    </footer>
+    } @else if (lastResult(); as result) {
+    <header class="ab-drawer-head">
+      <span class="ab-section-icon"
+        ><svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 12 4 4L19 6" /></svg
+      ></span>
+      <div>
+        <h2>{{ result.assignmentState }}</h2>
+        <p>{{ result.leadPreview }}</p>
+      </div>
+    </header>
+    <dl class="ab-detail-section">
+      <div>
+        <dt>Owner</dt>
+        <dd>{{ result.owner }}</dd>
+      </div>
+      <div>
+        <dt>Effective time</dt>
+        <dd class="ab-number">{{ result.effectiveTime }}</dd>
+      </div>
+      <div>
+        <dt>Next action</dt>
+        <dd class="ab-number">{{ result.nextAction }}</dd>
+      </div>
+    </dl>
+    } @else if (bulkResult(); as result) {
+    <header class="ab-drawer-head">
+      <span class="ab-section-icon"
+        ><svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 12 4 4L19 6" /></svg
+      ></span>
+      <div>
+        <h2>Bulk assignment complete</h2>
+        <p>{{ result.success }} assigned · {{ result.ineligible }} skipped</p>
+      </div>
+    </header>
+    <p>Owner: {{ result.newOwner }}</p>
+    <ul class="ab-history-list">
+      @for (detail of result.details; track detail.leadReference) {
+      <li>
+        <h3>{{ detail.leadPreview }}</h3>
+        <p>
+          {{ detail.status === 'success' ? 'Assigned' : 'Skipped' }} · {{
+          detail.note }}
+        </p>
+      </li>
+      }
+    </ul>
+    } @else if (previewRow(); as row) {
+    <header class="ab-drawer-head">
+      <span class="ab-section-icon"
+        ><svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"
+          /></svg
+      ></span>
+      <div>
+        <h2>{{ row.leadPreview }}</h2>
+        <p class="ab-number">{{ row.leadReference }}</p>
+      </div>
+    </header>
+    <section class="ab-detail-section">
+      <h3>Record details</h3>
+      <dl>
+        <div>
+          <dt>Campaign</dt>
+          <dd>{{ row.campaign }}</dd>
+        </div>
+        <div>
+          <dt>Team</dt>
+          <dd>{{ row.team }}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{{ row.language }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{{ row.status }}</dd>
+        </div>
+      </dl>
+    </section>
+    <section class="ab-detail-section">
+      <h3>Ownership</h3>
+      <dl>
+        <div>
+          <dt>Current owner</dt>
+          <dd>{{ row.currentOwner }}</dd>
+        </div>
+        <div>
+          <dt>Suggested owner</dt>
+          <dd>{{ row.suggestedOwner || 'None' }}</dd>
+        </div>
+        <div>
+          <dt>Open work items</dt>
+          <dd class="ab-number">{{ row.openWorkCount }}</dd>
+        </div>
+        <div>
+          <dt>Workload</dt>
+          <dd>{{ row.workloadBand }}</dd>
+        </div>
+      </dl>
+      <p class="ab-hint">{{ row.suggestionRationale }}</p>
+    </section>
+    <section class="ab-detail-section">
+      <h3>Follow-up</h3>
+      <p class="ab-number">
+        {{ row.nextActionDue === '—' ? 'Not scheduled' : row.nextActionDue }}
+      </p>
+      <p>{{ row.slaState }}</p>
+    </section>
+    <footer class="ab-drawer-actions">
+      @if (permissions()[primaryActionId(row)]) {<button
+        type="button"
+        class="btn btn-primary btn-sm"
+        [title]="primaryActionLabel(row)"
+        (click)="handlePrimaryCta()"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M17 11h6"
+          /></svg
+        >{{ primaryActionLabel(row) }}</button
+      >}@if (permissions()['view']) {<button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        title="Inspect history"
+        (click)="openHistoryPanel(row)"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2" /></svg
+        >History</button
+      ><button
+        type="button"
+        class="btn btn-primary btn-sm"
+        title="Schedule Follow-up Call"
+        (click)="scheduleFollowUp(row)"
+      >
+        <svg
+          class="ab-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2"
+          /></svg
+        >Schedule Follow-up Call</button
+      >}
+    </footer>
+    }
+  </aside>
+  } @if (confirmConfig(); as cfg) {
+  <div class="ab-modal-backdrop">
+    <section
+      class="ab-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ab-confirm-title"
+      tabindex="-1"
+      (keydown)="onOverlayKeydown($event)"
+    >
+      <header class="ab-drawer-head">
+        <span class="ab-section-icon"
+          ><svg
+            class="ab-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m5 12 4 4L19 6" /></svg
+        ></span>
+        <div>
+          <h2 id="ab-confirm-title">{{ cfg.title }}</h2>
+          <p>{{ cfg.message }}</p>
+        </div>
+      </header>
+      <dl class="ab-detail-section">
+        @for (change of cfg.beforeAfter ?? []; track change.label) {
+        <div>
+          <dt>{{ change.label }}</dt>
+          <dd>{{ change.before }} → {{ change.after }}</dd>
+        </div>
+        }
+      </dl>
+      <label for="ab-reason"
+        >Assignment reason <span class="ab-required">*</span></label
+      ><textarea
+        id="ab-reason"
+        rows="4"
+        maxlength="2000"
+        [ngModel]="assignmentReason()"
+        (ngModelChange)="assignmentReason.set($event)"
+        [disabled]="processing()"
+        aria-describedby="ab-reason-hint"
+        placeholder="Explain the ownership change"
+      ></textarea>
+      <p id="ab-reason-hint" class="ab-hint">
+        10–2,000 characters required ·
+        <span class="ab-number"
+          >{{ assignmentReason().trim().length }}/2,000</span
+        >
+      </p>
+      <footer class="ab-drawer-actions">
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          title="Cancel confirmation"
+          [disabled]="processing()"
+          (click)="onCancel()"
+        >
+          <svg
+            class="ab-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m6 6 12 12M18 6 6 18" /></svg
+          >Cancel</button
+        ><button
+          type="button"
+          class="btn btn-primary btn-sm"
+          title="Save assignment"
+          [disabled]="!reasonValid() || processing()"
+          (click)="onConfirm(assignmentReason().trim())"
+        >
+          <svg
+            class="ab-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m5 12 4 4L19 6" /></svg
+          >{{ processing() ? 'Saving…' : 'Save' }}
+        </button>
+      </footer>
+    </section>
+  </div>
   }
 </main>

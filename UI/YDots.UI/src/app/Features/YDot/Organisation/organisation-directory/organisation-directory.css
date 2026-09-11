@@ -66,6 +66,28 @@
   }
 }
 
+/* The hero's own height stayed fixed while .org-page above kept widening,
+   so on a big monitor the banner grew wide but stayed just as short — the
+   artwork's visible slice (object-fit: cover at a fixed height) ended up
+   far wider than tall, cropping it down to an oddly thin strip. Growing
+   the height at the same breakpoints keeps the crop close to its original
+   proportions instead of flattening it out. */
+@media (min-width: 1440px) {
+  .org-hero {
+    height: 200px;
+  }
+}
+@media (min-width: 1920px) {
+  .org-hero {
+    height: 230px;
+  }
+}
+@media (min-width: 2560px) {
+  .org-hero {
+    height: 260px;
+  }
+}
+
 /* ---------- Breadcrumb ---------- */
 .org-breadcrumb {
   display: flex;
@@ -96,14 +118,47 @@
 .org-header {
   margin-bottom: 20px;
 }
-.org-header-actions {
-  display: flex;
+
+/* Hugs the hero banner's actual top-right corner, on top of the artwork.
+   A frosted-glass pill rather than a flat colour block — it picks up
+   whatever is behind it (sky, building, foliage) through the blur, so it
+   reads as sitting on the photo instead of a sticker glued over it, while
+   staying clearly legible against any part of the image. */
+.org-hero-cta {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
+  gap: 6px;
+  /* padding: 8px 14px;
+  border-radius: 20px; */
+  /* background: rgba(255, 255, 255, 0.68); */
+  /* backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); */
+  /* border: 1px solid rgba(255, 255, 255, 0.55); */
+  color: white;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(30, 42, 36, 0.1);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
+.org-hero-cta a{
+  color: white;
+}
+
+.org-hero-cta i {
+  font-size: 15px !important;
+}
+
+.org-hero-cta:hover {
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(30, 42, 36, 0.16);
+}
+
 .org-title {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 24px;
@@ -133,7 +188,7 @@
   align-items: stretch;
   justify-content: space-between;
   gap: 24px;
-  height: 136px;
+  height: 172px;
   border-radius: 22px;
   /* The photo's one dominant, unifying colour is its clear blue sky — a
      stronger sky-blue wash reads as "one piece with the image" far more
@@ -319,7 +374,7 @@
 }
 
 .org-hero-side {
-  flex: 0 0 32%;
+  flex: 0 0 22%;
   display: flex;
   min-width: 0;
   z-index: 1;
@@ -341,8 +396,15 @@
     flex-direction: column;
     height: auto;
   }
+  /* No longer sitting over the artwork at this width — it drops below the
+     title, so it just joins the normal stacked flow instead of floating. */
+  .org-hero-cta {
+    position: static;
+    align-self: flex-start;
+    margin: 16px 0 0 22px;
+  }
   .org-hero-main {
-    padding: 22px 22px 0 22px;
+    padding: 14px 22px 0 22px;
   }
   .org-hero-side {
     flex: none;
@@ -730,20 +792,29 @@
   border-radius: 12px;
   background: #f0f0eb;
 }
+/* Icon-only now — square rather than the wider pill the text label needed.
+   The label moves to a native tooltip (title/aria-label in the markup)
+   instead of disappearing entirely. */
 .org-view-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border-radius: 9px;
   border: none;
   background: none;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   font-family: inherit;
   color: var(--org-ink-2);
   cursor: pointer;
-  white-space: nowrap;
+}
+/* !important: same global bare-<i> font-size reset noted throughout this
+   file — must be set on the <i> itself, not the wrapping button. */
+.org-view-toggle-btn i {
+  font-size: 16px !important;
 }
 .org-view-toggle-btn:hover {
   color: var(--org-ink);
@@ -806,12 +877,36 @@
   position: relative;
   z-index: 1;
 }
+/* !important on both: this is a bare <span>, and the global stylesheet's
+   giant selector list — body, p, span, div, ... — forces its own
+   font-weight (400) and font-size onto every one, with its own
+   !important. Without matching it here the number silently renders at
+   regular weight no matter what is set below. */
 .org-org-card-num {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  font-size: 34px;
-  font-weight: 700;
+  font-size: 40px !important;
+  font-weight: 800 !important;
   color: var(--org-border);
   line-height: 1;
+  display: inline-block;
+  animation: org-org-num-in 0.5s 0.1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+}
+@keyframes org-org-num-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+.org-org-card:hover .org-org-card-num {
+  transform: scale(1.18) rotate(-4deg);
+  color: var(--org-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-org-card-num {
+    animation: none;
+  }
+  .org-org-card:hover .org-org-card-num {
+    transform: none;
+  }
 }
 .org-org-card-name {
   font-size: 17px;
@@ -852,6 +947,7 @@
 }
 .org-org-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
   padding-top: 16px;
@@ -859,115 +955,148 @@
   position: relative;
   z-index: 1;
 }
+/* min-width: fit-content stops a longer label (e.g. "Re-send invitation")
+   being squeezed narrower than its own text needs — flex-wrap then lets it
+   drop to its own row on a narrow card instead of overflowing the button. */
 .org-org-card-actions .org-btn {
   flex: 1 1 auto;
+  min-width: fit-content;
 }
 
 /* ---------- Stat summary boxes ---------- */
 .org-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns:  repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
-/* An asymmetric, "twisted" corner shape — two corners rounded generously,
-   the other two barely at all — rather than a plain uniform rounded
-   rectangle, and it flips to the mirror shape on hover instead of just
-   lifting the whole card. */
+/* Each card carries its own accent as two custom properties — --stat-c
+   (the strong colour: icon, bar, value) and --stat-soft (the pale tint:
+   background wash, icon tile, hill silhouette) — so every tone-specific
+   rule below only has to set those two variables once. */
 .org-stat-card {
+  --stat-c: #3b6fd6;
+  --stat-soft: #e5edfb;
   display: block;
   width: 100%;
   text-align: left;
   font-family: inherit;
-  border: 1px solid var(--org-border);
-  border-radius: 28px 8px 28px 8px;
-  padding: 20px 22px;
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--stat-soft);
+  border-radius: 20px;
+  padding: 22px 24px 46px;
+  background: linear-gradient(165deg, #ffffff 0%, var(--stat-soft) 160%);
   box-shadow: 0 1px 2px rgba(30, 42, 36, 0.03), 0 4px 10px -8px rgba(30, 42, 36, 0.2);
-  transition: border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .org-stat-card:hover {
-  border-radius: 8px 28px 8px 28px;
-  box-shadow: 0 3px 6px rgba(30, 42, 36, 0.04), 0 14px 26px -12px rgba(30, 42, 36, 0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(30, 42, 36, 0.05), 0 16px 28px -14px rgba(30, 42, 36, 0.24);
 }
-/* A one-shot diagonal sheen that sweeps across on hover, rather than an
-   always-on loop. */
-.org-stat-card::after {
-  content: '';
+.org-stat-card.is-accent { --stat-c: var(--org-good); --stat-soft: var(--org-good-soft); }
+.org-stat-card.is-warn { --stat-c: #c98a1f; --stat-soft: var(--org-warn-soft); }
+.org-stat-card.is-info { --stat-c: #6a4fc2; --stat-soft: #eae5fa; }
+.org-stat-card.is-error { --stat-c: var(--org-error); --stat-soft: var(--org-error-soft); }
+
+/* Two overlapping circles tucked into the bottom-right corner — a smaller
+   hill peeking out from behind a taller one — rather than a wave repeating
+   across the card's full width. This element is a plain full-card-sized
+   wrapper (no visible box of its own); both circles are its own
+   pseudo-elements, positioned relative to the CARD's edges directly rather
+   than nested inside each other, which is what makes their right/bottom
+   offsets straightforward to reason about. Each circle is mostly pushed
+   below the card's own bottom edge (and clipped there by .org-stat-card's
+   overflow: hidden), so only its rounded cap shows, reading as a soft
+   watermark rather than a pattern that competes with the numbers above it.
+   Same colour/opacity on both means their overlap seam is invisible — they
+   read as one continuous two-bump skyline regardless of stacking order. */
+.org-stat-hill {
   position: absolute;
-  top: 0;
-  left: -60%;
-  width: 40%;
-  height: 100%;
-  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.65), transparent);
-  transform: skewX(-15deg);
-  transition: left 0.65s ease;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
 }
-.org-stat-card:hover::after {
-  left: 130%;
-}
-.org-stat-card::before {
+
+.org-stat-hill::before,
+.org-stat-hill::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  border-radius: 50%;
+  background: var(--stat-soft);
+}
+
+/* The taller hill, hugging the card's right edge. */
+.org-stat-hill::after {
+  right: -16px;
+  bottom: -90px;
+  width: 170px;
+  height: 170px;
+}
+
+/* The shorter hill, overlapping in front of it and further left. */
+.org-stat-hill::before {
+  right: 88px;
+  bottom: -55px;
+  width: 100px;
+  height: 100px;
+}
+
+/* A thin decorative capacity bar along the bottom edge. */
+.org-stat-bar {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 12px;
+  z-index: 1;
+  display: block;
   height: 4px;
+  border-radius: 4px;
   background: var(--org-border);
+  overflow: hidden;
 }
-.org-stat-card.is-accent::before {
-  background: var(--org-good);
+.org-stat-bar span {
+  display: block;
+  height: 100%;
+  width: 35%;
+  border-radius: 4px;
+  background: var(--stat-c);
 }
-.org-stat-card.is-warn::before {
-  background: var(--org-warn);
-}
-.org-stat-card.is-error::before {
-  background: var(--org-error);
-}
-/* A full tinted background, not just the top accent line, so each card's
-   tone reads at a glance rather than needing a close look at a 4px bar. */
-.org-stat-card {
-  background: #f7f7f4;
-}
-.org-stat-card.is-accent {
-  background: var(--org-good-soft);
-}
-.org-stat-card.is-warn {
-  background: var(--org-warn-soft);
-}
-.org-stat-card.is-error {
-  background: var(--org-error-soft);
-}
-.org-stat-card.is-info {
-  background: var(--org-blue-soft);
-}
-/* Bare, uncontained icons — no circle behind them — a little larger to
-   still carry visual weight on their own, and springing into a tilt on
-   hover instead of just riding along with the card lift. */
+.org-stat-card.is-accent .org-stat-bar span { width: 18%; }
+.org-stat-card.is-warn .org-stat-bar span { width: 14%; }
+.org-stat-card.is-info .org-stat-bar span { width: 48%; }
+.org-stat-card.is-error .org-stat-bar span { width: 14%; }
+
+/* The icon sits in its own rounded, tinted tile — a badge, not a bare
+   floating glyph — and springs into a tilt on hover. The tile itself
+   (size, background) stays put; only the glyph inside grows. */
 .org-stat-icon {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  margin-bottom: 12px;
-  color: var(--org-muted);
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  margin-bottom: 14px;
+  background: var(--stat-soft);
+  color: var(--stat-c);
   transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+/* !important: styles.css has a global reset that targets the bare <i> tag
+   directly and pins its font-size with its own !important. Setting
+   font-size on the wrapping .org-stat-icon div does nothing for the <i>
+   itself — it has to be set on the <i> to out-specificity that rule. */
+.org-stat-icon i {
+  font-size: 28px !important;
+}
 .org-stat-card:hover .org-stat-icon {
-  transform: rotate(-10deg) scale(1.18);
-}
-.org-stat-card.is-accent .org-stat-icon {
-  color: var(--org-good);
-}
-.org-stat-card.is-warn .org-stat-icon {
-  color: var(--org-warn);
-}
-.org-stat-card.is-error .org-stat-icon {
-  color: var(--org-error);
+  transform: rotate(-8deg) scale(1.12);
 }
 .org-stat-label {
+  position: relative;
+  z-index: 1;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -975,28 +1104,29 @@
   color: var(--org-muted);
   margin: 0 0 8px;
 }
+/* !important on both: this is a bare <p>, and the global stylesheet's
+   giant selector list — body, p, span, div, ... — forces its own
+   font-size AND font-weight onto every one, each with its own !important.
+   Without matching it here the number silently renders at the smaller,
+   regular-weight fallback no matter what is set below. */
 .org-stat-value {
+  position: relative;
+  z-index: 1;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 32px;
-  font-weight: 400;
-  color: var(--org-ink);
+  font-size: 36px !important;
+  font-weight: 800 !important;
+  color: var(--stat-c);
   margin: 0;
   line-height: 1;
 }
-.org-stat-card.is-accent .org-stat-value {
-  color: var(--org-good);
+.org-stat-caption {
+  position: relative;
+  z-index: 1;
+  font-size: 12.5px;
+  color: var(--org-muted);
+  margin: 4px 0 0;
 }
-.org-stat-card.is-warn .org-stat-value {
-  color: var(--org-warn);
-}
-.org-stat-card.is-error .org-stat-value {
-  color: var(--org-error);
-}
-@media (min-width: 720px) {
-  .org-stat-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
+
 
 /* ---------- Key/value read rows ---------- */
 .org-kv-label {
@@ -1543,9 +1673,6 @@
   .org-span-2 {
     grid-column: span 1;
   }
-  .org-header-actions {
-    width: 100%;
-  }
 }
 @media (max-width: 640px) {
   .org-page {
@@ -1595,15 +1722,9 @@
   white-space: nowrap;
 }
 
-/* ONBOARDING IS NOT AN ALERT. Blue rather than gold: an organisation part-way through onboarding
-   is progressing normally, and a warning tone would put it beside the ones that need attention. */
-.org-stat-card.is-info {
-  border-color: var(--org-blue);
-}
-
-.org-stat-card.is-info .org-stat-icon {
-  color: var(--org-blue);
-}
+/* ONBOARDING IS NOT AN ALERT — its own indigo tone (set via --stat-c /
+   --stat-soft above) rather than gold, so it doesn't sit beside the ones
+   that actually need attention. */
 
 @media (max-width: 720px) {
   .org-row-actions {

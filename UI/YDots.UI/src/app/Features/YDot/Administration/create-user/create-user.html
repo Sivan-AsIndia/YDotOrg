@@ -194,8 +194,8 @@
 
             <div class="col-6 col-lg-3">
               <label class="cu-label" for="cuTitle">Title</label>
-              <div class="cu-field">
-                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+              <div class="cu-field cu-field--title">
+                <i class="ri-honour-line cu-field-icon cu-field-icon--title" aria-hidden="true"></i>
                 <select id="cuTitle" class="form-select" [value]="form().title"
                         (change)="update('title', $any($event.target).value)">
                   <option value="">Select title</option>
@@ -211,8 +211,8 @@
 
             <div class="col-lg-3">
               <label class="cu-label" for="cuFirst">First name <span class="cu-req" aria-hidden="true">*</span></label>
-              <div class="cu-field">
-                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+              <div class="cu-field cu-field--first">
+                <i class="ri-user-line cu-field-icon cu-field-icon--first" aria-hidden="true"></i>
                 <input id="cuFirst" class="form-control" [class.is-invalid]="isFieldInvalid('firstName')"
                        placeholder="Enter first name"
                        [value]="form().firstName"
@@ -226,8 +226,8 @@
 
             <div class="col-lg-3">
               <label class="cu-label" for="cuLast">Last name <span class="cu-req" aria-hidden="true">*</span></label>
-              <div class="cu-field">
-                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+              <div class="cu-field cu-field--last">
+                <i class="ri-user-2-line cu-field-icon cu-field-icon--last" aria-hidden="true"></i>
                 <input id="cuLast" class="form-control" [class.is-invalid]="isFieldInvalid('lastName')"
                        placeholder="Enter last name"
                        [value]="form().lastName"
@@ -241,8 +241,8 @@
 
             <div class="col-lg-6">
               <label class="cu-label" for="cuDisplay">Display name <span class="cu-req" aria-hidden="true">*</span></label>
-              <div class="cu-field">
-                <i class="ri-user-line cu-field-icon" aria-hidden="true"></i>
+              <div class="cu-field cu-field--display">
+                <i class="ri-account-box-line cu-field-icon cu-field-icon--display" aria-hidden="true"></i>
                 <input id="cuDisplay" class="form-control" [class.is-invalid]="isFieldInvalid('displayName')"
                        placeholder="Enter display name"
                        [value]="form().displayName"
@@ -381,7 +381,7 @@
 
           <!-- Invitation & Security — the band from the reference design, restating what the API
                actually does: the invite goes to the address above and no password is set here. -->
-          <aside class="cu-invite mt-4">
+          <!-- <aside class="cu-invite mt-4">
             <span class="cu-invite-icon" aria-hidden="true"><i class="ri-shield-check-line"></i></span>
             <div class="cu-invite-text">
               <h6 class="cu-invite-title">Invitation &amp; Security</h6>
@@ -398,7 +398,7 @@
                 <path d="M115 42l27-28" />
               </g>
             </svg>
-          </aside>
+          </aside> -->
         }
 
         <!-- ============================= STEP 2 — Organisation ============================= -->

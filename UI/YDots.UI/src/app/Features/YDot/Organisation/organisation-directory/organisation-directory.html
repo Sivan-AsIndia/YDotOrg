@@ -1,16 +1,15 @@
 <main class="app-wrapper">
 <div class="page-wrapper">
-<div class="org-page">
+<div class="container-fluid px-4 py-3">
 
   <div class="org-header">
-    <div class="org-header-actions">
-      <a routerLink="/app/administration/organisation/setup-wizard"
-         class="org-btn org-btn-primary org-btn-sm">
-        <i class="ri-add-line"></i> Create organisation
-      </a>
-    </div>
-
     <div class="org-hero">
+    <button type="button" class="btn btn-primary btn-sm org-hero-cta" *ngIf="isSuperAdmin()">
+      <a routerLink="/app/administration/organisation/setup-wizard">
+        <i class="ri-add-line"></i> Create
+      </a>
+    </button>
+
       <div class="org-hero-main">
         <span class="org-title-icon" aria-hidden="true">
           <i class="ri-building-4-line wiz-icon-static"></i>
@@ -41,26 +40,41 @@
         <div class="org-stat-icon"><i class="ri-building-4-line"></i></div>
         <p class="org-stat-label">Total</p>
         <p class="org-stat-value">{{ stats.total ?? 0 }}</p>
+        <p class="org-stat-caption">All organisations</p>
+        <span class="org-stat-hill" aria-hidden="true"></span>
+        <span class="org-stat-bar" aria-hidden="true"><span></span></span>
       </div>
       <div class="org-stat-card is-accent">
-        <div class="org-stat-icon"><i class="ri-checkbox-circle-line"></i></div>
+        <div class="org-stat-icon"><i class="ri-team-line"></i></div>
         <p class="org-stat-label">Active</p>
         <p class="org-stat-value">{{ stats.active ?? 0 }}</p>
+        <p class="org-stat-caption">Currently active</p>
+        <span class="org-stat-hill" aria-hidden="true"></span>
+        <span class="org-stat-bar" aria-hidden="true"><span></span></span>
       </div>
       <button type="button" class="org-stat-card is-warn" (click)="toggleAwaitingReview()">
         <div class="org-stat-icon"><i class="ri-time-line"></i></div>
         <p class="org-stat-label">Awaiting review</p>
         <p class="org-stat-value">{{ stats.awaitingReview ?? 0 }}</p>
+        <p class="org-stat-caption">Under review</p>
+        <span class="org-stat-hill" aria-hidden="true"></span>
+        <span class="org-stat-bar" aria-hidden="true"><span></span></span>
       </button>
       <div class="org-stat-card is-info">
         <div class="org-stat-icon"><i class="ri-draft-line"></i></div>
         <p class="org-stat-label">Onboarding</p>
         <p class="org-stat-value">{{ stats.onboarding ?? 0 }}</p>
+        <p class="org-stat-caption">In onboarding</p>
+        <span class="org-stat-hill" aria-hidden="true"></span>
+        <span class="org-stat-bar" aria-hidden="true"><span></span></span>
       </div>
       <div class="org-stat-card is-error">
         <div class="org-stat-icon"><i class="ri-forbid-2-line"></i></div>
         <p class="org-stat-label">Suspended</p>
         <p class="org-stat-value">{{ stats.suspended ?? 0 }}</p>
+        <p class="org-stat-caption">Temporarily suspended</p>
+        <span class="org-stat-hill" aria-hidden="true"></span>
+        <span class="org-stat-bar" aria-hidden="true"><span></span></span>
       </div>
     </div>
   }
@@ -148,7 +162,7 @@
         </button>
       } @else {
         <a routerLink="/app/administration/organisation/setup-wizard"
-           class="org-btn org-btn-primary org-btn-sm">Create organisation</a>
+           class="org-btn org-btn-primary org-btn-sm">Create</a>
       }
     </div>
   } @else {
@@ -164,18 +178,14 @@
         <div class="org-section-head-actions">
           <div class="org-view-toggle">
             <button type="button" class="org-view-toggle-btn" [class.is-active]="viewMode() === 'cards'"
-                    (click)="viewMode.set('cards')">
-              <i class="ri-layout-grid-line"></i> Card view
+                    (click)="viewMode.set('cards')" aria-label="Card view" title="Card view">
+              <i class="ri-layout-grid-line"></i>
             </button>
             <button type="button" class="org-view-toggle-btn" [class.is-active]="viewMode() === 'table'"
-                    (click)="viewMode.set('table')">
-              <i class="ri-list-check-2"></i> Table view
+                    (click)="viewMode.set('table')" aria-label="Table view" title="Table view">
+              <i class="ri-list-check-2"></i>
             </button>
           </div>
-          <a routerLink="/app/administration/organisation/setup-wizard"
-             class="org-btn org-btn-primary org-btn-sm">
-            <i class="ri-add-line"></i> Create organisation
-          </a>
         </div>
       </div>
 

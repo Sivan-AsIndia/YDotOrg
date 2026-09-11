@@ -1,12 +1,11 @@
-import { CommonModule } from "@angular/common";
-import { Component, inject, signal, computed } from "@angular/core";
-import { FormsModule } from "@angular/forms";
-import { RouterModule, Router } from "@angular/router";
-import { OrganisationStateService } from "../../../../Service/organisation-state.service";
-import { SearchableSelectComponent } from "../../../../Shared/components/searchable-select/searchable-select";
-import { ORGANISATION_TYPES, LEGAL_STRUCTURES, OrganisationType, LegalStructure } from "../../../../Shared/models/organisation.model";
-import { createGeoCascade } from "../../../../Shared/services/geo-cascade";
-
+import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterModule } from '@angular/router';
+import { OrganisationStateService } from '../../../../Service/organisation-state.service';
+import { SearchableSelectComponent } from '../../../../Shared/components/searchable-select/searchable-select';
+import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
+import { ORGANISATION_TYPES, LEGAL_STRUCTURES, OrganisationType, LegalStructure } from '../../../../Shared/models/organisation.model';
 
 
 @Component({

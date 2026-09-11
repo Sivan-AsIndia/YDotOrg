@@ -1,6 +1,6 @@
 ﻿<main class="app-wrapper">
 <div class="page-wrapper">
-<div class="org-page">
+  <div class="container-fluid px-4 py-3">
 
   @if (loading()) {
     <div class="org-card org-empty">
@@ -19,20 +19,7 @@
   } @else if (organisation(); as org) {
 
     <div class="org-header">
-      @if (!isOwnOrganisation()) {
-        <div class="org-header-actions">
-          <button type="button" class="org-btn org-btn-ghost org-btn-sm" (click)="goBack()">
-            <i class="ri-arrow-left-line"></i> All organisations
-          </button>
-          @if (can('Approve') || can('StartReview')) {
-            <a [routerLink]="['/app/administration/organisation/registration-verification', org.id]"
-               class="org-btn org-btn-primary org-btn-sm">
-              <i class="ri-shield-check-line"></i> Review
-            </a>
-          }
-        </div>
-      }
-
+  
       <div class="org-hero">
         <div class="org-hero-main">
           <span class="org-title-icon" aria-hidden="true">
@@ -57,9 +44,12 @@
             </div>
           </div>
         </div>
+ 
 
         <div class="org-hero-side">
+          
           <img class="org-hero-art" src="assets/images/orgpic1.png" alt="" aria-hidden="true">
+          
         </div>
       </div>
     </div>
@@ -149,13 +139,27 @@
         </button>
       </div>
 
-      @if (tab() === 'profile' && canEditProfile() && !editing()) {
         <div class="org-tabs-actions">
-          <button type="button" class="org-btn org-btn-outline org-btn-sm" (click)="startEditing()">
+
+             @if (!isOwnOrganisation()) {
+          <button type="button" class="btn btn-primary btn-sm" (click)="goBack()">
+            <i class="ri-arrow-left-line"></i> All organisations
+          </button>
+          @if (can('Approve') || can('StartReview')) {
+            <a [routerLink]="['/app/administration/organisation/registration-verification', org.id]"
+               class="org-btn org-btn-primary org-btn-sm">
+              <i class="ri-shield-check-line"></i> Review
+            </a>
+          }
+      }
+      @if (tab() === 'profile' && canEditProfile() && !editing()) {
+
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="startEditing()">
             <i class="ri-edit-line"></i> Edit
           </button>
+            }
         </div>
-      }
+    
     </div>
 
     <!-- ================================================================= Profile -->

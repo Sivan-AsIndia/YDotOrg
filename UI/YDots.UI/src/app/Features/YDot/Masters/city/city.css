@@ -1,8 +1,7 @@
 /* city.css */
 /* ===== Design tokens — soft green palette matching Country List reference ===== */
 :host {
-  --primary: #0f6b4c;
-  --primary-hover: #0c563d;
+  --primary-light: #e5eee9;
   --primary-soft: #e8f5ef;
   --primary-soft-2: #f0faf5;
   --primary-line: #dceee4;
@@ -133,13 +132,6 @@ textarea:focus-visible {
   .toast-container { left: 1rem; right: 1rem; max-width: none; }
 }
 
-/* Layout */
-.content {
-  padding: 1.25rem 0;
-  background: var(--bg-page);
-  min-height: 100%;
-}
-
 /* ===== Header hero card (matches "Country List" reference) ===== */
 .page-header-card {
   position: relative;
@@ -148,8 +140,11 @@ textarea:focus-visible {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-  background: #f2f9f5;
-  border: 1px solid var(--primary-line);
+  border: 1px solid  color-mix(in srgb, var(--primary) 20%, white);
+ 
+  background:
+    
+    color-mix(in srgb, var(--primary) 5%, white);
   border-radius: var(--radius);
   padding: 1.35rem 1.6rem;
   margin-bottom: 1rem;
@@ -227,72 +222,12 @@ textarea:focus-visible {
   .header-decor { display: block; }
 }
 .header-decor .dot {
-  fill: #cfe9dc;
+  fill: color-mix(in srgb, var(--primary) 19%, white);
 }
 .header-decor .pin {
   fill: var(--primary);
 }
 
-/* Create button — solid green */
-.btn-create {
-  display: inline-flex;
-  align-items: center;
-  gap: .4rem;
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: .6rem 1.2rem;
-  font-size: .875rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background .15s;
-  box-shadow: 0 1px 2px rgba(15,107,76,.2);
-  white-space: nowrap;
-}
-.btn-create:hover:not(:disabled) {
-  background: var(--primary-hover);
-  color: #fff;
-}
-.btn-create:disabled {
-  opacity: .6;
-  cursor: not-allowed;
-}
-.btn-create .plus-icon {
-  font-size: 1.15rem;
-  font-weight: 500;
-  line-height: 1;
-}
-.btn-sm {
-  padding: .35rem .85rem;
-  font-size: .8rem;
-}
-
-/* Outline button */
-.btn-outline {
-  display: inline-flex;
-  align-items: center;
-  gap: .4rem;
-  background: #fff;
-  color: var(--text-main);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: .55rem 1.05rem;
-  font-size: .875rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all .15s;
-}
-.btn-outline:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-.btn-outline:disabled {
-  opacity: .6;
-  cursor: not-allowed;
-}
 
 /* Success / Warning / Danger buttons */
 .btn-success { background: var(--success); color: #fff; border: none; border-radius: var(--radius-sm); padding: .5rem 1.1rem; font-weight: 500; cursor: pointer; }
@@ -351,31 +286,6 @@ textarea:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: .6rem;
-}
-.btn-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: .4rem;
-  height: 40px;
-  padding: 0 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--text-main);
-  font-size: .84rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all .15s;
-}
-.btn-filter:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-soft-2);
-}
-.btn-filter.active {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-soft);
 }
 .filter-select {
   height: 40px;
@@ -1503,7 +1413,9 @@ textarea.form-control {
     flex-wrap: wrap;
   }
   .form-actions .btn-outline,
-  .form-actions .btn-create {
+  .form-actions .btn.btn-outline-secondary,
+  .form-actions .btn-create,
+  .form-actions .btn.btn-primary {
     flex: 1;
   }
 }
@@ -1554,7 +1466,9 @@ textarea.form-control {
   .toolbar-card { padding: .7rem; }
   .search-input { height: 40px; }
   .filters-wrap { gap: .45rem; }
-  .btn-filter, .filter-select { height: 38px; }
+  .btn-filter,
+  .btn.btn-outline-secondary.btn-filter,
+  .filter-select { height: 38px; }
   .data-table { min-width: 0; }
   .data-table tbody td { padding: .68rem .55rem; }
   .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 72px; }

@@ -2729,3 +2729,24 @@ button.dl-badge {
 :host .dl-page .dl-kpis .dl-kpi .dl-kpi__value {
   color: var(--dl-metric-color);
 }
+/* Current page standards: base typography, compact summary and aligned header. */
+:host .app-wrapper, :host .page-wrapper, :host .dl-page { background: transparent; }
+:host .dl-page { margin: 0; padding: 0; width: 100%; min-width: 0; }
+:host .dl-page .dl-header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 0 0 20px; padding: 0; }
+:host .dl-page .dl-header__titles { flex: 1 1 260px; min-width: 0; }
+:host .dl-page .dl-header__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+:host .dl-page .dl-header .dl-title { font-family: var(--font-heading); font-size: 40px !important; line-height: 1.2; margin: 0 0 8px; }
+:host .dl-page .dl-kpis { min-height: 0; padding: 8px 0; }
+:host .dl-page .dl-kpis .dl-kpi { min-height: 144px; padding: 16px 24px; }
+:host .dl-page .dl-kpis .dl-kpi[data-kpi=followups] { padding-right: 36%; }
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__top { margin-bottom: 4px; gap: 12px; }
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__icon { width: 40px; height: 40px; flex-basis: 40px; }
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__value,
+:host .dl-page .dl-kpis .dl-kpi[data-kpi=total] .dl-kpi__value,
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__label,
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__hint { font-size: var(--font-size-base) !important; }
+:host .dl-page .dl-kpis .dl-kpi .dl-kpi__value, :host .dl-number { font-family: var(--font-number); }
+:host .dl-page .btn { font-family: var(--font-other); font-size: var(--font-size-base); }
+@media (max-width: 575px) {
+ :host .dl-page .dl-header__actions { margin-left: 0; }
+ }

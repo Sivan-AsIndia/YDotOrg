@@ -1,9 +1,15 @@
-
+import {
+  Component,
+  HostListener,
+  computed,
+  inject,
+  linkedSignal,
+  signal,
+} from "@angular/core";
+import { ActivatedRoute, Router } from "@angular/router";
 import { CommonModule } from "@angular/common";
-import { Component, inject, signal, computed, linkedSignal, HostListener } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { Router, ActivatedRoute } from "@angular/router";
-import { forkJoin, map, catchError, of } from "rxjs";
+import { forkJoin, catchError, map, of } from "rxjs";
 import { DonorApiService } from "../../../../Service/donor-api.service";
 import { apiErrorMessage } from "../../../../Shared/models/api-response.model";
 import {
@@ -11,7 +17,6 @@ import {
   FollowUp as ApiFollowUp,
   FollowUpPlannerResponse,
 } from "../../../../Shared/models/donor-contract.model";
-import { readableIdentifier } from "../../../../Shared/models/identifier";
 
 export type RecordType = "Lead" | "Donor";
 export type FollowUpType =
@@ -39,24 +44,7 @@ export interface HistoryEvent {
 }
 
 export interface FollowUp {
-  /**
-   * The API id. A GUID, so it is what requests carry and NEVER what a screen prints.
-   *
-   * See `reference` below - that is the one to render.
-   */
   id: string;
-
-  /**
-   * The human reference - FUP-2026-0007 - which is what this follow-up is called.
-   *
-   * IT WAS MISSING, AND `id` WAS BEING PRINTED IN ITS PLACE. The queue's row label, its kanban
-   * card and the detail drawer all rendered `f.id`, which is the row's GUID: the card that should
-   * read "FUP-2026-0007" read "3f9a1c22-..." instead, in the one place somebody would quote when
-   * asking a colleague about it. The server has always returned `followUpReference`; nothing was
-   * carrying it across.
-   */
-  reference: string;
-
   recordId?: string;
   recordName: string;
   recordType: RecordType;
@@ -150,7 +138,7 @@ function buildCalendarStrip(
 ): CalendarDay[] {
   const days: CalendarDay[] = [];
   const center = new Date(centerIso + "T00:00:00");
-  for (let i = -2; i <= 2; i++) {
+  for (let i = -3; i <= 3; i++) {
     const d = new Date(center);
     d.setDate(center.getDate() + i);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -215,8 +203,8 @@ interface ActiveModal {
   ids: string[];
 }
 
-const TODAY_ISO = new Date().toISOString().slice(0, 10);
-const CURRENT_USER = "Arun Kumar";
+const now = new Date();
+const TODAY_ISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
 function emptyFilters(): GeneralFilters {
   return {
@@ -234,7 +222,7 @@ function emptyFilters(): GeneralFilters {
   selector: "app-follow-up-queue",
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl:"./follow-up-queue.html",
+  templateUrl: "./follow-up-queue.html",
   styleUrls: ["./follow-up-queue.css"],
 })
 export class FollowUpQueueComponent {
@@ -287,7 +275,7 @@ export class FollowUpQueueComponent {
   readonly activeQuickFilter = signal<QuickFilterKey>(null);
   readonly calendarCenterDate = signal<string>(TODAY_ISO);
   readonly selectedStripDate = signal<string | null>(null);
-  readonly calendarMonthCursor = signal<string>("2026-08-01");
+  readonly calendarMonthCursor = signal<string>(TODAY_ISO.slice(0, 7) + "-01");
   readonly calendarSelectedDate = signal<string | null>(null);
 
   readonly selectedIds = signal<Set<string>>(new Set());
@@ -377,11 +365,6 @@ export class FollowUpQueueComponent {
 
     return {
       id: item.id,
-
-      // THE READABLE HALF, carried alongside the id so the screen never has to print the GUID.
-      // Falls back to nothing rather than to the id - see Shared/models/identifier.
-      reference: readableIdentifier(item.followUpReference, ''),
-
       recordId: item.leadId ?? item.donorId ?? undefined,
       recordName:
         item.donorDisplayName ?? item.leadReference ?? item.followUpReference,
@@ -529,7 +512,7 @@ export class FollowUpQueueComponent {
             return false;
           break;
         case "mine":
-          if (f.assignedTo !== CURRENT_USER) return false;
+          // The planner request already enforces onlyMine on the server.
           break;
         case "escalated":
           if (f.status !== "Escalated") return false;
@@ -676,7 +659,7 @@ export class FollowUpQueueComponent {
     for (let w = 0; w < 6; w++) {
       const week = [];
       for (let d = 0; d < 7; d++) {
-        const iso = cell.toISOString().slice(0, 10);
+        const iso = this.toDateInput(cell);
         week.push({
           iso,
           dayNumber: cell.getDate(),
@@ -886,6 +869,7 @@ export class FollowUpQueueComponent {
   }
 
   resetFilters() {
+    this.selectedStripDate.set(null);
     this.draftFilters.set(emptyFilters());
     this.activeFilters.set(emptyFilters());
     this.activeQuickFilter.set(null);
@@ -915,7 +899,7 @@ export class FollowUpQueueComponent {
   shiftCalendarMonth(months: number) {
     const d = new Date(this.calendarMonthCursor() + "T00:00:00");
     d.setMonth(d.getMonth() + months);
-    this.calendarMonthCursor.set(d.toISOString().slice(0, 10));
+    this.calendarMonthCursor.set(this.toDateInput(d));
   }
 
   onCalendarDayClick(day: { iso: string; items: FollowUp[] }) {
@@ -923,6 +907,8 @@ export class FollowUpQueueComponent {
       this.openPreview(day.items[0].id);
     } else {
       this.calendarSelectedDate.set(day.iso);
+      this.calendarCenterDate.set(day.iso);
+      this.onStripDateClick(day.iso);
     }
   }
 
@@ -1266,11 +1252,25 @@ export class FollowUpQueueComponent {
   }
 
   onStripDateClick(iso: string) {
-    this.selectedStripDate.set(this.selectedStripDate() === iso ? null : iso);
+    this.selectedStripDate.set(iso);
+    this.activeQuickFilter.set(null);
+    this.viewMode.set("grid");
     this.activeSavedViewId.set(null);
   }
 
+  shiftStripWeek(direction: number): void {
+    const date = new Date(this.calendarCenterDate() + "T00:00:00");
+    date.setDate(date.getDate() + direction * 7);
+    this.calendarCenterDate.set(this.toDateInput(date));
+    if (this.selectedStripDate()) {
+      const selected = new Date(this.selectedStripDate()! + "T00:00:00");
+      selected.setDate(selected.getDate() + direction * 7);
+      this.onStripDateClick(this.toDateInput(selected));
+    }
+  }
+
   setQuickFilter(key: QuickFilterKey) {
+    this.selectedStripDate.set(null);
     this.activeQuickFilter.set(this.activeQuickFilter() === key ? null : key);
     this.activeSavedViewId.set(null);
   }
@@ -1299,7 +1299,46 @@ export class FollowUpQueueComponent {
     this.showToast("Queue refreshed");
   }
   exportQueue() {
-    this.showToast(`Exporting ${this.filteredFollowUps().length} follow-ups`);
+    const rows = this.filteredFollowUps();
+    const cell = (value: string) =>
+      '"' +
+      (/^[=+@\-\t\r]/.test(value) ? "'" + value : value).replace(/"/g, '""') +
+      '"';
+    const data = [
+      [
+        "Follow-Up ID",
+        "Related To",
+        "Type",
+        "Reason",
+        "Date",
+        "Time",
+        "Assigned User",
+        "Priority",
+        "Status",
+      ],
+      ...rows.map((f) => [
+        f.id,
+        f.recordName,
+        f.followUpType,
+        f.purpose,
+        f.scheduledDate,
+        f.scheduledTime,
+        f.assignedTo,
+        f.priority,
+        f.status,
+      ]),
+    ]
+      .map((row) => row.map(cell).join(","))
+      .join("\r\n");
+    const url = URL.createObjectURL(
+      new Blob(["\uFEFF" + data], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `follow-up-queue-${this.today}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.showToast(`Exported ${rows.length} follow-ups`);
   }
   createFollowUp() {
     this.router.navigate(["/app/don/follow-up-planner"], {

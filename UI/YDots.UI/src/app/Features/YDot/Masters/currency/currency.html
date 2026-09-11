@@ -48,9 +48,9 @@
         </div>
 
         <div class="header-actions">
-          <button type="button" class="btn-create" (click)="openCreate()">
+          <button type="button" class="btn btn-primary btn-sm" (click)="openCreate()">
             <span class="plus">+</span>
-            Create Currency
+            Create
           </button>
         </div>
       </header>
@@ -343,8 +343,8 @@
             </div>
 
             <footer class="details-footer">
-              <button type="button" class="btn-outline" (click)="closeView()">Close</button>
-              <button type="button" class="btn-success" (click)="openEdit(selectedCurrency)">Edit Currency</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeView()">Close</button>
+              <button type="button" class="btn btn-primary btn-sm" (click)="openEdit(selectedCurrency)">Edit Currency</button>
             </footer>
           </aside>
         }
@@ -365,8 +365,8 @@
           <h3 class="confirm-title">Activate Currency</h3>
           <p class="confirm-text">Are you sure you want to activate <strong>{{ selectedCurrency.currencyName }}</strong>?</p>
           <div class="confirm-actions">
-            <button type="button" class="btn-outline" (click)="closeActivate()">Cancel</button>
-            <button type="button" class="btn-success" (click)="confirmActivate()">Yes, Activate</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeActivate()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="confirmActivate()">Yes, Activate</button>
           </div>
         </div>
       </div>
@@ -391,8 +391,8 @@
               This currency will not be available for new transactions.
             </div>
             <div class="confirm-actions">
-              <button type="button" class="btn-outline" (click)="closeDeactivate()">Cancel</button>
-              <button type="button" class="btn-warning" (click)="confirmDeactivate()">Yes, Deactivate</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDeactivate()">Cancel</button>
+              <button type="button" class="btn btn-warning btn-sm" (click)="confirmDeactivate()">Yes, Deactivate</button>
             </div>
           } @else {
             <div class="confirm-icon danger">
@@ -408,7 +408,7 @@
               This currency is in use by companies or exchange rates.
             </div>
             <div class="confirm-actions">
-              <button type="button" class="btn-outline" (click)="closeDeactivate()">Close</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDeactivate()">Close</button>
             </div>
           }
         </div>
@@ -437,8 +437,8 @@
               This action cannot be undone.
             </div>
             <div class="confirm-actions">
-              <button type="button" class="btn-outline" (click)="closeDelete()">Cancel</button>
-              <button type="button" class="btn-danger" (click)="confirmDelete()">Yes, Delete</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDelete()">Cancel</button>
+              <button type="button" class="btn btn-danger btn-sm" (click)="confirmDelete()">Yes, Delete</button>
             </div>
           } @else {
             <div class="confirm-icon danger">
@@ -454,7 +454,7 @@
               This currency is referenced by other records.
             </div>
             <div class="confirm-actions">
-              <button type="button" class="btn-outline" (click)="closeDelete()">Close</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDelete()">Close</button>
             </div>
           }
         </div>
@@ -488,7 +488,7 @@
         <h1 class="page-title">{{ pageTitle }}</h1>
         <p class="page-subtitle">{{ pageSubTitle }}</p>
       </div>
-      <button type="button" class="btn-outline" (click)="backToList()">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="backToList()">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="m12 19-7-7 7-7"/>
           <path d="M19 12H5"/>
@@ -752,13 +752,13 @@
 
       <!-- Actions -->
       <div class="form-actions">
-        <button type="button" class="btn-outline" (click)="backToList()">
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="backToList()">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
           </svg>
           Cancel
         </button>
-        <button type="submit" class="btn-primary">
+        <button type="submit" class="btn btn-primary btn-sm">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
           </svg>

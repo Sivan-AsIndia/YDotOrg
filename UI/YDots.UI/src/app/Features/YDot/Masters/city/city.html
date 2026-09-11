@@ -55,7 +55,7 @@
                 </div>
               </div>
               <div class="page-header-right">
-                <button type="button" class="btn btn-create" (click)="goToCreate()">
+                <button type="button" class="btn btn-primary btn-sm" (click)="goToCreate()">
                   <span class="plus-icon">+</span> Create City
                 </button>
               </div>
@@ -133,7 +133,7 @@
               <div class="filters-wrap">
                 <button
                   type="button"
-                  class="btn-filter"
+                  class="btn btn-outline-secondary btn-sm btn-filter"
                   [class.active]="filtersOpen()"
                   (click)="toggleFiltersDrawer()"
                   [attr.aria-expanded]="filtersOpen()"
@@ -324,13 +324,13 @@
                             @if (cities().length === 0) {
                               <p class="empty-title">No cities yet</p>
                               <p class="empty-text">Get started by creating your first city.</p>
-                              <button type="button" class="btn btn-create btn-sm" (click)="goToCreate()">
+                              <button type="button" class="btn btn-primary btn-sm" (click)="goToCreate()">
                                 <span class="plus-icon">+</span> Create City
                               </button>
                             } @else {
                               <p class="empty-title">No cities match your filters</p>
                               <p class="empty-text">Try adjusting your search or filters.</p>
-                              <button type="button" class="btn btn-outline" (click)="clearFilters()">
+                              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearFilters()">
                                 Clear Filters
                               </button>
                             }
@@ -921,19 +921,19 @@
               </div>
 
               <div class="form-actions">
-                <button type="button" class="btn btn-outline" [disabled]="isSubmitting()" (click)="cancel()">
+                <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="isSubmitting()" (click)="cancel()">
                   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
                   </svg>
                   Cancel
                 </button>
-                <button type="button" class="btn btn-outline" [disabled]="isSubmitting()" (click)="resetForm()">
+                <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="isSubmitting()" (click)="resetForm()">
                   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20 11a8.1 8.1 0 0 0-15.5-2"/><path d="M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2"/><path d="M20 19v-4h-4"/>
                   </svg>
                   Reset
                 </button>
-                <button type="submit" class="btn btn-create" [disabled]="isSubmitting()">
+                <button type="submit" class="btn btn-primary btn-sm" [disabled]="isSubmitting()">
                   <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
                   </svg>

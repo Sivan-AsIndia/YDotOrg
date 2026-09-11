@@ -5,8 +5,8 @@
    ========================================================================== */
 
 .state-module {
-  --primary: #17634c;
-  --primary-dark: #124a39;
+  --primary-light: #e5eee9;
+  --primary-dark: #264436;
   --primary-soft: #edf7f2;
   --primary-pale: #f5faf7;
   --ink: #1f2d27;
@@ -38,8 +38,8 @@
   display: block;
   position: relative;
   min-height: 100%;
-  padding: 18px 20px 24px;
-  background: var(--page);
+  /* padding: 18px 20px 24px; */
+  /* background: var(--page); */
   color: var(--ink);
   font-family: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
@@ -140,8 +140,11 @@
   overflow: hidden;
   padding: 22px 24px;
   margin-bottom: 14px;
-  background: #f0f8f4;
-  border: 1px solid #e0ebe6;
+border: 1px solid 
+color-mix(in srgb, var(--primary) 20%, white);
+    border-radius: 16px;
+    background: radial-gradient(circle at 79% 45%, rgba(45, 138, 104, .09) 1px, transparent 1.7px) 0 0 / 10px 10px, 
+color-mix(in srgb, var(--primary) 5%, white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
 }
@@ -211,7 +214,7 @@
   top: 7px;
   width: 280px;
   height: 105px;
-  color: #9bc8b6;
+  color: color-mix(in srgb, var(--primary) 52%, white);
   opacity: .42;
   pointer-events: none;
 }
@@ -221,40 +224,13 @@
   height: 100%;
 }
 
-/* Buttons ------------------------------------------------------------------ */
-
-.btn {
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
-}
 
 .btn:disabled {
   opacity: .5;
   cursor: not-allowed;
 }
 
-.btn-primary,
-.btn-success {
-  color: #fff;
-  background: var(--primary);
-}
 
-.btn-primary:hover:not(:disabled),
-.btn-success:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
 
 .btn-warning {
   color: #fff;
@@ -266,16 +242,7 @@
   background: var(--danger);
 }
 
-.btn-outline {
-  color: var(--ink);
-  background: var(--surface);
-  border-color: var(--border);
-}
 
-.btn-outline:hover:not(:disabled) {
-  border-color: #cbd6d1;
-  background: var(--surface-2);
-}
 
 .btn-plus {
   font-size: 17px;
@@ -434,7 +401,7 @@
 .workspace-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  height: 594px;
+  /* height: 594px; */
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -795,7 +762,7 @@
   justify-content: center;
   padding: 0;
   color: var(--muted);
-  background: var(--surface);
+  /* background: var(--primary); */
   border: 1px solid transparent;
   border-radius: 7px;
   cursor: pointer;
@@ -1057,8 +1024,11 @@
   gap: 16px;
   padding: 20px 22px;
   margin-bottom: 14px;
-  background: #f0f8f4;
-  border: 1px solid #e0ebe6;
+border: 1px solid 
+color-mix(in srgb, var(--primary) 22%, white);
+    border-radius: 9px;
+    background: 
+color-mix(in srgb, var(--primary) 5%, white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
 }
@@ -1114,8 +1084,11 @@
 
 .tl-label.active {
   color: var(--primary);
-  background: var(--primary-soft);
-  border-color: #d5e9df;
+  border: 1px solid 
+color-mix(in srgb, var(--primary) 22%, white);
+    border-radius: 9px;
+    background: 
+color-mix(in srgb, var(--primary) 3%, white);
 }
 
 .tl-label-icon,
@@ -1127,8 +1100,11 @@
   justify-content: center;
   flex: 0 0 27px;
   color: var(--primary);
-  background: #e2f0e9;
-  border: 1px solid #d2e7dd;
+ border: 1px solid 
+color-mix(in srgb, var(--primary) 22%, white);
+    border-radius: 9px;
+    background: 
+color-mix(in srgb, var(--primary) 9%, white);
   border-radius: 8px;
   font-size: 9px;
   font-weight: 800;
@@ -1166,8 +1142,8 @@
 }
 
 .tl-card.card-active {
-  border-color: #cfe2d9;
-  box-shadow: 0 0 0 2px #f0f8f4;
+  border-color: color-mix(in srgb, var(--primary) 10%, white);
+  box-shadow: 0 0 0 2px  color-mix(in srgb, var(--primary) 2%, white);
 }
 
 .tl-card-header {

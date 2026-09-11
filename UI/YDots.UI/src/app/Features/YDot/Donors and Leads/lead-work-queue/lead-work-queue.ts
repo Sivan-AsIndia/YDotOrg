@@ -157,18 +157,18 @@ export class LeadWorkQueueComponent {
     const options = this.filterOptions();
     const choices = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
     return [
-      { key: 'stage', label: 'Stage', value: this.stageFilter(), options: choices(options.stages) },
+      { key: 'stage', label: 'Stage', value: this.stageFilter(), options: options.stages },
       {
         key: 'temperature',
         label: 'Temperature',
         value: this.temperatureFilter(),
-        options: choices(options.temperatures),
+        options: options.temperatures,
       },
       {
         key: 'potential',
         label: 'Donation potential',
         value: this.potentialFilter(),
-        options: choices(options.potentials),
+        options: options.potentials,
       },
       {
         key: 'source',
@@ -209,6 +209,14 @@ export class LeadWorkQueueComponent {
   }
 
   protected setFilterValue(key: string, value: string): void {
+    // Explicit field choices supersede saved views that force the same field.
+    if (
+      (key === 'temperature' && this.savedView() === 'Hot Leads') ||
+      (key === 'potential' && this.savedView() === 'High Donation Potential') ||
+      (key === 'owner' && ['Assigned Leads', 'Unassigned Leads'].includes(this.savedView()))
+    ) {
+      this.savedView.set('All Leads');
+    }
     switch (key) {
       case 'stage':
         this.stageFilter.set(value);
@@ -300,9 +308,9 @@ export class LeadWorkQueueComponent {
   protected readonly pipeline = signal<readonly PipelineStage[]>([]);
   protected readonly savedViews = signal<readonly string[]>(SAVED_VIEWS);
   protected readonly filterOptions = signal<{
-    readonly stages: readonly string[];
-    readonly temperatures: readonly string[];
-    readonly potentials: readonly string[];
+    readonly stages: readonly DonLookupItem[];
+    readonly temperatures: readonly DonLookupItem[];
+    readonly potentials: readonly DonLookupItem[];
     readonly sources: readonly string[];
   }>({ stages: [], temperatures: [], potentials: [], sources: [] });
   protected readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
@@ -429,6 +437,8 @@ export class LeadWorkQueueComponent {
   private applyResponse(response: LeadWorkQueueResponse): void {
     this.leads.set(response.leads.items.map((row) => this.toRow(row)));
     this.totalCount.set(response.leads.totalCount);
+    const visibleIds = new Set(this.filteredLeads().map((lead) => lead.id));
+    this.selectedIds.update((ids) => new Set([...ids].filter((id) => visibleIds.has(id))));
 
     this.screen.update((current) => ({
       ...current,
@@ -477,9 +487,9 @@ export class LeadWorkQueueComponent {
     );
 
     this.filterOptions.set({
-      stages: response.statusOptions.map((o) => o.label),
-      temperatures: response.temperatureOptions.map((o) => o.label),
-      potentials: response.donationPotentialOptions.map((o) => o.label),
+      stages: response.statusOptions,
+      temperatures: response.temperatureOptions,
+      potentials: response.donationPotentialOptions,
       sources: this.distinct(response.leads.items.map((row) => row.source ?? '').filter(Boolean)),
     });
     this.ownerOptions.set(response.ownerOptions);
@@ -575,13 +585,22 @@ export class LeadWorkQueueComponent {
       chips.push({ key: 'search', label: `Search: ${this.searchTerm().trim()}` });
     }
     if (this.stageFilter()) {
-      chips.push({ key: 'stage', label: `Stage: ${this.stageFilter()}` });
+      chips.push({
+        key: 'stage',
+        label: `Stage: ${this.filterOptions().stages.find((option) => option.value === this.stageFilter())?.label ?? this.stageFilter()}`,
+      });
     }
     if (this.temperatureFilter()) {
-      chips.push({ key: 'temperature', label: `Temperature: ${this.temperatureFilter()}` });
+      chips.push({
+        key: 'temperature',
+        label: `Temperature: ${this.filterOptions().temperatures.find((option) => option.value === this.temperatureFilter())?.label ?? this.temperatureFilter()}`,
+      });
     }
     if (this.potentialFilter()) {
-      chips.push({ key: 'potential', label: `Potential: ${this.potentialFilter()}` });
+      chips.push({
+        key: 'potential',
+        label: `Potential: ${this.filterOptions().potentials.find((option) => option.value === this.potentialFilter())?.label ?? this.potentialFilter()}`,
+      });
     }
     if (this.sourceFilter()) {
       chips.push({ key: 'source', label: `Source: ${this.sourceFilter()}` });
@@ -608,7 +627,10 @@ export class LeadWorkQueueComponent {
   });
 
   protected readonly hasResults = computed(() => this.filteredLeads().length > 0);
-  protected readonly selectionCount = computed(() => this.selectedIds().size);
+  protected readonly selectedRows = computed(() =>
+    this.filteredLeads().filter((lead) => this.selectedIds().has(lead.id)),
+  );
+  protected readonly selectionCount = computed(() => this.selectedRows().length);
   protected readonly allSelected = computed(() => {
     const ids = this.filteredLeads().map((l) => l.id);
     return ids.length > 0 && ids.every((id) => this.selectedIds().has(id));
@@ -653,7 +675,7 @@ export class LeadWorkQueueComponent {
     if (!stage) {
       return;
     }
-    this.stageFilter.set(stage.label);
+    this.stageFilter.set(stage.key);
     this.savedView.set('All Leads');
     this.load();
   }
@@ -780,7 +802,11 @@ export class LeadWorkQueueComponent {
       return;
     }
     this.router.navigate(['/app/fundraising/relationships/assignment-board'], {
-      queryParams: { leadIds: [...this.selectedIds()].join(',') },
+      queryParams: {
+        leadIds: this.selectedRows()
+          .map((lead) => lead.id)
+          .join(','),
+      },
     });
   }
 

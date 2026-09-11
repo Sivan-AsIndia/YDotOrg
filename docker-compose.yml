@@ -120,7 +120,7 @@ services:
   # ===============================================================================================
 
   ydot-iam:
-    image: sivan67906/ydot-iam:9.3.2
+    image: ramya2000/ydot-iam:0.0.1
     build:
       context: .
       dockerfile: Services/IAM/YDot.IAM.Api/Dockerfile
@@ -318,7 +318,7 @@ services:
   # ===============================================================================================
 
   ydot-cam:
-    image: sivan67906/ydot-cam:9.3.2
+    image: ramya2000/ydot-cam:0.0.1
     build:
       context: .
       dockerfile: Services/CAM/YDots.CAM.API/Dockerfile
@@ -391,7 +391,7 @@ services:
   # ===============================================================================================
 
   ydot-don:
-    image: sivan67906/ydot-don:9.3.2
+    image: ramya2000/ydot-don:0.0.1
     build:
       context: .
       dockerfile: Services/DON/YDots.DON.Api/Dockerfile
@@ -442,7 +442,7 @@ services:
   # ===============================================================================================
 
   ydot-pay:
-    image: sivan67906/ydot-pay:9.3.2
+    image: ramya2000/ydot-pay:0.0.1
     build:
       context: .
       dockerfile: Services/PAY/YDot.PAY.Api/Dockerfile
@@ -654,7 +654,7 @@ services:
   # ===============================================================================================
 
   ydot-ui:
-    image: sivan67906/ydot-ui:9.3.2
+    image: ramya2000/ydot-ui:0.0.1
     build:
       context: UI/YDots.UI
       dockerfile: Dockerfile
