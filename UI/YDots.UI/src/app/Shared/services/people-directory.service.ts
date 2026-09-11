@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { UserDirectoryApiService } from '../../Service/user-directory-api.service';
-import { readableIdentifier } from '../models/identifier';
+import { firstReadable, readableIdentifier } from '../models/identifier';
 import { OrganisationScopeService } from './organisation-scope.service';
 import { UserSearchFilter } from '../models/user-directory.model';
 
@@ -120,7 +120,8 @@ export class PeopleDirectoryService {
             .map((person) => ({
               reference: person.id,
               code: person.code ?? '',
-              name: person.displayName || person.code || person.id,
+              // Printed straight into selectors, so never the id - see name() below.
+              name: firstReadable([person.displayName, person.code], 'Unnamed user'),
               context: contextOf(person.roleName, person.unitName),
 
               // The endpoint returns ACTIVE people only, so everyone it names can be given work.

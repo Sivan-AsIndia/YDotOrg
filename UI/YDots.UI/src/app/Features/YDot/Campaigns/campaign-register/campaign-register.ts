@@ -138,6 +138,7 @@ export class CampaignRegisterComponent {
     },
     ...this.people.all().map((person) => ({
       reference: person.reference,
+      code: person.code || undefined,
       name: person.name,
       context: person.context,
       initials: person.initials,

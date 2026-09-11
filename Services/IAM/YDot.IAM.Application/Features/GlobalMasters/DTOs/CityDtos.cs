@@ -109,4 +109,10 @@ public sealed record CityDetailResponse(
     DateTimeOffset? UpdatedAtUtc,
     Guid? UpdatedByUserId,
     long Version,
-    IReadOnlyList<string> PermittedActions);
+    IReadOnlyList<string> PermittedActions,
+
+    /// <summary>Who created the row, by name - "System" for a seeded platform row.</summary>
+    string? CreatedByName = null,
+
+    /// <summary>Who last changed the row, by name. Null when it has never been changed.</summary>
+    string? UpdatedByName = null);

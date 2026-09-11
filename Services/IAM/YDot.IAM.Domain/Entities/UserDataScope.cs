@@ -58,4 +58,19 @@ public class UserDataScope : TenantEntity
 
     /// <summary>The claim value the token carries: "Campaign:9fb1...".</summary>
     public string ToClaimValue() => $"{ScopeType}:{ScopeValue}";
+
+    /// <summary>
+    /// The same scope as a person reads it: "Campaign: Winter Appeal".
+    ///
+    /// NEVER THE CLAIM VALUE ON A SCREEN. For a campaign scope that value is a GUID, so the label
+    /// is used, then a readable value, and a plain word when there is only an id to go on.
+    /// </summary>
+    public string ToDisplayValue()
+    {
+        var label = !string.IsNullOrWhiteSpace(DisplayLabel)
+            ? DisplayLabel
+            : Guid.TryParse(ScopeValue, out _) ? "unnamed record" : ScopeValue;
+
+        return $"{ScopeType}: {label}";
+    }
 }

@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map, shareReplay } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ApiResponse, OutcomeResponse, PagedResponse } from '../../../Shared/models/api-response.model';
+import { apiEnumValue } from '../../../Shared/models/enum-option.model';
 import {
   CityDetail,
   CityListItem,
@@ -19,6 +20,7 @@ import {
   CurrencyListItem,
   CurrencySearchFilter,
   DeleteMasterRequest,
+  EnumOption,
   GlobalMasterReferenceData,
   MasterLookup,
   MasterSearchFilter,
@@ -95,17 +97,40 @@ export class MasterService {
         .get<ApiResponse<GlobalMasterReferenceData>>(`${this.baseUrl}/reference-data`, {
           params: new HttpParams().set('countryId', countryId),
         })
-        .pipe(map((response) => response.data!));
+        .pipe(map((response) => MasterService.inApiCase(response.data!)));
     }
 
     this.referenceData$ ??= this.http
       .get<ApiResponse<GlobalMasterReferenceData>>(`${this.baseUrl}/reference-data`)
       .pipe(
-        map((response) => response.data!),
+        map((response) => MasterService.inApiCase(response.data!)),
         shareReplay({ bufferSize: 1, refCount: false }),
       );
 
     return this.referenceData$;
+  }
+
+  /**
+   * Rewrites every enum list's values into the camelCase the records use.
+   *
+   * The reference call names options by their C# member - "MiddleEast", "UnionTerritory" - and
+   * every country and state it describes carries "middleEast", "unionTerritory". Done once here, so
+   * a screen can compare an option with a record, and pre-select a record's value, directly. See
+   * `enum-option.model.ts`.
+   */
+  private static inApiCase(data: GlobalMasterReferenceData): GlobalMasterReferenceData {
+    const recase = (options: EnumOption[] | null | undefined): EnumOption[] =>
+      (options ?? []).map((option) => ({ ...option, value: apiEnumValue(option.value) }));
+
+    return {
+      ...data,
+      regions: recase(data.regions),
+      jurisdictionTypes: recase(data.jurisdictionTypes),
+      currencyTypes: recase(data.currencyTypes),
+      symbolPositions: recase(data.symbolPositions),
+      roundingModes: recase(data.roundingModes),
+      statuses: recase(data.statuses),
+    };
   }
 
   /**

@@ -20,9 +20,11 @@ import {
 } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { enumLabel } from '../../../../Shared/models/enum-option.model';
 import {
   CityDetail,
   CityListItem,
+  EnumOption,
   MasterDataStatus,
   canPerform,
 } from '../../../../Shared/models/global-master.model';
@@ -42,10 +44,15 @@ export interface CityModel {
   isMetro: boolean;
   latitude?: number | null;
   longitude?: number | null;
-  status: string | null;
+
+  /** The API's code - 'draft', 'active', 'inactive'. The label comes from the server's options. */
+  status: MasterDataStatus | null;
+
   isActive: boolean;
   notes?: string | null;
   createdAt: Date | string;
+
+  /** Names, resolved by the server - never the user GUID it used to print. */
   createdBy?: string | null;
   updatedAt?: Date | string | null;
   updatedBy?: string | null;
@@ -60,18 +67,8 @@ export interface CityModel {
   permittedActions: string[];
 }
 
-/** The display label this screen shows, and the code the API takes. */
-const STATUS_CODES: Record<string, MasterDataStatus> = {
-  Draft: 'draft',
-  Active: 'active',
-  Inactive: 'inactive',
-};
-
-const STATUS_LABELS: Record<MasterDataStatus, string> = {
-  draft: 'Draft',
-  active: 'Active',
-  inactive: 'Inactive',
-};
+// THE STATUSES ARE THE SERVER'S, from `GET /masters/reference-data`. They used to be two literal
+// label/code tables here and a third list for the form.
 
 export interface CountryModel {
   id: string;
@@ -87,14 +84,6 @@ export interface StateProvinceModel {
   countryId: string;
   isActive: boolean;
 }
-
-export const CITY_STATUS = {
-  Draft: 'Draft',
-  Active: 'Active',
-  Inactive: 'Inactive',
-} as const;
-export type CityStatus = (typeof CITY_STATUS)[keyof typeof CITY_STATUS];
-export const CITY_STATUS_ALL: CityStatus[] = Object.values(CITY_STATUS);
 
 export interface ToastMessage {
   id: number;
@@ -150,8 +139,29 @@ export class CityComponent implements OnInit {
   pageWindowSize = 2;
 
   selectedCity = signal<CityModel | null>(null);
-  canDeactivate = signal(true);
-  canDelete = signal(true);
+
+  /**
+   * What the server allows on the open city. FALSE until its detail arrives: they started `true`,
+   * so a confirmation opened before the detail loaded offered a button the server then refused.
+   */
+  canDeactivate = signal(false);
+  canDelete = signal(false);
+
+  /** True while the detail behind an open confirmation is still being fetched. */
+  actionsLoading = signal(false);
+
+  /**
+   * Why an action is not on offer. A city has nothing beneath it, so the server withholds
+   * Deactivate and Delete only for a shared platform row the caller may not change - the modal's
+   * old "referenced by other records" named a rule that does not exist.
+   */
+  blockedReason(action: 'deactivate' | 'delete'): string {
+    return this.selectedCity()?.isPlatformRow
+      ? `This is a shared platform city. Only the platform administrator can ${action} it.`
+      : action === 'deactivate'
+        ? 'This city is not active, so there is nothing to deactivate.'
+        : 'This city cannot be deleted.';
+  }
 
   showView = signal(false);
   showActivateModal = signal(false);
@@ -170,7 +180,22 @@ export class CityComponent implements OnInit {
   statusError = signal<string | null>(null);
   private existingId: string | null = null;
   private isInitializing = false;
-  cityStatusList = CITY_STATUS_ALL;
+
+  /** The server's statuses, values in API case. The filter and the form both offer these. */
+  statusOptions = signal<EnumOption[]>([]);
+
+  /** A status code as the server labels it. */
+  statusLabel(status: string | null | undefined): string {
+    return enumLabel(this.statusOptions(), status);
+  }
+
+  /**
+   * Every state the catalogue knows, for the list filter when no country is chosen.
+   *
+   * Kept so clearing the country can restore the full list without a round trip. The per-country
+   * list replaces it while a country is selected - see onCountryChangeFilter.
+   */
+  private allStates: StateProvinceModel[] = [];
 
   /* ---------- Computed ---------- */
   /** The server's totals. A page of ten cannot say how many cities the catalogue holds. */
@@ -225,16 +250,18 @@ export class CityComponent implements OnInit {
       .sort((left, right) => left.countryName.localeCompare(right.countryName))
   );
 
-  /** Every state in the chosen country, for the same reason. */
-  tableStatesForDropdown = computed(() => {
-    const list = this.selectedCountryId
-      ? this.states().filter((state) => state.countryId === this.selectedCountryId)
-      : this.states();
-
-    return [...list].sort((left, right) =>
+  /**
+   * The states offered in the FILTER: every state, or the chosen country's.
+   *
+   * THIS LIST WAS ALWAYS EMPTY. `states` was set to [] and nothing ever filled it, so the State
+   * filter offered "All States" and nothing else. It is now filled from the server - the whole
+   * catalogue at first, and the selected country's states once one is chosen.
+   */
+  tableStatesForDropdown = computed(() =>
+    [...this.states()].sort((left, right) =>
       left.stateProvinceName.localeCompare(right.stateProvinceName)
-    );
-  });
+    )
+  );
 
   activeCount = computed(() => this.activeCountFromServer());
 
@@ -275,22 +302,20 @@ export class CityComponent implements OnInit {
   }
 
   /* ─────────────── Explicit navigation (buttons call these directly) ───────────────
-     These flip the view immediately via the signals, then sync the URL.
-     They don't depend on the paramMap subscription firing, so the buttons
-     work even if app-level routing isn't fully wired up yet. */
+     These flip the view in place. They USED TO navigate as well - to /cities, /cities/create and
+     /cities/:id - and none of those routes exists: the screen lives at /app/masters/city alone.
+     Each click therefore flipped the view and then fell through the router's wildcard to the
+     sign-in redirect, so Create, Edit, Back and every save left the page. */
   goToList(): void {
     this.openList();
-    this.router.navigateByUrl('/cities');
   }
 
   goToCreate(): void {
     this.openCreate();
-    this.router.navigateByUrl('/cities/create');
   }
 
   goToEdit(id: string): void {
     this.openEdit(id);
-    this.router.navigateByUrl(`/cities/${id}`);
   }
 
   @HostListener('document:keydown.escape')
@@ -362,6 +387,7 @@ export class CityComponent implements OnInit {
     this.form.get('cityCode')?.enable();
     this.form.get('countryId')?.enable();
     this.form.get('stateProvinceId')?.enable();
+    this.form.get('status')?.enable();
     this.filteredStates.set([]);
     this.countryError.set(null);
     this.stateError.set(null);
@@ -426,6 +452,10 @@ export class CityComponent implements OnInit {
           this.form.get('cityCode')?.disable();
           this.form.get('countryId')?.disable();
           this.form.get('stateProvinceId')?.disable();
+
+          // An update carries no status: Activate and Deactivate are separate, separately
+          // permissioned actions. A live select here would save nothing.
+          this.form.get('status')?.disable();
           this.isInitializing = false;
           this.isLoading.set(false);
         },
@@ -437,7 +467,6 @@ export class CityComponent implements OnInit {
             apiErrorMessage(error, 'The requested city could not be found.')
           );
           this.openList();
-          this.router.navigateByUrl('/cities');
         },
       });
   }
@@ -469,16 +498,28 @@ export class CityComponent implements OnInit {
             }))
           );
 
-          // THE STATE LIST CARRIES NO COUNTRY on the unfiltered reference call, so the country
-          // is resolved per state when a country is chosen - see onCountryChange, which asks the
-          // server for that country's states rather than filtering a list it cannot filter.
-          this.states.set([]);
+          // THE STATE LIST CARRIES NO COUNTRY on the unfiltered reference call, so it serves the
+          // list filter only while no country is chosen. Choosing one asks the server for that
+          // country's states - see onCountryChangeFilter and onCountryChange.
+          this.allStates = reference.stateProvinces.map((state) => ({
+            id: state.id,
+            stateProvinceName: state.name,
+            stateProvinceCode: state.code,
+            countryId: '',
+            isActive: state.status === 'active',
+          }));
+
+          if (!this.selectedCountryId) {
+            this.states.set(this.allStates);
+          }
+
+          this.statusOptions.set(reference.statuses);
         },
         error: () =>
           this.showToast(
             'warning',
             'Reference data',
-            'Countries could not be loaded. The form dropdowns will be empty.'
+            'Countries, states and statuses could not be loaded. The dropdowns will be empty.'
           ),
       });
   }
@@ -501,7 +542,7 @@ export class CityComponent implements OnInit {
         search: this.searchText.trim() || undefined,
         countryId: this.selectedCountryId || undefined,
         stateProvinceId: this.selectedStateId || undefined,
-        status: this.selectedStatus ? STATUS_CODES[this.selectedStatus] : undefined,
+        status: (this.selectedStatus as MasterDataStatus) || undefined,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -552,7 +593,7 @@ export class CityComponent implements OnInit {
       isMetro: item.isMetro,
       latitude: item.latitude,
       longitude: item.longitude,
-      status: STATUS_LABELS[item.status] ?? item.statusDescription,
+      status: item.status,
       isActive: item.isActive,
       notes: null,
       createdAt: item.updatedAtUtc ?? new Date(),
@@ -577,13 +618,13 @@ export class CityComponent implements OnInit {
       isMetro: detail.isMetro,
       latitude: detail.latitude,
       longitude: detail.longitude,
-      status: STATUS_LABELS[detail.status] ?? detail.statusDescription,
+      status: detail.status,
       isActive: detail.isActive,
       notes: detail.notes,
       createdAt: detail.createdAtUtc,
-      createdBy: detail.createdByUserId,
+      createdBy: detail.createdByName ?? null,
       updatedAt: detail.updatedAtUtc,
-      updatedBy: detail.updatedByUserId,
+      updatedBy: detail.updatedByName ?? null,
       isPlatformRow: detail.isPlatformRow,
       version: detail.version,
       permittedActions: detail.permittedActions,
@@ -599,7 +640,40 @@ export class CityComponent implements OnInit {
   onCountryChangeFilter(value: string): void {
     this.selectedCountryId = value;
     this.selectedStateId = '';
+    this.loadFilterStates(value);
     this.applyFilters();
+  }
+
+  /**
+   * The State filter's options for a country - the cascade on the list, not only on the form.
+   *
+   * No country means every state. A chosen country asks the server for its own states: the
+   * unfiltered reference list carries no country, so it cannot be narrowed here.
+   */
+  private loadFilterStates(countryId: string): void {
+    if (!countryId) {
+      this.states.set(this.allStates);
+      return;
+    }
+
+    this.states.set([]);
+
+    this.masters
+      .lookupStates(countryId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lookup) =>
+          this.states.set(
+            lookup.map((state) => ({
+              id: state.id,
+              stateProvinceName: state.name,
+              stateProvinceCode: state.code,
+              countryId,
+              isActive: state.status === 'active',
+            }))
+          ),
+        error: () => this.states.set([]),
+      });
   }
 
   onStateChangeFilter(value: string): void {
@@ -617,6 +691,7 @@ export class CityComponent implements OnInit {
     this.selectedStatus = '';
     this.selectedCountryId = '';
     this.selectedStateId = '';
+    this.loadFilterStates('');
     this.applyFilters();
   }
 
@@ -665,6 +740,9 @@ export class CityComponent implements OnInit {
 
     this.selectedCity.set(city);
     this.showView.set(true);
+    this.canDeactivate.set(false);
+    this.canDelete.set(false);
+    this.actionsLoading.set(true);
 
     this.masters
       .getCity(city.id)
@@ -674,13 +752,16 @@ export class CityComponent implements OnInit {
           this.selectedCity.set(this.toViewModelFromDetail(detail));
           this.canDeactivate.set(canPerform(detail, 'Deactivate'));
           this.canDelete.set(canPerform(detail, 'Delete'));
+          this.actionsLoading.set(false);
         },
-        error: (error) =>
+        error: (error) => {
+          this.actionsLoading.set(false);
           this.showToast(
             'error',
             'Could not open',
             apiErrorMessage(error, 'That city could not be opened.')
-          ),
+          );
+        },
       });
   }
 
@@ -864,9 +945,9 @@ export class CityComponent implements OnInit {
 
   getStatusPillClass(status: string | null | undefined): string {
     switch (status) {
-      case 'Active': return 'status-active';
-      case 'Inactive': return 'status-inactive';
-      case 'Draft': return 'status-draft';
+      case 'active': return 'status-active';
+      case 'inactive': return 'status-inactive';
+      case 'draft': return 'status-draft';
       default: return 'status-default';
     }
   }
@@ -965,7 +1046,7 @@ export class CityComponent implements OnInit {
         isMetro: !!raw.isMetro,
         latitude: raw.latitude,
         longitude: raw.longitude,
-        status: raw.status ? STATUS_CODES[raw.status] : 'draft',
+        status: (raw.status as MasterDataStatus) || 'draft',
         notes,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -1063,18 +1144,18 @@ export class CityComponent implements OnInit {
   /* ───────────────────── Helpers ───────────────────── */
   getStatusDotClass(status: string | null | undefined): string {
     switch (status) {
-      case 'Active': return 'dot-success';
-      case 'Inactive': return 'dot-danger';
-      case 'Draft': return 'dot-warning';
+      case 'active': return 'dot-success';
+      case 'inactive': return 'dot-danger';
+      case 'draft': return 'dot-warning';
       default: return 'dot-secondary';
     }
   }
 
   getStatusBadgeClass(status: string | null | undefined): string {
     switch (status) {
-      case 'Active': return 'badge-success';
-      case 'Inactive': return 'badge-danger';
-      case 'Draft': return 'badge-warning';
+      case 'active': return 'badge-success';
+      case 'inactive': return 'badge-danger';
+      case 'draft': return 'badge-warning';
       default: return 'badge-secondary';
     }
   }

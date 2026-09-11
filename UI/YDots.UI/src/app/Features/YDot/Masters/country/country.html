@@ -77,8 +77,8 @@
           <span class="sr-only">Region</span>
           <select [ngModel]="selectedRegion()" (ngModelChange)="onRegionChange($event)" aria-label="Filter by region">
             <option value="">All Regions</option>
-            @for (r of tableRegions(); track r) {
-              <option [value]="r">{{ r }}</option>
+            @for (r of regions(); track r.value) {
+              <option [value]="r.value">{{ r.label }}</option>
             }
           </select>
         </label>
@@ -87,8 +87,9 @@
           <span class="sr-only">Status</span>
           <select [ngModel]="selectedStatus()" (ngModelChange)="onStatusChange($event)" aria-label="Filter by status">
             <option value="">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+            @for (s of statuses(); track s.value) {
+              <option [value]="s.value">{{ s.label }}</option>
+            }
           </select>
         </label>
       </div>
@@ -266,12 +267,12 @@
 
                       <td class="hide-sm">{{ c.iso2 }}</td>
                       <td class="hide-sm">{{ c.iso3 || '—' }}</td>
-                      <td class="hide-md">{{ c.region || '—' }}</td>
+                      <td class="hide-md">{{ regionLabel(c.region) || '—' }}</td>
 
                       <td class="hide-sm">
                         <span class="status-badge" [class.active]="c.isActive" [class.inactive]="!c.isActive">
                           <span class="status-dot"></span>
-                          {{ c.isActive ? 'Active' : 'Inactive' }}
+                          {{ statusLabel(c.status) || (c.isActive ? 'Active' : 'Inactive') }}
                         </span>
                       </td>
 
@@ -425,7 +426,7 @@
                       <h2>{{ sc.countryName }}</h2>
                       <span class="status-badge" [class.active]="sc.isActive" [class.inactive]="!sc.isActive">
                         <span class="status-dot"></span>
-                        {{ sc.isActive ? 'Active' : 'Inactive' }}
+                        {{ statusLabel(sc.status) || (sc.isActive ? 'Active' : 'Inactive') }}
                       </span>
                     </div>
                     <p>{{ sc.officialName || sc.countryName }}</p>
@@ -500,7 +501,7 @@
                       <div class="detail-row">
                         <span>Region</span>
                         @if (sc.region) {
-                          <strong class="value-chip">{{ sc.region }}</strong>
+                          <strong class="value-chip">{{ regionLabel(sc.region) }}</strong>
                         } @else {
                           <strong>—</strong>
                         }
@@ -601,7 +602,7 @@
                         <span>Status</span>
                         <strong class="status-badge" [class.active]="sc.isActive" [class.inactive]="!sc.isActive">
                           <span class="status-dot"></span>
-                          {{ sc.isActive ? 'Active' : 'Inactive' }}
+                          {{ statusLabel(sc.status) || (sc.isActive ? 'Active' : 'Inactive') }}
                         </strong>
                       </div>
                       <div class="detail-row">
@@ -610,7 +611,7 @@
                       </div>
                       <div class="detail-row">
                         <span>Created by</span>
-                        <strong>{{ changedBy(sc.createdByUserId) }}</strong>
+                        <strong>{{ sc.createdByName || '—' }}</strong>
                       </div>
                       <div class="detail-row">
                         <span>Created</span>
@@ -625,7 +626,7 @@
                       @if (sc.updatedByUserId) {
                         <div class="detail-row">
                           <span>Updated by</span>
-                          <strong>{{ changedBy(sc.updatedByUserId) }}</strong>
+                          <strong>{{ sc.updatedByName || 'Unknown user' }}</strong>
                         </div>
                       }
                     </div>
@@ -910,11 +911,17 @@
             </div>
 
             <div class="field checkbox-field">
+              <!-- An update carries no status; Activate and Deactivate are separate actions on the
+                   list. The box used to stay live on edit and save nothing. -->
               <label class="checkbox-label">
-                <input type="checkbox" [(ngModel)]="country.isActive" name="isActive">
+                <input type="checkbox" [(ngModel)]="country.isActive" name="isActive" [disabled]="isEdit()">
                 <span>Active</span>
               </label>
-              <small>If inactive, cannot be selected for new Company/Branch</small>
+              @if (isEdit()) {
+                <small>Use Activate or Deactivate on the list to change it.</small>
+              } @else {
+                <small>If inactive, cannot be selected for new Company/Branch</small>
+              }
             </div>
           </div>
         }

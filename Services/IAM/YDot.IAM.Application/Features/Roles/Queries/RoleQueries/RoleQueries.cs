@@ -39,6 +39,7 @@ public sealed class RoleQueryHandler(
     ITokenHasher tokenHasher,
     IAuditService audit,
     IUnitOfWork unitOfWork,
+    ITenantContext tenantContext,
     ILogger<RoleQueryHandler> logger)
 {
     public async Task<Result<PagedResponse<RoleListItemResponse>>> HandleAsync(
@@ -105,6 +106,18 @@ public sealed class RoleQueryHandler(
         GetPermissionMatrixQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        // A ROLE belongs to one Organisation, so its grants are only read inside one. The
+        // role-free catalogue is platform data and is answered at any scope - that is what the
+        // SuperAdmin's Permission Catalogue screen reads.
+        if (query.RoleId.HasValue && !tenantContext.HasTenant)
+        {
+            logger.LogWarning(
+                "Permission matrix for a role requested without an organisation. RoleId {RoleId}.",
+                query.RoleId);
+
+            return Result.Failure<PermissionMatrixResponse>(Error.TenantSelectionRequired());
+        }
 
         logger.LogInformation("Retrieving permission matrix. RoleId {RoleId}.", query.RoleId);
 

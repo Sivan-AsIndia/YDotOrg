@@ -43,7 +43,7 @@
                     </div>
                     <div>
                         <div class="fw-bold fs-15">{{ passedUser()?.displayName || data()?.user?.displayName }}</div>
-                        <small class="text-muted">{{ userReference() || data()?.user?.reference }} &middot; Current username: {{ currentUsername() || data()?.user?.currentUsername }}</small>
+                        <small class="text-muted">{{ data()?.user?.reference }} &middot; Current username: {{ currentUsername() || data()?.user?.currentUsername }}</small>
                     </div>
                     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" (click)="goBack()">
                         <i class="ri-arrow-left-line me-1"></i> Back to Profile

@@ -200,7 +200,7 @@
                   [ngModel]="form().organisationType"
                   (ngModelChange)="update('organisationType', $event)">
             <option value="">Not specified</option>
-            @for (type of organisationTypes; track type) {
+            @for (type of organisationTypes(); track type) {
               <option [value]="type">{{ type }}</option>
             }
           </select>

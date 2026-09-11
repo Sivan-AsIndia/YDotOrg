@@ -41,7 +41,13 @@ public sealed record AuditEventResponse(
     /// <summary>Redacted detail. Null when the caller lacks the view-sensitive permission.</summary>
     string? Metadata);
 
-/// <summary>One row of a CSV export of the trail.</summary>
+/// <summary>
+/// One row of a CSV export of the trail.
+///
+/// <c>SupportReference</c> is the correlation id's first eight characters, upper-case - the same
+/// short reference the screen shows. The full id is a GUID, which nobody reading a spreadsheet can
+/// use; the log is searched by prefix.
+/// </summary>
 public sealed record AuditExportRow(
     string OccurredAtUtc,
     string? Organisation,
@@ -54,4 +60,13 @@ public sealed record AuditExportRow(
     string? Reason,
     string? IpAddress,
     string ClientType,
-    string CorrelationId);
+    string SupportReference)
+{
+    /// <summary>The short, quotable form of a correlation id: its first eight characters, upper-case.</summary>
+    public static string ShortReference(string? correlationId)
+    {
+        var compact = new string((correlationId ?? string.Empty).Where(char.IsLetterOrDigit).ToArray());
+
+        return compact.Length == 0 ? string.Empty : compact[..Math.Min(8, compact.Length)].ToUpperInvariant();
+    }
+}

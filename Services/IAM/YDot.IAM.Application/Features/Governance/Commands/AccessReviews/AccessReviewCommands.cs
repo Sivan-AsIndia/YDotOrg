@@ -768,13 +768,16 @@ public sealed class AccessReviewCommandHandler(
     {
         var now = DateTimeOffset.UtcNow;
 
+        // THE SNAPSHOT IS READ BY THE REVIEWER, so it is written in names: the role's name and the
+        // scope's label. It used to fall back to the role id and to the scope's claim value, both of
+        // which are GUIDs - asking somebody to confirm access they could not read.
         var roles = subject.UserRoles
             .Where(assignment => assignment.IsEffective(now))
-            .Select(assignment => assignment.Role?.Code ?? assignment.RoleId.ToString());
+            .Select(assignment => assignment.Role?.Name ?? assignment.Role?.Code ?? "Role no longer available");
 
         var scopes = subject.DataScopes
             .Where(scope => scope.IsEffective(now))
-            .Select(scope => scope.ToClaimValue());
+            .Select(scope => scope.ToDisplayValue());
 
         return string.Join("; ", roles.Concat(scopes));
     }

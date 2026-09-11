@@ -13,7 +13,12 @@ import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { AuditSearchFilter, IamAdminApiService } from '../../../../Service/iam-admin-api.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
 import { AuditEventResponse } from '../../../../Shared/models/iam-contract.model';
+import { ApiEnumOption } from '../../../../Shared/models/enum-option.model';
+import { withoutGuids } from '../../../../Shared/models/identifier';
+import { SupportReferencePipe } from '../../../../Shared/pipes/support-reference.pipe';
+import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 
 declare var ApexCharts: any;
@@ -28,6 +33,37 @@ declare var ApexCharts: any;
 const STATS_PAGE_SIZE = 100;
 const INITIAL_VISIBLE = 5;
 const LOAD_MORE_STEP = 5;
+
+/**
+ * A metadata property name as words: `previousTenantId` -> "Previous organisation",
+ * `roleIds` -> "Roles", `managerUserId` -> "Manager".
+ *
+ * The "Id" goes because the value beside it is now a name, and "tenant" becomes "organisation"
+ * because that is the word every screen uses for it.
+ */
+function humaniseKey(key: string): string {
+  const plural = /Ids$/.test(key);
+  let stem = key.replace(/Ids?$/, '');
+
+  if (stem.length > 4 && /User$/.test(stem)) {
+    stem = stem.slice(0, -4);
+  }
+
+  let words = (stem || key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_\-.]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+ids?\b/g, '')
+    .replace(/\btenant\b/g, 'organisation')
+    .replace(/\btenants\b/g, 'organisations');
+
+  if (plural && !words.endsWith('s')) {
+    words += 's';
+  }
+
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 /** One cell of the Mon–Sun x time-of-day grid. */
 type HeatmapGrid = number[][];
@@ -55,7 +91,7 @@ type HeatmapGrid = number[][];
 @Component({
   selector: 'app-audit-trail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SupportReferencePipe, ReadableIdPipe],
   templateUrl: './audit-trail.html',
   styleUrl: './audit-trail.css',
 })
@@ -63,6 +99,7 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
   private readonly api = inject(IamAdminApiService);
   private readonly tokens = inject(AuthTokenService);
   private readonly toast = inject(ToastService);
+  private readonly enums = inject(EnumOptionsService);
 
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
@@ -120,11 +157,11 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
    */
   readonly targetTypes = signal<string[]>([]);
 
-  readonly results = [
-    { value: 'succeeded', label: 'Succeeded' },
-    { value: 'denied', label: 'Denied' },
-    { value: 'failed', label: 'Failed' },
-  ];
+  /**
+   * The outcome filter's options - the server's `AuditResult` values, from `/reference-data/enums`.
+   * They were a literal three-item list.
+   */
+  readonly results = signal<ApiEnumOption[]>([]);
 
   // ---- Recent Activity (visible slice + "load more") -------------------------------------------
 
@@ -256,6 +293,15 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (types) => this.targetTypes.set(types),
         error: () => this.targetTypes.set([]),
+      });
+
+    // The same rule: a failure costs the outcome filter its options, never the page.
+    this.enums
+      .options('auditResults')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (options) => this.results.set(options),
+        error: () => this.results.set([]),
       });
 
     this.searchInput$
@@ -444,17 +490,74 @@ export class AuditTrailComponent implements OnInit, OnDestroy {
     return 'secondary';
   }
 
-  /** Pretty-prints a payload, falling back to the raw string when it is not JSON. */
+  /**
+   * "What changed", as lines a person can read - `Previous organisation: Acme Trust` - rather than
+   * the JSON the writer stored.
+   *
+   * THE SERVER HAS ALREADY PUT NAMES WHERE THE IDS WERE (see AuditRecordNames in the IAM read
+   * service). The keys are still the writer's property names, so they are turned into words here:
+   * `previousTenantId` reads "Previous organisation", `roleIds` reads "Roles". Anything still shaped
+   * like an id is replaced as a last resort, because a GUID in this panel is exactly what the panel
+   * exists to explain.
+   */
   formatPayload(payload: string | null | undefined): string {
     if (!payload) {
       return '';
     }
 
+    let parsed: unknown;
+
     try {
-      return JSON.stringify(JSON.parse(payload), null, 2);
+      parsed = JSON.parse(payload);
     } catch {
-      return payload;
+      return withoutGuids(payload, 'Record not available');
     }
+
+    const lines: string[] = [];
+    const show = (value: unknown): string => {
+      if (value === null || value === undefined || value === '') return '—';
+      if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+      return withoutGuids(String(value), 'Record not available');
+    };
+    const isPlain = (value: unknown) => value === null || typeof value !== 'object';
+
+    const walk = (value: unknown, label: string, indent: string): void => {
+      if (isPlain(value)) {
+        lines.push(`${indent}${label}: ${show(value)}`);
+      } else if (Array.isArray(value)) {
+        if (value.every(isPlain)) {
+          lines.push(`${indent}${label}: ${value.length ? value.map(show).join(', ') : 'None'}`);
+        } else {
+          lines.push(`${indent}${label}:`);
+          value.forEach((item, index) => walk(item, `${index + 1}`, indent + '  '));
+        }
+      } else {
+        lines.push(`${indent}${label}:`);
+        for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+          walk(child, humaniseKey(key), indent + '  ');
+        }
+      }
+    };
+
+    if (isPlain(parsed) || Array.isArray(parsed)) {
+      walk(parsed, 'Detail', '');
+    } else {
+      for (const [key, child] of Object.entries(parsed as Record<string, unknown>)) {
+        walk(child, humaniseKey(key), '');
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /** A server sentence - an outcome reason - with any id in it replaced by words. */
+  readableText(text: string | null | undefined): string {
+    return withoutGuids(text, 'a record');
+  }
+
+  /** A request path with the record ids in it shown as an ellipsis: `/api/v1/users/…/suspend`. */
+  requestPathLabel(path: string | null | undefined): string {
+    return path ? withoutGuids(path, '…') : '—';
   }
 
   /** Icon for an event's action category, read from its machine-readable action code. */

@@ -3,7 +3,9 @@ import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angul
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-response.model';
+import { enumLabel } from '../../../../Shared/models/enum-option.model';
 import {
+  EnumOption,
   MasterDataStatus,
   TimeZoneDetail,
   TimeZoneListItem,
@@ -38,10 +40,15 @@ export interface TimeZoneModel {
   dstRuleNote?: string | null;
   sortOrder: number;
   isDefaultRecommended: boolean;
-  status: string | null;
+
+  /** The API's code - 'draft', 'active', 'inactive'. The label comes from the server's options. */
+  status: MasterDataStatus | null;
+
   isActive: boolean;
   notes?: string | null;
   createdAt: Date;
+
+  /** Names, resolved by the server - never the user GUID it used to print. */
   createdBy?: string | null;
   updatedAt?: Date | null;
   updatedBy?: string | null;
@@ -68,25 +75,8 @@ interface Toast {
 
 type ViewMode = 'list' | 'form';
 
-export const TimeZoneStatus = {
-  Draft: 'Draft',
-  Active: 'Active',
-  Inactive: 'Inactive',
-  All: ['Draft', 'Active', 'Inactive'] as const,
-};
-
-/** The display label the template shows, and the code the API takes. */
-const STATUS_CODES: Record<string, MasterDataStatus> = {
-  Draft: 'draft',
-  Active: 'active',
-  Inactive: 'inactive',
-};
-
-const STATUS_LABELS: Record<MasterDataStatus, string> = {
-  draft: 'Draft',
-  active: 'Active',
-  inactive: 'Inactive',
-};
+// THE STATUSES ARE THE SERVER'S, from `GET /masters/reference-data`. They used to be a literal
+// list plus two label/code tables in this file.
 
 /* ============================================================
    Component
@@ -169,7 +159,13 @@ export class TimeZoneComponent implements OnInit {
   toasts: Toast[] = [];
   private toastSeq = 1;
 
-  readonly statusList = TimeZoneStatus.All;
+  /** The server's statuses, values in API case. The filter and the form both offer these. */
+  statusOptions: EnumOption[] = [];
+
+  /** A status code as the server labels it. */
+  statusLabel(status: string | null | undefined): string {
+    return enumLabel(this.statusOptions, status);
+  }
 
   /* ---------------- Form state ---------------- */
   editingId: string | null = null;
@@ -256,8 +252,26 @@ export class TimeZoneComponent implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    this.loadReferenceData();
     this.loadData();
     this.isInitialized = true;
+  }
+
+  /** The status dropdowns, from the shared reference call MasterService caches. */
+  private loadReferenceData(): void {
+    this.masters
+      .getReferenceData()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reference) => {
+          this.statusOptions = reference.statuses;
+          this.renderNow();
+        },
+        error: () => {
+          this.showToast('warning', 'Reference data', 'The statuses could not be loaded.');
+          this.renderNow();
+        },
+      });
   }
 
   /**
@@ -314,7 +328,7 @@ export class TimeZoneComponent implements OnInit {
         page: this.currentPage,
         pageSize: this.pageSize,
         search: this.searchText.trim() || undefined,
-        status: this.selectedStatus ? STATUS_CODES[this.selectedStatus] : undefined,
+        status: (this.selectedStatus as MasterDataStatus) || undefined,
         supportsDaylightSaving: this.selectedDST ? this.selectedDST === 'yes' : undefined,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -430,11 +444,11 @@ export class TimeZoneComponent implements OnInit {
 
   statusBadgeClass(status: string | null): string {
     switch (status) {
-      case 'Active':
+      case 'active':
         return 'badge-active';
-      case 'Inactive':
+      case 'inactive':
         return 'badge-inactive';
-      case 'Draft':
+      case 'draft':
         return 'badge-draft';
       default:
         return 'badge-neutral';
@@ -766,7 +780,7 @@ export class TimeZoneComponent implements OnInit {
         supportsDaylightSaving: model.supportsDST,
         daylightSavingRuleNote: (model.dstRuleNote ?? '').trim() || null,
         isDefaultRecommended: model.isDefaultRecommended,
-        status: model.status ? STATUS_CODES[model.status] : 'draft',
+        status: model.status || 'draft',
         sortOrder,
         notes: (model.notes ?? '').trim() || null,
       })
@@ -799,7 +813,7 @@ export class TimeZoneComponent implements OnInit {
       dstRuleNote: null,
       sortOrder: item.sortOrder,
       isDefaultRecommended: item.isDefaultRecommended,
-      status: STATUS_LABELS[item.status] ?? item.statusDescription,
+      status: item.status,
       isActive: item.isActive,
       notes: null,
       createdAt: item.updatedAtUtc ? new Date(item.updatedAtUtc) : new Date(),
@@ -823,13 +837,13 @@ export class TimeZoneComponent implements OnInit {
       dstRuleNote: detail.daylightSavingRuleNote,
       sortOrder: detail.sortOrder,
       isDefaultRecommended: detail.isDefaultRecommended,
-      status: STATUS_LABELS[detail.status] ?? detail.statusDescription,
+      status: detail.status,
       isActive: detail.isActive,
       notes: detail.notes,
       createdAt: new Date(detail.createdAtUtc),
-      createdBy: detail.createdByUserId,
+      createdBy: detail.createdByName ?? null,
       updatedAt: detail.updatedAtUtc ? new Date(detail.updatedAtUtc) : null,
-      updatedBy: detail.updatedByUserId,
+      updatedBy: detail.updatedByName ?? null,
       stateUsageCount: detail.stateUsageCount,
       isPlatformRow: detail.isPlatformRow,
       version: detail.version,

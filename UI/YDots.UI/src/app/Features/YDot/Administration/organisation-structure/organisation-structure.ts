@@ -14,7 +14,11 @@ import {
   OrganisationUnitResponse,
   RecordStatus,
 } from '../../../../Shared/models/iam-contract.model';
+import { ApiEnumOption, enumLabel } from '../../../../Shared/models/enum-option.model';
 import { AuthTokenService } from '../../../../Shared/services/auth-token.service';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
+import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
+import { PeopleDirectoryService } from '../../../../Shared/services/people-directory.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 
 type Mode = 'departments' | 'units';
@@ -51,6 +55,21 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly tokens = inject(AuthTokenService);
   private readonly toast = inject(ToastService);
+  private readonly enums = inject(EnumOptionsService);
+
+  /** The Organisation's active people, for the department head and the office manager. */
+  protected readonly people = inject(PeopleDirectoryService);
+
+  /**
+   * Country, state and city from the master catalogue, for an office's address.
+   *
+   * All three were free-text boxes - and the state was not on the form at all - so an office's
+   * address could not be matched to the catalogue every other address uses.
+   */
+  protected readonly geo = createGeoCascade();
+
+  /** The server's record statuses, values in API case. The Status select offers these. */
+  readonly statusOptions = signal<ApiEnumOption[]>([]);
 
   private readonly destroy$ = new Subject<void>();
 
@@ -68,21 +87,7 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
   /** Which row is open in the editor: an id, 'new', or null for closed. */
   readonly editing = signal<string | null>(null);
 
-  readonly form = signal({
-    name: '',
-    code: '',
-    description: '',
-    parentId: '',
-    headUserId: '',
-    unitType: '',
-    city: '',
-    country: '',
-    contactEmail: '',
-    contactPhone: '',
-    status: 'active' as RecordStatus,
-    displayOrder: 0,
-    expectedVersion: 0,
-  });
+  readonly form = signal(this.blankForm());
 
   readonly confirmingDelete = signal<string | null>(null);
 
@@ -133,6 +138,70 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
     this.mode.set(mode ?? 'departments');
 
     this.load();
+
+    // The Status select used to offer a literal Active/Inactive pair; the server also has Draft
+    // and Archived, and a record carrying either opened with a blank select.
+    this.enums
+      .options('recordStatuses')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (options) => this.statusOptions.set(options),
+        error: () => this.statusOptions.set([]),
+      });
+  }
+
+  /** A status code as the server labels it. */
+  statusLabel(status: string | null | undefined): string {
+    return enumLabel(this.statusOptions(), status);
+  }
+
+  private blankForm() {
+    return {
+      name: '',
+      code: '',
+      description: '',
+      parentId: '',
+      headUserId: '',
+      managerUserId: '',
+      unitType: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      country: '',
+      postalCode: '',
+      contactEmail: '',
+      contactPhone: '',
+      timeZone: '',
+      status: 'active' as RecordStatus,
+      displayOrder: 0,
+      expectedVersion: 0,
+    };
+  }
+
+  // ---- The address cascade ------------------------------------------------------------------
+
+  protected onCountryChange(value: string): void {
+    // The state and city go with the country, so a saved address cannot name a state that is not
+    // in the country beside it.
+    this.form.update((f) => ({ ...f, country: value, state: '', city: '' }));
+    this.geo.selectCountry(value);
+  }
+
+  protected onStateChange(value: string): void {
+    this.form.update((f) => ({ ...f, state: value, city: '' }));
+    this.geo.selectState(value);
+  }
+
+  /** A stored zone the offered list does not contain, kept visible rather than blanked. */
+  protected readonly orphanTimeZone = computed(() => {
+    const value = this.form().timeZone;
+    return value && !this.geo.timeZones().some((zone) => zone.ianaKey === value) ? value : '';
+  });
+
+  /** A stored person who is no longer in the active directory, kept visible likewise. */
+  protected personMissing(reference: string): boolean {
+    return !!reference && !this.people.assignable().some((person) => person.reference === reference);
   }
 
   ngOnDestroy(): void {
@@ -175,12 +244,8 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
     this.errorMessage.set('');
     this.fieldErrors.set({});
 
-    this.form.set({
-      name: '', code: '', description: '', parentId: '', headUserId: '',
-      unitType: '', city: '', country: '', contactEmail: '', contactPhone: '',
-      status: 'active', displayOrder: this.rows().length * 10,
-      expectedVersion: 0,
-    });
+    this.form.set({ ...this.blankForm(), displayOrder: this.rows().length * 10 });
+    this.geo.selectCountry(null);
   }
 
   startEditing(row: DepartmentResponse | OrganisationUnitResponse): void {
@@ -203,15 +268,27 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
         ? asDepartment.parentDepartmentId
         : asUnit.parentUnitId) ?? '',
       headUserId: asDepartment.headUserId ?? '',
+      managerUserId: asUnit.managerUserId ?? '',
       unitType: asUnit.unitType ?? '',
+      addressLine1: asUnit.addressLine1 ?? '',
+      addressLine2: asUnit.addressLine2 ?? '',
       city: asUnit.city ?? '',
+      state: asUnit.state ?? '',
       country: asUnit.country ?? '',
+      postalCode: asUnit.postalCode ?? '',
       contactEmail: asUnit.contactEmail ?? '',
       contactPhone: asUnit.contactPhone ?? '',
+      timeZone: asUnit.timeZone ?? '',
       status: row.status ?? 'active',
       displayOrder: row.displayOrder ?? 0,
       expectedVersion: row.version ?? 0,
     });
+
+    // Rebuild the cascade from the stored names, so the state and city pickers open on what was
+    // saved rather than blank.
+    if (!this.isDepartments()) {
+      this.geo.restore(asUnit.country, asUnit.state, asUnit.city);
+    }
   }
 
   cancelEditing(): void {
@@ -276,11 +353,14 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
       });
     }
 
+    // AN UPDATE SENDS THE TRIMMED TEXT, EMPTY INCLUDED. The server reads null as "leave it
+    // alone", so sending null for a cleared box - which this used to do - kept the old value and
+    // the edit silently did nothing.
     return this.api.updateDepartment(id!, {
       expectedVersion: f.expectedVersion,
       name: f.name.trim(),
       code: f.code.trim().toUpperCase(),
-      description: f.description.trim() || null,
+      description: f.description.trim(),
       parentDepartmentId: f.parentId || null,
       headUserId: f.headUserId || null,
       status: f.status,
@@ -296,25 +376,39 @@ export class OrganisationStructureComponent implements OnInit, OnDestroy {
         description: f.description.trim() || null,
         parentUnitId: f.parentId || null,
         unitType: f.unitType.trim() || null,
+        addressLine1: f.addressLine1.trim() || null,
+        addressLine2: f.addressLine2.trim() || null,
         city: f.city.trim() || null,
+        state: f.state.trim() || null,
         country: f.country.trim() || null,
+        postalCode: f.postalCode.trim() || null,
         contactEmail: f.contactEmail.trim() || null,
         contactPhone: f.contactPhone.trim() || null,
+        timeZone: f.timeZone.trim() || null,
+        managerUserId: f.managerUserId || null,
         displayOrder: f.displayOrder,
       });
     }
 
+    // Empty strings, not null, for the same reason as the department above: null means "leave
+    // it alone" to the server, so a cleared address line could never actually be cleared.
     return this.api.updateUnit(id!, {
       expectedVersion: f.expectedVersion,
       name: f.name.trim(),
       code: f.code.trim().toUpperCase(),
-      description: f.description.trim() || null,
+      description: f.description.trim(),
       parentUnitId: f.parentId || null,
-      unitType: f.unitType.trim() || null,
-      city: f.city.trim() || null,
-      country: f.country.trim() || null,
-      contactEmail: f.contactEmail.trim() || null,
-      contactPhone: f.contactPhone.trim() || null,
+      unitType: f.unitType.trim(),
+      addressLine1: f.addressLine1.trim(),
+      addressLine2: f.addressLine2.trim(),
+      city: f.city.trim(),
+      state: f.state.trim(),
+      country: f.country.trim(),
+      postalCode: f.postalCode.trim(),
+      contactEmail: f.contactEmail.trim(),
+      contactPhone: f.contactPhone.trim(),
+      timeZone: f.timeZone.trim(),
+      managerUserId: f.managerUserId || null,
       status: f.status,
       displayOrder: f.displayOrder,
     });

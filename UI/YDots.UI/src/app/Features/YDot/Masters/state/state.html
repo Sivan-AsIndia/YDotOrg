@@ -111,17 +111,17 @@
                   <label class="visually-hidden" for="filterJurisdiction">Filter by jurisdiction</label>
                   <select id="filterJurisdiction" class="form-select pill-select" [ngModel]="selectedJurisdictionType" (ngModelChange)="onJurisdictionFilterChange($event)">
                     <option value="">All Jurisdictions</option>
-                    @for (type of tableJurisdictionTypes; track type) {
-                      <option [value]="type">{{ type }}</option>
+                    @for (type of tableJurisdictionTypes; track type.value) {
+                      <option [value]="type.value">{{ type.label }}</option>
                     }
                   </select>
 
                   <label class="visually-hidden" for="filterStatus">Filter by status</label>
                   <select id="filterStatus" class="form-select pill-select" [ngModel]="selectedStatus" (ngModelChange)="onStatusFilterChange($event)">
                     <option value="">All Status</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
+                    @for (option of statusOptions; track option.value) {
+                      <option [value]="option.value">{{ option.label }}</option>
+                    }
                   </select>
                 </div>
               </div>
@@ -131,7 +131,7 @@
                   <div class="table-pane-header">
                     <div>
                       <h2>States &amp; Provinces</h2>
-                      <p>{{ filteredStates.length }} results in current scope</p>
+                      <p>{{ scopedCount }} result{{ scopedCount === 1 ? '' : 's' }} in current scope</p>
                     </div>
                     @if (selectedState && detailsOpen()) {
                       <span class="selection-label">
@@ -186,12 +186,12 @@
                               </td>
                               <td class="col-country">{{ s.countryName || '—' }}</td>
                               <td class="col-jurisdiction">
-                                <span class="badge badge-neutral">{{ s.jurisdictionType }}</span>
+                                <span class="badge badge-neutral">{{ jurisdictionLabel(s) }}</span>
                               </td>
                               <td class="col-gst">{{ s.gstStateCode || '—' }}</td>
                               <td class="col-status">
-                                <span class="status-pill" [class.active]="s.status === 'Active'" [class.inactive]="s.status === 'Inactive'" [class.draft]="s.status === 'Draft'">
-                                  <span class="status-dot" aria-hidden="true"></span>{{ s.status }}
+                                <span class="status-pill" [class.active]="s.status === 'active'" [class.inactive]="s.status === 'inactive'" [class.draft]="s.status === 'draft'">
+                                  <span class="status-dot" aria-hidden="true"></span>{{ statusLabel(s.status) }}
                                 </span>
                               </td>
                               <td class="col-action">
@@ -246,7 +246,7 @@
                           <option value="50">50</option>
                         </select>
                       </div>
-                      <span class="footer-count">Showing {{ ((currentPage - 1) * pageSize) + 1 }}–{{ pageEndItem }} of {{ filteredStates.length }}</span>
+                      <span class="footer-count">Showing {{ ((currentPage - 1) * pageSize) + 1 }}–{{ pageEndItem }} of {{ scopedCount }}</span>
                       <nav class="pagination" aria-label="Table pagination">
                         <button type="button" class="page-btn" [disabled]="currentPage === 1" aria-label="Previous page" (click)="previousPage()">‹</button>
                         @for (p of pageNumbers(); track p) {
@@ -275,8 +275,8 @@
                     </div>
 
                     <div class="details-toolbar">
-                      <span class="status-pill" [class.active]="selectedState.status === 'Active'" [class.inactive]="selectedState.status === 'Inactive'" [class.draft]="selectedState.status === 'Draft'">
-                        <span class="status-dot" aria-hidden="true"></span>{{ selectedState.status }}
+                      <span class="status-pill" [class.active]="selectedState.status === 'active'" [class.inactive]="selectedState.status === 'inactive'" [class.draft]="selectedState.status === 'draft'">
+                        <span class="status-dot" aria-hidden="true"></span>{{ statusLabel(selectedState.status) }}
                       </span>
                       <div class="details-actions">
                         <button type="button" class="mini-action" title="Edit" (click)="openEditForm(selectedState)">
@@ -310,7 +310,7 @@
                         <div class="detail-section-title"><span class="detail-section-icon">02</span><span>Country &amp; Jurisdiction</span></div>
                         <div class="detail-grid">
                           <div><span>Country</span><strong>{{ selectedState.countryName || '—' }}</strong></div>
-                          <div><span>Jurisdiction Type</span><strong><span class="badge badge-neutral">{{ selectedState.jurisdictionType || '—' }}</span></strong></div>
+                          <div><span>Jurisdiction Type</span><strong><span class="badge badge-neutral">{{ jurisdictionLabel(selectedState) || '—' }}</span></strong></div>
                           <div><span>Federal Jurisdiction</span><strong>{{ selectedState.isFederalJurisdiction ? 'Yes' : 'No' }}</strong></div>
                         </div>
                       </section>
@@ -320,7 +320,7 @@
                         <div class="detail-grid">
                           <div><span>GST State Code</span><strong>{{ selectedState.gstStateCode || '—' }}</strong></div>
                           <div><span>State Tax Jurisdiction Code</span><strong>{{ selectedState.stateTaxJurisdictionCode || '—' }}</strong></div>
-                          <div class="wide"><span>Default Time Zone</span><strong>{{ getTimeZoneName(selectedState.defaultTimeZoneId) || '—' }}</strong></div>
+                          <div class="wide"><span>Default Time Zone</span><strong>{{ selectedState.defaultTimeZoneName || getTimeZoneName(selectedState.defaultTimeZoneId) || '—' }}</strong></div>
                         </div>
                       </section>
 
@@ -335,7 +335,7 @@
                       <section class="detail-section">
                         <div class="detail-section-title"><span class="detail-section-icon">05</span><span>Status &amp; Governance</span></div>
                         <div class="detail-grid">
-                          <div><span>Status</span><strong>{{ selectedState.status || '—' }}</strong></div>
+                          <div><span>Status</span><strong>{{ statusLabel(selectedState.status) || '—' }}</strong></div>
                           <div><span>Sort Order</span><strong>{{ selectedState.sortOrder }}</strong></div>
                           <div><span>Created</span><strong>{{ selectedState.createdAt | date:'dd-MMM-yyyy' }}</strong></div>
                           <div><span>Created By</span><strong>{{ selectedState.createdBy || '—' }}</strong></div>
@@ -509,12 +509,31 @@
                                 name="jurisdictionType"
                                 (ngModelChange)="onJurisdictionTypeChanged()">
                                 <option [ngValue]="null">--Select Jurisdiction Type--</option>
-                                @for (type of jurisdictionTypeOptions; track type) {
-                                  <option [ngValue]="type">{{ type }}</option>
+                                @for (type of jurisdictionOptions; track type.value) {
+                                  <option [ngValue]="type.value">{{ type.label }}</option>
                                 }
                               </select>
                               @if (jurisdictionTypeValidationError) {
                                 <span class="field-error">{{ jurisdictionTypeValidationError }}</span>
+                              }
+                              <!-- The server requires a description for "Other"; without this box
+                                   the choice could never be saved. -->
+                              @if (isOtherJurisdiction) {
+                                <input
+                                  id="otherJurisdictionType"
+                                  type="text"
+                                  class="form-control mt-2"
+                                  [class.is-invalid]="otherJurisdictionTypeValidationError"
+                                  [attr.aria-invalid]="!!otherJurisdictionTypeValidationError"
+                                  aria-label="Describe the jurisdiction type"
+                                  [(ngModel)]="stateProvince.otherJurisdictionType"
+                                  name="otherJurisdictionType"
+                                  (input)="otherJurisdictionTypeValidationError = null"
+                                  placeholder="Describe it, e.g. Autonomous Region"
+                                  maxlength="100" />
+                                @if (otherJurisdictionTypeValidationError) {
+                                  <span class="field-error">{{ otherJurisdictionTypeValidationError }}</span>
+                                }
                               }
                             </div>
                             <div class="form-col col-4 checkbox-col">
@@ -647,14 +666,21 @@
                                 [attr.aria-invalid]="!!statusValidationError"
                                 [(ngModel)]="stateProvince.status"
                                 name="status"
+                                [disabled]="isEdit"
                                 (ngModelChange)="onStatusChanged()">
                                 <option [ngValue]="null">--Select Status--</option>
-                                @for (status of statusOptions; track status) {
-                                  <option [ngValue]="status">{{ status }}</option>
+                                @for (status of statusOptions; track status.value) {
+                                  <option [ngValue]="status.value">{{ status.label }}</option>
                                 }
                               </select>
                               @if (statusValidationError) {
                                 <span class="field-error">{{ statusValidationError }}</span>
+                              }
+                              <!-- An edit has no status field on the server; Activate and
+                                   Deactivate are separate, separately permissioned actions. A
+                                   select that looked editable here saved nothing. -->
+                              @if (isEdit) {
+                                <small class="muted">Use Activate or Deactivate on the list to change it.</small>
                               }
                             </div>
                             <div class="form-col col-3">
@@ -716,14 +742,16 @@
             <div class="modal-box confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="deactivate-title" (keydown.escape)="closeModals()">
               <div class="confirm-icon confirm-warning">!</div>
               <h4 id="deactivate-title">Deactivate State/Province</h4>
-              @if (!canDeactivate) {
-                <p class="text-danger">Cannot deactivate! Please deactivate all cities under this state first.</p>
+              @if (actionsLoading) {
+                <p>Checking what can be done with <strong>{{ selectedState?.stateProvinceName }}</strong>…</p>
+              } @else if (!canDeactivate) {
+                <p class="text-danger">{{ deactivateBlockedReason }}</p>
               } @else {
                 <p>Are you sure you want to deactivate <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
               }
               <div class="confirm-actions">
                 <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
-                @if (canDeactivate) {
+                @if (canDeactivate && !actionsLoading) {
                   <button type="button" class="btn btn-warning" (click)="deactivateConfirmed()">Yes, Deactivate</button>
                 }
               </div>
@@ -735,15 +763,17 @@
             <div class="modal-box confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" (keydown.escape)="closeModals()">
               <div class="confirm-icon confirm-danger">×</div>
               <h4 id="delete-title">Delete State/Province</h4>
-              @if (!canDelete) {
-                <p class="text-danger">Cannot delete! Please delete all cities under this state first.</p>
+              @if (actionsLoading) {
+                <p>Checking what can be done with <strong>{{ selectedState?.stateProvinceName }}</strong>…</p>
+              } @else if (!canDelete) {
+                <p class="text-danger">{{ deleteBlockedReason }}</p>
               } @else {
                 <p>Are you sure you want to delete <strong>{{ selectedState?.stateProvinceName }}</strong>?</p>
                 <div class="alert-danger-box">This action cannot be undone.</div>
               }
               <div class="confirm-actions">
                 <button type="button" class="btn btn-outline" (click)="closeModals()">Cancel</button>
-                @if (canDelete) {
+                @if (canDelete && !actionsLoading) {
                   <button type="button" class="btn btn-danger" (click)="deleteConfirmed()">Yes, Delete</button>
                 }
               </div>

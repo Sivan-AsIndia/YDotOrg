@@ -36,7 +36,7 @@
           <div class="card border-0 shadow-sm h-100 bu-main-card">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h6 class="mb-0">{{ unit.name }}</h6>
-              <span class="badge" [ngClass]="statusClass(unit.status)">{{ unit.status }}</span>
+              <span class="badge" [ngClass]="statusClass(unit.status)">{{ unit.status | titlecase }}</span>
             </div>
 
             <div class="card-body">

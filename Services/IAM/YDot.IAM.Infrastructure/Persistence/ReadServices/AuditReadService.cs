@@ -133,11 +133,58 @@ public sealed class AuditReadService(IamDbContext context, ITenantContext tenant
             })
             .ToListAsync(cancellationToken);
 
-        var items = rows
-            .Select(row => ToResponse(row.Event, row.TenantName, canSeeSensitive))
-            .ToList();
+        var items = await WithNamesAsync(
+            [.. rows.Select(row => ToResponse(row.Event, row.TenantName, canSeeSensitive))],
+            cancellationToken);
 
         return new PagedResponse<AuditEventResponse>(items, total, filter.Page, filter.PageSize);
+    }
+
+    /// <summary>
+    /// The rows with every id a person would read replaced by a name - inside the metadata and
+    /// the reason, and in place of an actor or target whose name was not recorded.
+    /// See <see cref="AuditRecordNames"/>.
+    /// </summary>
+    private async Task<List<AuditEventResponse>> WithNamesAsync(
+        List<AuditEventResponse> items, CancellationToken cancellationToken)
+    {
+        var ids = AuditRecordNames.IdsIn(
+            items.SelectMany(item => new[] { item.Metadata, item.Reason, item.TargetDisplayName, item.ActorDisplayName }));
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.ActorDisplayName) && item.ActorUserId is { } actorId)
+            {
+                ids.Add(actorId);
+            }
+
+            if (string.IsNullOrWhiteSpace(item.TargetDisplayName) && item.TargetId is { } targetId)
+            {
+                ids.Add(targetId);
+            }
+        }
+
+        if (ids.Count == 0)
+        {
+            return items;
+        }
+
+        var names = await AuditRecordNames.ResolveAsync(context, ids, cancellationToken);
+
+        return
+        [
+            .. items.Select(item => item with
+            {
+                ActorDisplayName = string.IsNullOrWhiteSpace(item.ActorDisplayName)
+                    ? item.ActorUserId is { } actorId && names.TryGetValue(actorId, out var actor) ? actor : item.ActorDisplayName
+                    : AuditRecordNames.Rewrite(item.ActorDisplayName, names),
+                TargetDisplayName = string.IsNullOrWhiteSpace(item.TargetDisplayName)
+                    ? item.TargetId is { } targetId && names.TryGetValue(targetId, out var target) ? target : item.TargetDisplayName
+                    : AuditRecordNames.Rewrite(item.TargetDisplayName, names),
+                Reason = AuditRecordNames.Rewrite(item.Reason, names),
+                Metadata = AuditRecordNames.Rewrite(item.Metadata, names),
+            }),
+        ];
     }
 
     public async Task<AuditEventResponse?> GetAsync(
@@ -158,7 +205,7 @@ public sealed class AuditReadService(IamDbContext context, ITenantContext tenant
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        return ToResponse(auditEvent, tenantName, canSeeSensitive);
+        return (await WithNamesAsync([ToResponse(auditEvent, tenantName, canSeeSensitive)], cancellationToken))[0];
     }
 
     /// <summary>
@@ -177,7 +224,8 @@ public sealed class AuditReadService(IamDbContext context, ITenantContext tenant
             .Take(Math.Clamp(take, 1, 100))
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(row => ToResponse(row, null, canSeeSensitive: false))];
+        return await WithNamesAsync(
+            [.. rows.Select(row => ToResponse(row, null, canSeeSensitive: false))], cancellationToken);
     }
 
     /// <summary>

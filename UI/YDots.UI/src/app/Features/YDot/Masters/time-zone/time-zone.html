@@ -109,7 +109,7 @@
         <div class="tz-select">
           <select [(ngModel)]="selectedStatus" (change)="onStatusFilterChange()">
             <option value="">All Status</option>
-            <option *ngFor="let s of statusList" [value]="s">{{ s }}</option>
+            <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.label }}</option>
           </select>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </div>
@@ -154,7 +154,7 @@
               <td class="col-offset">{{ formatOffset(t.standardUtcOffsetMinutes) }}</td>
               <td class="col-status">
                 <span class="tz-status-pill" [ngClass]="statusBadgeClass(t.status)">
-                  <span class="dot"></span>{{ t.status || '—' }}
+                  <span class="dot"></span>{{ statusLabel(t.status) || '—' }}
                 </span>
               </td>
               <td class="col-action">
@@ -261,7 +261,7 @@
               <span>Status</span>
               <strong>
                 <span class="tz-status-pill" [ngClass]="statusBadgeClass(tz.status)">
-                  <span class="dot"></span>{{ tz.status || '—' }}
+                  <span class="dot"></span>{{ statusLabel(tz.status) || '—' }}
                 </span>
               </strong>
             </div>
@@ -321,7 +321,7 @@
           <section class="tz-details-section">
             <h4>Status &amp; Usage</h4>
             <div class="tz-details-grid">
-              <div><span>Status</span><strong>{{ tz.status || '—' }}</strong></div>
+              <div><span>Status</span><strong>{{ statusLabel(tz.status) || '—' }}</strong></div>
               <div><span>Notes</span><strong>{{ getPlainText(tz.notes) }}</strong></div>
               <div><span>Created</span><strong>{{ tz.createdAt | date: 'dd-MMM-yyyy' }}</strong></div>
               <div><span>Created By</span><strong>{{ tz.createdBy || '—' }}</strong></div>
@@ -487,13 +487,15 @@
         <div class="tz-field">
           <label>Status <span class="req">*</span></label>
           <div class="tz-select tz-select-block" [class.invalid]="statusValidationError">
-            <select [(ngModel)]="formModel.status" name="status" (change)="onStatusChanged()">
+            <select [(ngModel)]="formModel.status" name="status" (change)="onStatusChanged()" [disabled]="isEdit">
               <option [ngValue]="null">--Select Status--</option>
-              <option *ngFor="let s of statusList" [value]="s">{{ s }}</option>
+              <option *ngFor="let s of statusOptions" [ngValue]="s.value">{{ s.label }}</option>
             </select>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </div>
           <span class="tz-error" *ngIf="statusValidationError">{{ statusValidationError }}</span>
+          <!-- An update carries no status; Activate and Deactivate are separate actions. -->
+          <small *ngIf="isEdit">Use Activate or Deactivate on the list to change it.</small>
         </div>
 
         <div class="tz-field tz-field-wide">

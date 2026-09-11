@@ -104,7 +104,16 @@ public sealed class GlobalMasterReadService(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return row?.Country.ToDetailResponse(row.StateCount, row.CityCount, currentUser.IsSuperAdmin);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var detail = row.Country.ToDetailResponse(row.StateCount, row.CityCount, currentUser.IsSuperAdmin);
+        var (createdBy, updatedBy) = await DescribeAuthorsAsync(
+            detail.CreatedByUserId, detail.UpdatedByUserId, cancellationToken);
+
+        return detail with { CreatedByName = createdBy, UpdatedByName = updatedBy };
     }
 
     public async Task<IReadOnlyList<CountryExportRow>> GetCountryExportRowsAsync(
@@ -204,8 +213,17 @@ public sealed class GlobalMasterReadService(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return row?.State.ToDetailResponse(
+        if (row is null)
+        {
+            return null;
+        }
+
+        var detail = row.State.ToDetailResponse(
             row.CountryCode, row.CountryName, row.TimeZoneName, row.CityCount, currentUser.IsSuperAdmin);
+        var (createdBy, updatedBy) = await DescribeAuthorsAsync(
+            detail.CreatedByUserId, detail.UpdatedByUserId, cancellationToken);
+
+        return detail with { CreatedByName = createdBy, UpdatedByName = updatedBy };
     }
 
     public async Task<IReadOnlyList<StateProvinceExportRow>> GetStateProvinceExportRowsAsync(
@@ -316,8 +334,17 @@ public sealed class GlobalMasterReadService(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return row?.City.ToDetailResponse(
+        if (row is null)
+        {
+            return null;
+        }
+
+        var detail = row.City.ToDetailResponse(
             row.StateCode, row.StateName, row.CountryCode, row.CountryName, currentUser.IsSuperAdmin);
+        var (createdBy, updatedBy) = await DescribeAuthorsAsync(
+            detail.CreatedByUserId, detail.UpdatedByUserId, cancellationToken);
+
+        return detail with { CreatedByName = createdBy, UpdatedByName = updatedBy };
     }
 
     public async Task<IReadOnlyList<CityExportRow>> GetCityExportRowsAsync(
@@ -402,7 +429,11 @@ public sealed class GlobalMasterReadService(
         var usageCount = await context.Countries
             .CountAsync(country => country.DefaultCurrencyCode == currency.Code, cancellationToken);
 
-        return currency.ToDetailResponse(usageCount, currentUser.IsSuperAdmin);
+        var detail = currency.ToDetailResponse(usageCount, currentUser.IsSuperAdmin);
+        var (createdBy, updatedBy) = await DescribeAuthorsAsync(
+            detail.CreatedByUserId, detail.UpdatedByUserId, cancellationToken);
+
+        return detail with { CreatedByName = createdBy, UpdatedByName = updatedBy };
     }
 
     public async Task<IReadOnlyList<CurrencyExportRow>> GetCurrencyExportRowsAsync(
@@ -490,7 +521,16 @@ public sealed class GlobalMasterReadService(
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return row?.Zone.ToDetailResponse(row.UsageCount, currentUser.IsSuperAdmin);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var detail = row.Zone.ToDetailResponse(row.UsageCount, currentUser.IsSuperAdmin);
+        var (createdBy, updatedBy) = await DescribeAuthorsAsync(
+            detail.CreatedByUserId, detail.UpdatedByUserId, cancellationToken);
+
+        return detail with { CreatedByName = createdBy, UpdatedByName = updatedBy };
     }
 
     public async Task<IReadOnlyList<TimeZoneExportRow>> GetTimeZoneExportRowsAsync(
@@ -879,6 +919,45 @@ public sealed class GlobalMasterReadService(
             MasterRowScope.Tenant => query.Where(entity => entity.TenantKey != Guid.Empty),
             _ => query
         };
+    }
+
+    /// <summary>
+    /// Who created and last changed a row, by name, for the detail panel's audit lines.
+    ///
+    /// SERVED FROM HERE because the client cannot answer it. The screens used to print the raw
+    /// user GUID - or, on Country, look it up in the people directory, which is tenant-scoped and
+    /// refuses a SuperAdmin at platform scope, so every row read "Unknown user".
+    ///
+    /// THE EMPTY GUID IS THE SEEDER, and is shown as "System" rather than as a missing person.
+    /// A real id the query filter cannot see (somebody in another Organisation) comes back null
+    /// rather than leaking a name across the boundary.
+    /// </summary>
+    private async Task<(string? CreatedBy, string? UpdatedBy)> DescribeAuthorsAsync(
+        Guid createdByUserId, Guid? updatedByUserId, CancellationToken cancellationToken)
+    {
+        const string system = "System";
+
+        var ids = new[] { createdByUserId, updatedByUserId ?? Guid.Empty }
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        var names = ids.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await context.Users
+                .AsNoTracking()
+                .Where(user => ids.Contains(user.Id))
+                .Select(user => new { user.Id, user.DisplayName })
+                .ToDictionaryAsync(user => user.Id, user => user.DisplayName, cancellationToken);
+
+        string? NameOf(Guid? id) => id switch
+        {
+            null => null,
+            _ when id == Guid.Empty => system,
+            _ => names.TryGetValue(id.Value, out var name) && !string.IsNullOrWhiteSpace(name) ? name : null
+        };
+
+        return (NameOf(createdByUserId), NameOf(updatedByUserId));
     }
 
     /// <summary>Active rows only. What every picker wants and no grid does.</summary>

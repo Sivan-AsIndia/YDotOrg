@@ -85,7 +85,7 @@
                   </svg>
                 </div>
                 <div>
-                  <div class="stat-value">{{ filteredCities().length }}</div>
+                  <div class="stat-value">{{ totalCountFromServer() }}</div>
                   <div class="stat-label">Cities (scoped)</div>
                 </div>
               </div>
@@ -108,7 +108,7 @@
                 </div>
                 <div>
                   <div class="stat-value">{{ inactiveCount() }}</div>
-                  <div class="stat-label">Inactive / Draft</div>
+                  <div class="stat-label">Inactive</div>
                 </div>
               </div>
             </div>
@@ -150,9 +150,9 @@
                   (ngModelChange)="onStatusChangeFilter($event)"
                 >
                   <option value="">All Statuses</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  @for (option of statusOptions(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
                 </select>
               </div>
 
@@ -243,7 +243,7 @@
                           <td class="d-none d-md-table-cell">
                             <span class="status-pill" [class]="getStatusPillClass(c.status)">
                               <span class="status-dot" aria-hidden="true"></span>
-                              {{ c.status }}
+                              {{ statusLabel(c.status) }}
                             </span>
                           </td>
                           <td>
@@ -363,7 +363,7 @@
                   </div>
                   <div class="pagination-controls">
                     <span class="pagination-summary">
-                      Showing {{ (currentPage() - 1) * pageSize() + 1 }}–{{ pageRangeEnd() }} of {{ filteredCities().length }}
+                      Showing {{ (currentPage() - 1) * pageSize() + 1 }}–{{ pageRangeEnd() }} of {{ totalCountFromServer() }}
                     </span>
                     <nav aria-label="City list pagination">
                       <ul class="pagination">
@@ -407,7 +407,7 @@
                     <div class="details-header-top">
                       <h5 id="cityDetailsTitle">{{ city.cityName }}</h5>
                       <span class="status-pill" [class]="getStatusPillClass(city.status)">
-                        <span class="status-dot"></span>{{ city.status }}
+                        <span class="status-dot"></span>{{ statusLabel(city.status) }}
                       </span>
                     </div>
                     <p class="details-header-sub">{{ city.displayName || city.cityName }}</p>
@@ -522,7 +522,7 @@
                         <div class="details-list-row">
                           <span class="details-list-label">Status</span>
                           <span class="status-pill" [class]="getStatusPillClass(city.status)">
-                            <span class="status-dot"></span>{{ city.status }}
+                            <span class="status-dot"></span>{{ statusLabel(city.status) }}
                           </span>
                         </div>
                         <div class="details-list-row">
@@ -609,15 +609,17 @@
                       </div>
                       <h4 id="deactivateModalTitle">Deactivate City</h4>
                       <p>
-                        @if (!canDeactivate()) {
-                          <span class="text-danger">Cannot deactivate! This city is referenced by other records.</span>
+                        @if (actionsLoading()) {
+                          Checking what can be done with <strong>{{ city.cityName }}</strong>…
+                        } @else if (!canDeactivate()) {
+                          <span class="text-danger">{{ blockedReason('deactivate') }}</span>
                         } @else {
                           Are you sure you want to deactivate <strong>{{ city.cityName }}</strong>?
                         }
                       </p>
                       <div class="modal-actions">
                         <button type="button" class="btn btn-outline" (click)="showDeactivateModal.set(false)">Cancel</button>
-                        @if (canDeactivate()) {
+                        @if (canDeactivate() && !actionsLoading()) {
                           <button type="button" class="btn btn-warning" (click)="deactivateConfirmed()">Yes, Deactivate</button>
                         }
                       </div>
@@ -645,18 +647,20 @@
                       </div>
                       <h4 id="deleteModalTitle">Delete City</h4>
                       <p>
-                        @if (!canDelete()) {
-                          <span class="text-danger">Cannot delete! This city is referenced by other records.</span>
+                        @if (actionsLoading()) {
+                          Checking what can be done with <strong>{{ city.cityName }}</strong>…
+                        } @else if (!canDelete()) {
+                          <span class="text-danger">{{ blockedReason('delete') }}</span>
                         } @else {
                           Are you sure you want to delete <strong>{{ city.cityName }}</strong>?
                         }
                       </p>
-                      @if (canDelete()) {
+                      @if (canDelete() && !actionsLoading()) {
                         <div class="alert alert-danger">This action cannot be undone.</div>
                       }
                       <div class="modal-actions">
                         <button type="button" class="btn btn-outline" (click)="showDeleteModal.set(false)">Cancel</button>
-                        @if (canDelete()) {
+                        @if (canDelete() && !actionsLoading()) {
                           <button type="button" class="btn btn-danger" (click)="deleteConfirmed()">Yes, Delete</button>
                         }
                       </div>
@@ -898,12 +902,15 @@
                         (change)="onStatusChange()"
                       >
                         <option value="">--Select Status--</option>
-                        @for (s of cityStatusList; track s) {
-                          <option [value]="s">{{ s }}</option>
+                        @for (s of statusOptions(); track s.value) {
+                          <option [value]="s.value">{{ s.label }}</option>
                         }
                       </select>
                       @if (statusError()) {
                         <span class="field-error">{{ statusError() }}</span>
+                      }
+                      @if (isEdit()) {
+                        <small class="text-muted">Use Activate or Deactivate on the list to change it.</small>
                       }
                     </div>
                     <div class="form-group form-group-wide">

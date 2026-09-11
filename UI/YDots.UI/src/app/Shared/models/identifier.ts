@@ -29,6 +29,16 @@
 const GUID_PATTERN =
   /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i;
 
+/**
+ * A GUID INSIDE a longer string: the 8-4-4-4-12 form and the 32-hex "N" form correlation ids use.
+ *
+ * FOR FREE TEXT ONLY - a server message, an audit note, a toast. It is looser than GUID_PATTERN
+ * because it has to find the value mid-sentence, which is exactly why it is never used to decide
+ * whether a whole field is an id.
+ */
+const EMBEDDED_GUID_PATTERN =
+  /\{?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b\}?|\b[0-9a-f]{32}\b/gi;
+
 /** True when this value is a bare GUID and therefore must not be shown to anybody. */
 export function isGuid(value: unknown): boolean {
   return typeof value === 'string' && GUID_PATTERN.test(value.trim());
@@ -78,4 +88,34 @@ export function firstReadable(
   }
 
   return fallback;
+}
+
+/**
+ * A sentence with every GUID in it replaced by words.
+ *
+ * THE SAFETY NET FOR TEXT THIS SIDE DID NOT WRITE. Server messages, notification bodies and audit
+ * notes are composed elsewhere, and a single `{record.Id}` in one of them puts thirty-six
+ * characters of hexadecimal into a toast. The screen cannot know the name behind an id it was
+ * only handed inside a sentence, so the id is replaced by a phrase that still reads.
+ */
+export function withoutGuids(text: string | null | undefined, replacement = 'this record'): string {
+  if (!text) {
+    return text ?? '';
+  }
+
+  return text.replace(EMBEDDED_GUID_PATTERN, replacement);
+}
+
+/**
+ * The short form of a correlation id, for a person to quote to support: the first eight
+ * characters, upper-case - "7F3A09C2".
+ *
+ * NOT A GUID, AND STILL FINDABLE. Support searches the service log by prefix, and eight hex
+ * characters are unique across any realistic window of requests; thirty-two are unreadable over a
+ * telephone, which is the only place a support reference is ever used.
+ */
+export function supportReference(value: string | null | undefined, fallback = '—'): string {
+  const compact = (value ?? '').replace(/[^0-9a-z]/gi, '');
+
+  return compact ? compact.slice(0, 8).toUpperCase() : fallback;
 }

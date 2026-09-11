@@ -192,7 +192,7 @@
                 >
                   @for (o of ownerOptions(); track o.reference) {
                     <option [value]="o.reference">
-                      {{ o.reference === 'USR-0000' ? 'All Owners' : o.name + ' · ' + o.reference }}
+                      {{ o.name }}@if (o.code) { · {{ o.code }} }
                     </option>
                   }
                 </select>

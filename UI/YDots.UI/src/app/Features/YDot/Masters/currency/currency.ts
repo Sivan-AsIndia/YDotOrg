@@ -1,12 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { apiErrorMessage, apiFieldErrors } from '../../../../Shared/models/api-response.model';
+import { enumLabel } from '../../../../Shared/models/enum-option.model';
 import {
   CurrencyDetail,
   CurrencyListItem,
   CurrencyType,
+  EnumOption,
   RoundingMode,
   SymbolPosition,
   canPerform,
@@ -16,11 +18,10 @@ import { MasterService } from '../master.service';
 /**
  * One currency, in the shape this screen's template binds to.
  *
- * IT KEEPS DISPLAY LABELS WHERE THE API KEEPS CODES - "Crypto" rather than "crypto", "Round Half
- * Up" rather than "halfUp". The template compares `currencyType === 'Crypto'` to pick a badge
- * colour and prints the value straight into a cell, so translating at the edge keeps every one of
- * those bindings working unchanged. The two mappings below are the only places the vocabularies
- * meet.
+ * IT KEEPS THE API'S CODES - 'crypto', 'halfUp' - and the template asks for the label when it
+ * draws one, from the server's own option lists. It used to hold display labels translated through
+ * three literal tables in this file, which meant the labels could not come from the server and a
+ * row loaded before those tables were consulted kept a blank type for good.
  *
  * THE THREE FIELDS AT THE END ARE NEW and are what make the screen honest. `version` is the
  * optimistic-concurrency stamp every write has to send back; `isPlatformRow` says whether this is
@@ -32,13 +33,13 @@ export interface Currency {
   currencyCode: string;
   currencyName: string;
   numericCode: number | null;
-  currencyType: string;
+  currencyType: CurrencyType | '';
   symbol: string | null;
-  symbolPosition: string;
+  symbolPosition: SymbolPosition | '';
   displayFormat: string | null;
   decimalPlaces: number | null;
   minorUnitName: string | null;
-  roundingMode: string;
+  roundingMode: RoundingMode | '';
   roundingStep: number | null;
   isActive: boolean;
   notes: string | null;
@@ -53,6 +54,13 @@ export interface Currency {
 
   /** What the SERVER says this caller may do. Buttons are drawn from it, never from a local rule. */
   permittedActions: string[];
+
+  /** Countries naming this currency as their default - the reason Delete is refused. */
+  countryUsageCount: number;
+
+  /** Who created and last changed it, by name, as the server resolved them. */
+  createdByName?: string | null;
+  updatedByName?: string | null;
 }
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -64,38 +72,12 @@ export interface ToastMessage {
   message: string;
 }
 
-/**
- * The display label for each API code, and back again.
- *
- * PAIRS RATHER THAN TWO LISTS, so a label and its code cannot drift apart. The previous version
- * had a bare `['Fiat', 'Crypto', 'Other']` and sent the label to a server that had never heard of
- * it - which, once the screen was talking to a real API, would have been a validation failure on
- * every save.
- */
-const CURRENCY_TYPES: readonly { code: CurrencyType; label: string }[] = [
-  { code: 'fiat', label: 'Fiat' },
-  { code: 'crypto', label: 'Crypto' },
-  { code: 'other', label: 'Other' },
-];
-
-const SYMBOL_POSITIONS: readonly { code: SymbolPosition; label: string }[] = [
-  { code: 'prefix', label: 'Prefix' },
-  { code: 'suffix', label: 'Suffix' },
-];
-
-/**
- * THE SERVER OFFERS THREE ROUNDING MODES, not five.
- *
- * The old list included "Round Up" and "Round Down", which the domain does not have - money
- * rounding on this platform is half-up, half-down or bankers'. Offering a fourth would have let
- * somebody choose a mode the API rejects, and there is no honest way to render a choice that
- * cannot be saved.
- */
-const ROUNDING_MODES: readonly { code: RoundingMode; label: string }[] = [
-  { code: 'halfUp', label: 'Round Half Up' },
-  { code: 'halfDown', label: 'Round Half Down' },
-  { code: 'bankers', label: 'Round Half Even' },
-];
+// THE CURRENCY TYPES, SYMBOL POSITIONS AND ROUNDING MODES ARE THE SERVER'S, from
+// `GET /masters/reference-data`. They used to be three literal tables here; a value the domain
+// adds now appears without an Angular change.
+//
+// The two lists below are NOT domain data, which is why they stay: they are the choices this form
+// offers for two numeric fields the server stores as plain numbers.
 
 const ROUNDING_STEPS = ['0.01', '0.05', '0.10', '1.00'];
 
@@ -106,30 +88,6 @@ const DECIMAL_PLACES_OPTIONS = [
   { value: 3, label: '3' },
   { value: 4, label: '4' },
 ];
-
-function labelForType(code: CurrencyType | undefined): string {
-  return CURRENCY_TYPES.find((entry) => entry.code === code)?.label ?? '';
-}
-
-function codeForType(label: string): CurrencyType {
-  return CURRENCY_TYPES.find((entry) => entry.label === label)?.code ?? 'fiat';
-}
-
-function labelForPosition(code: SymbolPosition | undefined): string {
-  return SYMBOL_POSITIONS.find((entry) => entry.code === code)?.label ?? '';
-}
-
-function codeForPosition(label: string): SymbolPosition {
-  return SYMBOL_POSITIONS.find((entry) => entry.label === label)?.code ?? 'prefix';
-}
-
-function labelForRounding(code: RoundingMode | undefined): string {
-  return ROUNDING_MODES.find((entry) => entry.code === code)?.label ?? '';
-}
-
-function codeForRounding(label: string): RoundingMode {
-  return ROUNDING_MODES.find((entry) => entry.label === label)?.code ?? 'halfUp';
-}
 
 function blankCurrency(): Currency {
   return {
@@ -152,6 +110,7 @@ function blankCurrency(): Currency {
     version: 0,
     isPlatformRow: false,
     permittedActions: [],
+    countryUsageCount: 0,
   };
 }
 
@@ -186,17 +145,15 @@ function blankCurrency(): Currency {
 export class CurrencyComponent implements OnInit {
   private readonly masters = inject(MasterService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   // ---------- View switch: 'list' | 'form' (replaces routing) ----------
   view: 'list' | 'form' = 'list';
 
-  // ---------- Dropdown option sources ----------
-  //
-  // The template prints these straight into <option> elements, so they stay as the display
-  // labels they always were. The codes travel separately - see the mapping helpers above.
-  currencyTypes = CURRENCY_TYPES.map((entry) => entry.label);
-  symbolPositions = SYMBOL_POSITIONS.map((entry) => entry.label);
-  roundingModes = ROUNDING_MODES.map((entry) => entry.label);
+  // ---------- Dropdown option sources - the server's, values in API case ----------
+  currencyTypes: EnumOption[] = [];
+  symbolPositions: EnumOption[] = [];
+  roundingModes: EnumOption[] = [];
   roundingSteps = ROUNDING_STEPS;
   decimalPlacesOptions = DECIMAL_PLACES_OPTIONS;
 
@@ -233,10 +190,33 @@ export class CurrencyComponent implements OnInit {
    *
    * BOTH COME FROM THE SERVER now. They used to be hard-coded `true`, so the buttons were always
    * enabled and the refusal - a currency still in use, a platform row an Organisation may not
-   * touch - arrived as a 409 nobody could have anticipated.
+   * touch - arrived as a 409 nobody could have anticipated. They are FALSE until the detail
+   * arrives, so a confirmation opened before then cannot offer a button the server would refuse.
    */
-  canDeactivate = true;
-  canDelete = true;
+  canDeactivate = false;
+  canDelete = false;
+
+  /** True while the detail behind an open confirmation is still being fetched. */
+  actionsLoading = false;
+
+  /** Why Deactivate is not on offer. The server ties it to permission and status, not usage. */
+  get deactivateBlockedReason(): string {
+    return this.selectedCurrency?.isPlatformRow
+      ? 'This is a shared platform currency. Only the platform administrator can change it.'
+      : 'This currency is not active, so there is nothing to deactivate.';
+  }
+
+  /** Why Delete is not on offer: the countries using it, or the platform-row rule. */
+  get deleteBlockedReason(): string {
+    const countries = this.selectedCurrency?.countryUsageCount ?? 0;
+
+    if (countries > 0) {
+      return `${countries} ${countries === 1 ? 'country uses' : 'countries use'} this as `
+        + 'their default currency. Change them first, or deactivate it instead.';
+    }
+
+    return 'This is a shared platform currency. Only the platform administrator can delete it.';
+  }
 
   isLoading = false;
   showActivateModal = false;
@@ -257,7 +237,54 @@ export class CurrencyComponent implements OnInit {
   private nextToastId = 1;
 
   ngOnInit(): void {
+    this.loadReferenceData();
     this.loadData();
+  }
+
+  /**
+   * Asks for a render after state changed outside an Angular-bound event.
+   *
+   * THIS IS WHY THE GRID SHOWED "No currencies found". The application is zoneless and this
+   * component keeps its state in plain fields, so an HTTP callback filling `currencies` and
+   * clearing `isLoading` changed nothing on screen: arriving from the sidebar left the loading
+   * overlay over an empty table with zero counters, although all three requests had succeeded.
+   * Every asynchronous callback in this file ends here, as on the Time Zone screen.
+   */
+  private renderNow(): void {
+    this.cdr.markForCheck();
+  }
+
+  /** The type, symbol-position and rounding dropdowns, from the shared reference call. */
+  private loadReferenceData(): void {
+    this.masters
+      .getReferenceData()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reference) => {
+          this.currencyTypes = reference.currencyTypes;
+          this.symbolPositions = reference.symbolPositions;
+          this.roundingModes = reference.roundingModes;
+          this.renderNow();
+        },
+        error: () =>
+          this.showToast(
+            'warning',
+            'Reference data',
+            'Currency types, symbol positions and rounding modes could not be loaded.',
+          ),
+      });
+  }
+
+  typeLabel(code: string | null | undefined): string {
+    return enumLabel(this.currencyTypes, code);
+  }
+
+  positionLabel(code: string | null | undefined): string {
+    return enumLabel(this.symbolPositions, code);
+  }
+
+  roundingLabel(code: string | null | undefined): string {
+    return enumLabel(this.roundingModes, code);
   }
 
   // ================= LIST: derived counts =================
@@ -277,7 +304,7 @@ export class CurrencyComponent implements OnInit {
     return this.inactiveCountFromServer;
   }
 
-  get uniqueTypes(): string[] {
+  get uniqueTypes(): EnumOption[] {
     return this.currencyTypes;
   }
 
@@ -298,7 +325,7 @@ export class CurrencyComponent implements OnInit {
         page: this.currentPage,
         pageSize: this.pageSize,
         search: this.searchText.trim() || undefined,
-        currencyType: this.selectedType ? codeForType(this.selectedType) : undefined,
+        currencyType: (this.selectedType as CurrencyType) || undefined,
         status: this.selectedStatus
           ? this.selectedStatus === 'active'
             ? 'active'
@@ -315,6 +342,7 @@ export class CurrencyComponent implements OnInit {
           this.totalPages = Math.max(1, page.totalPages);
           this.currentPage = page.page;
           this.isLoading = false;
+          this.renderNow();
         },
         error: (error) => {
           this.isLoading = false;
@@ -327,12 +355,22 @@ export class CurrencyComponent implements OnInit {
     this.masters
       .searchCurrencies({ pageSize: 1, status: 'active' })
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (page) => (this.activeCountFromServer = page.totalCount) });
+      .subscribe({
+        next: (page) => {
+          this.activeCountFromServer = page.totalCount;
+          this.renderNow();
+        },
+      });
 
     this.masters
       .searchCurrencies({ pageSize: 1, status: 'inactive' })
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (page) => (this.inactiveCountFromServer = page.totalCount) });
+      .subscribe({
+        next: (page) => {
+          this.inactiveCountFromServer = page.totalCount;
+          this.renderNow();
+        },
+      });
   }
 
   /** Every filter change restarts at page one - staying on page four of a narrower result is a blank screen. */
@@ -406,6 +444,9 @@ export class CurrencyComponent implements OnInit {
    */
   openView(currency: Currency): void {
     this.selectedCurrency = currency;
+    this.canDeactivate = false;
+    this.canDelete = false;
+    this.actionsLoading = true;
 
     this.masters
       .getCurrency(currency.id)
@@ -419,9 +460,13 @@ export class CurrencyComponent implements OnInit {
           // refuses it; this stops the button being offered in the first place.
           this.canDelete =
             canPerform(detail, 'Delete') && detail.countryUsageCount === 0;
+          this.actionsLoading = false;
+          this.renderNow();
         },
-        error: (error) =>
-          this.showToast('error', 'Could not open', apiErrorMessage(error, 'That currency could not be opened.')),
+        error: (error) => {
+          this.actionsLoading = false;
+          this.showToast('error', 'Could not open', apiErrorMessage(error, 'That currency could not be opened.'));
+        },
       });
   }
 
@@ -559,7 +604,10 @@ export class CurrencyComponent implements OnInit {
       .getCurrency(currency.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (detail) => (this.formCurrency = this.toViewModelFromDetail(detail)),
+        next: (detail) => {
+          this.formCurrency = this.toViewModelFromDetail(detail);
+          this.renderNow();
+        },
         error: (error) => {
           this.view = 'list';
           this.showToast('error', 'Could not open', apiErrorMessage(error, 'That currency could not be opened for editing.'));
@@ -612,13 +660,13 @@ export class CurrencyComponent implements OnInit {
           expectedVersion: this.formCurrency.version,
           currencyName: name,
           numericCode: this.formCurrency.numericCode,
-          currencyType: codeForType(this.formCurrency.currencyType),
+          currencyType: this.formCurrency.currencyType || null,
           symbol: this.formCurrency.symbol,
-          symbolPosition: codeForPosition(this.formCurrency.symbolPosition),
+          symbolPosition: this.formCurrency.symbolPosition || null,
           displayFormat: this.formCurrency.displayFormat,
           decimalPlaces: this.formCurrency.decimalPlaces,
           minorUnitName: this.formCurrency.minorUnitName,
-          roundingMode: codeForRounding(this.formCurrency.roundingMode),
+          roundingMode: this.formCurrency.roundingMode || null,
           roundingStep: this.formCurrency.roundingStep,
           notes: this.formCurrency.notes,
 
@@ -645,13 +693,13 @@ export class CurrencyComponent implements OnInit {
         currencyCode: code,
         currencyName: name,
         numericCode: this.formCurrency.numericCode,
-        currencyType: codeForType(this.formCurrency.currencyType),
+        currencyType: this.formCurrency.currencyType || 'fiat',
         symbol: this.formCurrency.symbol,
-        symbolPosition: codeForPosition(this.formCurrency.symbolPosition),
+        symbolPosition: this.formCurrency.symbolPosition || 'prefix',
         displayFormat: this.formCurrency.displayFormat,
         decimalPlaces: this.formCurrency.decimalPlaces ?? 2,
         minorUnitName: this.formCurrency.minorUnitName,
-        roundingMode: codeForRounding(this.formCurrency.roundingMode),
+        roundingMode: this.formCurrency.roundingMode || 'halfUp',
         roundingStep: this.formCurrency.roundingStep,
         status: this.formCurrency.isActive ? 'active' : 'draft',
         notes: this.formCurrency.notes,
@@ -677,9 +725,9 @@ export class CurrencyComponent implements OnInit {
       currencyCode: item.currencyCode,
       currencyName: item.currencyName,
       numericCode: item.numericCode,
-      currencyType: labelForType(item.currencyType),
+      currencyType: item.currencyType,
       symbol: item.symbol,
-      symbolPosition: labelForPosition(item.symbolPosition),
+      symbolPosition: item.symbolPosition,
       displayFormat: null,
       decimalPlaces: item.decimalPlaces,
       minorUnitName: null,
@@ -696,6 +744,7 @@ export class CurrencyComponent implements OnInit {
       version: item.version,
       isPlatformRow: item.isPlatformRow,
       permittedActions: [],
+      countryUsageCount: 0,
     };
   }
 
@@ -705,13 +754,13 @@ export class CurrencyComponent implements OnInit {
       currencyCode: detail.currencyCode,
       currencyName: detail.currencyName,
       numericCode: detail.numericCode,
-      currencyType: labelForType(detail.currencyType),
+      currencyType: detail.currencyType,
       symbol: detail.symbol,
-      symbolPosition: labelForPosition(detail.symbolPosition),
+      symbolPosition: detail.symbolPosition,
       displayFormat: detail.displayFormat,
       decimalPlaces: detail.decimalPlaces,
       minorUnitName: detail.minorUnitName,
-      roundingMode: labelForRounding(detail.roundingMode),
+      roundingMode: detail.roundingMode,
       roundingStep: detail.roundingStep,
       isActive: detail.isActive,
       notes: detail.notes,
@@ -720,6 +769,9 @@ export class CurrencyComponent implements OnInit {
       version: detail.version,
       isPlatformRow: detail.isPlatformRow,
       permittedActions: detail.permittedActions,
+      countryUsageCount: detail.countryUsageCount,
+      createdByName: detail.createdByName ?? null,
+      updatedByName: detail.updatedByName ?? null,
     };
   }
 
@@ -776,10 +828,15 @@ export class CurrencyComponent implements OnInit {
     const toast: ToastMessage = { id: this.nextToastId++, type, title, message };
     this.toasts = [...this.toasts, toast];
     setTimeout(() => this.dismissToast(toast.id), 3500);
+
+    // Raised from HTTP callbacks: asking for the render here also paints whatever else the same
+    // callback changed.
+    this.renderNow();
   }
 
   dismissToast(id: number): void {
     this.toasts = this.toasts.filter((toast) => toast.id !== id);
+    this.renderNow();
   }
 
   toastIconPath(type: ToastType): string {

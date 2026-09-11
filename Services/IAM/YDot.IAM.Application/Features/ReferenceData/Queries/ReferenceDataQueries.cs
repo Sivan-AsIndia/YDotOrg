@@ -1,5 +1,6 @@
 ﻿using YDot.IAM.Application.Common.Abstractions.Persistence;
 using YDot.IAM.Application.Common.Abstractions.Security;
+using YDot.IAM.Application.Common.Constants;
 using YDot.IAM.Application.Common.Models;
 using YDot.IAM.Application.Common.Results;
 using YDot.IAM.Domain.Enums;
@@ -85,7 +86,13 @@ public sealed class ReferenceDataQueryHandler(
         Describe<AccessReviewDecision>(),
         Describe<BulkActionType>(),
         Describe<ClientType>(),
-        Describe<PrivilegeLevel>());
+        Describe<PrivilegeLevel>(),
+        Describe<RecordStatus>(),
+        Describe<MenuLevel>(),
+        Describe<MenuStatus>(),
+        Describe<AuditResult>(),
+        // Labels, not enum names: the column stores the label itself. See OrganisationTypes.
+        [.. OrganisationTypes.All.Select((label, index) => new EnumOption(label, label, index))]);
 
     /// <summary>Turns an enum into name/label pairs, with the label humanised for display.</summary>
     private static IReadOnlyList<EnumOption> Describe<TEnum>() where TEnum : struct, Enum =>
@@ -160,4 +167,18 @@ public sealed record EnumOptionsResponse(
     IReadOnlyList<EnumOption> AccessReviewDecisions,
     IReadOnlyList<EnumOption> BulkActionTypes,
     IReadOnlyList<EnumOption> ClientTypes,
-    IReadOnlyList<EnumOption> PrivilegeLevels);
+    IReadOnlyList<EnumOption> PrivilegeLevels,
+
+    /// <summary>Department and organisation-unit status.</summary>
+    IReadOnlyList<EnumOption> RecordStatuses,
+
+    /// <summary>The three depths of the navigation catalogue.</summary>
+    IReadOnlyList<EnumOption> MenuLevels,
+
+    IReadOnlyList<EnumOption> MenuStatuses,
+
+    /// <summary>How an audited action ended, for the audit trail's outcome filter.</summary>
+    IReadOnlyList<EnumOption> AuditResults,
+
+    /// <summary>The organisation types on offer. Value and label are the same stored text.</summary>
+    IReadOnlyList<EnumOption> OrganisationTypes);

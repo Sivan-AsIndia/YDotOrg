@@ -5,6 +5,7 @@ import { DonorApiService } from './donor-api.service';
 import { PeopleDirectoryService } from '../Shared/services/people-directory.service';
 import { OrganisationScopeService } from '../Shared/services/organisation-scope.service';
 import { apiErrorMessage } from '../Shared/models/api-response.model';
+import { readableIdentifier } from '../Shared/models/identifier';
 import {
   DonorListItem,
   FollowUp as ApiFollowUp,
@@ -1211,7 +1212,7 @@ export class WorkflowStateService {
     const optimistic: WorkflowFollowUp = {
       id: input.id ?? `FUP-PENDING-${Date.now()}`,
       recordId: input.recordId,
-      recordName: input.recordName ?? lead?.name ?? donor?.name ?? input.recordId,
+      recordName: input.recordName ?? lead?.name ?? donor?.name ?? readableIdentifier(input.recordId, 'Record'),
       recordType: input.recordType ?? (donor ? 'Donor' : 'Lead'),
       followUpType: input.followUpType ?? 'Call',
       scheduledDate: input.scheduledDate ?? new Date().toISOString().slice(0, 10),

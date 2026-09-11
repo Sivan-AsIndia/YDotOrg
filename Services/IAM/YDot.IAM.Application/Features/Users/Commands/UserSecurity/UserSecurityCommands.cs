@@ -376,7 +376,8 @@ public sealed class UserSecurityCommandHandler(
 
         var reference = tokenHasher.GenerateReference("EXP");
         var file = exports.ToCsv(
-            rows, $"security-{user.Code ?? user.Id.ToString()}", reference);
+            // The file name is what the person sees in their downloads - the user's code, never their id.
+            rows, $"security-{(string.IsNullOrWhiteSpace(user.Code) ? "user" : user.Code)}", reference);
 
         await audit.WriteAsync(
             AuditActionCodes.UserExported, nameof(User), user.Id, user.DisplayName,

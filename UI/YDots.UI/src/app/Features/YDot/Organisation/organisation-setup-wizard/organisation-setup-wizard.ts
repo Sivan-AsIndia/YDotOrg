@@ -10,6 +10,7 @@ import {
   CreateOrganisationResponse,
   MfaRequirement,
 } from '../../../../Shared/models/iam-contract.model';
+import { EnumOptionsService } from '../../../../Shared/services/enum-options.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { createGeoCascade } from '../../../../Shared/services/geo-cascade';
 
@@ -51,6 +52,7 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
   private readonly api = inject(OrganisationApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly enums = inject(EnumOptionsService);
 
   private readonly destroy$ = new Subject<void>();
   private readonly subdomainInput$ = new Subject<string>();
@@ -105,19 +107,11 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
    * A free-text field here produces a directory where "NGO", "N.G.O." and "Ngo" are three
    * different things and none of them can be reported on. The list stays short and ends in
    * "Other", which is what makes it tolerable to constrain.
+   *
+   * FROM THE SERVER now (`OrganisationTypes` in IAM, served with the enums), so the organisation
+   * profile offers exactly the same list. It was a literal array here and free text there.
    */
-  readonly organisationTypes = [
-    'Non-profit / NGO',
-    'Charitable organisation',
-    'Foundation',
-    'Community organisation',
-    'Educational organisation',
-    'Healthcare organisation',
-    'Faith-based organisation',
-    'Social welfare organisation',
-    'International organisation',
-    'Other',
-  ];
+  readonly organisationTypes = signal<string[]>([]);
 
   readonly mfaOptions: { value: MfaRequirement; label: string; hint: string }[] = [
     {
@@ -200,6 +194,12 @@ export class OrganisationSetupWizardComponent implements OnDestroy {
 
       // An empty suffix is honest. Guessing a domain here is what produced the original problem.
       error: () => this.rootDomain.set(''),
+    });
+
+    // A failure leaves the Type select at "Not specified", which the server accepts.
+    this.enums.organisationTypes().pipe(takeUntil(this.destroy$)).subscribe({
+      next: (types) => this.organisationTypes.set(types),
+      error: () => this.organisationTypes.set([]),
     });
 
     // The availability check runs as the address is typed, not on blur: somebody who types a

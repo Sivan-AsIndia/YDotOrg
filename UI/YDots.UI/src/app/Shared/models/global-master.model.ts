@@ -83,6 +83,19 @@ export interface DeleteMasterRequest {
   reason?: string;
 }
 
+/**
+ * Who created and last changed a master row, by name.
+ *
+ * RESOLVED BY THE SERVER. The screens used to print `createdByUserId` itself - a GUID, and for
+ * every seeded row the empty GUID - or look it up in the people directory, which is
+ * tenant-scoped and refuses a SuperAdmin at platform scope. "System" is a seeded row; absent means
+ * the row has never been changed, or its author is not visible from here.
+ */
+export interface MasterAuthorship {
+  createdByName?: string | null;
+  updatedByName?: string | null;
+}
+
 // =============================================================================================
 // Countries
 // =============================================================================================
@@ -117,7 +130,7 @@ export interface CountryListItem {
   version: number;
 }
 
-export interface CountryDetail extends Omit<CountryListItem, 'stateProvinceCount'> {
+export interface CountryDetail extends Omit<CountryListItem, 'stateProvinceCount'>, MasterAuthorship {
   businessUnitId: string;
   numericCode: string | null;
   postalCodePattern: string | null;
@@ -207,7 +220,7 @@ export interface StateProvinceListItem {
   version: number;
 }
 
-export interface StateProvinceDetail extends StateProvinceListItem {
+export interface StateProvinceDetail extends StateProvinceListItem, MasterAuthorship {
   businessUnitId: string;
   otherJurisdictionType: string | null;
   stateTaxJurisdictionCode: string | null;
@@ -296,7 +309,7 @@ export interface CityListItem {
   version: number;
 }
 
-export interface CityDetail extends CityListItem {
+export interface CityDetail extends CityListItem, MasterAuthorship {
   businessUnitId: string;
   defaultPostalCodePattern: string | null;
   hasCoordinates: boolean;
@@ -381,7 +394,7 @@ export interface CurrencyListItem {
   version: number;
 }
 
-export interface CurrencyDetail extends CurrencyListItem {
+export interface CurrencyDetail extends CurrencyListItem, MasterAuthorship {
   businessUnitId: string;
   displayFormat: string | null;
   minorUnitName: string | null;
@@ -461,7 +474,7 @@ export interface TimeZoneListItem {
   version: number;
 }
 
-export interface TimeZoneDetail extends TimeZoneListItem {
+export interface TimeZoneDetail extends TimeZoneListItem, MasterAuthorship {
   businessUnitId: string;
   daylightSavingRuleNote: string | null;
   notes: string | null;

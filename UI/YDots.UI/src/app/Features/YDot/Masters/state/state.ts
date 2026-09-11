@@ -1,9 +1,19 @@
-import { Component, DestroyRef, ElementRef, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
+import { enumLabel } from '../../../../Shared/models/enum-option.model';
 import {
+  EnumOption,
   JurisdictionType,
   MasterDataStatus,
   StateProvinceDetail,
@@ -36,19 +46,30 @@ export interface StateProvinceModel {
   displayName?: string | null;
   countryId?: string | null;
   countryName?: string | null;
-  jurisdictionType?: string | null;
+
+  /** The API's code - 'state', 'unionTerritory'. The label comes from the server's option list. */
+  jurisdictionType?: JurisdictionType | null;
+
+  /** How the server words it - the typed description for "Other", rather than the word itself. */
+  jurisdictionDescription?: string | null;
+
   isFederalJurisdiction: boolean;
   gstStateCode?: string | null;
   stateTaxJurisdictionCode?: string | null;
   defaultTimeZoneId?: string | null;
   postalCodePattern?: string | null;
   addressFormatHint?: string | null;
-  status?: string | null;
+
+  /** The API's code - 'draft', 'active', 'inactive'. */
+  status?: MasterDataStatus | null;
+
   isActive: boolean;
   isDeleted: boolean;
   sortOrder: number;
   notes?: string | null;
   createdAt: Date;
+
+  /** Names, resolved by the server - never the user GUID it used to print. */
   createdBy?: string | null;
   updatedAt?: Date | null;
   updatedBy?: string | null;
@@ -71,64 +92,10 @@ export interface StateProvinceModel {
   defaultTimeZoneName?: string | null;
 }
 
-/**
- * The jurisdiction types the SERVER accepts, paired with the labels this screen shows.
- *
- * THE OLD LIST WAS WRONG IN BOTH DIRECTIONS. It offered six labels the API had never heard of -
- * saving any of them would have failed validation - and omitted District and Prefecture, which
- * the API does accept and which several countries need.
- */
-const JURISDICTION_TYPES: readonly { code: JurisdictionType; label: string }[] = [
-  { code: 'state', label: 'State' },
-  { code: 'unionTerritory', label: 'Union Territory' },
-  { code: 'province', label: 'Province' },
-  { code: 'territory', label: 'Territory' },
-  { code: 'region', label: 'Region' },
-  { code: 'district', label: 'District' },
-  { code: 'prefecture', label: 'Prefecture' },
-  { code: 'other', label: 'Other' },
-];
-
-const STATUS_CODES: Record<string, MasterDataStatus> = {
-  Draft: 'draft',
-  Active: 'active',
-  Inactive: 'inactive',
-};
-
-const STATUS_LABELS: Record<MasterDataStatus, string> = {
-  draft: 'Draft',
-  active: 'Active',
-  inactive: 'Inactive',
-};
-
-function jurisdictionLabel(code: JurisdictionType | undefined | null): string {
-  return JURISDICTION_TYPES.find((entry) => entry.code === code)?.label ?? '';
-}
-
-function jurisdictionCode(label: string | null | undefined): JurisdictionType {
-  return JURISDICTION_TYPES.find((entry) => entry.label === label)?.code ?? 'state';
-}
-
-export const JurisdictionTypes = {
-  State: 'State',
-  UnionTerritory: 'Union Territory',
-  Province: 'Province',
-  Territory: 'Territory',
-  Region: 'Region',
-  District: 'District',
-  Prefecture: 'Prefecture',
-  Other: 'Other',
-
-  // Derived from the pairs above so a label and its code cannot drift apart.
-  all: JURISDICTION_TYPES.map((entry) => entry.label),
-};
-
-export const StateProvinceStatus = {
-  Draft: 'Draft',
-  Active: 'Active',
-  Inactive: 'Inactive',
-  all: ['Draft', 'Active', 'Inactive'],
-};
+// THE JURISDICTION TYPES AND STATUSES ARE THE SERVER'S. They used to be two literal lists in this
+// file, paired with label/code maps; they now come from `GET /masters/reference-data`, already in
+// the camelCase the records carry (see MasterService), so a value the domain adds appears here
+// without an Angular change and an existing record's value always has an option to select.
 
 type ToastKind = 'success' | 'warning' | 'error' | 'info';
 
@@ -170,6 +137,11 @@ export class StateComponent implements OnInit {
 
   countries: CountryModel[] = [];
   timeZones: TimeZoneModel[] = [];
+
+  /** The server's jurisdiction types and statuses, values in API case. */
+  jurisdictionOptions: EnumOption[] = [];
+  statusOptions: EnumOption[] = [];
+
   toasts: ToastMessage[] = [];
   private toastCounter = 0;
 
@@ -178,6 +150,7 @@ export class StateComponent implements OnInit {
   private readonly masters = inject(MasterService);
   private readonly geoMasters = inject(GeoMasterService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   constructor(private hostRef: ElementRef<HTMLElement>) {}
 
@@ -185,6 +158,19 @@ export class StateComponent implements OnInit {
     this.loadReferenceData();
     this.loadData();
     this.isInitialized = true;
+  }
+
+  /**
+   * Asks for a render after state changed outside an Angular-bound event.
+   *
+   * THIS IS WHY THE SCREEN SAT ON ITS LOADING OVERLAY. The application is zoneless, and this
+   * component keeps its state in plain fields rather than signals, so an HTTP callback setting
+   * `isLoading = false` changed nothing on screen: no DOM event, no signal, no render. Arriving from
+   * the sidebar left the whirly-loader over a grid whose three requests had all succeeded. Every
+   * asynchronous callback in this file ends here - the same arrangement the Time Zone screen uses.
+   */
+  private renderNow(): void {
+    this.cdr.markForCheck();
   }
 
   /**
@@ -212,14 +198,28 @@ export class StateComponent implements OnInit {
             displayName: zone.name,
             isActive: zone.status === 'active',
           }));
+
+          this.jurisdictionOptions = reference.jurisdictionTypes;
+          this.statusOptions = reference.statuses;
+          this.renderNow();
         },
         error: () =>
           this.showToast(
             'warning',
             'Reference data',
-            'Countries and time zones could not be loaded. The form dropdowns will be empty.',
+            'Countries, jurisdictions and time zones could not be loaded. The dropdowns will be empty.',
           ),
       });
+  }
+
+  /** A status code as the server labels it. */
+  statusLabel(status: string | null | undefined): string {
+    return enumLabel(this.statusOptions, status);
+  }
+
+  /** A jurisdiction as the server words it, preferring the row's own description. */
+  jurisdictionLabel(state: Pick<StateProvinceModel, 'jurisdictionType' | 'jurisdictionDescription'>): string {
+    return state.jurisdictionDescription || enumLabel(this.jurisdictionOptions, state.jurisdictionType);
   }
 
   private captureFocus(): void {
@@ -240,8 +240,16 @@ export class StateComponent implements OnInit {
   filteredStates: StateProvinceModel[] = [];
   selectedState: StateProvinceModel | null = null;
   selectedCompany: StateProvinceModel | null = null;
-  canDeactivate = true;
-  canDelete = true;
+
+  /**
+   * What the server allows on the open record. FALSE until its detail arrives: they used to start
+   * `true`, so a modal opened before the detail loaded offered a button the server then refused.
+   */
+  canDeactivate = false;
+  canDelete = false;
+
+  /** True while the detail behind an open confirmation is still being fetched. */
+  actionsLoading = false;
 
   searchText = '';
   selectedStatus = '';
@@ -300,8 +308,8 @@ export class StateComponent implements OnInit {
   }
 
   /** The full catalogue, for the same reason as the countries above. */
-  get tableJurisdictionTypes(): string[] {
-    return JurisdictionTypes.all;
+  get tableJurisdictionTypes(): EnumOption[] {
+    return this.jurisdictionOptions;
   }
 
   get scopedCount(): number {
@@ -333,10 +341,8 @@ export class StateComponent implements OnInit {
         pageSize: this.pageSize,
         search: this.searchText.trim() || undefined,
         countryId: this.selectedCountryId || undefined,
-        jurisdictionType: this.selectedJurisdictionType
-          ? jurisdictionCode(this.selectedJurisdictionType)
-          : undefined,
-        status: this.selectedStatus ? STATUS_CODES[this.selectedStatus] : undefined,
+        jurisdictionType: (this.selectedJurisdictionType as JurisdictionType) || undefined,
+        status: (this.selectedStatus as MasterDataStatus) || undefined,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -347,6 +353,7 @@ export class StateComponent implements OnInit {
           this.totalPagesFromServer = page.totalPages;
           this.currentPage = page.page;
           this.isLoading = false;
+          this.renderNow();
         },
         error: (error) => {
           this.states = [];
@@ -363,12 +370,22 @@ export class StateComponent implements OnInit {
     this.masters
       .searchStates({ pageSize: 1, status: 'active' })
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (page) => (this.activeCountFromServer = page.totalCount) });
+      .subscribe({
+        next: (page) => {
+          this.activeCountFromServer = page.totalCount;
+          this.renderNow();
+        },
+      });
 
     this.masters
       .searchStates({ pageSize: 1, status: 'inactive' })
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (page) => (this.inactiveCountFromServer = page.totalCount) });
+      .subscribe({
+        next: (page) => {
+          this.inactiveCountFromServer = page.totalCount;
+          this.renderNow();
+        },
+      });
   }
 
   private toViewModel(item: StateProvinceListItem): StateProvinceModel {
@@ -379,14 +396,15 @@ export class StateComponent implements OnInit {
       displayName: item.displayName,
       countryId: item.countryId,
       countryName: item.countryName,
-      jurisdictionType: jurisdictionLabel(item.jurisdictionType),
+      jurisdictionType: item.jurisdictionType,
+      jurisdictionDescription: item.jurisdictionDescription,
       isFederalJurisdiction: item.isFederalJurisdiction,
       gstStateCode: item.gstStateCode,
       stateTaxJurisdictionCode: null,
       defaultTimeZoneId: null,
       postalCodePattern: null,
       addressFormatHint: null,
-      status: STATUS_LABELS[item.status] ?? item.statusDescription,
+      status: item.status,
       isActive: item.isActive,
       isDeleted: false,
       sortOrder: item.sortOrder,
@@ -408,7 +426,8 @@ export class StateComponent implements OnInit {
       displayName: detail.displayName,
       countryId: detail.countryId,
       countryName: detail.countryName,
-      jurisdictionType: jurisdictionLabel(detail.jurisdictionType),
+      jurisdictionType: detail.jurisdictionType,
+      jurisdictionDescription: detail.jurisdictionDescription,
       otherJurisdictionType: detail.otherJurisdictionType,
       isFederalJurisdiction: detail.isFederalJurisdiction,
       gstStateCode: detail.gstStateCode,
@@ -417,15 +436,15 @@ export class StateComponent implements OnInit {
       defaultTimeZoneName: detail.defaultTimeZoneName,
       postalCodePattern: detail.postalCodePattern,
       addressFormatHint: detail.addressFormatHint,
-      status: STATUS_LABELS[detail.status] ?? detail.statusDescription,
+      status: detail.status,
       isActive: detail.isActive,
       isDeleted: false,
       sortOrder: detail.sortOrder,
       notes: detail.notes,
       createdAt: new Date(detail.createdAtUtc),
-      createdBy: detail.createdByUserId,
+      createdBy: detail.createdByName ?? null,
       updatedAt: detail.updatedAtUtc ? new Date(detail.updatedAtUtc) : null,
-      updatedBy: detail.updatedByUserId,
+      updatedBy: detail.updatedByName ?? null,
       cityCount: detail.cityCount,
       isPlatformRow: detail.isPlatformRow,
       version: detail.version,
@@ -461,11 +480,11 @@ export class StateComponent implements OnInit {
 
   getStatusBadge(status?: string | null): string {
     switch (status) {
-      case 'Active':
+      case 'active':
         return 'bg-success-transparent text-success';
-      case 'Inactive':
+      case 'inactive':
         return 'bg-danger-transparent text-danger';
-      case 'Draft':
+      case 'draft':
         return 'bg-warning-transparent text-warning';
       default:
         return 'bg-secondary-transparent text-secondary';
@@ -474,11 +493,11 @@ export class StateComponent implements OnInit {
 
   getStatusDotBadge(status?: string | null): string {
     switch (status) {
-      case 'Active':
+      case 'active':
         return 'bg-success text-success';
-      case 'Inactive':
+      case 'inactive':
         return 'bg-danger text-danger';
-      case 'Draft':
+      case 'draft':
         return 'bg-warning text-warning';
       default:
         return 'bg-secondary text-secondary';
@@ -532,6 +551,9 @@ export class StateComponent implements OnInit {
     this.detailsOpen.set(true);
     this.showViewOffcanvas = true;
     this.showRowDetailsModal = false;
+    this.canDeactivate = false;
+    this.canDelete = false;
+    this.actionsLoading = true;
 
     this.masters
       .getState(state.id)
@@ -545,14 +567,48 @@ export class StateComponent implements OnInit {
 
           // Both halves matter: the permission AND the fact that no city sits beneath it.
           this.canDelete = canPerform(detail, 'Delete') && detail.cityCount === 0;
+          this.actionsLoading = false;
+          this.renderNow();
         },
-        error: (error) =>
+        error: (error) => {
+          this.actionsLoading = false;
           this.showToast(
             'error',
             'Could not open',
             apiErrorMessage(error, 'That state could not be opened.'),
-          ),
+          );
+        },
       });
+  }
+
+  /**
+   * Why Deactivate is not on offer, in terms the person can act on.
+   *
+   * The modal used to say "deactivate all cities under this state first" - but the server never
+   * ties deactivation to cities. It withholds it for a shared platform row the caller may not
+   * change, or for a row that is not active.
+   */
+  get deactivateBlockedReason(): string {
+    const state = this.selectedState;
+
+    if (state?.isPlatformRow) {
+      return 'This is a shared platform state. Only the platform administrator can change it.';
+    }
+
+    return 'This state is not active, so there is nothing to deactivate.';
+  }
+
+  /** Why Delete is not on offer: the cities beneath it, or the same platform-row rule. */
+  get deleteBlockedReason(): string {
+    const state = this.selectedState;
+    const cities = state?.cityCount ?? 0;
+
+    if (cities > 0) {
+      return `${cities} ${cities === 1 ? 'city sits' : 'cities sit'} under this state. `
+        + 'Remove or move them first, or deactivate the state instead.';
+    }
+
+    return 'This is a shared platform state. Only the platform administrator can delete it.';
   }
 
   closeViewOffcanvas(): void {
@@ -771,11 +827,14 @@ export class StateComponent implements OnInit {
   stateProvinceNameValidationError: string | null = null;
   countryValidationError: string | null = null;
   jurisdictionTypeValidationError: string | null = null;
+  otherJurisdictionTypeValidationError: string | null = null;
   statusValidationError: string | null = null;
   gstStateCodeValidationError: string | null = null;
 
-  jurisdictionTypeOptions = JurisdictionTypes.all;
-  statusOptions = StateProvinceStatus.all;
+  /** True when "Other" is chosen, which is when the server requires a description of it. */
+  get isOtherJurisdiction(): boolean {
+    return this.stateProvince.jurisdictionType === 'other';
+  }
 
   get isIndiaSelected(): boolean {
     return (
@@ -829,6 +888,7 @@ export class StateComponent implements OnInit {
       .getTimeZones(countryId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((result) => {
+        this.renderNow();
         this.timeZonesAreCountryFiltered = result.isCountryFiltered;
 
         // isActive is unconditionally true: the lookup endpoints return only Active rows, both
@@ -917,6 +977,7 @@ export class StateComponent implements OnInit {
           // Narrow the zone picker to this state's country as the form opens, so the saved
           // value is shown in the list it belongs to rather than in the whole catalogue.
           this.loadCountryTimeZones(this.stateProvince.countryId);
+          this.renderNow();
         },
         error: (error) => {
           this.viewMode = 'list';
@@ -944,6 +1005,7 @@ export class StateComponent implements OnInit {
     this.stateProvinceNameValidationError = null;
     this.countryValidationError = null;
     this.jurisdictionTypeValidationError = null;
+    this.otherJurisdictionTypeValidationError = null;
     this.statusValidationError = null;
     this.gstStateCodeValidationError = null;
   }
@@ -1048,6 +1110,7 @@ export class StateComponent implements OnInit {
   onJurisdictionTypeChanged(): void {
     this.addressTouched = true;
     this.jurisdictionTypeValidationError = null;
+    this.otherJurisdictionTypeValidationError = null;
   }
 
   onStatusChanged(): void {
@@ -1069,7 +1132,9 @@ export class StateComponent implements OnInit {
 
   hasCountryErrors(): boolean {
     return (
-      !this.stateProvince.countryId || !this.stateProvince.jurisdictionType?.trim()
+      !this.stateProvince.countryId
+      || !this.stateProvince.jurisdictionType?.trim()
+      || (this.isOtherJurisdiction && !this.stateProvince.otherJurisdictionType?.trim())
     );
   }
 
@@ -1089,6 +1154,7 @@ export class StateComponent implements OnInit {
     this.stateProvinceNameValidationError = null;
     this.countryValidationError = null;
     this.jurisdictionTypeValidationError = null;
+    this.otherJurisdictionTypeValidationError = null;
     this.statusValidationError = null;
     this.gstStateCodeValidationError = null;
 
@@ -1113,6 +1179,11 @@ export class StateComponent implements OnInit {
 
     if (!this.stateProvince.jurisdictionType?.trim()) {
       this.jurisdictionTypeValidationError = 'Jurisdiction Type is required';
+      isValid = false;
+    } else if (this.isOtherJurisdiction && !this.stateProvince.otherJurisdictionType?.trim()) {
+      // The server requires it for "Other" and the form had no box for it, so choosing Other
+      // could never be saved.
+      this.otherJurisdictionTypeValidationError = 'Describe the jurisdiction type';
       isValid = false;
     }
 
@@ -1162,7 +1233,7 @@ export class StateComponent implements OnInit {
 
     const country = this.countries.find((c) => c.id === this.stateProvince.countryId);
     this.stateProvince.countryName = country?.countryName ?? null;
-    this.stateProvince.isActive = this.stateProvince.status === StateProvinceStatus.Active;
+    this.stateProvince.isActive = this.stateProvince.status === 'active';
 
     if (this.isEdit && this.editingId) {
       this.masters
@@ -1170,8 +1241,8 @@ export class StateComponent implements OnInit {
           expectedVersion: this.stateProvince.version,
           stateProvinceName: this.stateProvince.stateProvinceName,
           displayName: this.stateProvince.displayName || null,
-          jurisdictionType: jurisdictionCode(this.stateProvince.jurisdictionType),
-          otherJurisdictionType: this.stateProvince.otherJurisdictionType || null,
+          jurisdictionType: this.stateProvince.jurisdictionType ?? null,
+          otherJurisdictionType: this.stateProvince.otherJurisdictionType?.trim() || null,
           isFederalJurisdiction: this.stateProvince.isFederalJurisdiction,
           gstStateCode: this.stateProvince.gstStateCode || null,
           stateTaxJurisdictionCode: this.stateProvince.stateTaxJurisdictionCode || null,
@@ -1190,6 +1261,7 @@ export class StateComponent implements OnInit {
               `State/Province '${this.stateProvince.stateProvinceName}' updated successfully`,
             );
             this.masters.invalidateReferenceData();
+            this.geoMasters.invalidate();
             this.viewMode = 'list';
             this.editingId = null;
             this.loadData();
@@ -1206,15 +1278,15 @@ export class StateComponent implements OnInit {
         stateProvinceName: this.stateProvince.stateProvinceName,
         countryId: this.stateProvince.countryId!,
         displayName: this.stateProvince.displayName || null,
-        jurisdictionType: jurisdictionCode(this.stateProvince.jurisdictionType),
-        otherJurisdictionType: this.stateProvince.otherJurisdictionType || null,
+        jurisdictionType: this.stateProvince.jurisdictionType ?? 'state',
+        otherJurisdictionType: this.stateProvince.otherJurisdictionType?.trim() || null,
         isFederalJurisdiction: this.stateProvince.isFederalJurisdiction,
         gstStateCode: this.stateProvince.gstStateCode || null,
         stateTaxJurisdictionCode: this.stateProvince.stateTaxJurisdictionCode || null,
         defaultTimeZoneId: this.stateProvince.defaultTimeZoneId || null,
         postalCodePattern: this.stateProvince.postalCodePattern || null,
         addressFormatHint: this.stateProvince.addressFormatHint || null,
-        status: this.stateProvince.status ? STATUS_CODES[this.stateProvince.status] : 'draft',
+        status: this.stateProvince.status ?? 'draft',
         sortOrder: this.stateProvince.sortOrder,
         notes: this.stateProvince.notes || null,
       })
@@ -1227,6 +1299,7 @@ export class StateComponent implements OnInit {
             `State/Province '${created.stateProvinceName}' added successfully`,
           );
           this.masters.invalidateReferenceData();
+          this.geoMasters.invalidate();
           this.viewMode = 'list';
           this.currentPage = 1;
           this.loadData();
@@ -1257,6 +1330,7 @@ export class StateComponent implements OnInit {
         'A state/province with this code already exists for the selected country',
       );
       this.openAccordion('stateIdentity');
+      this.renderNow();
       return;
     }
 
@@ -1280,10 +1354,15 @@ export class StateComponent implements OnInit {
     const toast: ToastMessage = { id: this.toastCounter, kind, title, message };
     this.toasts.push(toast);
     setTimeout(() => this.dismissToast(toast.id), 3500);
+
+    // Toasts are raised from HTTP callbacks, so the render has to be asked for - and asking once
+    // here also paints whatever else the same callback changed.
+    this.renderNow();
   }
 
   dismissToast(id: number): void {
     this.toasts = this.toasts.filter((t) => t.id !== id);
+    this.renderNow();
   }
 
   private delay(ms: number): Promise<void> {

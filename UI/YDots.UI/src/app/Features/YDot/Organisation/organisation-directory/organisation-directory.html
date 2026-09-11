@@ -89,7 +89,7 @@
         <select id="org-status" class="org-select"
                 [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
           <option value="">All statuses</option>
-          @for (option of statusOptions; track option.value) {
+          @for (option of statusOptions(); track option.value) {
             <option [value]="option.value">{{ option.label }}</option>
           }
         </select>
@@ -108,7 +108,7 @@
         <label class="org-field-label" for="org-page-size">Rows per page</label>
         <select id="org-page-size" class="org-select"
                 [ngModel]="pageSize()"
-                (ngModelChange)="pageSize.set(+$event); goToPage(1); load()">
+                (ngModelChange)="onPageSizeChange($event)">
           <option [value]="10">10</option>
           <option [value]="25">25</option>
           <option [value]="50">50</option>

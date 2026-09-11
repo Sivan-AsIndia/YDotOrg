@@ -122,4 +122,13 @@ public sealed record CountryDetailResponse(
     /// no Edit and no Delete to a Tenant caller, so the screen does not draw a button that
     /// would answer 403.
     /// </summary>
-    IReadOnlyList<string> PermittedActions);
+    IReadOnlyList<string> PermittedActions,
+
+    /// <summary>
+    /// Who created the row, by name - "System" for a seeded platform row. Resolved by the server,
+    /// because the client's people directory is tenant-scoped and cannot answer at platform scope.
+    /// </summary>
+    string? CreatedByName = null,
+
+    /// <summary>Who last changed the row, by name. Null when it has never been changed.</summary>
+    string? UpdatedByName = null);

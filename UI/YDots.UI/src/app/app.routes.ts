@@ -388,7 +388,12 @@ export const routes: Routes = [
       // the platform". The guard is on the ROUTE rather than on the links that lead here on
       // purpose - a link can be fixed, but the Back button and a bookmark cannot.
       { path: 'administration/organisation/directory', component: OrganisationDirectoryComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.view')] },
-      { path: 'administration/organisation/details', component: OrganisationDetailComponent, canActivate: [requirePermission('iam.organisation.view')] },
+      // THE ORGANISATION'S OWN SCREENS CARRY organisationContextGuard. They read
+      // /organisations/mine/..., which has nothing to answer until an Organisation is chosen, so
+      // a SuperAdmin at platform scope used to land on "This organisation could not be loaded" -
+      // or, for departments and units, a 500. The guard sends them to the picker and back.
+      // details/:id is the platform view of ANY organisation and needs no such context.
+      { path: 'administration/organisation/details', component: OrganisationDetailComponent, canActivate: [organisationContextGuard, requirePermission('iam.organisation.view')] },
       { path: 'administration/organisation/details/:id', component: OrganisationDetailComponent, canActivate: [requirePermission('iam.organisation.view')] },
       { path: 'administration/organisation/setup-wizard', component: OrganisationSetupWizardComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.create')] },
       { path: 'administration/organisation/registration-verification', component: RegistrationVerificationComponent, canActivate: [platformScopeGuard, requirePermission('platform.organisations.review')] },
@@ -399,7 +404,15 @@ export const routes: Routes = [
       //
       // Both codes are accepted because the screen serves two audiences: somebody who may read the
       // organisation profile, and the administrator who may change its settings.
-      { path: 'administration/organisation/settings', component: OrganisationDetailComponent, canActivate: [requirePermission('iam.organisation.manage-settings', 'iam.organisation.view')] },
+      //
+      // `tab` IS WHAT MAKES IT OPEN ON THAT TAB. The comment above always said so, and nothing read
+      // it: the Settings menu item opened the Profile tab like the details route does.
+      {
+        path: 'administration/organisation/settings',
+        component: OrganisationDetailComponent,
+        data: { tab: 'settings' },
+        canActivate: [organisationContextGuard, requirePermission('iam.organisation.manage-settings', 'iam.organisation.view')],
+      },
 
       // Two hierarchies, one screen. `mode` tells the component which it is managing, so the
       // routes can be renamed without touching it. See the component for why they are separate
@@ -408,14 +421,14 @@ export const routes: Routes = [
         path: 'administration/organisation/departments',
         component: OrganisationStructureComponent,
         data: { mode: 'departments' },
-        canActivate: [requirePermission(
+        canActivate: [organisationContextGuard, requirePermission(
           'iam.organisation.view', 'iam.organisation.manage-departments')],
       },
       {
         path: 'administration/organisation/units',
         component: OrganisationStructureComponent,
         data: { mode: 'units' },
-        canActivate: [requirePermission('iam.organisation.view', 'iam.organisation.manage-units')],
+        canActivate: [organisationContextGuard, requirePermission('iam.organisation.view', 'iam.organisation.manage-units')],
       },
 
       // =========================================================================
