@@ -45,7 +45,6 @@ export interface HistoryEvent {
 
 export interface FollowUp {
   id: string;
-  reference?: string;
   recordId?: string;
   recordName: string;
   recordType: RecordType;
@@ -474,7 +473,7 @@ export class FollowUpQueueComponent {
       if (this.recordFilterId() && f.recordId !== this.recordFilterId())
         return false;
       if (term) {
-        const hay = `${f.reference} ${f.recordName} ${f.phone}`.toLowerCase();
+        const hay = `${f.id} ${f.recordName} ${f.phone}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       if (gf.status.size && !gf.status.has(f.status)) return false;

@@ -1,6 +1,4 @@
-import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
 import { CommonModule } from '@angular/common';
-import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DonorApiService } from '../../../../Service/donor-api.service';
@@ -19,12 +17,27 @@ import { PeopleDirectoryService } from '../../../../Shared/services/people-direc
 
 @Component({
   selector: 'app-donor-360',
-  imports: [CommonModule, FormsModule, ReadableIdPipe],
+  imports: [CommonModule, FormsModule],
   templateUrl: './donor-360.html',
   styleUrl: './donor-360.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Donor360Component {
+    readonly pageSize = 10;
+    readonly pages = signal<Record<string, number>>({});
+    readonly ownerSearch = signal('');
+    readonly hasSelectedOwner = computed(() => this.ownerOptions().some(p => p.reference === this.correctOwner()));
+    readonly filteredOwners = computed(() => this.ownerOptions().filter(p => p.reference === this.correctOwner() || (p.name + ' ' + (p.context ?? '')).toLowerCase().includes(this.ownerSearch().toLowerCase())));
+    readonly upcoming = computed(() => (this.response()?.followUps ?? []).filter(f => !['Completed','Cancelled'].includes(f.status)).slice().sort((a,b) => (a.dueAtUtc ? Date.parse(a.dueAtUtc) : Infinity) - (b.dueAtUtc ? Date.parse(b.dueAtUtc) : Infinity)));
+    readonly latestDocument = computed(() => this.documents().slice().sort((a,b) => Date.parse(b.uploadedOn)-Date.parse(a.uploadedOn))[0]);
+    readonly initials = computed(() => this.donor().fullName.trim().split(/\s+/).map(n => n[0]).slice(0,2).join(''));
+    filtered<T extends object>(rows: readonly T[]): T[] { const q = this.searchTerm().trim().toLowerCase(); return rows.filter(row => !q || Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q))); }
+    pageCount(rows: readonly object[]): number { return Math.max(1, Math.ceil(this.filtered(rows).length / this.pageSize)); }
+    pageNumber(key: string, rows: readonly object[]): number { return Math.min(this.pages()[key] ?? 1, this.pageCount(rows)); }
+    paged<T extends object>(key: string, rows: readonly T[]): T[] { const start=(this.pageNumber(key,rows)-1)*this.pageSize; return this.filtered(rows).slice(start,start+this.pageSize); }
+    movePage(key: string, rows: readonly object[], delta: number): void { this.pages.update(p => ({...p,[key]:Math.max(1,Math.min(this.pageCount(rows),this.pageNumber(key,rows)+delta))})); }
+    selectTab(tab: TabId): void { this.activeTab.set(tab); this.searchTerm.set(''); this.pages.set({}); }
+
     private readonly router = inject(Router);
     private readonly route = inject(ActivatedRoute);
     private readonly api = inject(DonorApiService);
@@ -211,12 +224,6 @@ export class Donor360Component {
     readonly conversations = computed<ConversationItem[]>(() =>
       (this.response()?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
-
-        // THE ID COLUMN USED TO PRINT `conversation.id`, which is a GUID. The contract carries no
-        // reference for a conversation, so the column shows what the interaction WAS - a call, an
-        // e-mail, a meeting - which is the thing a person reading the row can actually use.
-        type: conversation.interactionType,
-
         channel: conversation.channel ?? conversation.interactionType,
         summary: conversation.description ?? conversation.name,
         date: this.formatDate(conversation.occurredAtUtc),
@@ -227,11 +234,6 @@ export class Donor360Component {
     readonly followUps = computed<FollowUpItem[]>(() =>
       (this.response()?.followUps ?? []).map((followUp) => ({
         id: followUp.id,
-
-        // FUP-2026-0007, not the row's GUID. `Execute Follow-Up` still sends `id`; this is only
-        // what the list shows.
-        reference: readableIdentifier(followUp.followUpReference, ''),
-
         title: followUp.nextAction ?? followUp.followUpReference,
         due: followUp.dueAtUtc ? this.formatDate(followUp.dueAtUtc) : '',
         owner: followUp.relationshipOwnerName ?? '',
@@ -306,11 +308,7 @@ export class Donor360Component {
     }
 
   
-    readonly activity: ActivityItem[] = [
-      { id: 'A-9001', actor: 'System', action: 'Consent state re-confirmed at annual review.', timestamp: '12 Jul 2026, 10:02 am' },
-      { id: 'A-8990', actor: 'Sarah Johnson', action: 'Logged phone conversation and updated preference.', timestamp: '14 Jul 2026, 3:45 pm' },
-      { id: 'A-8944', actor: 'System', action: 'Donation reconciled against Winter Relief Appeal.', timestamp: '30 Jul 2026, 9:10 am' },
-    ];
+    readonly activity = computed<ActivityItem[]>(() => (this.response()?.activityHistory ?? []).slice().sort((a,b) => Date.parse(b.occurredAtUtc)-Date.parse(a.occurredAtUtc)).map(a => ({ id:a.id, actor:a.targetType, action:a.reason || a.actionCode, timestamp:this.formatDate(a.occurredAtUtc) })));
   
     // ============================================================
     // TABS — progressive disclosure of the main work area
@@ -319,12 +317,12 @@ export class Donor360Component {
     readonly tabs: { id: TabId; label: string }[] = [
       { id: 'overview', label: 'Overview' },
       { id: 'donations', label: 'Donations' },
-      { id: 'communications', label: 'Communications' },
+      
       { id: 'follow-ups', label: 'Follow-Ups' },
-      { id: 'documents', label: 'Documents & duplicates' },
+      { id: 'documents', label: 'Documents' },
       { id: 'activity', label: 'Activity history' },
-      { id: 'consent', label: 'Consent' },
-      { id: 'identity-verification', label: 'Identity Verification' },
+      
+      
     ];
     activeTab = signal<TabId>((this.route.snapshot.queryParamMap.get('tab') as TabId | null) ?? 'overview');
   
@@ -412,7 +410,7 @@ export class Donor360Component {
     lifetimeGiving = computed(() => this.donationTotals().find(d => d.stage === 'Received')?.amount ?? 0);
 
     /** KPI: number of campaigns this donor has given to. */
-    totalDonationsCount = computed(() => this.campaignHistory().length);
+    totalDonationsCount = computed(() => this.response()?.donationTotalsByStage.find(d => d.stage === 'Received')?.transactionCount ?? 0);
 
     /** KPI: promises fulfilled to date. */
     fulfilledPromisesCount = computed(() => this.promises().filter(p => p.status === 'Fulfilled').length);
@@ -447,6 +445,7 @@ export class Donor360Component {
     searchTerm = signal('');
     setSearchTerm(value: string) {
       this.searchTerm.set(value);
+      this.pages.set({});
     }
     matchesSearch(...fields: (string | number)[]): boolean {
       const q = this.searchTerm().trim().toLowerCase();
@@ -485,6 +484,7 @@ export class Donor360Component {
       if (action === 'correct') {
         this.correctOwner.set(this.response()?.donor?.relationshipOwnerUserId ?? '');
         this.correctReason.set('');
+        this.ownerSearch.set('');
       }
 
       this.correctErrors.set({});
@@ -500,7 +500,7 @@ export class Donor360Component {
   
     submitCorrect() {
       const errors: Record<string, string> = {};
-      if (!this.correctReason().trim()) errors['reason'] = 'Enter Reason for correction.';
+      if (this.correctReason().trim().length < 10 || this.correctReason().trim().length > 2000) errors['reason'] = 'Enter a reason between 10 and 2000 characters.';
       this.correctErrors.set(errors);
       if (Object.keys(errors).length) return;
   
@@ -528,6 +528,7 @@ export class Donor360Component {
           // NULL, NOT AN EMPTY STRING. "No owner" is a real choice here, and the API takes null
           // for it; an empty string is not a Guid and is refused before a handler sees it.
           relationshipOwnerUserId: this.correctOwner().trim() || null,
+          relationshipOwnerName: this.ownerOptions().find(p => p.reference === this.correctOwner())?.name ?? null,
           correctionReason: this.correctReason(),
           expectedVersion: current.donor.version,
         })
@@ -838,12 +839,8 @@ export class Donor360Component {
   
   interface DonationStage { stage: string; amount: number; asOf: string; }
   interface CampaignHistoryItem { id: string; name: string; role: string; amount: number; date: string; status: string; }
-  // `id` IS THE API'S GUID ON BOTH OF THESE and is kept only for tracking and for the calls that
-  // need it. What the tables PRINT is the readable field beside it - see the note on each map
-  // below. A conversation has no reference of its own on the contract, so its interaction type is
-  // what stands in the column; a follow-up has one and it was simply never carried across.
-  interface ConversationItem { id: string; type: string; channel: string; summary: string; date: string; owner: string; }
-  interface FollowUpItem { id: string; reference: string; title: string; due: string; owner: string; status: string; }
+  interface ConversationItem { id: string; channel: string; summary: string; date: string; owner: string; }
+  interface FollowUpItem { id: string; title: string; due: string; owner: string; status: string; }
   interface PromiseItem { id: string; amount: number; dueDate: string; status: string; }
   interface DocumentItem { id: string; name: string; type: string; uploadedOn: string; classification: string; }
   interface DuplicateLink { id: string; reference: string; matchReason: string; similarity: string; }

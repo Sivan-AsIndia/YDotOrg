@@ -1,31 +1,38 @@
 /* =========================================================
    Campaign detail
-   Read-only view, aligned to the register palette for cross-screen consistency.
+   Read-only view, restyled to match the Campaign Overview list:
+   white canvas, bold sans headings with a gold accent rule,
+   deep burgundy actions, gold highlights, plum owner avatar.
    ========================================================= */
 :host {
   --cd-paper: #ffffff;
   --cd-card: #ffffff;
-  --cd-ink: #1e2a24;
-  --cd-ink-2: #4a564e;
-  --cd-muted: #7b8880;
-  --cd-border: #e4e0d3;
-  --cd-border-2: #d8d3c4;
+  --cd-row-alt: #faf7f5;
+  --cd-ink: #1c1a1a;
+  --cd-ink-2: #5c5654;
+  --cd-muted: #928c89;
+  --cd-border: #ece5e2;
+  --cd-border-2: #ddd2cd;
 
-  --cd-meadow: var(--pe-primary, #223c30);
-  --cd-meadow-700: var(--pe-primary-text-emphasis, #26412e);
-  --cd-meadow-soft: var(--pe-primary-bg-subtle, #e7efe7);
+  /* Primary = deep burgundy, standing in for the wizard's meadow green */
+  --cd-maroon: var(--pe-primary, #7c1f2e);
+  --cd-maroon-700: var(--pe-primary-text-emphasis, #5c1521);
+  --cd-maroon-soft: #f6e8ea;
 
-  --cd-gold: #b4842a;
-  --cd-gold-soft: #f6ecd4;
-  --cd-blue: #58717c;
-  --cd-blue-soft: #e6eff3;
-  --cd-plum: #6b4a72;
+  --cd-gold: #c39433;
+  --cd-gold-soft: #f4e8c8;
+  --cd-blue: #3f6dab;
+  --cd-blue-soft: #e6edf6;
+  --cd-plum: #5b3b6b;
+  --cd-plum-soft: #ece4f0;
   --cd-good: #2f7d4f;
-  --cd-good-soft: #e5efe7;
-  --cd-error: #c0392b;
-  --cd-error-soft: #f9e6e2;
+  --cd-good-soft: #e4efe6;
+  --cd-error: #b23b31;
+  --cd-error-soft: #f8e3e0;
   --cd-warn: #b5822f;
   --cd-warn-soft: #f7ecd6;
+
+  --cd-font-display: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
 
   display: block;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -36,19 +43,21 @@
   box-sizing: border-box;
 }
 .cd-page {
-  padding: 24px 17px 48px;
+  padding: 32px 28px 48px;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
-/* Visible deep-olive / antique-gold focus ring; no trap. */
+/* Visible burgundy/gold focus ring; no trap. */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid #E4EFE6;
-  outline-offset: 0;
-  border-radius: 10px;
+  outline: 2px solid var(--cd-gold);
+  outline-offset: 1px;
+  border-radius: 6px;
 }
 
 /* ---------- Buttons ---------- */
@@ -58,40 +67,43 @@ textarea:focus-visible,
   justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 10px 18px;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
   border: 1px solid transparent;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .cd-btn-primary {
-  background: var(--cd-meadow);
+  background: var(--cd-maroon);
   color: #fff;
 }
 /* Header action buttons (Export, Manage lifecycle, Edit, Delete) all match the
    New Campaign button height so the row is uniform. */
 .cd-header-actions .cd-btn {
-  min-height: 36px;
-  padding: 6px 14px;
+  min-height: 38px;
+  padding: 8px 16px;
   font-size: 13px;
 }
 .cd-btn-primary:hover {
-  background: var(--cd-meadow-700);
+  background: var(--cd-maroon-700);
 }
 .cd-btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* Ghost secondary — same shape as the wizard's .btn-ghost. */
 .cd-btn-outline {
   background: #fff;
-  color: var(--cd-meadow);
-  border-color: var(--cd-meadow);
+  color: var(--cd-maroon);
+  border-color: var(--cd-border-2);
 }
 .cd-btn-outline:hover {
-  background: var(--cd-meadow-soft);
+  background: var(--cd-maroon-soft);
+  border-color: var(--cd-maroon);
 }
 .cd-btn-danger {
   background: #fff;
@@ -137,16 +149,38 @@ textarea:focus-visible,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+}
+.cd-header-text {
+  display: flex;
+  align-items: flex-start;
   gap: 20px;
-  margin-bottom: 18px;
+}
+/* Decorative record-type glyph, mirrors the heart-in-hands mark on the
+   Campaign Overview banner — purely illustrative, aria-hidden. */
+.cd-header-glyph {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cd-gold-soft), #fff);
+  border: 1px solid var(--cd-gold-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cd-header-glyph svg {
+  width: 28px;
+  height: 28px;
+  color: var(--cd-maroon);
 }
 .cd-eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--cd-meadow);
-  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--cd-ink-2);
+  margin: 0 0 10px;
 }
 .cd-title-row {
   display: flex;
@@ -155,18 +189,31 @@ textarea:focus-visible,
   flex-wrap: wrap;
 }
 .cd-title {
-  /* Georgia renders old-style figures (digits like "2025" sit unevenly against
-     the capitals) and ignores the lining-figure feature. Use serifs whose default
-     numerals are lining/uniform-height so the year reads cleanly. */
-  font-family: ui-serif, 'Cambria', 'Times New Roman', 'Times', serif;
+  font-family: var(--cd-font-display);
   font-size: 34px;
-  line-height: 1.1;
-  font-weight: 500;
-  letter-spacing: -0.4px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.3px;
   margin: 0;
-  color: #000;
-  font-variant-numeric: lining-nums;
-  font-feature-settings: 'lnum' 1;
+  color: var(--cd-ink);
+      font-family: "Inter" !important;
+    font-size: 40px;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin: 0;
+}
+/* Gold accent rule beneath the title, echoing the overview page's underline */
+.cd-header-text::after {
+  content: '';
+}
+.cd-title-rule {
+      width: 38px;
+    height: 5px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: #e3b93f;
 }
 .cd-task-meta {
   display: flex;
@@ -189,10 +236,6 @@ textarea:focus-visible,
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-
-  /* Up to four actions stand here on a Draft (Submit, Manage lifecycle, Tracking assets, Export,
-     then Edit and Delete draft), so the row wraps to the right rather than pushing the title
-     column out of the header on a narrow viewport. */
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -211,7 +254,7 @@ textarea:focus-visible,
   padding: 2px 10px;
 }
 .cd-badge-draft {
-  background: #eef1ec;
+  background: #efeceb;
   color: var(--cd-muted);
 }
 .cd-badge-submitted {
@@ -223,7 +266,7 @@ textarea:focus-visible,
   color: var(--cd-good);
 }
 .cd-badge-scheduled {
-  background: #efe6f1;
+  background: var(--cd-plum-soft);
   color: var(--cd-plum);
 }
 .cd-badge-active {
@@ -256,7 +299,7 @@ textarea:focus-visible,
   flex-wrap: wrap;
   background: #fff;
   border: 1px solid var(--cd-border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 12px 16px;
   margin-bottom: 12px;
 }
@@ -271,8 +314,8 @@ textarea:focus-visible,
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  background: var(--cd-meadow-soft);
-  color: var(--cd-meadow);
+  background: var(--cd-maroon-soft);
+  color: var(--cd-maroon);
   border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
@@ -300,8 +343,8 @@ textarea:focus-visible,
 }
 .cd-search-input:focus {
   outline: none;
-  border-color: var(--cd-meadow);
-  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+  border-color: var(--cd-gold);
+  box-shadow: 0 0 0 2px var(--cd-gold-soft);
 }
 .cd-saved {
   display: inline-flex;
@@ -329,8 +372,8 @@ textarea:focus-visible,
 }
 .cd-select:focus {
   outline: none;
-  border-color: var(--cd-meadow);
-  box-shadow: 0 0 0 3px rgba(49, 87, 70, 0.1);
+  border-color: var(--cd-gold);
+  box-shadow: 0 0 0 2px var(--cd-gold-soft);
 }
 .cd-chev {
   position: absolute;
@@ -349,7 +392,6 @@ textarea:focus-visible,
 .cd-totals-fetching {
   opacity: 0.6;
 }
-/* Donations-in-scope total relocated into the task-header meta row. */
 .cd-meta-totals {
   font-variant-numeric: tabular-nums;
 }
@@ -376,8 +418,8 @@ textarea:focus-visible,
   cursor: pointer;
 }
 .cd-refresh-btn:hover:not(:disabled) {
-  background: var(--cd-meadow-soft);
-  color: var(--cd-meadow);
+  background: var(--cd-maroon-soft);
+  color: var(--cd-maroon);
 }
 .cd-refresh-btn:disabled {
   cursor: not-allowed;
@@ -392,15 +434,31 @@ textarea:focus-visible,
   }
 }
 
-/* ---------- Owner name/id/role line ---------- */
+/* ---------- Owner avatar + name/id/role line ---------- */
 .cd-owner-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   margin: 6px 0 0;
   font-size: 13.5px;
   color: var(--cd-ink-2);
+}
+/* Plum initials avatar, matching the owner circle on the overview list */
+.cd-avatar {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #ffaeea4a;
+    color: #51003b63;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: uppercase;
 }
 .cd-owner-name {
   font-weight: 700;
@@ -410,7 +468,7 @@ textarea:focus-visible,
   color: var(--cd-muted);
 }
 .cd-owner-role {
-  color: var(--cd-meadow);
+  color: var(--cd-maroon);
   font-weight: 600;
 }
 
@@ -423,7 +481,7 @@ textarea:focus-visible,
   padding: 0;
   font-size: 12px;
   font-weight: 700;
-  color: var(--cd-meadow);
+  color: var(--cd-maroon);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -439,7 +497,7 @@ textarea:focus-visible,
   height: 100vh;
   max-height: 100vh;
   margin: -20px -20px -20px auto;
-  border-radius: 18px 0 0 18px;
+  /* border-radius: 18px 0 0 18px; */
   padding: 0;
   position: relative;
   display: flex;
@@ -469,11 +527,8 @@ textarea:focus-visible,
   display: block;
   padding: 22px 24px 30px;
   overflow-y: auto;
-  flex: 1 1 auto;
+  /* flex: 1 1 auto; */
 }
-/* While the embedded action off-canvas is open, hide this lifecycle popup's own chrome
-   (surface, shadow, close button, backdrop dim) so only the action off-canvas is visible.
-   The child keeps its fixed overlays mounted, so they stay on screen. */
 .cd-modal-backdrop.cd-lifecycle-chrome-hidden {
   background: transparent;
 }
@@ -497,7 +552,7 @@ textarea:focus-visible,
   padding: 14px 16px;
   border: 1px solid var(--cd-border);
   border-radius: 10px;
-  background: var(--cd-row-alt, #faf8f3);
+  background: var(--cd-row-alt, #faf7f5);
   font-size: 14px;
   line-height: 1.6;
   margin-bottom: 6px;
@@ -523,16 +578,16 @@ textarea:focus-visible,
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  background: var(--cd-meadow-soft);
+  background: var(--cd-maroon-soft);
   border: none;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--cd-meadow);
+  color: var(--cd-maroon);
   cursor: pointer;
 }
 .cd-chip:hover {
-  background: #dbe8db;
+  background: #efd9dd;
 }
 .cd-clear-all {
   background: none;
@@ -552,22 +607,46 @@ textarea:focus-visible,
 .cd-card {
   background: var(--cd-card);
   border: 1px solid var(--cd-border);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(28, 26, 26, 0.03);
 }
 .cd-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #80808038;
+    padding-bottom: 20px;
+}
+.cd-card-head-left {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 10px;
+}
+/* Small icon bubble beside each card title, echoing the chart-icon bubble on
+   the Campaign Progress panel. */
+.cd-card-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--cd-good-soft);
+  color: var(--cd-good);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cd-card-icon svg {
+  width: 16px;
+  height: 16px;
 }
 .cd-card-title {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--cd-ink-2);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--cd-ink);
   margin: 0;
 }
 
@@ -591,13 +670,10 @@ textarea:focus-visible,
   flex-direction: column;
   gap: 20px;
 }
-/* Narrower label column so the persistent-outcome facts read well in the sidebar. */
 .cd-side .cd-facts dt {
   min-width: 120px;
 }
 .cd-side-card {
-  /* Related & history no longer sticky so the Persistent outcome card can sit
-     directly beneath it in the sidebar flow. */
 }
 
 /* ---------- Read-only facts ---------- */
@@ -642,6 +718,52 @@ textarea:focus-visible,
 .cd-facts-3 dt {
   min-width: 0;
 }
+
+/* ---------- Icon-led fact grid (Campaign summary) ---------- */
+.cd-fact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 28px;
+  margin: 0;
+}
+.cd-fact-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.cd-fact-ic {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+      color: var(--icon-color);
+}
+.cd-fact-ic svg {
+  width: 100%;
+  height: 100%;
+}
+.cd-fact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cd-fact-body dt {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cd-ink-2);
+}
+.cd-fact-body dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--cd-ink);
+  line-height: 1.45;
+}
+@media (max-width: 560px) {
+  .cd-fact-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .cd-amount {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -652,7 +774,7 @@ textarea:focus-visible,
   width: 64px;
   height: 7px;
   border-radius: 999px;
-  background: #eae5da;
+  background: #ece5e2;
   overflow: hidden;
   vertical-align: middle;
   margin-right: 8px;
@@ -660,7 +782,7 @@ textarea:focus-visible,
 .cd-share-fill {
   display: block;
   height: 100%;
-  background: var(--cd-gold, #c39433);
+  background: var(--cd-gold);
   border-radius: 999px;
 }
 .cd-share-pct {
@@ -676,17 +798,18 @@ textarea:focus-visible,
   line-height: 1.5;
 }
 
-/* Progress meter — antique-gold-tracked representation of "Target and reconciled progress". */
+/* Progress meter — thin cream track with a burgundy fill, matching the
+   overview list's progress bars. */
 .cd-meter {
   height: 8px;
   border-radius: 999px;
-  background: #eae5da;
+  background: #ece5e2;
   overflow: hidden;
   margin-top: 8px;
 }
 .cd-meter-fill {
   height: 100%;
-  background: var(--cd-meadow);
+  background: var(--cd-maroon);
   border-radius: 999px;
 }
 
@@ -696,11 +819,8 @@ textarea:focus-visible,
 }
 .cd-tabs {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
   border-bottom: 1px solid var(--cd-border);
   margin-bottom: 18px;
 }
@@ -721,15 +841,14 @@ textarea:focus-visible,
   color: var(--cd-ink);
 }
 .cd-tab-active {
-  color: var(--cd-meadow);
-  border-bottom-color: var(--cd-meadow);
+  color: var(--cd-maroon);
+  border-bottom-color: var(--cd-maroon);
 }
 .cd-tabpanel {
   min-height: 96px;
 }
 
-/* ---------- Read-only lists ---------- */
-/* ---------- Read-only tables (Targets / Budget / Sources / Tracking / Payments / History) ---------- */
+/* ---------- Read-only tables (Tracking / Payments) ---------- */
 .cd-table-scroll {
   overflow-x: auto;
 }
@@ -739,15 +858,21 @@ textarea:focus-visible,
   font-size: 13px;
 }
 .cd-table th {
-  text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--cd-muted);
-  padding: 0 12px 8px;
-  border-bottom: 1px solid var(--cd-border);
-  white-space: nowrap;
+    text-align: left;
+    /* font-size: 11.5px !important; */
+    font-weight: 700;
+    color: var(--primary);
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--cd-border);
+    white-space: nowrap;
+    background: 
+color-mix(in srgb, var(--primary) 3%, white);
+}
+.cd-table th:first-child {
+  border-radius: 8px 0 0 0;
+}
+.cd-table th:last-child {
+  border-radius: 0 8px 0 0;
 }
 .cd-table td {
   padding: 10px 12px;
@@ -790,7 +915,7 @@ textarea:focus-visible,
   background: var(--cd-good);
 }
 .cd-tone-meadow {
-  background: var(--cd-meadow);
+  background: var(--cd-maroon);
 }
 .cd-tone-blue {
   background: var(--cd-blue);
@@ -818,7 +943,55 @@ textarea:focus-visible,
   color: var(--cd-muted);
 }
 
-/*.cd-decision-value is still used inline by the Operate lifecycle dialog's radio options. */
+/* ---------- Related & history — empty state ----------
+   A soft, illustrated placeholder rather than blank space under a heading;
+   reuses the existing "good/green" tone already used for status, so it
+   doesn't introduce a new colour to the palette. */
+.cd-side-card-empty {
+
+    background: linear-gradient(165deg, 
+color-mix(in srgb, var(--primary) 8%, white) 0%, #fff 78%);
+    border-color: 
+color-mix(in srgb, var(--primary) 22%, white);
+
+}
+.cd-card-icon-leaf {
+  background: #fff;
+  color: var(--cd-good);
+}
+.cd-side-empty-note {
+  max-width: 30ch;
+  margin-inline: 0;
+  text-align: left;
+}
+.cd-side-empty-art {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin: 18px auto 4px;
+}
+
+/* History empty-state SVG — accent paths follow the app's primary token
+   (--primary, #315746) instead of hard-coded greens, and the art scales
+   down to fit inside the side card (viewBox keeps the aspect ratio). */
+.cd-side-empty-art .hs-accent {
+  stroke: var(--primary);
+  fill: var(--primary);
+}
+.cd-side-empty-art .hs-accent[fill="none"] {
+  fill: none;
+}
+.cd-side-empty-art .hs-ring-a {
+  stop-color: var(--primary);
+}
+.cd-side-empty-art .hs-ring-b {
+  stop-color: color-mix(in srgb, var(--primary) 78%, black);
+}
+.cd-side-empty-art .hs-line {
+  fill: color-mix(in srgb, var(--primary) 22%, #e2efe9);
+}
+
 .cd-decision-value {
   font-size: 13px;
   color: var(--cd-ink);
@@ -870,7 +1043,7 @@ textarea:focus-visible,
 }
 .cd-skeleton-head,
 .cd-skeleton-body {
-  background: linear-gradient(90deg, #E5EFE7 25%, #f7f6f0 37%, #E5EFE7 63%);
+  background: linear-gradient(90deg, #ece5e2 25%, #f7f3f1 37%, #ece5e2 63%);
   background-size: 400% 100%;
   animation: cd-sk 1.4s ease infinite;
 }
@@ -922,7 +1095,7 @@ textarea:focus-visible,
   position: fixed;
   inset: 0;
   z-index: 1100;
-  background: rgba(24, 32, 26, 0.5);
+  background: rgba(28, 20, 20, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -930,7 +1103,7 @@ textarea:focus-visible,
 }
 .cd-modal {
   background: #fff;
-  border-radius: 18px;
+  /* border-radius: 18px; */
   padding: 28px;
   width: 100%;
   max-width: 540px;
@@ -939,8 +1112,9 @@ textarea:focus-visible,
   overflow: auto;
 }
 .cd-modal-title {
+  font-family: var(--cd-font-display);
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0 0 8px;
 }
 .cd-modal-lead {
@@ -968,7 +1142,7 @@ textarea:focus-visible,
   cursor: pointer;
 }
 .cd-radio-row input[type='radio'] {
-  accent-color: var(--cd-meadow);
+  accent-color: var(--cd-maroon);
 }
 .cd-field-label {
   display: block;
@@ -997,8 +1171,8 @@ textarea:focus-visible,
 }
 .cd-textarea:focus {
   outline: none;
-  border-color: #8fbfa0;
-  box-shadow: 0 0 0 2px #E4EFE6;
+  border-color: var(--cd-gold);
+  box-shadow: 0 0 0 2px var(--cd-gold-soft);
 }
 .cd-field-foot {
   display: flex;
@@ -1048,8 +1222,19 @@ textarea:focus-visible,
   .cd-task-header {
     flex-direction: column;
   }
+  .cd-header-text {
+    gap: 14px;
+  }
+  .cd-header-glyph {
+    width: 44px;
+    height: 44px;
+  }
+  .cd-header-glyph svg {
+    width: 22px;
+    height: 22px;
+  }
   .cd-title {
-    font-size: 27px;
+    font-size: 26px;
   }
   .cd-context {
     flex-direction: column;

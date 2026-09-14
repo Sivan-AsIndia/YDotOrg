@@ -5,9 +5,6 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-
-import { ReadableIdPipe } from '../../../../Shared/pipes/readable-id.pipe';
-import { readableIdentifier } from '../../../../Shared/models/identifier';
 import { WorkflowStateService } from '../../../../Service/workflow-state.service';
 
 /** Donor record as surfaced from the Donation & Payments module. */
@@ -86,7 +83,7 @@ const CONSENT_TAGS: ConsentStatus[] = [
 @Component({
   selector: 'app-donor-list',
   standalone: true,
-  imports: [ReadableIdPipe],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'onEscape()',
@@ -98,16 +95,8 @@ const CONSENT_TAGS: ConsentStatus[] = [
 export class DonorListComponent {
   /** ----- Raw data + async state ----- */
   protected readonly donors = computed<Donor[]>(() => this.workflow.donors() as Donor[]);
-
-  /**
-   * THE WORKSPACE'S OWN LOAD STATE. The donors come from the DON API through
-   * WorkflowStateService; this screen used to fetch a `donors.json` asset that no longer exists,
-   * and because that request always failed, the list always showed "Unable to load donors" -
-   * over rows the API had already returned.
-   */
-  protected readonly loading = computed(() => this.workflow.isLoading() && this.donors().length === 0);
-  protected readonly error = computed(() =>
-    this.donors().length === 0 && this.workflow.loadError() ? 'Unable to load donors.' : null);
+  protected readonly loading = signal<boolean>(true);
+  protected readonly error = signal<string | null>(null);
   protected readonly lastRefreshed = signal<Date>(new Date());
 
   /** ----- Search + filters ----- */
@@ -170,10 +159,33 @@ export class DonorListComponent {
     this.loadDonors();
   }
 
-  /** Reloads the donors from the DON API (through the shared workspace state). */
+  /**
+   * Loads donor records handed off by the Donation & Payments module.
+   * `donors.json` stands in for that read API during development — it is
+   * served as a static asset, so swap the URL below for the real endpoint
+   * (e.g. `/api/donors`) once it is available. Kept as a runtime fetch
+   * rather than a build-time import so no tsconfig changes are required.
+   */
   private loadDonors(): void {
-    this.workflow.refresh();
-    this.lastRefreshed.set(new Date());
+    this.loading.set(true);
+    this.error.set(null);
+    fetch('/assets/data/donors.json')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+        return response.json() as Promise<Donor[]>;
+      })
+      .then((data) => {
+        this.workflow.seedDonors(data);
+        this.lastRefreshed.set(new Date());
+      })
+      .catch(() => {
+        this.error.set('Unable to load donors.');
+      })
+      .finally(() => {
+        this.loading.set(false);
+      });
   }
 
   /** Search is enabled in profile dropdowns only above 20 options. */
@@ -528,7 +540,7 @@ export class DonorListComponent {
 
   protected exportDonorRecord(donor: Donor, event: Event): void {
     event.stopPropagation();
-    this.downloadCsv([donor], `${readableIdentifier(donor.reference, 'donor')}.csv`);
+    this.downloadCsv([donor], `${donor.donorId}.csv`);
     this.openMoreMenuId.set(null);
   }
 
@@ -645,7 +657,7 @@ export class DonorListComponent {
     ];
     const lines = rows.map((d) =>
       [
-        readableIdentifier(d.reference, ''),
+        d.donorId,
         d.name,
         d.mobile,
         d.email,
@@ -674,7 +686,7 @@ export class DonorListComponent {
     const bodyRows = rows
       .map(
         (d) =>
-          `<tr><td>${readableIdentifier(d.reference, '')}</td><td>${d.name}</td><td>${d.mobile}</td><td>${d.email}</td>` +
+          `<tr><td>${d.donorId}</td><td>${d.name}</td><td>${d.mobile}</td><td>${d.email}</td>` +
           `<td>${d.location}</td><td>${d.campaign}</td><td>${d.owner}</td><td>${d.lastDonationAmount}</td>` +
           `<td>${d.lifetimeGiving}</td><td>${d.followUpStatus}</td><td>${d.consentStatus}</td><td>${d.verificationStatus}</td></tr>`,
       )
@@ -689,7 +701,7 @@ export class DonorListComponent {
     const rowsHtml = rows
       .map(
         (d) =>
-          `<tr><td>${readableIdentifier(d.reference, '')}</td><td>${d.name}</td><td>${d.campaign}</td>` +
+          `<tr><td>${d.donorId}</td><td>${d.name}</td><td>${d.campaign}</td>` +
           `<td>${this.formatCurrency(d.lifetimeGiving)}</td><td>${d.verificationStatus}</td></tr>`,
       )
       .join('');

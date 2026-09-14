@@ -31,7 +31,11 @@
 
   display: block;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: var(--cr-paper);
+  /* Soft green campaign-gradient backdrop (matches the Campaign Overview design). */
+  background:
+    radial-gradient(1100px 420px at 88% -6%, rgba(47, 107, 69, 0.12), transparent 62%),
+    radial-gradient(900px 380px at -8% 108%, rgba(47, 107, 69, 0.1), transparent 60%),
+    linear-gradient(180deg, #f1f8f2 0%, #fbfdfb 46%, #eaf3ec 100%);
   color: var(--cr-ink);
 }
 * {
@@ -196,13 +200,24 @@ button:focus-visible,
   margin-bottom: 20px;
 }
 .cr-title {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 38px;
-  line-height: 1.1;
-  font-weight: 400;
-  letter-spacing: -0.4px;
-  margin: 0 0 4px;
-  color: #000;
+    font-family: "Inter" !important;
+    font-size: 40px;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin: 0;
+    color: var(--pr-meadow);
+}
+/* Orange accent bar under the page title (per the Campaign Overview design). */
+.cr-title-accent {
+  display: block;
+    width: 38px;
+    height: 5px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+
+    border-radius: 999px;
+    background: #e3b93f;
 }
 .cr-subtitle {
   font-size: 14px;
@@ -446,13 +461,18 @@ button:focus-visible,
 
 /* Main table — the flex item that actually grows to fill the page (see `.cr-page` above); the
    pager row and any banners above the table keep their natural height, so only the table itself
-   claims the extra space. */
+   claims the extra space. Restyled as the white "Campaign Progress" panel of the overview design. */
 .cr-main {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   margin-bottom: 20px;
+  background: #ffffff;
+  border: 1px solid #e3ebe4;
+  border-radius: 18px;
+  padding: 18px 20px 8px;
+  box-shadow: 0 1px 3px rgba(23, 49, 31, 0.05);
 }
 .cr-pager-row {
   display: flex;
@@ -616,12 +636,12 @@ button:focus-visible,
 */
 .cr-table-scroll {
   flex: 1;
-  min-height: 260px;
+  /* min-height: 260px; */
   overflow-x: auto;
   overflow-y: auto;
   border: 1px solid #e8e9f3;
   border-radius: 8px;
-  min-height: calc(41px + (5 * 44px));
+  /* min-height: calc(41px + (5 * 44px)); */
 }
 .cr-table {
   width: 100%;
@@ -635,13 +655,14 @@ button:focus-visible,
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f8f9fa;
-  color: #495057;
+  background: #29292908;
+  color: #5c6a61;
   padding: 12px 14px;
   text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
   border-bottom: 1px solid #dee2e6;
 }
@@ -664,10 +685,10 @@ button:focus-visible,
    --pe-primary-bg-subtle which renders pink in this theme) with one accent bar on
    the leading cell only, never a green line down every column. */
 .cr-table tbody tr.cr-row-selected td {
-  background: #eef4f1;
+  background: color-mix(in srgb, var(--primary) 1%, white);
 }
 .cr-table tbody tr.cr-row-selected:hover td {
-  background: #e8f0ec;
+  background: color-mix(in srgb, var(--primary) 4%, rgba(255, 255, 255, 0.187));
 }
 .cr-table tbody tr.cr-row-selected td:first-child {
   box-shadow: inset 3px 0 0 var(--cr-meadow, #223c30);
@@ -1038,10 +1059,9 @@ button:focus-visible,
 .cr-table-footer {
   display: flex;
   align-items: center;
-  /* Pagination is the only child now that the currency note has gone, so it is pinned right
-     rather than pushed there by a space-between that has nothing left to space against. */
-  justify-content: flex-end;
-  padding: 12px 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px;
 }
 /* Context strip */
 .cr-context-strip {
@@ -1272,5 +1292,346 @@ button:focus-visible,
   .cr-active-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* =========================================================
+   Campaign Overview redesign
+   Back button + eyebrow, emblem, spotlight summary cards and
+   the "Campaign Progress" panel head.
+   ========================================================= */
+.cr-page {
+  position: relative;
+}
+/* Content sits above the absolutely-positioned leaf decorations — but modal
+   backdrops are excluded, they position themselves against the viewport. */
+.cr-page > *:not(.cr-modal-backdrop) {
+  position: relative;
+}
+
+/* Task header — back button, eyebrow label, emblem */
+.cr-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.cr-back-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #14311f;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.cr-back-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.cr-back-btn:hover {
+  background: rgba(20, 49, 31, 0.08);
+}
+.cr-eyebrow {
+  font-size: 14px;
+  font-weight: 700;
+  color: #14311f;
+}
+.cr-meta-strong {
+  font-weight: 600;
+  color: #3f4c44;
+}
+.cr-meta-sep {
+  width: 1px;
+  height: 14px;
+  background: #c9d4cb;
+  display: inline-block;
+}
+.cr-emblem {
+  width: 115px;
+  height: 115px;
+  flex: none;
+  margin-top: -4px;
+}
+.cr-emblem svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Soft leaf decorations in the page corners */
+.cr-deco {
+  position: absolute;
+  pointer-events: none;
+  color: #cfe4d4;
+  z-index: 0;
+}
+.cr-deco svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.cr-deco-bl {
+  left: 8px;
+  bottom: 34px;
+  width: 110px;
+  opacity: 0.55;
+  transform: rotate(-12deg);
+}
+.cr-deco-br {
+  right: 6%;
+  bottom: 4px;
+  width: 200px;
+  opacity: 0.4;
+  transform: scaleX(-1) rotate(6deg);
+}
+
+/* Spotlight summary cards */
+.cr-spotlight {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  margin: 4px 0 20px;
+  z-index: 1;
+}
+.cr-scard {
+  --sc: #2f8f5b;
+  --sc-soft: #e3f2e8;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e6ede7;
+  border-radius: 16px;
+  padding: 14px 16px 26px;
+  min-height: 124px;
+  box-shadow: 0 1px 2px rgba(23, 49, 31, 0.04);
+}
+.cr-scard[data-tone='plum'] {
+  --sc: #b06ab3;
+  --sc-soft: #f6e9f8;
+}
+.cr-scard[data-tone='green'] {
+  --sc: #2f8f5b;
+  --sc-soft: #e3f2e8;
+}
+.cr-scard[data-tone='orange'] {
+  --sc: #e8912d;
+  --sc-soft: #fdeeda;
+}
+.cr-scard[data-tone='blue'] {
+  --sc: #4a90d9;
+  --sc-soft: #e5effa;
+}
+.cr-scard[data-tone='red'] {
+  --sc: #e25555;
+  --sc-soft: #fde7e7;
+}
+.cr-scard[data-tone='violet'] {
+  --sc: #8b5cf6;
+  --sc-soft: #efe9fd;
+}
+.cr-scard-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+.cr-scard-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--sc-soft);
+  color: var(--sc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.cr-scard-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.cr-scard-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cr-scard-label {
+  font-size: 12.5px;
+  color: #6d7a71;
+}
+.cr-scard-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #14311f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.cr-scard-link {
+  color: var(--sc);
+  text-decoration: none;
+}
+.cr-scard-link:hover {
+  text-decoration: underline;
+}
+.cr-scard-sub {
+  font-size: 12px;
+  color: var(--cr-muted, #7b8880);
+}
+/* Thin progress bar inside the Progress card */
+.cr-scard-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #eae7dd;
+  overflow: hidden;
+  margin-top: 6px;
+  width: 100%;
+  display: block;
+}
+.cr-scard-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--sc, #2f8f5b);
+  transition: width 0.3s ease;
+}
+/* Owner card */
+.cr-scard-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  max-width: 100%;
+}
+.cr-scard-owner .cr-avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+}
+.cr-scard-owner-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #14311f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Actions card — dots trigger + menu */
+.cr-scard-menu-wrap {
+  position: relative;
+  z-index: 3;
+  margin-top: 2px;
+}
+.cr-scard-dots {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #e3ebe4;
+  background: #fff;
+  color: #4a564e;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cr-scard-dots:hover {
+  background: var(--sc-soft, #e3f2e8);
+  border-color: var(--sc, #2f8f5b);
+}
+.cr-scard .cr-menu {
+  right: auto;
+  left: 0;
+}
+/* Decorative wave + leaf at the bottom of every card */
+.cr-scard-wave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 32px;
+  color: var(--sc);
+  opacity: 0.3;
+  pointer-events: none;
+}
+.cr-scard-leaf {
+  position: absolute;
+  right: 10px;
+  bottom: 28px;
+  width: 15px;
+  height: 15px;
+  color: var(--sc);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* "Campaign Progress" panel head */
+.cr-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cr-panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cr-panel-badge {
+     width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: white;
+    color: #2f6b45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
+}
+.cr-panel-badge svg {
+width: 24px;
+    height: 24px;
+}
+.cr-panel-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #14311f;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .cr-spotlight {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .cr-spotlight {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cr-emblem,
+  .cr-deco {
+    display: none;
   }
 }

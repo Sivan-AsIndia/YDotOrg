@@ -399,7 +399,7 @@
               >
                 <option value="">No campaign</option>
                 @for (c of filterLookup('campaign', campaignDropdownOptions(), fields().campaign); track c.reference) {
-                  <option [value]="c.label">{{ c.label }}@if (c.context) { &mdash; {{ c.context }} }</option>
+                  <option [value]="c.label">{{ c.label }} &mdash; {{ c.context }}</option>
                 }
               </select>
             </div>

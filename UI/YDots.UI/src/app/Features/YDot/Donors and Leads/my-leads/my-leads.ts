@@ -210,9 +210,12 @@ export class MyLeadsComponent {
   readonly stageFilter = signal<FilterValue>('All');
   readonly temperatureFilter = signal<FilterValue>('All');
   readonly followUpFilter = signal<FilterValue>('All');
+  readonly stageOptionSearch = signal('');
 
   readonly selectedRefs = signal<ReadonlySet<string>>(new Set());
   readonly activeRef = signal<string | null>(null);
+  readonly currentPage = signal(1);
+  readonly pageSize = 10;
 
   // ---- copy-to-clipboard feedback state ----
   readonly copiedRef = signal<string | null>(null);
@@ -247,6 +250,7 @@ export class MyLeadsComponent {
         const permitted = response.permittedActions ?? [];
         this.permissions.set({
           view: permitted.includes('Open') || permitted.includes('Filter'),
+          create: permitted.includes('Create'),
           contact: permitted.includes('Contact'),
           qualify: permitted.includes('Qualify'),
           close: permitted.includes('Close'),
@@ -258,10 +262,9 @@ export class MyLeadsComponent {
         const requestedId = this.route.snapshot.queryParamMap.get('leadId');
         const rows = this.sourceLeads();
         this.activeRef.set(
-          requestedId && rows.some((lead) => lead.reference === requestedId)
-            ? requestedId
-            : rows[0]?.reference ?? null,
+          requestedId && rows.some((lead) => lead.reference === requestedId) ? requestedId : null,
         );
+        this.ensureValidPage();
       },
       error: (error: unknown) => {
         this.loading.set(false);
@@ -321,6 +324,10 @@ export class MyLeadsComponent {
     'All',
     ...Array.from(new Set(this.sourceLeads().map((l) => l.stage))),
   ]);
+  readonly visibleStageOptions = computed(() => {
+    const term = this.stageOptionSearch().trim().toLowerCase();
+    return term ? this.stageOptions().filter((option) => option.toLowerCase().includes(term)) : this.stageOptions();
+  });
   readonly temperatureOptions: FilterValue[] = ['All', 'Cold', 'Warm', 'Hot'];
   readonly followUpOptions: FilterValue[] = ['All', 'Upcoming', 'Due', 'Overdue', 'Completed'];
 
@@ -343,6 +350,18 @@ export class MyLeadsComponent {
     });
   });
 
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredLeads().length / this.pageSize)));
+
+  readonly pagedLeads = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize;
+    return this.filteredLeads().slice(start, start + this.pageSize);
+  });
+
+  readonly pageStart = computed(() => this.filteredLeads().length === 0 ? 0 : (this.currentPage() - 1) * this.pageSize + 1);
+  readonly pageEnd = computed(() => Math.min(this.currentPage() * this.pageSize, this.filteredLeads().length));
+
+  readonly pageNumbers = computed(() => Array.from({ length: this.totalPages() }, (_, index) => index + 1));
+
   readonly isEmpty = computed(() => !this.loading() && !this.loadError() && this.filteredLeads().length === 0);
 
   readonly activeLead = computed<LeadItem | null>(() => {
@@ -355,7 +374,7 @@ export class MyLeadsComponent {
   readonly hasSelection = computed(() => this.selectedCount() > 0);
 
   readonly allVisibleSelected = computed(() => {
-    const visible = this.filteredLeads();
+    const visible = this.pagedLeads();
     if (visible.length === 0) return false;
     const selected = this.selectedRefs();
     return visible.every((l) => selected.has(l.reference));
@@ -435,6 +454,10 @@ export class MyLeadsComponent {
     this.activeRef.set(ref);
   }
 
+  closeLeadDetails(): void {
+    this.activeRef.set(null);
+  }
+
   toggleSelection(ref: string, event: Event): void {
     event.stopPropagation();
     const next = new Set(this.selectedRefs());
@@ -447,7 +470,7 @@ export class MyLeadsComponent {
   }
 
   toggleSelectAllVisible(): void {
-    const visible = this.filteredLeads();
+    const visible = this.pagedLeads();
     if (this.allVisibleSelected()) {
       const next = new Set(this.selectedRefs());
       visible.forEach((l) => next.delete(l.reference));
@@ -465,6 +488,35 @@ export class MyLeadsComponent {
 
   applyPipelineFilter(stage: string): void {
     this.stageFilter.set(stage);
+    this.currentPage.set(1);
+  }
+
+  updateSearch(term: string): void {
+    this.searchTerm.set(term);
+    this.currentPage.set(1);
+  }
+
+  updateStageFilter(value: FilterValue): void {
+    this.stageFilter.set(value);
+    this.currentPage.set(1);
+  }
+
+  updateTemperatureFilter(value: FilterValue): void {
+    this.temperatureFilter.set(value);
+    this.currentPage.set(1);
+  }
+
+  updateFollowUpFilter(value: FilterValue): void {
+    this.followUpFilter.set(value);
+    this.currentPage.set(1);
+  }
+
+  goToPage(page: number): void {
+    this.currentPage.set(Math.min(Math.max(page, 1), this.totalPages()));
+  }
+
+  private ensureValidPage(): void {
+    this.goToPage(this.currentPage());
   }
 
   applySavedFilter(name: string): void {
@@ -495,6 +547,7 @@ export class MyLeadsComponent {
     this.stageFilter.set('All');
     this.temperatureFilter.set('All');
     this.followUpFilter.set('All');
+    this.currentPage.set(1);
   }
 
   refresh(): void {
@@ -628,6 +681,10 @@ export class MyLeadsComponent {
   requestOpenFollowUpQueue(): void {
     this.openFollowUpQueue.emit();
     this.router.navigate(['/app/fundraising/relationships/follow-up-queue']);
+  }
+
+  requestCreateLead(): void {
+    this.router.navigate(['/app/fundraising/relationships/lead-capture']);
   }
 
   requestViewLeadQueue(): void {

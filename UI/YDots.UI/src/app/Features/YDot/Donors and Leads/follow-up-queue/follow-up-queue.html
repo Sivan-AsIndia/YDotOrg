@@ -481,6 +481,8 @@
         </button>
       </div>
 
+      <!-- ============================== QUICK ACTION CARDS ============================== -->
+
       <!-- ============================== MAIN BODY ============================== -->
       <div class="fq-body">
         <div class="fq-main">
@@ -675,17 +677,14 @@
               </div>
               <div>
                 <label class="filter-group-label" for="fq-owner">Owner</label>
-                @if (owners().length > 20) {
-                <input
+                @if (owners().length > 20) {<input
                   type="search"
                   class="field-input option-search"
                   aria-label="Search fq-owner"
-                  placeholder="Search options…"
+                  placeholder="Search optionsâ€¦"
                   [value]="ownerSearch()"
                   (input)="ownerSearch.set($any($event.target).value)"
-                />
-                }
-                <select
+                />}<select
                   id="fq-owner"
                   class="field-select"
                   [value]="draftFilters().owner ?? ''"
@@ -702,17 +701,14 @@
                 <label class="filter-group-label" for="fq-campaign"
                   >Campaign</label
                 >
-                @if (campaigns().length > 20) {
-                <input
+                @if (campaigns().length > 20) {<input
                   type="search"
                   class="field-input option-search"
                   aria-label="Search fq-campaign"
-                  placeholder="Search options…"
+                  placeholder="Search optionsâ€¦"
                   [value]="campaignSearch()"
                   (input)="campaignSearch.set($any($event.target).value)"
-                />
-                }
-                <select
+                />}<select
                   id="fq-campaign"
                   class="field-select"
                   [value]="draftFilters().campaign ?? ''"
@@ -737,7 +733,7 @@
                     [value]="draftFilters().dateFrom ?? ''"
                     (change)="setDraftDateFrom($any($event.target).value)"
                   />
-                  <span aria-hidden="true">–</span>
+                  <span aria-hidden="true">â€“</span>
                   <label class="visually-hidden" for="fq-date-to">To</label>
                   <input
                     id="fq-date-to"
@@ -924,328 +920,507 @@
           }
 
           <!-- ============================== GRID VIEW ============================== -->
-          @if (viewMode() === 'grid') {
-            @if (loading()) {
-            <div class="fq-card empty-state" role="status">Loading follow-ups…</div>
-            } @else if (loadError()) {
-            <div class="fq-card empty-state" role="alert">
-              <p>{{ loadError() }}</p>
-              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refresh()" title="Retry loading follow-ups">Retry</button>
+          @if (viewMode() === 'grid') { @if (loading()) { <div class="fq-card empty-state" role="status">Loading follow-ups…</div> } @else if (loadError()) { <div class="fq-card empty-state" role="alert"><p>{{ loadError() }}</p><button type="button" class="btn btn-outline-secondary btn-sm" (click)="refresh()" title="Retry loading follow-ups">Retry</button></div> } @else if (filteredFollowUps().length === 0) {
+          <div class="fq-card empty-state">
+            <div class="empty-icon">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M8 2v4M16 2v4M3 10h18" />
+              </svg>
             </div>
-            } @else if (filteredFollowUps().length === 0) {
-            <div class="fq-card empty-state">
-              <div class="empty-icon">
+            <h3>No follow-ups found</h3>
+            <p>
+              Try adjusting your filters, or create a new follow-up to get
+              started.
+            </p>
+            <div class="empty-actions">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                (click)="resetFilters()"
+              >
                 <svg
-                  width="24"
-                  height="24"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
                 >
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M8 2v4M16 2v4M3 10h18" />
+                  <path d="m5 12 4 4L19 6" />
                 </svg>
-              </div>
-              <h3>No follow-ups found</h3>
-              <p>
-                Try adjusting your filters, or create a new follow-up to get
-                started.
-              </p>
-              <div class="empty-actions">
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary btn-sm"
-                  (click)="resetFilters()"
+                Clear Filters
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                (click)="createFollowUp()"
+                title="Add"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
                 >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m5 12 4 4L19 6" />
-                  </svg>
-                  Clear Filters
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-primary btn-sm"
-                  (click)="createFollowUp()"
-                  title="Add"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Add
-                </button>
-              </div>
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add
+              </button>
             </div>
-            } @else {
-            <div class="fq-card table-scroll">
-              <table class="fq-table">
-                <thead>
-                  <tr>
-                    <th class="checkbox-cell">
-                      <label class="visually-hidden" for="fq-select-all">Select all visible</label>
-                      <input id="fq-select-all" type="checkbox" class="fq-checkbox" [checked]="allVisibleSelected()" (change)="toggleSelectAllVisible()" />
-                    </th>
-                    <th>Follow-Up ID</th>
-                    <th>Related To</th>
-                    <th>Follow-Up Type</th>
-                    <th>Reason</th>
-                    <th>Scheduled Date &amp; Time</th>
-                    <th>Assigned User</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Dependency</th>
-                    <th class="actions-cell">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (f of pagedFollowUps(); track trackById($index, f)) {
-                  <tr [class.row-overdue]="isOverdue(f)">
-                    <td class="checkbox-cell">
-                      <label class="visually-hidden" [attr.for]="'sel-' + f.id">Select {{ f.reference || f.recordName }}</label>
-                      <input [id]="'sel-' + f.id" type="checkbox" class="fq-checkbox" [checked]="isSelected(f.id)" (change)="toggleSelect(f.id)" />
-                    </td>
-                    <td>
-                      <button type="button" class="btn btn-outline-secondary btn-sm fu-id-link" (click)="openPreview(f.id)">
-                        {{ f.reference || 'Follow-up' }}
-                      </button>
-                    </td>
-                    <td>
-                      <button type="button" class="btn btn-outline-secondary btn-sm record-name-btn" (click)="openPreview(f.id)">
-                        {{ f.recordName }}
-                      </button>
-                      <span class="record-type-tag">{{ f.recordType }}</span>
-                    </td>
-                    <td>
-                      <span class="type-badge" [attr.data-type]="f.followUpType">
-                        @switch (f.followUpType) {
-                          @case ('Call') {
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                            <path d="M4 3h4l2 5-3 2a15 15 0 0 0 7 7l2-3 5 2v4c-9 3-20-8-17-17Z" />
-                          </svg>
-                          }
-                          @case ('Email') {
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <path d="m3 6 9 7 9-7" />
-                          </svg>
-                          }
-                          @default {
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="3" y="5" width="18" height="16" rx="2" />
-                            <path d="M3 10h18M8 3v4M16 3v4" />
-                          </svg>
-                          }
-                        }
-                        {{ f.followUpType }}
-                      </span>
-                    </td>
-                    <td class="reason-cell">{{ f.purpose || '—' }}</td>
-                    <td class="mono-cell">
-                      {{ formatDate(f.scheduledDate) }}<br />{{ f.scheduledTime }}
-                    </td>
-                    <td>
-                      <span class="avatar-chip">
-                        <span class="avatar-circle">{{ f.assignedToInitials }}</span>
-                        {{ f.assignedTo }}
-                      </span>
-                    </td>
-                    <td>
-                      <span class="badge priority-badge" [ngClass]="priorityClass(f.priority)">{{ f.priority }}</span>
-                    </td>
-                    <td>
-                      <span class="badge" [ngClass]="statusClass(f.status)">{{ f.status }}</span>
-                    </td>
-                    <td>
-                      <span class="badge" [ngClass]="f.dependencyStatus === 'Ready' ? 'dep-ready' : 'dep-blocked'">{{ f.dependencyStatus }}</span>
-                      @if (f.dependencyStatus === 'Blocked' && f.dependencyBlockedReason) {
-                      <span class="dependency-flag">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                          <path d="M12 8v5M12 16h.01" />
+          </div>
+          } @else {
+          <div class="fq-card table-scroll">
+            <table class="fq-table">
+              <thead>
+                <tr>
+                  <th class="checkbox-cell">
+                    <label class="visually-hidden" for="fq-select-all"
+                      >Select all visible</label
+                    >
+                    <input
+                      id="fq-select-all"
+                      type="checkbox"
+                      class="fq-checkbox"
+                      [checked]="allVisibleSelected()"
+                      (change)="toggleSelectAllVisible()"
+                    />
+                  </th>
+                  <th>Follow-Up ID</th>
+                  <th>Related To</th>
+                  <th>Follow-Up Type</th>
+                  <th>Reason</th>
+                  <th>Scheduled Date &amp; Time</th>
+                  <th>Assigned User</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Dependency</th>
+                  <th class="actions-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (f of pagedFollowUps(); track trackById($index, f)) {
+                <tr [class.row-overdue]="isOverdue(f)">
+                  <td class="checkbox-cell">
+                    <label class="visually-hidden" [attr.for]="'sel-' + f.id"
+                      >Select {{ f.id }}</label
+                    >
+                    <input
+                      [id]="'sel-' + f.id"
+                      type="checkbox"
+                      class="fq-checkbox"
+                      [checked]="isSelected(f.id)"
+                      (change)="toggleSelect(f.id)"
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm fu-id-link"
+                      (click)="openPreview(f.id)"
+                    >
+                      {{ f.id }}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm record-name-btn"
+                      (click)="openPreview(f.id)"
+                    >
+                      {{ f.recordName }}
+                    </button>
+                    <span class="record-type-tag">{{ f.recordType }}</span>
+                  </td>
+                  <td>
+                    <span class="type-badge" [attr.data-type]="f.followUpType"
+                      >@switch (f.followUpType) { @case ('Call') {<svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4 3h4l2 5-3 2a15 15 0 0 0 7 7l2-3 5 2v4c-9 3-20-8-17-17Z"
+                        /></svg
+                      >} @case ('Email') {<svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="5" width="18" height="14" rx="2" />
+                        <path d="m3 6 9 7 9-7" /></svg
+                      >} @default {<svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="5" width="18" height="16" rx="2" />
+                        <path d="M3 10h18M8 3v4M16 3v4" /></svg
+                      >} }{{ f.followUpType }}</span
+                    >
+                  </td>
+                  <td class="reason-cell">{{ f.purpose || 'â€”' }}</td>
+                  <td class="mono-cell">
+                    {{ formatDate(f.scheduledDate) }}<br />{{ f.scheduledTime }}
+                  </td>
+                  <td>
+                    <span class="avatar-chip">
+                      <span class="avatar-circle"
+                        >{{ f.assignedToInitials }}</span
+                      >
+                      {{ f.assignedTo }}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      class="badge priority-badge"
+                      [ngClass]="priorityClass(f.priority)"
+                      >{{ f.priority }}</span
+                    >
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="statusClass(f.status)"
+                      >{{ f.status }}</span
+                    >
+                  </td>
+                  <td>
+                    <span
+                      class="badge"
+                      [ngClass]="f.dependencyStatus === 'Ready' ? 'dep-ready' : 'dep-blocked'"
+                      >{{ f.dependencyStatus }}</span
+                    >
+                    @if (f.dependencyStatus === 'Blocked' &&
+                    f.dependencyBlockedReason) {
+                    <span class="dependency-flag">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                      >
+                        <path d="M12 8v5M12 16h.01" />
+                      </svg>
+                      {{ f.dependencyBlockedReason }}
+                    </span>
+                    }
+                  </td>
+                  <td class="actions-cell">
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm icon-btn"
+                        title="View"
+                        [attr.aria-label]="'View ' + f.id"
+                        (click)="openPreview(f.id)"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"
+                          />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="icon-btn"
+                        title="Edit schedule"
+                        [attr.aria-label]="'Edit schedule for ' + f.id"
+                        (click)="openReschedule(f.id)"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6ZM13 20h8"
+                          />
                         </svg>
-                        {{ f.dependencyBlockedReason }}
-                      </span>
-                      }
-                    </td>
-                    <td class="actions-cell">
-                      <div class="row-actions" (click)="$event.stopPropagation()">
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm icon-btn"
+                        [disabled]="!canExecute(f) || f.status !== 'Pending'"
+                        [attr.aria-label]="'Execute ' + f.id"
+                        [title]="canExecute(f) ? 'Execute' : 'Blocked: ' + (f.dependencyBlockedReason ?? 'dependency pending')"
+                        (click)="executeFollowUp(f)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M5 3v18l15-9L5 3Z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm icon-btn"
+                        title="View history"
+                        [attr.aria-label]="'View history for ' + f.id"
+                        (click)="openHistory(f.id)"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg></button
+                      ><button
+                        type="button"
+                        class="icon-btn"
+                        title="More actions"
+                        [attr.aria-label]="'More actions for ' + f.id"
+                        (click)="toggleActionMenu(f.id, $event)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <circle cx="12" cy="5" r="1" />
+                          <circle cx="12" cy="12" r="1" />
+                          <circle cx="12" cy="19" r="1" />
+                        </svg>
+                      </button>
+                      @if (openActionMenuId() === f.id) {
+                      <div
+                        class="action-menu"
+                        (click)="$event.stopPropagation()"
+                      >
                         <button
                           type="button"
-                          class="btn btn-outline-secondary btn-sm icon-btn"
-                          title="View"
-                          [attr.aria-label]="'View ' + (f.reference || f.recordName)"
-                          (click)="openPreview(f.id)"
+                          (click)="openPreview(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
-                            <circle cx="12" cy="12" r="3" />
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
                           </svg>
+                          Preview
                         </button>
                         <button
                           type="button"
-                          class="btn btn-outline-secondary btn-sm icon-btn"
-                          title="Edit schedule"
-                          [attr.aria-label]="'Edit schedule for ' + (f.reference || f.recordName)"
-                          (click)="openReschedule(f.id)"
+                          (click)="openReschedule(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6ZM13 20h8" />
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
                           </svg>
+                          Reschedule
                         </button>
                         <button
                           type="button"
-                          class="btn btn-outline-secondary btn-sm icon-btn"
-                          [disabled]="!canExecute(f) || f.status !== 'Pending'"
-                          [attr.aria-label]="'Execute ' + (f.reference || f.recordName)"
-                          [title]="canExecute(f) ? 'Execute' : 'Blocked: ' + (f.dependencyBlockedReason ?? 'dependency pending')"
-                          (click)="executeFollowUp(f)"
+                          (click)="openReassign(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 3v18l15-9L5 3Z" />
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
                           </svg>
+                          Reassign
                         </button>
                         <button
                           type="button"
-                          class="btn btn-outline-secondary btn-sm icon-btn"
-                          title="View history"
-                          [attr.aria-label]="'View history for ' + (f.reference || f.recordName)"
-                          (click)="openHistory(f.id)"
+                          (click)="openEscalate(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 7v5l3 2" />
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
                           </svg>
+                          Escalate
                         </button>
                         <button
                           type="button"
-                          class="btn btn-outline-secondary btn-sm icon-btn"
-                          title="More actions"
-                          [attr.aria-label]="'More actions for ' + (f.reference || f.recordName)"
-                          (click)="toggleActionMenu(f.id, $event)"
+                          (click)="openHistory(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="5" r="1" />
-                            <circle cx="12" cy="12" r="1" />
-                            <circle cx="12" cy="19" r="1" />
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
                           </svg>
+                          View History
                         </button>
-                        @if (openActionMenuId() === f.id) {
-                        <div class="action-menu" (click)="$event.stopPropagation()">
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openPreview(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            Preview
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openReschedule(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14v6ZM13 20h8" />
-                            </svg>
-                            Reschedule
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openReassign(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <path d="M17 2.1l4 4-4 4" />
-                              <path d="M3 12.2v-2a4 4 0 0 1 4-4h12.8M7 21.9l-4-4 4-4" />
-                              <path d="M21 11.8v2a4 4 0 0 1-4 4H4.2" />
-                            </svg>
-                            Reassign
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEscalate(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <path d="m12 3 10 18H2L12 3ZM12 9v5M12 17h.01" />
-                            </svg>
-                            Escalate
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openHistory(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <circle cx="12" cy="12" r="9" />
-                              <path d="M12 7v5l3 2" />
-                            </svg>
-                            View History
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="duplicateFollowUp(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                            Duplicate
-                          </button>
-                          <div class="divider"></div>
-                          <button type="button" class="btn btn-outline-secondary btn-sm danger" (click)="openCancel(f.id); closeActionMenu()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                              <path d="m6 6 12 12M6 18 18 6" />
-                            </svg>
-                            Cancel
-                          </button>
-                        </div>
-                        }
+                        <button
+                          type="button"
+                          (click)="duplicateFollowUp(f.id); closeActionMenu()"
+                          class="btn btn-outline-secondary btn-sm"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
+                          </svg>
+                          Duplicate
+                        </button>
+                        <div class="divider"></div>
+                        <button
+                          type="button"
+                          class="btn btn-outline-secondary btn-sm danger"
+                          (click)="openCancel(f.id); closeActionMenu()"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                          >
+                            <path d="M5 12h14m-6-6 6 6-6 6" />
+                          </svg>
+                          Cancel
+                        </button>
                       </div>
-                    </td>
-                  </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-            <footer class="queue-pagination" aria-label="Pagination">
-              <span role="status">Showing {{ pageStart() }}–{{ pageEnd() }} of {{ filteredFollowUps().length }} follow-ups</span>
-              <nav aria-label="Follow-up pages">
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary btn-sm page-button"
-                  title="Previous page"
-                  aria-label="Previous page"
-                  [disabled]="currentPage() === 1"
-                  (click)="goToPage(currentPage() - 1)"
-                >
-                  ‹
-                </button>
-                @for (page of pageNumbers(); track page) {
-                <button
-                  type="button"
-                  class="page-button"
-                  [class.active]="currentPage() === page"
-                  [attr.aria-current]="currentPage() === page ? 'page' : null"
-                  [attr.aria-label]="'Page ' + page"
-                  (click)="goToPage(page)"
-                >
-                  {{ page }}
-                </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
                 }
-                <button
-                  type="button"
-                  class="page-button"
-                  title="Next page"
-                  aria-label="Next page"
-                  [disabled]="currentPage() === totalPages()"
-                  (click)="goToPage(currentPage() + 1)"
-                >
-                  ›
-                </button>
-              </nav>
-            </footer>
-            }
-          }
+              </tbody>
+            </table>
+          </div>
+          <footer class="queue-pagination" aria-label="Pagination">
+            <span role="status"
+              >Showing {{ pageStart() }}â€“{{ pageEnd() }} of {{
+              filteredFollowUps().length }} follow-ups</span
+            >
+            <nav aria-label="Follow-up pages">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm page-button"
+                title="Previous page"
+                aria-label="Previous page"
+                [disabled]="currentPage() === 1"
+                (click)="goToPage(currentPage() - 1)"
+              >
+                â€¹</button
+              >@for (page of pageNumbers(); track page) {<button
+                type="button"
+                class="page-button"
+                [class.active]="currentPage() === page"
+                [attr.aria-current]="currentPage() === page ? 'page' : null"
+                [attr.aria-label]="'Page ' + page"
+                (click)="goToPage(page)"
+              >
+                {{ page }}</button
+              >}<button
+                type="button"
+                class="page-button"
+                title="Next page"
+                aria-label="Next page"
+                [disabled]="currentPage() === totalPages()"
+                (click)="goToPage(currentPage() + 1)"
+              >
+                â€º
+              </button>
+            </nav>
+          </footer>
+          } }
 
           <!-- ============================== KANBAN VIEW ============================== -->
           @if (viewMode() === 'kanban') {
@@ -1263,15 +1438,14 @@
               >
                 @if (col.items.length === 0) {
                 <p class="kanban-empty">No follow-ups</p>
-                }
-                @for (f of col.items; track trackById($index, f)) {
+                } @for (f of col.items; track trackById($index, f)) {
                 <div
                   class="kanban-card"
                   draggable="true"
                   (dragstart)="onDragStart(f.id, $event)"
                   (click)="openPreview(f.id)"
                 >
-                  <span class="kanban-card-id">{{ f.reference || 'Follow-up' }}</span>
+                  <span class="kanban-card-id">{{ f.id }}</span>
                   <p class="kanban-card-name">{{ f.recordName }}</p>
                   <div class="kanban-card-meta">
                     <span class="badge" [ngClass]="priorityClass(f.priority)"
@@ -1510,7 +1684,7 @@
               <div class="fq-card">
                 <p class="fq-section-title">Follow-Up Aging</p>
                 <div class="bar-row">
-                  <span class="bar-label">0–3 days</span>
+                  <span class="bar-label">0â€“3 days</span>
                   <div class="bar-track">
                     <div
                       class="bar-fill"
@@ -1520,7 +1694,7 @@
                   <span class="bar-value">{{ agingBuckets().b0 }}</span>
                 </div>
                 <div class="bar-row">
-                  <span class="bar-label">4–7 days</span>
+                  <span class="bar-label">4â€“7 days</span>
                   <div class="bar-track">
                     <div
                       class="bar-fill fill-orange"
@@ -1530,7 +1704,7 @@
                   <span class="bar-value">{{ agingBuckets().b1 }}</span>
                 </div>
                 <div class="bar-row">
-                  <span class="bar-label">8–15 days</span>
+                  <span class="bar-label">8â€“15 days</span>
                   <div class="bar-track">
                     <div
                       class="bar-fill fill-orange"
@@ -1612,6 +1786,8 @@
             </aside>
           </details>
         </div>
+
+        <!-- ============================== DAILY AGENDA PANEL ============================== -->
       </div>
     </div>
   </div>
@@ -1629,11 +1805,11 @@
     class="preview-drawer"
     role="dialog"
     aria-modal="true"
-    [attr.aria-label]="'Follow-up ' + (f.reference || f.recordName)"
+    [attr.aria-label]="'Follow-up ' + f.id"
   >
     <div class="drawer-header">
       <div>
-        <p class="drawer-id">{{ f.reference || 'Follow-up' }}</p>
+        <p class="drawer-id">{{ f.id }}</p>
         <h2 class="drawer-record-name">{{ f.recordName }}</h2>
         <div class="drawer-header-badges">
           <span class="badge" [ngClass]="priorityClass(f.priority)"
@@ -1683,7 +1859,7 @@
           <circle cx="12" cy="12" r="9" />
         </svg>
         <span
-          >Dependency not completed — {{ f.dependencyBlockedReason }}.
+          >Dependency not completed â€” {{ f.dependencyBlockedReason }}.
           Execution is blocked.</span
         >
       </div>
@@ -2069,17 +2245,14 @@
     <div class="modal-body">
       <div class="form-field">
         <label for="reassign-owner">New owner</label>
-        @if (owners().length > 20) {
-        <input
+        @if (owners().length > 20) {<input
           type="search"
           class="field-input option-search"
           aria-label="Search reassign-owner"
-          placeholder="Search options…"
+          placeholder="Search optionsâ€¦"
           [value]="reassignSearch()"
           (input)="reassignSearch.set($any($event.target).value)"
-        />
-        }
-        <select
+        />}<select
           id="reassign-owner"
           class="field-select"
           [value]="reassignOwner()"
@@ -2297,17 +2470,14 @@
     <div class="modal-body">
       <div class="form-field">
         <label for="escalate-to">Escalate to</label>
-        @if (owners().length > 20) {
-        <input
+        @if (owners().length > 20) {<input
           type="search"
           class="field-input option-search"
           aria-label="Search escalate-to"
-          placeholder="Search options…"
+          placeholder="Search optionsâ€¦"
           [value]="escalateSearch()"
           (input)="escalateSearch.set($any($event.target).value)"
-        />
-        }
-        <select
+        />}<select
           id="escalate-to"
           class="field-select"
           [value]="escalateTo()"
@@ -2508,7 +2678,7 @@
         >
           <rect x="3" y="5" width="18" height="16" rx="2" />
           <path d="M3 10h18M8 3v4M16 3v4" /></svg
-        >History — {{ modal.ids[0] }}
+        >History â€” {{ modal.ids[0] }}
       </h2>
       <button
         type="button"
@@ -2577,3 +2747,4 @@
   <div class="toast" role="status" aria-live="polite">{{ msg }}</div>
   }
 </main>
+

@@ -4,46 +4,79 @@
 
       <!-- HEADER -->
       <header class="ct-header">
-      
-
-        <div class="ct-header-row">
-          <div class="ct-header-titleblock">
-            <div class="ct-title-line">
-              <h1 class="ct-title">{{ relationship().name }} &ndash; Communication Timeline</h1>
-           
-            </div>
-            <p class="ct-subtitle">Track all communication and engagement history.</p>
-        
-          </div>
-
-          <div class="ct-header-actions">
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm"
-              [disabled]="isRefreshing()"
-              (click)="refreshTimeline()"
-            >
-              {{ isRefreshing() ? 'Refreshing…' : 'Refresh' }}
-            </button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openExportModal()">
-              Export Timeline
-            </button>
-            <button type="button" class="btn btn-primary btn-sm" (click)="handleOpenMyLeads()">
-              Open My Leads
-            </button>
-          </div>
+        <div class="ct-header-copy">
+          <h1 class="ct-title">{{ relationship().name || 'Communication' }} &ndash; Communication Timeline</h1>
+          <p class="ct-subtitle">Track all communication and engagement history.</p>
         </div>
-
-        <div class="ct-scope-pill">
-          <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true">
-            <path d="M8 1a5 5 0 0 0-5 5c0 3.5 5 9 5 9s5-5.5 5-9a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
-          </svg>
-          <span>{{ relationship().campaign }} &middot; {{ relationship().source }}</span>
-        </div>
+        <svg class="ct-header-art" viewBox="0 0 1774 887" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="ct-trace-paper" x2=".7" y2="1"><stop stop-color="currentColor" stop-opacity=".15"/><stop offset="1" stop-color="currentColor" stop-opacity=".015"/></linearGradient>
+            <linearGradient id="ct-trace-leaf" x2=".8" y2="1"><stop stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            <linearGradient id="ct-trace-gold" x2="1" y2="1"><stop stop-color="#ffe48a"/><stop offset="1" stop-color="#ffbe16"/></linearGradient>
+          </defs>
+          <g fill="currentColor">
+            <path opacity=".07" d="M306 764C305 688 364 627 435 624C430 552 488 479 554 472C551 365 627 297 718 282L1182 577C1299 521 1486 521 1534 642L1557 761C1626 722 1661 765 1674 799H196C216 757 250 727 306 746Z"/>
+            <path opacity=".12" d="M196 799C222 735 276 733 315 747C389 772 419 778 483 751C553 721 594 631 716 595L1184 748C1230 653 1297 644 1336 682C1348 693 1354 705 1357 719C1388 699 1420 730 1418 757C1498 728 1517 773 1558 754C1616 731 1653 750 1673 799Z"/>
+            <path d="M780 172H1229C1199 172 1181 193 1181 228V724Q1181 766 1146 766H753Q717 766 717 728V236Q717 172 780 172Z" fill="url(#ct-trace-paper)"/>
+            <path d="M1182 278V730Q1182 759 1155 766" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="5"/>
+            <path opacity=".75" d="M1180 279V230C1180 151 1280 151 1280 228V279Z"/>
+            <path opacity=".4" d="M792 258H859Q882 258 882 282V358Q882 382 859 382H792Q769 382 769 358V282Q769 258 792 258ZM931 279H1116A12 12 0 0 1 1116 304H931A12 12 0 0 1 931 279ZM931 337H1043A12 12 0 0 1 1043 361H931A12 12 0 0 1 931 337ZM785 440H1062A12 12 0 0 1 1062 463H785A12 12 0 0 1 785 440ZM785 481H990A11 11 0 0 1 990 503H785A11 11 0 0 1 785 481ZM794 569H853Q875 569 875 591V655Q875 677 853 677H794Q772 677 772 655V591Q772 569 794 569ZM921 585H1083A11 11 0 0 1 1083 607H921A11 11 0 0 1 921 585ZM921 636H1010A11 11 0 0 1 1010 658H921A11 11 0 0 1 921 636Z"/>
+            <path fill="#fff" d="M840 304A14 14 0 1 1 812 304A14 14 0 1 1 840 304ZM803 351Q797 351 802 339C811 319 841 319 850 341Q853 351 847 351ZM845 623A21 21 0 1 1 803 623A21 21 0 1 1 845 623Z"/>
+            <path opacity=".12" d="M354 284C365 303 359 318 385 324C357 338 405 365 425 373C482 395 514 426 543 472C492 364 470 309 354 284Z"/>
+            <path opacity=".44" d="M433 247Q470 256 463 296Q438 282 433 247Z"/>
+            <path opacity=".68" d="M357 405C430 428 477 458 487 496Q489 508 503 511C535 541 546 612 519 656C377 644 340 547 357 405Z"/>
+            <path opacity=".65" d="M634 332C709 442 733 552 599 668C504 591 500 462 634 332Z"/>
+            <path fill="url(#ct-trace-leaf)" d="M634 332C709 442 733 552 599 668C504 591 500 462 634 332Z"/>
+            <path opacity=".44" d="M446 717C480 685 526 712 544 762C506 738 474 744 446 717Z"/>
+            <path d="M407 475C465 581 549 692 576 798M394 509L434 528M457 499Q462 532 452 559M411 562L471 586M496 553Q499 584 489 609M575 797C600 659 610 535 620 417M587 453L614 496L647 451M570 519L608 568Q639 539 656 505" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+            <path opacity=".48" d="M1387 531C1378 469 1409 430 1475 412C1473 478 1446 511 1387 531Z"/>
+            <path d="M1389 528L1365 571" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="5" stroke-linecap="round"/>
+            <path d="M1288 401C1341 341 1407 317 1472 297" fill="none" stroke="currentColor" stroke-opacity=".55" stroke-width="8" stroke-linecap="round" stroke-dasharray="16 25"/>
+            <path opacity=".72" d="M1450 229L1672 197L1573 339Q1570 344 1566 340L1505 284L1487 271L1448 235Q1445 231 1450 229Z"/>
+            <path d="M1487 271L1672 197L1505 284L1488 332Q1485 335 1486 326Z"/>
+            <path opacity=".85" d="M1488 332L1534 310L1505 284Z"/>
+            <path d="M1224 375C1289 375 1342 427 1342 491C1342 555 1289 607 1224 607Q1200 608 1179 599L1137 615Q1132 617 1133 611L1140 574C1117 553 1105 524 1105 491C1105 427 1158 375 1224 375Z"/>
+            <path fill="#fff" opacity=".7" d="M1190 468C1162 457 1162 503 1190 494ZM1260 468C1286 457 1286 503 1261 494ZM1187 503C1170 503 1159 513 1160 529H1180Q1177 513 1187 503ZM1261 503Q1290 503 1288 529H1268Q1270 514 1261 503Z"/>
+            <path fill="#fff" d="M1244 463A20 20 0 1 1 1204 463A20 20 0 1 1 1244 463ZM1189 529Q1183 512 1200 499C1215 487 1234 489 1248 500Q1264 513 1259 529Z"/>
+          </g>
+          <g>
+            <path fill="url(#ct-trace-gold)" d="M1089 669A69 69 0 1 1 1089 807A69 69 0 1 1 1089 669Z"/>
+            <path fill="none" stroke="#fbbb13" stroke-width="4" d="M1090 678A61 61 0 1 1 1090 800"/>
+            <path fill="#fff9e4" stroke="#ffdb68" stroke-width="3" d="M1089 685A52 52 0 1 1 1089 789A52 52 0 1 1 1089 685Z"/>
+            <path d="M1089 709V738L1110 751" fill="none" stroke="#f8b500" stroke-width="9" stroke-linecap="round"/>
+            <path fill="url(#ct-trace-gold)" d="M1454 664H1552Q1579 664 1579 691V771Q1579 798 1552 798H1454Q1428 798 1428 771V691Q1428 664 1454 664Z"/>
+            <path fill="#f5b600" d="M1466 700H1540Q1549 700 1549 710V756Q1549 765 1540 765H1466Q1458 765 1458 756V710Q1458 700 1466 700Z"/>
+            <path fill="#fff" d="M1467 698H1540Q1550 699 1548 709L1510 737Q1503 742 1495 736L1458 709Q1456 699 1467 698Z"/>
+            <path fill="#ffbf0c" d="M589 242A19 19 0 1 1 551 242A19 19 0 1 1 589 242ZM315 656A14 14 0 1 1 287 656A14 14 0 1 1 315 656ZM269 293C275 293 272 312 280 316C286 319 298 318 297 323C297 329 280 327 276 334C273 340 274 351 268 351C263 351 266 334 258 331C251 328 239 329 240 323C240 318 255 319 260 313C264 307 263 293 269 293ZM1605 455C1611 455 1608 473 1616 477C1624 480 1634 478 1633 484C1633 489 1618 488 1613 494C1610 502 1611 512 1605 512C1600 512 1602 496 1595 492C1588 489 1576 490 1577 484C1577 479 1593 480 1597 473C1600 466 1600 455 1605 455Z"/>
+            <path d="M210 471V507M192 489H228M1656 630V659M1642 645H1670" fill="none" stroke="currentColor" stroke-opacity=".8" stroke-width="11" stroke-linecap="round"/>
+            <path fill="currentColor" opacity=".8" d="M1530 550A12 12 0 1 1 1506 550A12 12 0 1 1 1530 550Z"/>
+            <path d="M132 800H446M492 800H967M1027 800H1671" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="5" stroke-linecap="round"/>
+          </g>
+        </svg>
       </header>
 
       <!-- LEAD SUMMARY CARD -->
       <section class="ct-card ct-summary-card" aria-label="Lead summary">
+        <div class="ct-profile-bar">
+          <div class="ct-identity">
+            <span class="ct-avatar" aria-hidden="true">{{ relationshipInitials() }}</span>
+            <div>
+              <p class="ct-person-name">{{ relationship().name || 'Communication record' }}</p>
+              <p class="ct-profile-context">{{ relationship().campaign || 'No campaign' }} <span aria-hidden="true">|</span> {{ relationship().source || 'No source' }}</p>
+            </div>
+          </div>
+          <div class="ct-header-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="isRefreshing()" (click)="refreshTimeline()" title="Refresh timeline">
+              <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M13 5V2l-1.2 1.2A6 6 0 1 0 14 8"/></svg>{{ isRefreshing() ? 'Refreshing…' : 'Refresh' }}
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openExportModal()" title="Export timeline">
+              <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M8 2v8m-3-3 3 3 3-3M3 13h10"/></svg>Export Timeline
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="handleOpenMyLeads()" title="Open My Leads">
+              <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><path d="M6 3 1 8l5 5M2 8h12"/></svg>Open My Leads
+            </button>
+          </div>
+        </div>
         <div class="ct-summary-grid">
           <div class="ct-summary-group">
             <span class="ct-summary-label">Lead ID</span>
@@ -154,14 +187,14 @@
 
           <!-- QUICK ACTION TOOLBAR -->
           <div class="ct-toolbar">
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Call')">Log Call</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Email')">Log Email</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('SMS')">Log SMS</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('WhatsApp')">Log WhatsApp</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Meeting')">Log Meeting</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Visit')">Log Visit</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Event')">Log Event</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Internal Note')">Add Internal Note</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Call')" title="Log call">Log Call</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Email')" title="Log email">Log Email</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('SMS')" title="Log SMS">Log SMS</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('WhatsApp')" title="Log WhatsApp">Log WhatsApp</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Meeting')" title="Log meeting">Log Meeting</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Visit')" title="Log visit">Log Visit</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Event')" title="Log event">Log Event</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="openEntryDrawer('Internal Note')" title="Add internal note"><span aria-hidden="true">＋</span> Add Internal Note</button>
           </div>
 
           <!-- TABS + FILTER TOGGLE -->
@@ -177,9 +210,15 @@
               <button type="button" class="ct-tab" [class.active]="activeTab() === 'Important'" (click)="setTab('Important')">Important</button>
             </div>
 
+            <label class="ct-search">
+              <svg viewBox="0 0 16 16" class="ct-icon" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+              <span class="visually-hidden">Search communication history</span>
+              <input type="search" placeholder="Search timeline" [ngModel]="searchQuery()" (ngModelChange)="setSearchQuery($event)" />
+            </label>
+
             <button
               type="button"
-              class="btn btn-outline-primary btn-sm ct-filters-btn"
+              class="btn btn-outline-secondary btn-sm ct-filters-btn"
               [class.active]="isFilterOpen()"
               (click)="toggleFilterPanel()"
               aria-haspopup="true"
@@ -240,7 +279,7 @@
               </div>
 
               <div class="ct-filters-actions">
-                <button type="button" class="btn btn-outline-primary btn-sm" (click)="resetFilters()">Reset Filters</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="resetFilters()">Reset Filters</button>
                 <button type="button" class="btn btn-primary btn-sm" (click)="isFilterOpen.set(false)">Apply Filters</button>
               </div>
             </section>
@@ -252,16 +291,16 @@
               <div class="ct-card ct-empty-state">
                 <p class="ct-empty-title">No communication history available.</p>
                 <div class="ct-empty-actions">
-                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Call')">Log First Call</button>
-                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Email')">Log First Email</button>
-                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="openEntryDrawer('Meeting')">Log First Meeting</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Call')">Log First Call</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Email')">Log First Email</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openEntryDrawer('Meeting')">Log First Meeting</button>
                 </div>
               </div>
             } @else {
-              @for (record of filteredRecords(); track record.id) {
-                <article class="ct-timeline-card">
+              @for (record of paginatedRecords(); track record.id) {
+                <article class="ct-timeline-card" [class.ct-timeline-card-important]="record.important">
                   <div class="ct-timeline-rail">
-                    <span class="ct-timeline-dot">{{ communicationIcon(record.type) }}</span>
+                    <span class="ct-timeline-dot" [attr.data-type]="record.type" [attr.aria-label]="record.type">{{ communicationIcon(record.type) }}</span>
                     <span class="ct-timeline-line"></span>
                   </div>
 
@@ -269,6 +308,7 @@
                     <div class="ct-timeline-top">
                       <div class="ct-timeline-type">
                         <span class="ct-timeline-type-name">{{ record.type }}</span>
+                        <span class="ct-direction">{{ record.direction }}</span>
                         @if (record.important) {
                           <span class="ct-important" title="Important">&#9733; Important</span>
                         }
@@ -301,11 +341,9 @@
                     </div>
 
                     <div class="ct-timeline-meta">
-                      <span>{{ record.date }} &middot; {{ record.time }}</span>
+                      <time>{{ record.date }} &middot; {{ record.time }}</time>
                       <span class="ct-meta-dot">&middot;</span>
                       <span>Recorded by {{ record.createdBy }}</span>
-                      <span class="ct-meta-dot">&middot;</span>
-                      <span>{{ record.direction }}</span>
                     </div>
 
                     <span class="ct-badge" [ngClass]="outcomeClass(record.outcome)">{{ record.outcome }}</span>
@@ -324,12 +362,22 @@
                     </div>
 
                     <div class="ct-timeline-actions">
-                      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openDetails(record)">View Details</button>
-                      <button type="button" class="btn btn-outline-primary btn-sm" (click)="editCommunication(record)">Edit</button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openDetails(record)" title="View details"><span aria-hidden="true">&#128065;</span> View Details</button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="editCommunication(record)" title="Edit communication"><span aria-hidden="true">&#9998;</span> Edit</button>
                     </div>
                   </div>
                 </article>
               }
+              <nav class="ct-pagination" aria-label="Timeline pagination">
+                <span class="ct-page-summary">Showing {{ firstVisibleRecord() }}&ndash;{{ lastVisibleRecord() }} of {{ filteredRecords().length }}</span>
+                <div class="ct-page-actions">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)" title="Previous page" aria-label="Previous page">&#8249;</button>
+                  @for (page of pageNumbers(); track page) {
+                    <button type="button" class="btn btn-sm" [class.btn-primary]="page === currentPage()" [class.btn-outline-secondary]="page !== currentPage()" (click)="goToPage(page)" [attr.aria-current]="page === currentPage() ? 'page' : null" [attr.title]="'Page ' + page">{{ page }}</button>
+                  }
+                  <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)" title="Next page" aria-label="Next page">&#8250;</button>
+                </div>
+              </nav>
             }
           </section>
         </div>
@@ -392,7 +440,7 @@
   <aside class="ct-drawer" role="dialog" aria-modal="true" aria-label="Communication details">
     <div class="ct-drawer-header">
       <h2>{{ record.type }} &middot; {{ record.date }}</h2>
-      <button type="button" class="ct-drawer-close" (click)="closeDetails()" aria-label="Close">&times;</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm ct-drawer-close" (click)="closeDetails()" aria-label="Close" title="Close">&times;</button>
     </div>
 
     <div class="ct-drawer-body">
@@ -427,10 +475,10 @@
     </div>
 
     <div class="ct-drawer-footer">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="editCommunication(record)">Edit</button>
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openTemperatureModal()">Update Temperature</button>
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openDonationPotentialModal()">Update Donation Potential</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDetails()">Close</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="editCommunication(record)" title="Edit communication"><span aria-hidden="true">&#9998;</span> Edit</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openTemperatureModal()">Update Temperature</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openDonationPotentialModal()">Update Donation Potential</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDetails()"><span aria-hidden="true">&#10005;</span> Close</button>
     </div>
   </aside>
 }
@@ -441,7 +489,7 @@
   <aside class="ct-drawer" role="dialog" aria-modal="true" aria-label="Log communication">
     <div class="ct-drawer-header">
       <h2>{{ editingId() ? 'Edit Communication' : 'Log Communication' }}</h2>
-      <button type="button" class="ct-drawer-close" (click)="closeEntryDrawer()" aria-label="Close">&times;</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm ct-drawer-close" (click)="closeEntryDrawer()" aria-label="Close" title="Close">&times;</button>
     </div>
 
     <div class="ct-drawer-body">
@@ -458,7 +506,6 @@
       <label class="ct-field">
         <span class="ct-field-label">Communication Type <em>*</em></span>
         <select class="ct-select" [ngModel]="form().type" (ngModelChange)="updateForm('type', $event)">
-          <option value="" disabled>Select Communication Type</option>
           @for (type of communicationTypes; track type) {
             <option [value]="type">{{ type }}</option>
           }
@@ -486,7 +533,6 @@
       <label class="ct-field">
         <span class="ct-field-label">Direction <em>*</em></span>
         <select class="ct-select" [ngModel]="form().direction" (ngModelChange)="updateForm('direction', $event)">
-          <option value="" disabled>Select Direction</option>
           <option value="Incoming">Incoming</option>
           <option value="Outgoing">Outgoing</option>
         </select>
@@ -495,7 +541,6 @@
       <label class="ct-field">
         <span class="ct-field-label">Outcome <em>*</em></span>
         <select class="ct-select" [ngModel]="form().outcome" (ngModelChange)="updateForm('outcome', $event)">
-          <option value="" disabled>Select Outcome</option>
           @for (outcome of outcomes; track outcome) {
             <option [value]="outcome">{{ outcome }}</option>
           }
@@ -506,7 +551,6 @@
         <label class="ct-field">
           <span class="ct-field-label">Engagement Level <em>*</em></span>
           <select class="ct-select" [ngModel]="form().engagement" (ngModelChange)="updateForm('engagement', $event)">
-            <option value="" disabled>Select Engagement Level</option>
             @for (level of engagementLevels; track level) {
               <option [value]="level">{{ level }}</option>
             }
@@ -516,7 +560,6 @@
         <label class="ct-field">
           <span class="ct-field-label">Communication Quality <em>*</em></span>
           <select class="ct-select" [ngModel]="form().quality" (ngModelChange)="updateForm('quality', $event)">
-            <option value="" disabled>Select Communication Quality</option>
             @for (quality of qualities; track quality) {
               <option [value]="quality">{{ quality }}</option>
             }
@@ -567,24 +610,23 @@
     </div>
 
     <div class="ct-drawer-footer">
-      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeEntryDrawer()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" (click)="saveCommunication()">Save Communication</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeEntryDrawer()"><span aria-hidden="true">&#10005;</span> Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" (click)="saveCommunication()"><span aria-hidden="true">&#10003;</span> Save Communication</button>
     </div>
   </aside>
 }
 
 <!-- UPDATE TEMPERATURE MODAL -->
 @if (isTemperatureModalOpen()) {
-  <div class="ct-overlay" (click)="closeTemperatureModal()"></div>
+  <div class="ct-overlay" aria-hidden="true"></div>
   <div class="ct-modal" role="dialog" aria-modal="true" aria-label="Update temperature">
-    <h2 class="ct-modal-title">Update Temperature</h2>
+    <h2 class="ct-modal-title"><span class="ct-modal-icon" aria-hidden="true">&#9788;</span> Update Temperature</h2>
 
     <div class="ct-detail-row"><span>Current Temperature</span><strong>{{ currentTemperature() }}</strong></div>
 
     <label class="ct-field">
       <span class="ct-field-label">New Temperature <em>*</em></span>
       <select class="ct-select" [ngModel]="newTemperature()" (ngModelChange)="newTemperature.set($event)">
-        <option value="" disabled>Select New Temperature</option>
         @for (temperature of temperatures; track temperature) {
           <option [value]="temperature">{{ temperature }}</option>
         }
@@ -602,9 +644,9 @@
     </label>
 
     <div class="ct-modal-footer">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeTemperatureModal()">Cancel</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeTemperatureModal()"><span aria-hidden="true">&#10005;</span> Cancel</button>
       <button type="button" class="btn btn-primary btn-sm" [disabled]="!temperatureReason().trim()" (click)="saveTemperature()">
-        Save
+        <span aria-hidden="true">&#10003;</span> Save
       </button>
     </div>
   </div>
@@ -612,16 +654,15 @@
 
 <!-- UPDATE DONATION POTENTIAL MODAL -->
 @if (isDonationPotentialModalOpen()) {
-  <div class="ct-overlay" (click)="closeDonationPotentialModal()"></div>
+  <div class="ct-overlay" aria-hidden="true"></div>
   <div class="ct-modal" role="dialog" aria-modal="true" aria-label="Update donation potential">
-    <h2 class="ct-modal-title">Update Donation Potential</h2>
+    <h2 class="ct-modal-title"><span class="ct-modal-icon" aria-hidden="true">&#9670;</span> Update Donation Potential</h2>
 
     <div class="ct-detail-row"><span>Current Potential</span><strong>{{ donationPotential() }}</strong></div>
 
     <label class="ct-field">
       <span class="ct-field-label">New Donation Potential <em>*</em></span>
       <select class="ct-select" [ngModel]="newDonationPotential()" (ngModelChange)="newDonationPotential.set($event)">
-        <option value="" disabled>Select New Donation Potential</option>
         @for (potential of donationPotentials; track potential) {
           <option [value]="potential">{{ potential }}</option>
         }
@@ -639,14 +680,14 @@
     </label>
 
     <div class="ct-modal-footer">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeDonationPotentialModal()">Cancel</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeDonationPotentialModal()"><span aria-hidden="true">&#10005;</span> Cancel</button>
       <button
         type="button"
         class="btn btn-primary btn-sm"
         [disabled]="!donationPotentialReason().trim()"
         (click)="saveDonationPotential()"
       >
-        Save
+        <span aria-hidden="true">&#10003;</span> Save
       </button>
     </div>
   </div>
@@ -655,18 +696,18 @@
 
 <!-- EXPORT MODAL -->
 @if (isExportModalOpen()) {
-  <div class="ct-overlay" (click)="closeExportModal()"></div>
+  <div class="ct-overlay" aria-hidden="true"></div>
   <div class="ct-modal ct-modal-sm" role="dialog" aria-modal="true" aria-label="Export timeline">
-    <h2 class="ct-modal-title">Export Timeline</h2>
+    <h2 class="ct-modal-title"><span class="ct-modal-icon" aria-hidden="true">&#8681;</span> Export Timeline</h2>
     <p class="ct-modal-copy">Choose a format to export the currently filtered communications.</p>
 
     <div class="ct-export-options">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportAsExcel()">Excel</button>
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="exportAsPdf()">PDF</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="exportAsExcel()">Excel</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="exportAsPdf()">PDF</button>
     </div>
 
     <div class="ct-modal-footer">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="closeExportModal()">Close</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeExportModal()"><span aria-hidden="true">&#10005;</span> Close</button>
     </div>
   </div>
 }

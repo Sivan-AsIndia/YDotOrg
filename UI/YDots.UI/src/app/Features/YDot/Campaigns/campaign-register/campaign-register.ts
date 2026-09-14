@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -49,6 +49,7 @@ export class CampaignRegisterComponent {
   protected readonly user = inject(CurrentUserService);
   private readonly toast = inject(ToastService);
   private readonly campaignApi = inject(CampaignApiService);
+  private readonly location = inject(Location);
 
   /** Dev-only session switcher — every permission combination is testable (Step 3). */
   /**
@@ -91,6 +92,35 @@ export class CampaignRegisterComponent {
 
   /** Accountable owner shown in the task header — the active session's identity. */
   protected readonly owner = computed(() => `${this.user.current().name} · ${this.user.current().role}`);
+
+  /**
+   * Back to wherever the caller came from (browser history), so the campaigns landing page,
+   * a campaign detail or a dashboard entry point all return to the right place.
+   */
+  protected goBack(): void {
+    this.location.back();
+  }
+
+  /**
+   * Spotlight record for the summary card strip above the register.
+   *
+   * The overview strip shows ONE campaign across six cards (name, status, progress, owner,
+   * launch date, actions) — the first campaign of the current page, so it always follows the
+   * same sorting and filtering the table below shows rather than disagreeing with it.
+   */
+  protected readonly spotlight = computed<CampaignRecord | null>(() => this.pagedRecords()[0] ?? null);
+
+  /**
+   * The spotlight card's own actions menu. Independent of the table row menus so opening the
+   * card's menu never opens (or closes) a row's menu at the same time.
+   */
+  protected readonly spotlightMenuOpen = signal(false);
+  protected toggleSpotlightMenu(): void {
+    this.spotlightMenuOpen.update((open) => !open);
+  }
+  protected closeSpotlightMenu(): void {
+    this.spotlightMenuOpen.set(false);
+  }
 
   // ================= Context and filters =================
 

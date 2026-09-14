@@ -2,10 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { ConfirmModalComponent } from '../../../../Shared/components/confirm-modal/confirm-modal';
-import {
-  ConfirmDialogConfig,
-} from '../../../../Shared/models/donors-leads.model';
+import { ElementRef, viewChild, effect } from '@angular/core';
+import { ConfirmDialogConfig } from '../../../../Shared/models/donors-leads.model';
 import { DonorApiService } from '../../../../Service/donor-api.service';
 import { ToastService } from '../../../../Shared/services/toast.service';
 import { apiErrorMessage } from '../../../../Shared/models/api-response.model';
@@ -16,71 +14,13 @@ import {
 
 type PlannerUiState = 'ready' | 'loading' | 'success' | 'error' | 'empty';
 
-interface OwnerOption {
-  readonly reference: string;
-  readonly label: string;
-  readonly context: string;
-  readonly initials: string;
-}
-
-interface ScreenAction {
-  readonly id: string;
-  readonly label: string;
-  readonly placement: 'primary' | 'secondary' | 'danger';
-  readonly permission: string;
-  readonly allowedState: string;
-  readonly result: string;
-  readonly requiresReason?: boolean;
-  readonly typedConfirm?: boolean;
-}
-
-interface ScreenData {
-  readonly screen: {
-    readonly viewId: string;
-    readonly title: string;
-    readonly route: string;
-    readonly purpose: string;
-    readonly primaryAction: string;
-    readonly viewPermission: string;
-    readonly primaryUsers: readonly string[];
-    readonly scope: string;
-    readonly lastRefresh: string;
-  };
-  readonly permissions: Readonly<Record<string, boolean>>;
-  readonly followUpReference: string;
-  readonly donorOrLeadReference: string;
-  readonly relationshipOwner: string;
-  readonly purpose: string;
-  readonly permittedChannel: string;
-  readonly preferredLanguage: string;
-  readonly preferredContactTime: string;
-  readonly nextAction: string;
-  readonly dueDate: string;
-  readonly priority: string;
-  readonly notes: string;
-  readonly consentWarning: string;
-  readonly assignedScope: string;
-  readonly priorities: readonly string[];
-  readonly channels: readonly string[];
-  readonly languages: readonly string[];
-  readonly ownerOptions: readonly OwnerOption[];
-  readonly savedFilters: readonly string[];
-  readonly fieldContracts: readonly {
-    readonly label: string;
-    readonly control: string;
-    readonly required: boolean;
-    readonly visibility: string;
-  }[];
-  readonly actions: readonly ScreenAction[];
-}
-
 /**
  * DON-UI-08 — Follow-up planner.
  * Plan a respectful, consent-aware next action with clear ownership and due time.
  */
 @Component({
   selector: 'app-follow-up-planner',
-  imports: [CommonModule, FormsModule, ConfirmModalComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './follow-up-planner.html',
   styleUrl: './follow-up-planner.css',
   host: { class: 'd-block' },
@@ -127,20 +67,31 @@ export class FollowUpPlannerComponent {
   protected readonly priorityOptions = signal<readonly DonLookupItem[]>([]);
   protected readonly ownerOptions = signal<readonly DonLookupItem[]>([]);
 
-  protected readonly resolvedDonorId = computed(() => this.donorId() ?? this.existing()?.donorId ?? null);
-  protected readonly resolvedLeadId = computed(() => this.leadId() ?? this.existing()?.leadId ?? null);
+  protected readonly resolvedDonorId = computed(
+    () => this.donorId() ?? this.existing()?.donorId ?? null,
+  );
+  protected readonly resolvedLeadId = computed(
+    () => this.leadId() ?? this.existing()?.leadId ?? null,
+  );
 
   protected readonly recordReference = computed(
-    () => this.existing()?.leadReference ?? this.existing()?.donorReference ?? this.resolvedLeadId() ?? this.resolvedDonorId() ?? '',
+    () =>
+      this.existing()?.leadReference ??
+      this.existing()?.donorReference ??
+      this.resolvedLeadId() ??
+      this.resolvedDonorId() ??
+      '',
   );
-  protected readonly relationshipOwner = computed(() => this.existing()?.relationshipOwnerName ?? '');
+  protected readonly relationshipOwner = computed(
+    () => this.existing()?.relationshipOwnerName ?? '',
+  );
   protected readonly campaign = computed(() => '');
   protected readonly preferredLanguage = computed(() => this.existing()?.preferredLanguage ?? '');
 
-  protected readonly followUpType = signal('');
+  protected readonly followUpType = signal('Email');
   protected readonly scheduledDate = signal('');
   protected readonly scheduledTime = signal('');
-  protected readonly priority = signal('');
+  protected readonly priority = signal('Medium');
   protected readonly owner = signal('');
   protected readonly purpose = signal('');
   protected readonly expectedOutcome = signal('');
@@ -161,17 +112,104 @@ export class FollowUpPlannerComponent {
   /** Whose records this caller may see, as the server described it. */
   protected readonly activeScope = signal('');
 
+  protected readonly saving = signal(false);
+  protected readonly page = signal(1);
+  protected readonly totalPages = signal(1);
+  protected readonly rows = signal<readonly ApiFollowUp[]>([]);
+  protected readonly modalReason = signal('');
+  protected readonly record = signal({ name: '—', email: '—', phone: '—', owner: 'Unassigned' });
+  protected readonly searches = signal<Record<string, string>>({});
+  private readonly dialog = viewChild<ElementRef<HTMLDialogElement>>('confirmation');
+  private readonly showConfirmation = effect(() => {
+    const dialog = this.dialog()?.nativeElement;
+    if (this.confirmConfig() && dialog && !dialog.open) dialog.showModal();
+  });
+  protected readonly reasonValid = computed(
+    () =>
+      !this.confirmConfig()?.requireReason ||
+      (this.modalReason().trim().length >= 10 && this.modalReason().trim().length <= 2000),
+  );
+  protected searchOptions(key: string, value: string): void {
+    this.searches.update((current) => ({ ...current, [key]: value }));
+  }
+  protected options(key: string, values: readonly DonLookupItem[]): readonly DonLookupItem[] {
+    const search = (this.searches()[key] ?? '').toLowerCase().trim();
+    const selected =
+      key === 'owner' ? this.owner() : key === 'channel' ? this.followUpType() : this.priority();
+    return values.filter(
+      (item) => item.value === selected || item.label.toLowerCase().includes(search),
+    );
+  }
+  protected changePage(delta: number): void {
+    const page = this.page() + delta;
+    if (page < 1 || page > this.totalPages()) return;
+    this.page.set(page);
+    this.load();
+  }
+  protected selectRecord(item: ApiFollowUp): void {
+    this.followUpId.set(item.id);
+    this.leadId.set(item.leadId);
+    this.donorId.set(item.donorId);
+    this.load();
+  }
+  protected cancelPlanner(): void {
+    this.router.navigate(['/app/fundraising/relationships/follow-up-queue']);
+  }
+  private loadRecord(): void {
+    const lead = this.resolvedLeadId();
+    const donor = this.resolvedDonorId();
+    if (lead)
+      this.api.getLead(lead).subscribe({
+        next: (r) =>
+          this.record.set({
+            name: [r.firstName, r.lastName].filter(Boolean).join(' '),
+            email: r.emailAddress || '—',
+            phone: r.mobileNumber || '—',
+            owner: r.ownerName || 'Unassigned',
+          }),
+        error: () =>
+          this.toast.show(
+            'Record details unavailable',
+            'Contact details could not be loaded.',
+            'error',
+          ),
+      });
+    else if (donor)
+      this.api.getDonor(donor).subscribe({
+        next: (r) =>
+          this.record.set({
+            name: r.displayName,
+            email: r.primaryEmail || '—',
+            phone: r.primaryPhone || '—',
+            owner: r.relationshipOwnerName || 'Unassigned',
+          }),
+        error: () =>
+          this.toast.show(
+            'Record details unavailable',
+            'Contact details could not be loaded.',
+            'error',
+          ),
+      });
+  }
+
   constructor() {
     this.load();
   }
 
-  private load(): void {
+  protected load(): void {
     this.uiState.set('loading');
 
     this.api
-      .getFollowUpPlanner({ page: 1, pageSize: 50, leadId: this.leadId(), donorId: this.donorId() })
+      .getFollowUpPlanner({
+        page: this.page(),
+        pageSize: 10,
+        leadId: this.leadId(),
+        donorId: this.donorId(),
+      })
       .subscribe({
         next: (response) => {
+          this.rows.set(response.followUps.items);
+          this.totalPages.set(response.followUps.totalPages);
           this.channelOptions.set(response.channelOptions);
           this.priorityOptions.set(response.priorityOptions);
           this.ownerOptions.set(response.ownerOptions);
@@ -213,10 +251,26 @@ export class FollowUpPlannerComponent {
           }
 
           this.activeScope.set(response.activeScope);
-          this.lastRefresh.set(new Date().toLocaleString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-          }));
+          this.lastRefresh.set(
+            new Date().toLocaleString('en-GB', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          );
 
+          if (this.followUpId() && !editing) {
+            if (response.followUps.hasNextPage) {
+              this.page.update((p) => p + 1);
+              this.load();
+              return;
+            }
+            this.uiState.set('error');
+            return;
+          }
+          this.loadRecord();
           this.uiState.set('ready');
           this.checkConsent();
         },
@@ -228,18 +282,30 @@ export class FollowUpPlannerComponent {
   }
 
   /** Re-asks the server whether the chosen channel is permitted for this person. */
+  private consentRequest = 0;
   protected checkConsent(): void {
+    const request = ++this.consentRequest;
+    this.consentWarning.set('Checking channel consent…');
     const leadId = this.resolvedLeadId();
     const donorId = this.resolvedDonorId();
     if (!leadId && !donorId) {
+      this.consentWarning.set('');
       return;
     }
 
     this.api
       .getConsentWarning(donorId ?? undefined, leadId ?? undefined, this.followUpType())
       .subscribe({
-        next: (warning) => this.consentWarning.set(warning.hasWarning ? warning.message : ''),
-        error: () => this.consentWarning.set(''),
+        next: (warning) => {
+          if (request === this.consentRequest)
+            this.consentWarning.set(warning.hasWarning ? warning.message : '');
+        },
+        error: () => {
+          if (request === this.consentRequest)
+            this.consentWarning.set(
+              'Consent could not be verified. Select the channel again to retry.',
+            );
+        },
       });
   }
 
@@ -289,7 +355,11 @@ export class FollowUpPlannerComponent {
   ] as const;
 
   protected readonly visibleActions = computed(() =>
-    this.actionCatalogue.filter((action) => this.permissions()[action.id] === true),
+    this.actionCatalogue.filter(
+      (action) =>
+        this.permissions()[action.id] === true &&
+        (action.id === 'scheduleFollowUp' ? !this.existing() : !!this.existing()),
+    ),
   );
 
   protected readonly activeFilterSummary = computed(() => {
@@ -299,9 +369,7 @@ export class FollowUpPlannerComponent {
       : [];
   });
 
-  protected readonly hasRecord = computed(() =>
-    Boolean(this.recordReference()),
-  );
+  protected readonly hasRecord = computed(() => Boolean(this.recordReference()));
 
   protected removeFilterChip(key: string): void {
     if (key === 'saved') {
@@ -348,11 +416,27 @@ export class FollowUpPlannerComponent {
   }
 
   protected openAction(actionId: string): void {
-    if (actionId === 'scheduleFollowUp') {
-      const missing = !this.followUpType().trim() || !this.scheduledDate() || !this.scheduledTime() ||
-        !this.priority().trim() || !this.owner().trim() || !this.purpose().trim();
+    if (this.saving()) return;
+    if (actionId === 'scheduleFollowUp' || actionId === 'reschedule') {
+      const missing =
+        !this.scheduledDate() ||
+        !this.scheduledTime() ||
+        !this.priority().trim() ||
+        (actionId === 'scheduleFollowUp' &&
+          (!this.followUpType().trim() || !this.owner().trim() || !this.purpose().trim()));
       if (missing) {
-        this.validationMessage.set('Complete follow-up type, date, time, priority, purpose, and owner before saving.');
+        this.validationMessage.set(
+          actionId === 'reschedule'
+            ? 'Complete date, time, and priority before rescheduling.'
+            : 'Complete follow-up type, date, time, priority, purpose, and owner before saving.',
+        );
+        return;
+      }
+      if (
+        !this.hasRecord() ||
+        !Number.isFinite(new Date(`${this.scheduledDate()}T${this.scheduledTime()}`).getTime())
+      ) {
+        this.validationMessage.set('Select a record and enter a valid date and time.');
         return;
       }
       this.validationMessage.set(null);
@@ -370,6 +454,7 @@ export class FollowUpPlannerComponent {
       return;
     }
 
+    this.modalReason.set('');
     this.activeActionId.set(actionId);
     this.confirmConfig.set({
       title: `Confirm ${action.label}`,
@@ -392,6 +477,8 @@ export class FollowUpPlannerComponent {
   }
 
   protected onConfirm(reason: string): void {
+    if (this.saving() || !this.confirmConfig() || !this.reasonValid()) return;
+    this.saving.set(true);
     const action = this.activeActionId();
     const existingId = this.followUpId();
 
@@ -450,11 +537,13 @@ export class FollowUpPlannerComponent {
       return;
     }
 
+    this.saving.set(false);
     this.confirmConfig.set(null);
     this.activeActionId.set('');
   }
 
   private afterWrite(message: string): void {
+    this.saving.set(false);
     this.confirmConfig.set(null);
     this.activeActionId.set('');
     this.uiState.set('success');
@@ -471,6 +560,7 @@ export class FollowUpPlannerComponent {
   }
 
   private afterError(error: unknown): void {
+    this.saving.set(false);
     this.confirmConfig.set(null);
     this.activeActionId.set('');
     this.uiState.set('ready');
@@ -478,6 +568,7 @@ export class FollowUpPlannerComponent {
   }
 
   protected onCancel(): void {
+    if (this.saving()) return;
     this.confirmConfig.set(null);
     this.activeActionId.set('');
   }

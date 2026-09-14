@@ -1,100 +1,131 @@
 <main class="app-wrapper">
-<div class="cd-page" [attr.data-ui-state]="uiState()">
+  <div class="page-wrapper">
+    <div class="container-fluid px-4 py-3">
+      <!-- ============ TASK HEADER ============ -->
+      <header class="cd-task-header" aria-labelledby="cd-title">
+        <div class="cd-header-text">
+          <!-- Decorative record-type glyph — purely illustrative, mirrors the mark on the
+           Campaign Overview banner. Hidden from assistive tech; the record's identity
+           is already carried by the heading and status badge below. -->
+          <span class="cd-header-glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M12 6.2c-1.1-1.6-3-2.4-4.8-1.9-2.2.6-3.6 2.9-3.1 5.2.6 3 3.9 5.6 7.9 8.5 4-2.9 7.3-5.5 7.9-8.5.5-2.3-.9-4.6-3.1-5.2-1.8-.5-3.7.3-4.8 1.9Z" />
+              <path d="M3.5 16.5c-.9.9-1.5 1.9-1.5 3 0 .3.2.5.5.5h3" />
+              <path d="M20.5 16.5c.9.9 1.5 1.9 1.5 3 0 .3-.2.5-.5.5h-3" />
+            </svg>
+          </span>
+          <div>
+            <div class="cd-title-row">
+              <h1 class="cd-title" id="cd-title">{{ campaignName() }}</h1>
+              <!-- Status: badge with text + icon; colour never carries meaning alone -->
 
-  <!-- ============ TASK HEADER ============ -->
-  <header class="cd-task-header" aria-labelledby="cd-title">
-    <div class="cd-header-text">
-      <p class="cd-eyebrow">Campaign detail</p>
-      <div class="cd-title-row">
-        <h1 class="cd-title" id="cd-title">{{ campaignName() }}</h1>
-        <!-- Status: badge with text + icon; colour never carries meaning alone -->
-        <span class="cd-badge" [class]="statusClass(status())">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-          {{ status() }}
-        </span>
-      </div>
-      <!-- Stable reference, Created/Updated freshness, and donations-in-scope total -->
-      <div class="cd-task-meta">
-        <span class="cd-meta-item">Reference: <strong>{{ reference }}</strong></span>
-        <span class="cd-meta-dot" aria-hidden="true">•</span>
-        <span class="cd-meta-item">{{ createdOrUpdatedLabel() }} {{ createdOrUpdatedAt() }}</span>
-        <span class="cd-meta-dot" aria-hidden="true">•</span>
-        <span class="cd-meta-item cd-meta-totals" [class.cd-totals-fetching]="donationsScopeFetching()">{{ scopedTotals() }}</span>
-        <button type="button" class="cd-refresh-btn" (click)="refreshDonationsScope()" [disabled]="donationsScopeFetching()"
-                aria-label="Refresh donations in scope">
-          <svg class="cd-ic-sm" [class.cd-spin]="donationsScopeFetching()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
-        </button>
-      </div>
-    </div>
+            </div>
+            <div class="cd-title-rule" aria-hidden="true"></div>
+            <!-- Stable reference, Created/Updated freshness, and donations-in-scope total -->
+            <div class="cd-task-meta">
+              <span class="cd-meta-item">View complete campaign information and details.</span>
 
-    <!-- Manage lifecycle, Tracking assets and Export are the three standing actions; the maker
+            </div>
+          </div>
+        </div>
+
+        <!-- Manage lifecycle, Tracking assets and Export are the three standing actions; the maker
          verb (Submit / Approve / Complete closure) joins them for the states that have one.
          Each appears when role, permission, scope, state and dependencies allow. -->
-    <div class="cd-header-actions">
-      @if (operateAllowed()) {
-        <button type="button" class="cd-btn cd-btn-primary" (click)="runPrimaryLifecycle()"
-                [attr.aria-label]="primaryActionLabel() + ' — operate according to lifecycle'">
-          <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-          {{ primaryActionLabel() }}
-        </button>
-      }
-      <!-- Manage lifecycle — opens Pause / Resume / Close as a right-edge off-canvas panel -->
-      @if (lifecycleAllowed()) {
-        <button type="button" class="cd-btn" [class.cd-btn-primary]="!operateAllowed()" [class.cd-btn-outline]="operateAllowed()"
-                (click)="openLifecycle()" aria-label="Manage lifecycle — pause, resume and close campaign">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-          Manage lifecycle
-        </button>
-      }
-      @if (exportAllowed()) {
-        <button type="button" class="cd-btn cd-btn-outline" (click)="exportThisCampaign()" aria-label="Export this campaign">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4.5 20h15"/></svg>
-          Export
-        </button>
-      }
-      <!-- Edit — opens the Campaign Wizard pre-filled with this record; Draft campaigns only -->
-      @if (canEdit()) {
-        <button type="button" class="cd-btn cd-btn-outline" (click)="openEdit()"
-                aria-label="Edit draft campaign in the wizard">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          Edit
-        </button>
-      }
-      <!-- Delete draft — permanent removal of an unused draft; offered next to Submit for Draft campaigns only -->
-      @if (canDeleteDraft()) {
-        <button type="button" class="cd-btn cd-btn-danger" (click)="openDeleteDraft()"
-                aria-label="Delete draft campaign">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M5 7l1 13h12l1-13"/><path d="M9 7V4h6v3"/></svg>
-          Delete draft
-        </button>
-      }
-    </div>
-  </header>
+        <div class="cd-header-actions">
+          @if (operateAllowed()) {
+          <button type="button" class="btn btn-primary btn-sm" (click)="runPrimaryLifecycle()"
+            [attr.aria-label]="primaryActionLabel() + ' — operate according to lifecycle'">
+            <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path
+                d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+              <circle cx="12" cy="12" r="3.2" />
+            </svg>
+            {{ primaryActionLabel() }}
+          </button>
+          }
+          <!-- Manage lifecycle — opens Pause / Resume / Close as a right-edge off-canvas panel -->
+          @if (lifecycleAllowed()) {
+          <button type="button" class="btn btn-sm" [class.btn-primary]="!operateAllowed()"
+            [class.btn-outline-secondary]="operateAllowed()" (click)="openLifecycle()"
+            aria-label="Manage lifecycle — pause, resume and close campaign">
+            <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path
+                d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+              <circle cx="12" cy="12" r="3.2" />
+            </svg>
+            Manage lifecycle
+          </button>
+          }
+          @if (exportAllowed()) {
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="exportThisCampaign()"
+            aria-label="Export this campaign">
+            <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3.5v11" />
+              <path d="m7.5 10 4.5 4.5 4.5-4.5" />
+              <path d="M4.5 20h15" />
+            </svg>
+            Export
+          </button>
+          }
+          <!-- Edit — opens the Campaign Wizard pre-filled with this record; Draft campaigns only -->
+          @if (canEdit()) {
+          <button type="button" class="btn btn-outline-secondary  btn-sm" (click)="openEdit()"
+            aria-label="Edit draft campaign in the wizard">
+            <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+            Edit
+          </button>
+          }
+          <!-- Delete draft — permanent removal of an unused draft; offered next to Submit for Draft campaigns only -->
+          @if (canDeleteDraft()) {
+          <button type="button" class="btn btn-danger btn-sm" (click)="openDeleteDraft()"
+            aria-label="Delete draft campaign">
+            <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7h16" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M5 7l1 13h12l1-13" />
+              <path d="M9 7V4h6v3" />
+            </svg>
+            Delete draft
+          </button>
+          }
+        </div>
+      </header>
 
-  <!-- ============ NON-READY UI STATES ============ -->
-  @switch (uiState()) {
-    @case ('loading') {
+      <!-- ============ NON-READY UI STATES ============ -->
+      @switch (uiState()) {
+      @case ('loading') {
       <section class="cd-state-panel" aria-live="polite">
         <div class="cd-skeleton-head"></div>
         <div class="cd-skeleton-body"></div>
         <p class="cd-state-note">Loading Campaign detail in scope {{ scope() }}…</p>
       </section>
-    }
-    @case ('empty') {
+      }
+      @case ('empty') {
       <section class="cd-state-panel">
         <h2 class="cd-state-title">Nothing to show in this view</h2>
         <p class="cd-state-note">No related items match the current scope and filters — this is not a global zero.</p>
         <button type="button" class="cd-btn cd-btn-outline" (click)="clearFilters()">Reset filters</button>
       </section>
-    }
-    @case ('validation') {
+      }
+      @case ('validation') {
       <section class="cd-state-panel cd-state-warn">
         <h2 class="cd-state-title">Check the highlighted fields</h2>
         <p class="cd-state-note">Provide the required reason before you operate according to lifecycle.</p>
         <button type="button" class="cd-btn cd-btn-primary" (click)="openOperate()">Review action</button>
       </section>
-    }
-    @case ('duplicate') {
+      }
+      @case ('duplicate') {
       <section class="cd-state-panel cd-state-warn">
         <h2 class="cd-state-title">A similar campaign already exists</h2>
         <p class="cd-state-note">Compare before continuing — no protected details of another record are shown.</p>
@@ -103,15 +134,16 @@
           <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Cancel</button>
         </div>
       </section>
-    }
-    @case ('no-access') {
+      }
+      @case ('no-access') {
       <section class="cd-state-panel cd-state-danger">
         <h2 class="cd-state-title">This record is not available with your current access</h2>
-        <p class="cd-state-note">Restricted menu, record, fields, counts and actions are hidden. Return to a permitted page.</p>
+        <p class="cd-state-note">Restricted menu, record, fields, counts and actions are hidden. Return to a permitted
+          page.</p>
         <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Back to campaigns</button>
       </section>
-    }
-    @case ('conflict') {
+      }
+      @case ('conflict') {
       <section class="cd-state-panel cd-state-warn">
         <h2 class="cd-state-title">This record changed after you opened it</h2>
         <p class="cd-state-note">Review the latest version before continuing. Your proposed values are retained.</p>
@@ -121,40 +153,47 @@
           <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Cancel</button>
         </div>
       </section>
-    }
-    @case ('dependency-failure') {
+      }
+      @case ('dependency-failure') {
       <section class="cd-state-panel cd-state-warn">
         <h2 class="cd-state-title">The dependent service step could not complete</h2>
         <p class="cd-state-note">Your confirmed local result is unchanged. Correlation reference INT-88421.</p>
         <button type="button" class="cd-btn cd-btn-outline" (click)="dismissBanner()">Retry dependency</button>
       </section>
-    }
-  }
+      }
+      }
 
-  <!-- ============ SUCCESS — persistent confirmation, not a toast alone ============ -->
-  @if (uiState() === 'success') {
-    <section class="cd-success-banner" role="status">
-      <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-      <div class="cd-success-text">
-        <strong>Saved successfully.</strong>
-        Reference {{ reference }}; state {{ status() }}; effective {{ effectiveTime }}.
-        <span class="cd-success-sub">Pending dependency: receipt email queued. Next: notify assigned people.</span>
-      </div>
-      <button type="button" class="cd-banner-close" (click)="dismissBanner()" aria-label="Dismiss confirmation">
-        <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </section>
-  }
+      <!-- ============ SUCCESS — persistent confirmation, not a toast alone ============ -->
+      @if (uiState() === 'success') {
+      <section class="cd-success-banner" role="status">
+        <svg class="cd-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="m8.5 12 2.5 2.5 4.5-5" />
+        </svg>
+        <div class="cd-success-text">
+          <strong>Saved successfully.</strong>
+          Reference {{ reference }}; state {{ status() }}; effective {{ effectiveTime }}.
+          <span class="cd-success-sub">Pending dependency: receipt email queued. Next: notify assigned people.</span>
+        </div>
+        <button type="button" class="cd-banner-close" (click)="dismissBanner()" aria-label="Dismiss confirmation">
+          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </section>
+      }
 
-  @if (uiState() !== 'loading' && uiState() !== 'no-access') {
+      @if (uiState() !== 'loading' && uiState() !== 'no-access') {
 
-  <!-- ============ TWO-REGION TASK LAYOUT ============ -->
-  <div class="cd-layout">
+      <!-- ============ TWO-REGION TASK LAYOUT ============ -->
+      <div class="cd-layout">
 
-    <!-- ---------- WORK AREA ---------- -->
-    <div class="cd-work">
+        <!-- ---------- WORK AREA ---------- -->
+        <div class="cd-work">
 
-      <!-- Read-only summary — reference/name/status already shown in the task header above,
+          <!-- Read-only summary — reference/name/status already shown in the task header above,
            so this card surfaces every other field captured in the Wizard: Purpose, Owner(s),
            Fund/programme, Date range, Channel, Location, Lifecycle activation,
            Public description, Terms & notice.
@@ -162,243 +201,570 @@
            TARGET & BUDGET IS NOT HERE. The Target & Budget module is on hold, no wizard step
            collects either figure, and the row printed a hard "₹0 target" on every campaign in
            the system - a number nobody entered, presented as though somebody had. -->
-      <section class="cd-card">
-        <div class="cd-card-head"><h2 class="cd-card-title">Campaign summary</h2></div>
-        <p class="cd-purpose">{{ fundProgramme() }}</p>
-        <dl class="cd-facts">
-          <!-- THE OWNER'S NAME, REFERENCE AND ROLE — assembled in the component so an unknown
+          <section class="cd-card">
+            <div class="cd-card-head">
+              <div class="card-title">
+
+                <h2 class="card-title">Campaign summary</h2>
+              </div>
+            </div>
+            <!-- <p class="cd-purpose">{{ fundProgramme() }}</p> -->
+            <!-- Icon-led fact grid: each field gets its own glyph, label and value,
+             two per row, in reading order. -->
+            <dl class="cd-fact-grid">
+              <!-- THE OWNER'S NAME, REFERENCE AND ROLE — assembled in the component so an unknown
                part takes its separator with it. The middle value used to be `ownerRef()`, the
                API's Guid. CURRENCY IS NOT HERE: the campaign carries one because the API
                requires one, but no wizard step asks for it and nothing on this screen shows an
                amount, so the row only ever restated a default. -->
-          <div class="cd-fact"><dt>Owner</dt><dd>{{ ownerLine() }}</dd></div>
-          <!-- THE ONE MONEY FIGURE A SCREEN ACTUALLY COLLECTS. See the card's note above for why
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8.2" r="3.2" />
+                    <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Owner</dt>
+                  <dd class="cd-owner-line">
+                    <span class="cd-avatar" aria-hidden="true">{{ ownerLine() ? ownerLine().slice(0, 2) : '—' }}</span>
+                    {{ ownerLine() }}
+                  </dd>
+                </span>
+              </div>
+              <!-- THE ONE MONEY FIGURE A SCREEN ACTUALLY COLLECTS. See the card's note above for why
                Target & Budget is still absent; this is a different field, captured on wizard step
                1, and it is what a donor is shown when they pick this campaign. -->
-          <div class="cd-fact"><dt>Campaign amount</dt><dd>{{ campaignAmountLabel() }}</dd></div>
-          <div class="cd-fact"><dt>Purpose</dt><dd>{{ purpose() }}</dd></div>
-          <div class="cd-fact"><dt>Date range</dt><dd>{{ formatDate(launchDate()) }} — {{ formatDate(endDate()) }}</dd></div>
-          <div class="cd-fact"><dt>Channel</dt><dd>{{ channelsLabel() }}</dd></div>
-          <div class="cd-fact"><dt>Location</dt><dd>{{ locationLabel() }}</dd></div>
-          <div class="cd-fact"><dt>Lifecycle activation</dt><dd>{{ activationLabel() }}</dd></div>
-          <div class="cd-fact">
-            <dt>Public description</dt>
-            <dd>
-              {{ hasPublicDescription() ? publicDescriptionPreview() : '—' }}
-              @if (hasPublicDescription()) {
-                <button type="button" class="cd-read-more" (click)="openReadMore('description')">Read more</button>
-              }
-            </dd>
-          </div>
-          <div class="cd-fact">
-            <dt>Terms and notice</dt>
-            <dd>
-              {{ hasTermsNotice() ? termsNoticePreview() : '—' }}
-              @if (hasTermsNotice()) {
-                <button type="button" class="cd-read-more" (click)="openReadMore('terms')">Read more</button>
-              }
-            </dd>
-          </div>
-        </dl>
-      </section>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="5" width="16" height="14" rx="2" />
+                    <path d="M8 9.5h4M8 13.5h8" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Campaign amount</dt>
+                  <dd>{{ campaignAmountLabel() }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="8.5" />
+                    <path d="M12 7.5v9M9 9.5h4a2 2 0 1 1 0 4h-3a2 2 0 1 0 0 4h4.5" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Purpose</dt>
+                  <dd>{{ purpose() }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="5.5" width="16" height="14" rx="2" />
+                    <path d="M4 10h16M8 3.5v3M16 3.5v3" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Date range</dt>
+                  <dd>{{ formatDate(launchDate()) }} — {{ formatDate(endDate()) }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="8.5" />
+                    <path
+                      d="M3.5 12h17M12 3.5c2.2 2.3 3.4 5.2 3.4 8.5s-1.2 6.2-3.4 8.5c-2.2-2.3-3.4-5.2-3.4-8.5S9.8 5.8 12 3.5Z" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Channel</dt>
+                  <dd>{{ channelsLabel() }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" />
+                    <circle cx="12" cy="10" r="2.3" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Location</dt>
+                  <dd>{{ locationLabel() }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 21V5.5a1 1 0 0 1 1-1h7l5 4v4" />
+                    <path d="M5 13.5h6M5 9.5h4" />
+                    <circle cx="17.5" cy="17.5" r="3.3" />
+                    <path d="M17.5 16v1.7l1.1.9" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Lifecycle activation</dt>
+                  <dd>{{ activationLabel() }}</dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20V4a.5.5 0 0 1 .5-.5Z" />
+                    <path d="M9 12.5h6M9 15.5h6M9 9.5h3" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Public description</dt>
+                  <dd>
+                    {{ hasPublicDescription() ? publicDescriptionPreview() : '—' }}
+                    @if (hasPublicDescription()) {
+                    <button type="button" class="cd-read-more" (click)="openReadMore('description')">Read more</button>
+                    }
+                  </dd>
+                </span>
+              </div>
+              <div class="cd-fact-tile">
+                <span class="cd-fact-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3.5 19 6v6c0 4.4-3 7.5-7 8.5-4-1-7-4.1-7-8.5V6Z" />
+                    <path d="m9 12 2 2 4-4.2" />
+                  </svg></span>
+                <span class="cd-fact-body">
+                  <dt>Terms and notice</dt>
+                  <dd>
+                    {{ hasTermsNotice() ? termsNoticePreview() : '—' }}
+                    @if (hasTermsNotice()) {
+                    <button type="button" class="cd-read-more" (click)="openReadMore('terms')">Read more</button>
+                    }
+                  </dd>
+                </span>
+              </div>
+            </dl>
+          </section>
 
-      <!-- Main work: task-oriented tab groups; no raw database table -->
-      <section class="cd-card cd-work-card">
-        <nav class="cd-tabs" role="tablist" aria-label="Campaign detail sections">
-          @for (t of tabs; track t.key) {
-            <button type="button" class="cd-tab" role="tab"
-                    [class.cd-tab-active]="activeTab() === t.key"
-                    [attr.aria-selected]="activeTab() === t.key"
-                    (click)="selectTab(t.key)">
-              {{ t.label }}
-            </button>
-          }
-        </nav>
-
-        <div class="cd-tabpanel">
-          <!-- TARGETS AND BUDGET PANELS REMOVED. Both read from the Budget & Target Plans
+          <!-- Main work: task-oriented tab groups; no raw database table -->
+          <section class="cd-card cd-work-card ">
+            <div class="card-title">
+              <nav class="cd-tabs" role="tablist" aria-label="Campaign detail sections">
+                @for (t of tabs; track t.key) {
+                <button type="button" class="cd-tab" role="tab" [class.cd-tab-active]="activeTab() === t.key"
+                  [attr.aria-selected]="activeTab() === t.key" (click)="selectTab(t.key)">
+                  {{ t.label }}
+                </button>
+                }
+              </nav>
+            </div>
+            <div class="cd-tabpanel">
+              <!-- TARGETS AND BUDGET PANELS REMOVED. Both read from the Budget & Target Plans
                module, which is on hold: the Targets panel showed a target of zero with a
                progress meter permanently at 0%, and the Budget panel showed "No approved budget
                plan" for every campaign because no plan can be created. Two tabs that could only
                ever report nothing. -->
 
-          <!-- Tracking: this campaign's tracking assets, as a table -->
-          @if (activeTab() === 'tracking') {
-            <div role="tabpanel" aria-label="Tracking">
-              <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: trackingAssets(), cols: ['Reference', 'Type · Channel', 'Status'] }"></ng-container>
-            </div>
-          }
+              <!-- Tracking: this campaign's tracking assets, as a table -->
+              @if (activeTab() === 'tracking') {
+              <div role="tabpanel" aria-label="Tracking">
+                <ng-container
+                  *ngTemplateOutlet="rowTable; context: { $implicit: trackingAssets(), cols: ['Reference', 'Type · Channel', 'Status'] }"></ng-container>
+              </div>
+              }
 
-          <!-- Payments: this campaign's donations, read live from the payments service -->
-          @if (activeTab() === 'payments') {
-            <div role="tabpanel" aria-label="Payments">
-              @if (donationsLoading()) {
+              <!-- Payments: this campaign's donations, read live from the payments service -->
+              @if (activeTab() === 'payments') {
+              <div role="tabpanel" aria-label="Payments">
+                @if (donationsLoading()) {
                 <p class="cd-state-note">Loading this campaign's donations…</p>
-              } @else if (donationsError()) {
+                } @else if (donationsError()) {
                 <p class="cd-state-note">{{ donationsError() }}</p>
-              } @else {
-                <ng-container *ngTemplateOutlet="rowTable; context: { $implicit: donations(), cols: ['Donation', 'Source · Method', 'Received'] }"></ng-container>
+                } @else {
+                <ng-container
+                  *ngTemplateOutlet="rowTable; context: { $implicit: donations(), cols: ['Donation', 'Source · Method', 'Received'] }"></ng-container>
+                }
+              </div>
               }
             </div>
-          }
+          </section>
+
         </div>
-      </section>
 
-    </div>
-
-    <!-- ---------- SECONDARY PANEL: Related and history ----------
+        <!-- ---------- SECONDARY PANEL: Related and history ----------
          Only Activity is shown for now; Linked records / Documents / Integration status /
          Support correlation / Audit chronology are hidden (kept in the.ts for later). -->
-    <aside class="cd-side" aria-label="Related and history">
-      <section class="cd-card cd-side-card">
-        <div class="cd-card-head"><h2 class="cd-card-title">Related &amp; history</h2></div>
-        <div class="cd-side-body">
-          <!-- AN EMPTY TRAIL SAYS SO. The list rendered nothing at all when the history came back
+        <aside class="cd-side" aria-label="Related and history">
+          <section class="cd-card cd-side-card"
+            [class.cd-side-card-empty]="!activityError() && !activityLoading() && recentActivity().length === 0">
+            <div class="cd-card-head">
+              <div class="cd-card-head-left">
+
+                <h2 class="card-title">Related &amp; history</h2>
+              </div>
+            </div>
+            <div class="cd-side-body">
+              <!-- AN EMPTY TRAIL SAYS SO. The list rendered nothing at all when the history came back
                empty or the call failed, so the panel was a heading over blank space and there was
                no way to tell "nothing has happened yet" from "this did not load". -->
-          @if (activityError()) {
-            <p class="cd-state-note">{{ activityError() }}</p>
-          } @else if (activityLoading()) {
-            <p class="cd-state-note">Loading this campaign's history…</p>
-          } @else if (recentActivity().length === 0) {
-            <p class="cd-state-note">
-              Nothing recorded against this campaign yet. Approvals, edits and lifecycle changes
-              appear here as they happen.
-            </p>
-          }
-          <ul class="cd-activity">
-            @for (a of recentActivity(); track a.title + a.time) {
-              <li class="cd-activity-row">
-                <span class="cd-activity-dot" [class]="'cd-tone-' + a.tone" aria-hidden="true"></span>
-                <span class="cd-activity-body">
-                  <span class="cd-activity-title">{{ a.title }}</span>
-                  <span class="cd-activity-detail">{{ a.detail }}</span>
-                  <span class="cd-activity-time">{{ a.time }}</span>
-                </span>
-              </li>
-            }
-          </ul>
-        </div>
-      </section>
-    </aside>
-  </div>
+              @if (activityError()) {
+              <p class="cd-state-note">{{ activityError() }}</p>
+              } @else if (activityLoading()) {
+              <p class="cd-state-note">Loading this campaign's history…</p>
+              } @else if (recentActivity().length === 0) {
+              <p class="cd-state-note cd-side-empty-note">
+                Nothing recorded against this campaign yet. Approvals, edits and lifecycle changes
+                appear here as they happen.
+              </p>
+              <!-- Decorative — a record with nothing on it yet, not a broken load.
+                 Purely illustrative; the sentence above already says this in words. -->
+        <svg xmlns="http://www.w3.org/2000/svg"
+     class="cd-side-empty-art"
+     viewBox="0 0 357 246"
+     aria-hidden="true"
+     focusable="false"
+     style="--primary-light: color-mix(in srgb, var(--primary) 15%, white);">
 
-  }
+  <defs>
 
-  <!-- Shared read-only 3-column table for HistoryRow[] (primary / secondary / meta) -->
-  <ng-template #rowTable let-rows let-cols="cols">
-    @if (rows.length) {
-      <div class="cd-table-scroll">
-        <table class="cd-table">
-          <thead><tr><th>{{ cols[0] }}</th><th>{{ cols[1] }}</th><th>{{ cols[2] }}</th></tr></thead>
-          <tbody>
-            @for (r of rows; track r.primary) {
-              <tr><td>{{ r.primary }}</td><td>{{ r.secondary }}</td><td>{{ r.meta }}</td></tr>
-            }
-          </tbody>
-        </table>
+
+    <linearGradient id="paper" x1="158" y1="39" x2="158" y2="220"
+                    gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".96"/>
+      <stop offset=".72" stop-color=" color-mix(in srgb, var(--primary) 5%, white)" stop-opacity=".98"/>
+      <stop offset="1" stop-color=" color-mix(in srgb, var(--primary) 5%, white)"/>
+    </linearGradient>
+
+    <linearGradient id="curl" x1="228" y1="40" x2="251" y2="63"
+                    gradientUnits="userSpaceOnUse">
+      <stop stop-color=" color-mix(in srgb, var(--primary) 15%, white)"/>
+      <stop offset="1" stop-color=" color-mix(in srgb, var(--primary) 15%, white)"/>
+    </linearGradient>
+
+    <linearGradient id="leaf" x1="245" y1="164" x2="310" y2="31"
+                    gradientUnits="userSpaceOnUse">
+      <stop stop-color="var(--primary)"/>
+      <stop offset="1" stop-color="var(--primary-light)"/>
+    </linearGradient>
+
+    <linearGradient id="clock" x1="183" y1="185" x2="258" y2="185"
+                    gradientUnits="userSpaceOnUse">
+      <stop stop-color="var(--primary)"/>
+      <stop offset="1" stop-color="var(--primary)"/>
+    </linearGradient>
+
+    <filter id="blur12" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+
+    <filter id="blur5" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+
+    <filter id="shadow" x="-30%" y="-30%" width="180%" height="180%">
+      <feDropShadow
+        dx="0"
+        dy="5"
+        stdDeviation="6"
+        flood-color=" color-mix(in srgb, var(--primary) 15%, white)"
+        flood-opacity=".32"/>
+    </filter>
+
+  </defs>
+
+  <!-- BACKGROUND -->
+  <path fill="url(#bg)" d="M0 0H357V246H0Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".42"
+    filter="url(#blur12)"
+    d="M-21 158C-6 153 1 145 3 130C6 104 16 81 37 82C59 83 72 103 76 127C80 148 71 167 57 179C42 192 22 196 2 189C-13 184-24 174-21 158Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".52"
+    filter="url(#blur5)"
+    d="M-15 171C-4 158 5 154 21 154C44 154 58 169 65 187C70 202 62 214 48 218H-8C-21 209-25 186-15 171Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".56"
+    filter="url(#blur5)"
+    d="M271 150C291 145 310 152 319 168C328 184 320 202 306 212C293 222 270 223 254 213C238 203 236 184 245 168C251 158 259 153 271 150Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".52"
+    filter="url(#blur5)"
+    d="M318 99C335 99 352 111 361 127V184C350 196 333 199 320 191C307 183 303 167 309 153C313 144 313 135 308 126C301 113 305 102 318 99Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".28"
+    filter="url(#blur5)"
+    d="M57 220C101 216 164 214 222 216C277 218 306 222 310 228C314 235 271 239 207 239C143 239 77 237 53 232C39 229 42 223 57 220Z"/>
+
+  <!-- PAPER -->
+  <path
+    fill="url(#paper)"
+    stroke=" color-mix(in srgb, var(--primary) 15%, white)"
+    stroke-width="2.4"
+    filter="url(#shadow)"
+    d="M94 39.8H237.8C230.1 42.4 226.4 49.6 226.3 59.8V191.7C226.3 206.8 217 219.4 202.9 219.4H53.8C67.1 215.3 73.5 204.9 73.5 188.2V62.8C73.5 49.5 81.4 39.8 94 39.8Z"/>
+
+  <!-- PAPER CURL -->
+  <path
+    fill="url(#curl)"
+    stroke=" color-mix(in srgb, var(--primary) 15%, white)"
+    stroke-width="2.2"
+    d="M237.7 39.8C246.1 39.8 251.8 49.1 250.9 59.6C250.8 61.4 250.4 63 249.9 64.4H226.3V58.7C226.3 48.1 230.2 41.7 237.7 39.8Z"/>
+
+  <path
+    fill=" color-mix(in srgb, var(--primary) 15%, white)"
+    fill-opacity=".22"
+    d="M226.3 62.7H249.9C247.8 66 244.1 67.6 238.8 67.6H226.3Z"/>
+
+  <!-- DOCUMENT LINES -->
+  <g fill=" color-mix(in srgb, var(--primary) 15%, white)">
+
+    <path
+      d="M99.8 70.5H165.9C168 70.5 169.5 72.1 169.5 74.2C169.5 76.3 168 77.9 165.9 77.9H99.8C97.7 77.9 96.1 76.3 96.1 74.2C96.1 72.1 97.7 70.5 99.8 70.5Z"/>
+
+    <path
+      d="M99.8 97.1H199.9C202.1 97.1 203.7 98.7 203.7 100.8C203.7 102.9 202.1 104.5 199.9 104.5H99.8C97.7 104.5 96.1 102.9 96.1 100.8C96.1 98.7 97.7 97.1 99.8 97.1Z"/>
+
+    <path
+      d="M99.8 117.6H199.9C202.1 117.6 203.7 119.2 203.7 121.3C203.7 123.4 202.1 125 199.9 125H99.8C97.7 125 96.1 123.4 96.1 121.3C96.1 119.2 97.7 117.6 99.8 117.6Z"/>
+
+    <path
+      d="M99.8 137.8H166.1C168.3 137.8 169.9 139.4 169.9 141.5C169.9 143.6 168.3 145.2 166.1 145.2H99.8C97.7 145.2 96.1 143.6 96.1 141.5C96.1 139.4 97.7 137.8 99.8 137.8Z"/>
+
+    <path
+      d="M99.8 156.1H150.1C152.3 156.1 153.9 157.7 153.9 159.8C153.9 161.9 152.3 163.5 150.1 163.5H99.8C97.7 163.5 96.1 161.9 96.1 159.8C96.1 157.7 97.7 156.1 99.8 156.1Z"/>
+
+  </g>
+
+
+
+
+  <!-- CLOCK -->
+  <path
+    class="hs-ring"
+    fill="#F9FDFC"
+    stroke="url(#clock)"
+    stroke-width="6.2"
+    d="M219.2 153.5
+       C238.1 153.5 253.4 168.8 253.4 187.7
+       C253.4 206.6 238.1 221.9 219.2 221.9
+       C200.3 221.9 185 206.6 185 187.7
+       C185 168.8 200.3 153.5 219.2 153.5Z"/>
+
+  <!-- CLOCK HANDS -->
+  <path
+    fill="none"
+    stroke="var(--primary)"
+    stroke-width="4.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M219 176.2V188.4L227.8 196.2"/>
+
+  <!-- CLOCK MARKERS -->
+  <path
+    fill="var(--primary)"
+    d="M216.8 164.7C216.8 163.3 217.8 162.3 219.2 162.3
+       C220.6 162.3 221.6 163.3 221.6 164.7
+       C221.6 166.1 220.6 167.1 219.2 167.1
+       C217.8 167.1 216.8 166.1 216.8 164.7Z"/>
+
+  <path
+    fill="var(--primary)"
+    d="M216.8 211.1C216.8 209.7 217.8 208.7 219.2 208.7
+       C220.6 208.7 221.6 209.7 221.6 211.1
+       C221.6 212.5 220.6 213.5 219.2 213.5
+       C217.8 213.5 216.8 212.5 216.8 211.1Z"/>
+
+  <path
+    fill="var(--primary)"
+    d="M195.9 185.3C197.3 185.3 198.3 186.3 198.3 187.7
+       C198.3 189.1 197.3 190.1 195.9 190.1
+       C194.5 190.1 193.5 189.1 193.5 187.7
+       C193.5 186.3 194.5 185.3 195.9 185.3Z"/>
+
+  <path
+    fill="var(--primary)"
+    d="M242.5 185.3C243.9 185.3 244.9 186.3 244.9 187.7
+       C244.9 189.1 243.9 190.1 242.5 190.1
+       C241.1 190.1 240.1 189.1 240.1 187.7
+       C240.1 186.3 241.1 185.3 242.5 185.3Z"/>
+
+</svg>
+              }
+              <ul class="cd-activity">
+                @for (a of recentActivity(); track a.title + a.time) {
+                <li class="cd-activity-row">
+                  <span class="cd-activity-dot" [class]="'cd-tone-' + a.tone" aria-hidden="true"></span>
+                  <span class="cd-activity-body">
+                    <span class="cd-activity-title">{{ a.title }}</span>
+                    <span class="cd-activity-detail">{{ a.detail }}</span>
+                    <span class="cd-activity-time">{{ a.time }}</span>
+                  </span>
+                </li>
+                }
+              </ul>
+            </div>
+          </section>
+        </aside>
       </div>
-    } @else {
-      <p class="cd-state-note">Nothing recorded for this campaign in scope — this is not a global zero.</p>
-    }
-  </ng-template>
 
-  <!-- ============ HIGH-RISK CONFIRM: Operate according to lifecycle ============ -->
-  @if (operateDialogOpen()) {
-    <div class="cd-modal-backdrop" (click)="cancelOperate()">
-      <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-op-title" (click)="$event.stopPropagation()">
-        <h2 class="cd-modal-title" id="cd-op-title">Confirm {{ proposedTransition()?.label }}</h2>
-        <p class="cd-modal-lead">Review the affected record, consequence, reason and effective time. This decision requires explicit confirmation.</p>
+      }
 
-        @if (dialogOptions().length > 1) {
+      <!-- Shared read-only 3-column table for HistoryRow[] (primary / secondary / meta) -->
+      <ng-template #rowTable let-rows let-cols="cols">
+        @if (rows.length) {
+        <div class="cd-table-scroll">
+          <table class="cd-table">
+            <thead>
+              <tr>
+                <th>{{ cols[0] }}</th>
+                <th>{{ cols[1] }}</th>
+                <th>{{ cols[2] }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of rows; track r.primary) {
+              <tr>
+                <td>{{ r.primary }}</td>
+                <td>{{ r.secondary }}</td>
+                <td>{{ r.meta }}</td>
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        } @else {
+        <p class="cd-state-note">Nothing recorded for this campaign in scope — this is not a global zero.</p>
+        }
+      </ng-template>
+
+      <!-- ============ HIGH-RISK CONFIRM: Operate according to lifecycle ============ -->
+      @if (operateDialogOpen()) {
+      <div class="cd-modal-backdrop" (click)="cancelOperate()">
+        <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-op-title" style="border-radius: 0.5rem"
+          (click)="$event.stopPropagation()">
+          <h2 class="cd-modal-title" id="cd-op-title">Confirm {{ proposedTransition()?.label }}</h2>
+          <p class="cd-modal-lead">Review the affected record, consequence, reason and effective time. This decision
+            requires explicit confirmation.</p>
+
+          @if (dialogOptions().length > 1) {
           <fieldset class="cd-modal-field">
             <legend class="cd-field-label">Lifecycle action</legend>
             @for (opt of dialogOptions(); track opt.key) {
-              <label class="cd-radio-row">
-                <input type="radio" name="cd-transition" [value]="opt.key"
-                       [checked]="selectedTransitionKey() === opt.key"
-                       (change)="selectTransition(opt.key)" />
-                {{ opt.label }} <span class="cd-decision-value">({{ opt.target }})</span>
-              </label>
+            <label class="cd-radio-row">
+              <input type="radio" name="cd-transition" [value]="opt.key" [checked]="selectedTransitionKey() === opt.key"
+                (change)="selectTransition(opt.key)" />
+              {{ opt.label }} <span class="cd-decision-value">({{ opt.target }})</span>
+            </label>
             }
           </fieldset>
-        }
-
-        <dl class="cd-facts cd-modal-facts">
-          <div class="cd-fact"><dt>Affected record</dt><dd>{{ reference }} · {{ campaignName() }}</dd></div>
-          <div class="cd-fact"><dt>Consequence</dt><dd>State {{ status() }} → {{ proposedState() }}</dd></div>
-          <div class="cd-fact"><dt>Effective permission</dt><dd>Granted — operate campaign lifecycle</dd></div>
-          <div class="cd-fact"><dt>Effective time</dt><dd>{{ effectiveTime }}</dd></div>
-        </dl>
-
-        <label class="cd-modal-field">
-          <span class="cd-field-label">Reason <span class="cd-req">required</span></span>
-          <textarea class="cd-textarea" rows="3" [ngModel]="operateReason()" (ngModelChange)="operateReason.set($event)"
-                    (blur)="operateReasonTouched.set(true)"
-                    placeholder="State why this lifecycle change is being made…"
-                    [attr.aria-invalid]="operateReasonTouched() && !operateReasonValid()"></textarea>
-          <span class="cd-field-foot">
-            <span class="cd-count" [class.cd-count-bad]="operateReasonCount() > operateReasonMax">{{ operateReasonCount() }} / {{ operateReasonMax }}</span>
-          </span>
-          @if (operateReasonTouched() && !operateReasonValid()) {
-            <span class="cd-field-error" role="alert">Enter Reason. Provide between {{ operateReasonMin }} and {{ operateReasonMax }} characters.</span>
           }
-        </label>
 
-        <div class="cd-modal-actions">
-          <button type="button" class="cd-btn cd-btn-outline" (click)="cancelOperate()">Cancel</button>
-          <button type="button" class="cd-btn cd-btn-primary" (click)="confirmOperate()" [disabled]="!operateReasonValid()">Confirm</button>
+          <dl class="cd-facts cd-modal-facts">
+            <div class="cd-fact">
+              <dt>Affected record</dt>
+              <dd>{{ reference }} · {{ campaignName() }}</dd>
+            </div>
+            <div class="cd-fact">
+              <dt>Consequence</dt>
+              <dd>State {{ status() }} → {{ proposedState() }}</dd>
+            </div>
+            <div class="cd-fact">
+              <dt>Effective permission</dt>
+              <dd>Granted — operate campaign lifecycle</dd>
+            </div>
+            <div class="cd-fact">
+              <dt>Effective time</dt>
+              <dd>{{ effectiveTime }}</dd>
+            </div>
+          </dl>
+
+          <label class="cd-modal-field">
+            <span class="cd-field-label">Reason <span class="cd-req">required</span></span>
+            <textarea class="cd-textarea" rows="3" [ngModel]="operateReason()"
+              (ngModelChange)="operateReason.set($event)" (blur)="operateReasonTouched.set(true)"
+              placeholder="State why this lifecycle change is being made…"
+              [attr.aria-invalid]="operateReasonTouched() && !operateReasonValid()"></textarea>
+            <span class="cd-field-foot">
+              <span class="cd-count" [class.cd-count-bad]="operateReasonCount() > operateReasonMax">{{
+                operateReasonCount() }} / {{ operateReasonMax }}</span>
+            </span>
+            @if (operateReasonTouched() && !operateReasonValid()) {
+            <span class="cd-field-error" role="alert">Enter Reason. Provide between {{ operateReasonMin }} and {{
+              operateReasonMax }} characters.</span>
+            }
+          </label>
+
+          <div class="cd-modal-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelOperate()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="confirmOperate()"
+              [disabled]="!operateReasonValid()">Confirm</button>
+          </div>
         </div>
       </div>
-    </div>
-  }
+      }
 
-  <!-- ============ CONFIRM: Delete draft (permanent) ============ -->
-  @if (deleteDraftDialogOpen()) {
-    <div class="cd-modal-backdrop" (click)="cancelDeleteDraft()">
-      <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-del-title" (click)="$event.stopPropagation()">
-        <h2 class="cd-modal-title" id="cd-del-title">Delete this draft?</h2>
-        <p class="cd-modal-lead">This permanently removes the draft campaign. This cannot be undone.</p>
-        <dl class="cd-facts cd-modal-facts">
-          <div class="cd-fact"><dt>Affected record</dt><dd>{{ reference }} · {{ campaignName() }}</dd></div>
-          <div class="cd-fact"><dt>Consequence</dt><dd>Draft permanently deleted</dd></div>
-        </dl>
-        <div class="cd-modal-actions">
-          <button type="button" class="cd-btn cd-btn-outline" (click)="cancelDeleteDraft()">Cancel</button>
-          <button type="button" class="cd-btn cd-btn-danger" (click)="confirmDeleteDraft()">Delete draft</button>
+      <!-- ============ CONFIRM: Delete draft (permanent) ============ -->
+      @if (deleteDraftDialogOpen()) {
+      <div class="cd-modal-backdrop" (click)="cancelDeleteDraft()">
+        <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-del-title"
+          (click)="$event.stopPropagation()">
+          <h2 class="cd-modal-title" id="cd-del-title">Delete this draft?</h2>
+          <p class="cd-modal-lead">This permanently removes the draft campaign. This cannot be undone.</p>
+          <dl class="cd-facts cd-modal-facts">
+            <div class="cd-fact">
+              <dt>Affected record</dt>
+              <dd>{{ reference }} · {{ campaignName() }}</dd>
+            </div>
+            <div class="cd-fact">
+              <dt>Consequence</dt>
+              <dd>Draft permanently deleted</dd>
+            </div>
+          </dl>
+          <div class="cd-modal-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelDeleteDraft()">Cancel</button>
+            <button type="button" class="btn btn-danger btn-sm" (click)="confirmDeleteDraft()">Delete draft</button>
+          </div>
         </div>
       </div>
-    </div>
-  }
+      }
 
-  <!-- ============ READ MORE — Public description / Terms and notice popup ============ -->
-  @if (readMoreField()) {
-    <div class="cd-modal-backdrop" (click)="closeReadMore()">
-      <div class="cd-modal cd-modal-lg" role="dialog" aria-modal="true" aria-labelledby="cd-readmore-title" (click)="$event.stopPropagation()">
-        <h2 class="cd-modal-title" id="cd-readmore-title">{{ readMoreTitle() }}</h2>
-        <div class="cd-readmore-body" [innerHTML]="readMoreHtml()"></div>
-        <div class="cd-modal-actions">
-          <button type="button" class="cd-btn cd-btn-outline" (click)="closeReadMore()">Close</button>
+      <!-- ============ READ MORE — Public description / Terms and notice popup ============ -->
+      @if (readMoreField()) {
+      <div class="cd-modal-backdrop" (click)="closeReadMore()">
+        <div class="cd-modal cd-modal-lg" role="dialog" aria-modal="true" aria-labelledby="cd-readmore-title"
+          (click)="$event.stopPropagation()">
+          <h2 class="cd-modal-title" id="cd-readmore-title">{{ readMoreTitle() }}</h2>
+          <div class="cd-readmore-body" [innerHTML]="readMoreHtml()"></div>
+          <div class="cd-modal-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeReadMore()">Close</button>
+          </div>
         </div>
       </div>
-    </div>
-  }
+      }
 
-  <!-- ============ PAUSE / RESUME / CLOSE — popup launched from "Manage lifecycle".
+      <!-- ============ PAUSE / RESUME / CLOSE — popup launched from "Manage lifecycle".
        No separate page: the full lifecycle-actions component renders inline in this modal. ============ -->
-  @if (lifecyclePopupOpen()) {
-    <div class="cd-modal-backdrop" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()" (click)="closeLifecyclePopup()">
-      <div class="cd-modal cd-modal-lg cd-modal-lifecycle" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()" role="dialog" aria-modal="true" aria-label="Pause, resume and close campaign" (click)="$event.stopPropagation()">
-        <button type="button" class="cd-banner-close cd-modal-close" (click)="closeLifecyclePopup()" aria-label="Close">
-          <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-        </button>
-        <app-pause-resume-close-campaign
-          [campaignRef]="lifecyclePopupRef()"
-          (panelOpenChange)="lifecyclePanelOpen.set($event)"
-        ></app-pause-resume-close-campaign>
+      @if (lifecyclePopupOpen()) {
+      <div class="cd-modal-backdrop" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()"
+        (click)="closeLifecyclePopup()">
+        <div class="cd-modal cd-modal-lg cd-modal-lifecycle" [class.cd-lifecycle-chrome-hidden]="lifecyclePanelOpen()"
+          role="dialog" aria-modal="true" aria-label="Pause, resume and close campaign"
+          (click)="$event.stopPropagation()">
+          <button type="button" class="cd-banner-close cd-modal-close" (click)="closeLifecyclePopup()"
+            aria-label="Close">
+            <svg class="cd-ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+          <app-pause-resume-close-campaign [campaignRef]="lifecyclePopupRef()"
+            (panelOpenChange)="lifecyclePanelOpen.set($event)"></app-pause-resume-close-campaign>
+        </div>
       </div>
-    </div>
-  }
+      }
 
-</div>
+    </div>
+  </div>
 </main>

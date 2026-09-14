@@ -4,6 +4,7 @@ import {
   EventEmitter,
   Output,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -67,13 +68,13 @@ interface CommunicationRecord {
 }
 
 interface CommunicationForm {
-  type: CommunicationType | '';
+  type: CommunicationType;
   date: string;
   time: string;
-  direction: 'Incoming' | 'Outgoing' | '';
-  outcome: Outcome | '';
-  engagement: EngagementLevel | '';
-  quality: CommunicationQuality | '';
+  direction: 'Incoming' | 'Outgoing';
+  outcome: Outcome;
+  engagement: EngagementLevel;
+  quality: CommunicationQuality;
   summary: string;
   notes: string;
   attachmentName: string;
@@ -135,11 +136,11 @@ export class CommunicationTimelineComponent {
   readonly formErrors = signal<string[]>([]);
 
   readonly currentTemperature = signal<Temperature>('Warm');
-  readonly newTemperature = signal<Temperature | ''>('');
+  readonly newTemperature = signal<Temperature>('Warm');
   readonly temperatureReason = signal('');
 
   readonly donationPotential = signal<DonationPotential>('Medium');
-  readonly newDonationPotential = signal<DonationPotential | ''>('');
+  readonly newDonationPotential = signal<DonationPotential>('Medium');
   readonly donationPotentialReason = signal('');
 
   readonly typeFilter = signal<string>('All');
@@ -148,6 +149,9 @@ export class CommunicationTimelineComponent {
   readonly importantOnly = signal(false);
   readonly dateFromFilter = signal('');
   readonly dateToFilter = signal('');
+  readonly searchQuery = signal('');
+  readonly currentPage = signal(1);
+  readonly pageSize = 10;
 
   /**
    * The profile beside the timeline.
@@ -230,6 +234,10 @@ export class CommunicationTimelineComponent {
   readonly records = signal<CommunicationRecord[]>([]);
 
   constructor() {
+    effect(() => {
+      const lastPage = this.totalPages();
+      if (this.currentPage() > lastPage) this.currentPage.set(lastPage);
+    });
     this.load();
   }
 
@@ -315,12 +323,13 @@ export class CommunicationTimelineComponent {
     return `${day} ${this.monthNames[value.getMonth()]} ${value.getFullYear()}`;
   }
 
-  readonly form = signal<CommunicationForm>(this.createEmptyForm());
+  readonly form = signal<CommunicationForm>(this.createEmptyForm('Call'));
 
 
   readonly filteredRecords = computed(() => {
     const from = this.dateFromFilter() ? this.parseDisplayDate(this.toDisplayDate(this.dateFromFilter())) : null;
     const to = this.dateToFilter() ? this.parseDisplayDate(this.toDisplayDate(this.dateToFilter())) : null;
+    const query = this.searchQuery().trim().toLocaleLowerCase();
 
     return this.records().filter((record) => {
       const tabMatch =
@@ -345,6 +354,9 @@ export class CommunicationTimelineComponent {
       const recordDate = this.parseDisplayDate(record.date);
       const fromMatch = !from || !recordDate || recordDate.getTime() >= from.getTime();
       const toMatch = !to || !recordDate || recordDate.getTime() <= to.getTime();
+      const searchMatch = !query || [record.type, record.outcome, record.summary, record.notes,
+        record.createdBy, record.direction, record.followUpPurpose]
+        .some((value) => value?.toLocaleLowerCase().includes(query));
 
       return (
         tabMatch &&
@@ -353,10 +365,28 @@ export class CommunicationTimelineComponent {
         outcomeMatch &&
         importantMatch &&
         fromMatch &&
-        toMatch
+        toMatch &&
+        searchMatch
       );
     });
   });
+
+  readonly relationshipInitials = computed(() => this.relationship().name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || '—');
+
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRecords().length / this.pageSize)));
+  readonly paginatedRecords = computed(() => {
+    const safePage = Math.min(this.currentPage(), this.totalPages());
+    const start = (safePage - 1) * this.pageSize;
+    return this.filteredRecords().slice(start, start + this.pageSize);
+  });
+  readonly pageNumbers = computed(() => Array.from({ length: this.totalPages() }, (_, index) => index + 1));
+  readonly firstVisibleRecord = computed(() => this.filteredRecords().length ? (this.currentPage() - 1) * this.pageSize + 1 : 0);
+  readonly lastVisibleRecord = computed(() => Math.min(this.currentPage() * this.pageSize, this.filteredRecords().length));
 
   readonly totalCommunications = computed(() => this.records().length);
 
@@ -567,16 +597,6 @@ export class CommunicationTimelineComponent {
       return;
     }
 
-    // validateForm has just refused a blank on each of the five choice fields, so they are
-    // narrowed once here rather than cast at every point they are read below.
-    const chosen = {
-      type: value.type as CommunicationType,
-      direction: value.direction as 'Incoming' | 'Outgoing',
-      outcome: value.outcome as Outcome,
-      engagement: value.engagement as EngagementLevel,
-      quality: value.quality as CommunicationQuality,
-    };
-
     const displayDate = this.toDisplayDate(value.date);
     const editingId = this.editingId();
 
@@ -586,13 +606,13 @@ export class CommunicationTimelineComponent {
           record.id === editingId
             ? {
                 ...record,
-                type: chosen.type,
+                type: value.type,
                 date: displayDate,
                 time: value.time,
-                direction: chosen.direction,
-                outcome: chosen.outcome,
-                engagement: chosen.engagement,
-                quality: chosen.quality,
+                direction: value.direction,
+                outcome: value.outcome,
+                engagement: value.engagement,
+                quality: value.quality,
                 summary: value.summary.trim(),
                 notes: value.notes.trim() || undefined,
                 attachment: value.attachmentName || record.attachment,
@@ -604,14 +624,14 @@ export class CommunicationTimelineComponent {
     } else {
       const newRecord: CommunicationRecord = {
         id: `COM-${Date.now()}`,
-        type: chosen.type,
+        type: value.type,
         date: displayDate,
         time: value.time,
         createdBy: this.relationship().owner,
-        direction: chosen.direction,
-        outcome: chosen.outcome,
-        engagement: chosen.engagement,
-        quality: chosen.quality,
+        direction: value.direction,
+        outcome: value.outcome,
+        engagement: value.engagement,
+        quality: value.quality,
         summary: value.summary.trim(),
         notes: value.notes.trim() || undefined,
         important: value.important,
@@ -637,8 +657,8 @@ export class CommunicationTimelineComponent {
 
     this.api
       .contactLead(leadId, {
-        channel: this.toConsentChannel(chosen.type),
-        outcome: chosen.outcome,
+        channel: this.toConsentChannel(value.type),
+        outcome: value.outcome,
 
         // THE SUMMARY LEADS THE NOTE. `ContactLeadRequest` carries one free-text field, and the
         // server uses the interaction's Name for the summary line, so both are sent together
@@ -822,6 +842,16 @@ export class CommunicationTimelineComponent {
 
   setTab(tab: 'All' | CommunicationType | 'Important'): void {
     this.activeTab.set(tab);
+    this.currentPage.set(1);
+  }
+
+  setSearchQuery(value: string): void {
+    this.searchQuery.set(value);
+    this.currentPage.set(1);
+  }
+
+  goToPage(page: number): void {
+    this.currentPage.set(Math.min(Math.max(page, 1), this.totalPages()));
   }
 
   resetFilters(): void {
@@ -831,6 +861,8 @@ export class CommunicationTimelineComponent {
     this.importantOnly.set(false);
     this.dateFromFilter.set('');
     this.dateToFilter.set('');
+    this.searchQuery.set('');
+    this.currentPage.set(1);
   }
 
   communicationIcon(type: CommunicationType): string {
@@ -945,26 +977,6 @@ export class CommunicationTimelineComponent {
       errors.push('Communication time is required.');
     }
 
-    if (!value.type) {
-      errors.push('Communication type is required.');
-    }
-
-    if (!value.direction) {
-      errors.push('Direction is required.');
-    }
-
-    if (!value.outcome) {
-      errors.push('Outcome is required.');
-    }
-
-    if (!value.engagement) {
-      errors.push('Engagement level is required.');
-    }
-
-    if (!value.quality) {
-      errors.push('Communication quality is required.');
-    }
-
     const summaryLength = value.summary.trim().length;
     if (summaryLength < 10) {
       errors.push('Summary must be at least 10 characters.');
@@ -979,15 +991,15 @@ export class CommunicationTimelineComponent {
     return errors;
   }
 
-  private createEmptyForm(type: CommunicationType | '' = ''): CommunicationForm {
+  private createEmptyForm(type: CommunicationType): CommunicationForm {
     return {
       type,
       date: this.getTodayIso(),
       time: '',
-      direction: '',
-      outcome: '',
-      engagement: '',
-      quality: '',
+      direction: 'Outgoing',
+      outcome: 'Connected',
+      engagement: 'Medium',
+      quality: 'Good',
       summary: '',
       notes: '',
       attachmentName: '',
